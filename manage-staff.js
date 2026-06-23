@@ -161,6 +161,7 @@ function showCardsView() {
 }
 
 function showDirectoryView(category) {
+    currentCategory = category;
     document.querySelector('.page-title-section').classList.add('d-none');
     document.querySelector('.staff-cards-container').classList.add('d-none');
     document.getElementById('summary-bar').classList.add('d-none');
@@ -174,6 +175,14 @@ function showDirectoryView(category) {
     dirView.classList.add('fade-in');
     
     document.getElementById('directory-title').textContent = `${category} Staff Directory`;
+
+    // Update Add button text based on category
+    const addBtn = document.getElementById('add-staff-btn');
+    if (addBtn) {
+        addBtn.innerHTML = category === 'Teaching'
+            ? '<i class="fas fa-plus"></i> Add Teacher'
+            : '<i class="fas fa-plus"></i> Add Non-Teaching Staff';
+    }
 
     // Reset animation
     setTimeout(() => dirView.classList.remove('fade-in'), 400);
@@ -347,6 +356,14 @@ function confirmRemove() {
     const staff = staffData[currentCategory].find(s => s.id === currentProfileId);
     if (!staff) return;
     
+    // Update modal title based on category
+    const modalTitle = document.getElementById('confirm-modal-title');
+    if (currentCategory === 'Teaching') {
+        modalTitle.textContent = 'Remove Teacher';
+    } else {
+        modalTitle.textContent = 'Remove Non-Teaching Staff';
+    }
+
     document.getElementById('remove-target-name').textContent = staff.name;
     document.getElementById('confirm-modal').classList.remove('d-none');
 }
@@ -455,7 +472,8 @@ function renderFormFields(category) {
 
 function openAddForm() {
     isEditMode = false;
-    document.getElementById('form-modal-title').textContent = `Add ${currentCategory} Staff`;
+    const title = currentCategory === 'Teaching' ? 'Add Teacher' : 'Add Non-Teaching Staff';
+    document.getElementById('form-modal-title').textContent = title;
     renderFormFields(currentCategory);
     document.getElementById('staff-form').reset();
     document.getElementById('form-modal').classList.remove('d-none');
@@ -463,7 +481,8 @@ function openAddForm() {
 
 function openEditForm() {
     isEditMode = true;
-    document.getElementById('form-modal-title').textContent = `Edit ${currentCategory} Staff`;
+    const title = currentCategory === 'Teaching' ? 'Edit Teacher' : 'Edit Non-Teaching Staff';
+    document.getElementById('form-modal-title').textContent = title;
     renderFormFields(currentCategory);
     
     // Prefill data
