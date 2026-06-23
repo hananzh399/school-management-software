@@ -1,0 +1,520 @@
+/* manage-finance.css - Enhanced Edition */
+
+:root {
+    --card-bg: #ffffff;
+    --text-dark: #1e293b;
+    --text-light: #64748b;
+    --transition-smooth: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+/* --- FINANCE HUB GRID --- */
+.finance-card-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 30px;
+    margin-top: 30px;
+    perspective: 1000px;
+}
+
+/* --- THE BEAUTIFUL CARD --- */
+.f-hub-card {
+    background: var(--card-bg);
+    padding: 45px 30px;
+    border-radius: 24px;
+    text-align: center;
+    border: 1px solid rgba(226, 232, 240, 0.8);
+    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.04), 
+                0 8px 10px -6px rgba(0, 0, 0, 0.04);
+    cursor: pointer;
+    transition: var(--transition-smooth);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    position: relative;
+    overflow: hidden;
+}
+
+/* Decorative background element on card */
+.f-hub-card::before {
+    content: '';
+    position: absolute;
+    top: -50%;
+    left: -50%;
+    width: 200%;
+    height: 200%;
+    background: radial-gradient(circle, rgba(52, 152, 219, 0.03) 0%, transparent 70%);
+    opacity: 0;
+    transition: 0.5s;
+}
+
+/* Hover State */
+.f-hub-card:hover {
+    transform: translateY(-12px) scale(1.02);
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.12);
+    border-color: var(--accent);
+}
+
+.f-hub-card:hover::before {
+    opacity: 1;
+}
+
+/* --- ICON STYLING (The Squircle) --- */
+.f-icon-circle {
+    width: 85px;
+    height: 85px;
+    border-radius: 24px; /* Squircle shape */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 2.2rem;
+    color: white;
+    margin-bottom: 25px;
+    transition: var(--transition-smooth);
+    z-index: 1;
+}
+
+.f-hub-card:hover .f-icon-circle {
+    transform: rotate(-10deg) scale(1.1);
+}
+
+/* Gradients with Glows */
+.blue-grad { 
+    background: linear-gradient(135deg, #3498db, #2980b9);
+    box-shadow: 0 10px 20px -5px rgba(52, 152, 219, 0.5);
+}
+.green-grad { 
+    background: linear-gradient(135deg, #27ae60, #2ecc71);
+    box-shadow: 0 10px 20px -5px rgba(39, 174, 96, 0.5);
+}
+.orange-grad { 
+    background: linear-gradient(135deg, #e67e22, #f39c12);
+    box-shadow: 0 10px 20px -5px rgba(230, 126, 34, 0.5);
+}
+.red-grad { 
+    background: linear-gradient(135deg, #e74c3c, #c0392b);
+    box-shadow: 0 10px 20px -5px rgba(231, 76, 60, 0.5);
+}
+.purple-grad { 
+    background: linear-gradient(135deg, #9b59b6, #8e44ad);
+    box-shadow: 0 10px 20px -5px rgba(155, 89, 182, 0.5);
+}
+
+/* --- CARD TEXT --- */
+.f-hub-card h3 {
+    color: var(--text-dark);
+    font-size: 1.4rem;
+    font-weight: 700;
+    margin-bottom: 12px;
+    z-index: 1;
+}
+
+.f-hub-card p {
+    color: var(--text-light);
+    font-size: 0.95rem;
+    line-height: 1.6;
+    margin-bottom: 20px;
+    z-index: 1;
+    max-width: 240px;
+}
+
+/* --- THE STAT BADGE --- */
+.f-badge {
+    background: #f8fafc;
+    color: var(--primary);
+    padding: 8px 16px;
+    border-radius: 12px;
+    font-size: 0.8rem;
+    font-weight: 700;
+    border: 1px solid #e2e8f0;
+    transition: 0.3s;
+    z-index: 1;
+}
+
+.f-hub-card:hover .f-badge {
+    background: var(--primary);
+    color: white;
+    border-color: var(--primary);
+}
+
+/* Back Button Styling */
+.action-back-btn {
+    background: white;
+    border: 1px solid #e2e8f0;
+    padding: 12px 24px;
+    border-radius: 12px;
+    cursor: pointer;
+    font-weight: 600;
+    color: var(--primary);
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    transition: 0.3s;
+}
+
+.action-back-btn:hover {
+    background: #f8fafc;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+    transform: translateX(-5px);
+}
+/* --- CLASS SELECTOR CARDS --- */
+.class-card-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 20px;
+    margin-top: 20px;
+}
+
+.class-selector-card {
+    background: white;
+    padding: 30px 20px;
+    border-radius: 15px;
+    text-align: center;
+    border: 1px solid #e2e8f0;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    box-shadow: var(--shadow-sm);
+}
+
+.class-selector-card:hover {
+    transform: translateY(-5px);
+    border-color: var(--accent);
+    box-shadow: var(--shadow-md);
+    background: #f0f9ff;
+}
+
+.class-selector-card .c-icon {
+    width: 50px;
+    height: 50px;
+    background: var(--accent);
+    color: white;
+    margin: 0 auto 15px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 800;
+    font-size: 1.2rem;
+}
+
+.class-selector-card h4 {
+    color: var(--primary);
+    font-size: 1rem;
+}
+
+/* Specific styling for ghost button */
+.btn-ghost {
+    background: #f1f5f9;
+    border: none;
+    padding: 8px 15px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: 600;
+    color: var(--text-muted);
+}
+
+/* ================= VOUCHER MODAL ================= */
+.voucher-modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.55);
+    backdrop-filter: blur(4px);
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+}
+
+.voucher-modal-box {
+    background: #f1f5f9;
+    border-radius: 18px;
+    width: min(900px, 100%);
+    max-height: 92vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    box-shadow: 0 30px 60px -15px rgba(0,0,0,0.35);
+}
+
+.voucher-modal-header {
+    background: white;
+    padding: 18px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid #e2e8f0;
+}
+
+.voucher-modal-header h3 {
+    color: var(--text-dark);
+    font-size: 1.1rem;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.voucher-modal-actions {
+    display: flex;
+    gap: 10px;
+}
+
+.voucher-modal-scroll {
+    padding: 24px;
+    overflow-y: auto;
+}
+
+/* ================= VOUCHER SHEET ================= */
+.voucher-sheet {
+    background: white;
+    border-radius: 16px;
+    padding: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+    box-shadow: 0 10px 25px -5px rgba(0,0,0,0.06);
+}
+
+.voucher-copy {
+    position: relative;
+    border: 2px dashed #cbd5e1;
+    border-radius: 14px;
+    padding: 22px 24px 18px;
+    background: linear-gradient(180deg, #f8fffd 0%, #ffffff 40%);
+}
+
+.voucher-copy-tag {
+    position: absolute;
+    top: -12px;
+    right: 20px;
+    padding: 5px 14px;
+    border-radius: 999px;
+    font-size: 0.7rem;
+    font-weight: 800;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: white;
+}
+
+.tag-blue { background: linear-gradient(135deg, #3498db, #2980b9); }
+.tag-green { background: linear-gradient(135deg, #27ae60, #2ecc71); }
+
+.voucher-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+    padding-bottom: 14px;
+}
+
+.voucher-school-info {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+}
+
+.voucher-logo {
+    width: 48px;
+    height: 48px;
+    border-radius: 14px;
+    background: linear-gradient(135deg, #3498db, #27ae60);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.3rem;
+    flex-shrink: 0;
+}
+
+.voucher-school-info h2 {
+    font-size: 1.05rem;
+    color: var(--text-dark);
+    margin: 0;
+    letter-spacing: 0.02em;
+}
+
+.voucher-school-info p {
+    font-size: 0.78rem;
+    color: var(--text-light);
+    margin: 2px 0 0;
+}
+
+.v-photo {
+    width: 64px;
+    height: 64px;
+    border-radius: 12px;
+    object-fit: cover;
+    border: 2px solid #27ae60;
+    flex-shrink: 0;
+}
+
+.v-photo-placeholder {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #f1f5f9;
+    color: #94a3b8;
+    font-size: 1.6rem;
+}
+
+.voucher-meta-row {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+    background: #f8fafc;
+    border-radius: 10px;
+    padding: 10px 14px;
+    margin-bottom: 12px;
+}
+
+.voucher-meta-row div {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.voucher-meta-row span {
+    font-size: 0.68rem;
+    color: var(--text-light);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.voucher-meta-row strong {
+    font-size: 0.85rem;
+    color: var(--text-dark);
+}
+
+.voucher-divider {
+    height: 1px;
+    background: linear-gradient(90deg, #3498db, #27ae60);
+    opacity: 0.25;
+    margin: 6px 0 14px;
+}
+
+.voucher-student-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px 24px;
+    margin-bottom: 16px;
+}
+
+.voucher-student-grid div {
+    display: flex;
+    justify-content: space-between;
+    border-bottom: 1px dotted #e2e8f0;
+    padding-bottom: 4px;
+}
+
+.voucher-student-grid span {
+    font-size: 0.8rem;
+    color: var(--text-light);
+}
+
+.voucher-student-grid strong {
+    font-size: 0.85rem;
+    color: var(--text-dark);
+}
+
+.voucher-fee-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 14px;
+}
+
+.voucher-fee-table th {
+    background: #ecfdf5;
+    color: #166534;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    text-align: left;
+    padding: 8px 10px;
+}
+
+.voucher-fee-table th:last-child,
+.voucher-fee-table td:last-child {
+    text-align: right;
+}
+
+.voucher-fee-table td {
+    padding: 9px 10px;
+    font-size: 0.85rem;
+    border-bottom: 1px solid #f1f5f9;
+    color: var(--text-dark);
+}
+
+.voucher-fee-table tfoot td {
+    font-weight: 800;
+    font-size: 0.95rem;
+    color: #1d7a45;
+    background: #f0fdf4;
+    border-top: 2px solid #27ae60;
+}
+
+.voucher-footer {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 16px;
+}
+
+.voucher-note {
+    font-size: 0.72rem;
+    color: var(--text-light);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    max-width: 60%;
+}
+
+.voucher-signature {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+}
+
+.sig-line {
+    width: 140px;
+    border-bottom: 1px solid #94a3b8;
+    height: 24px;
+}
+
+.voucher-signature span {
+    font-size: 0.7rem;
+    color: var(--text-light);
+}
+
+/* ================= PRINT STYLES ================= */
+.print-only {
+    display: none;
+}
+
+@media print {
+    body * {
+        visibility: hidden;
+    }
+    #voucher-print-area, #voucher-print-area * {
+        visibility: visible;
+    }
+    #voucher-print-area {
+        display: block !important;
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+    }
+    .voucher-sheet {
+        box-shadow: none;
+        gap: 12px;
+        padding: 10px;
+    }
+    .voucher-copy {
+        border: 1.5px dashed #94a3b8;
+        page-break-inside: avoid;
+    }
+    @page {
+        size: A4;
+        margin: 10mm;
+    }
+}
