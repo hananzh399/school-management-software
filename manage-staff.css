@@ -775,6 +775,14 @@ body {
     .staff-cards-container {
         gap: 24px;
     }
+
+    .directory-view {
+        max-width: 100%;
+    }
+
+    .profile-view {
+        max-width: 100%;
+    }
 }
 
 @media (max-width: 768px) {
@@ -828,6 +836,110 @@ body {
     .header-date {
         display: none;
     }
+
+    /* --- DIRECTORY VIEW RESPONSIVE --- */
+    .view-header {
+        flex-wrap: wrap;
+        gap: 12px;
+    }
+
+    .view-title {
+        font-size: 18px;
+    }
+
+    .table-controls {
+        flex-direction: column;
+        gap: 12px;
+        align-items: stretch;
+    }
+
+    .search-box {
+        max-width: 100%;
+    }
+
+    #add-staff-btn {
+        width: 100%;
+        justify-content: center;
+    }
+
+    .staff-table th,
+    .staff-table td {
+        padding: 12px 14px;
+        font-size: 13px;
+    }
+
+    .table-container {
+        border-radius: var(--radius-sm);
+    }
+
+    /* --- PROFILE VIEW RESPONSIVE --- */
+    .profile-card {
+        border-radius: var(--radius-md);
+    }
+
+    .profile-banner {
+        height: 90px;
+    }
+
+    .profile-avatar {
+        width: 80px;
+        height: 80px;
+        top: 50px;
+        left: 50%;
+        transform: translateX(-50%);
+    }
+
+    #profile-initials {
+        font-size: 26px;
+    }
+
+    .profile-header-info {
+        margin-top: 50px;
+        padding: 0 20px;
+        text-align: center;
+    }
+
+    .profile-name {
+        font-size: 20px;
+    }
+
+    .profile-details-grid {
+        grid-template-columns: 1fr;
+        padding: 20px;
+        gap: 16px;
+    }
+
+    .profile-actions {
+        padding: 20px;
+        justify-content: center;
+        flex-wrap: wrap;
+    }
+
+    /* --- MODALS RESPONSIVE --- */
+    .modal-content {
+        margin: 16px;
+        padding: 24px 20px;
+        max-width: 100%;
+    }
+
+    .form-modal-content {
+        max-width: 100%;
+        max-height: 90vh;
+        overflow-y: auto;
+    }
+
+    .form-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .modal-actions {
+        flex-direction: column;
+    }
+
+    .modal-actions .btn {
+        width: 100%;
+        justify-content: center;
+    }
 }
 
 @media (max-width: 480px) {
@@ -849,7 +961,114 @@ body {
     .counter-number {
         font-size: 28px;
     }
+
+    /* Header tighter */
+    .main-header {
+        padding: 12px 0;
+        margin-bottom: 24px;
+    }
+
+    .header-left {
+        gap: 10px;
+    }
+
+    .school-subtitle {
+        font-size: 11px;
+    }
+
+    /* Directory view table: card-style rows on very small screens */
+    .staff-table th {
+        font-size: 11px;
+        padding: 10px 8px;
+    }
+
+    .staff-table td {
+        font-size: 12px;
+        padding: 10px 8px;
+    }
+
+    .id-badge {
+        font-size: 10px !important;
+        padding: 2px 6px !important;
+    }
+
+    /* Profile tighter */
+    .profile-banner {
+        height: 70px;
+    }
+
+    .profile-avatar {
+        width: 64px;
+        height: 64px;
+        top: 38px;
+    }
+
+    #profile-initials {
+        font-size: 22px;
+    }
+
+    .profile-header-info {
+        margin-top: 40px;
+        padding: 0 16px;
+    }
+
+    .profile-name {
+        font-size: 18px;
+    }
+
+    .profile-id {
+        font-size: 12px;
+    }
+
+    .profile-details-grid {
+        padding: 16px;
+        gap: 12px;
+    }
+
+    .detail-label {
+        font-size: 11px;
+    }
+
+    .detail-value {
+        font-size: 13px;
+    }
+
+    .profile-actions {
+        padding: 16px;
+        gap: 10px;
+    }
+
+    .btn {
+        padding: 8px 14px;
+        font-size: 13px;
+    }
+
+    /* Back button */
+    .back-btn {
+        font-size: 13px;
+        padding: 6px 12px;
+    }
+
+    .view-title {
+        font-size: 16px;
+    }
+
+    /* Form modal */
+    .form-modal-content {
+        padding: 20px 16px;
+    }
+
+    .form-group input,
+    .form-group select {
+        padding: 8px 10px;
+        font-size: 13px;
+    }
+
+    .form-group label {
+        font-size: 12px;
+    }
 }
+
 
 /* Sidebar overlay backdrop for mobile */
 .sidebar-overlay {
