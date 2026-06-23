@@ -4,179 +4,242 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Staff Management | EduFlow Pro</title>
+    <meta name="description" content="EduFlow Pro Staff Management - Manage teaching and non-teaching staff directory.">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="admin.css">
-    <link rel="stylesheet" href="manage-students.css"> <!-- Reusing core management styles -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <link rel="stylesheet" href="manage-staff.css">
 </head>
 <body>
 
+    <!-- SIDEBAR -->
     <aside id="sidebar" class="sidebar">
         <div class="sidebar-header">
-            <div class="brand"><i class="fas fa-graduation-cap"></i><span>EduFlow Admin</span></div>
-            <button id="close-sidebar" class="close-btn"><i class="fas fa-times"></i></button>
+            <div class="brand">
+                <div class="brand-icon">
+                    <i class="fas fa-graduation-cap"></i>
+                </div>
+                <span>EduFlow Pro</span>
+            </div>
+            <button id="close-sidebar" class="close-btn" aria-label="Close sidebar">
+                <i class="fas fa-times"></i>
+            </button>
         </div>
+
         <nav class="sidebar-nav">
             <div class="nav-label">Core Modules</div>
-            <a href="index.html" class="nav-link"><i class="fas fa-th-large"></i> <span>Dashboard</span></a>
-            <a href="manage-students.html" class="nav-link"><i class="fas fa-user-graduate"></i> <span>Student Management</span></a>
-            <a href="manage-staff.html" class="nav-link active"><i class="fas fa-chalkboard-teacher"></i> <span>Staff Management</span></a>
-            <div class="sidebar-footer">
-                <hr><a href="login.html" class="nav-link logout-btn"><i class="fas fa-sign-out-alt"></i> <span>Logout</span></a>
-            </div>
+            <a href="index.html" class="nav-link">
+                <i class="fas fa-th-large"></i>
+                <span>Dashboard</span>
+            </a>
+            <a href="manage-students.html" class="nav-link">
+                <i class="fas fa-user-graduate"></i>
+                <span>Student Management</span>
+            </a>
+            <a href="manage-staff.html" class="nav-link active">
+                <i class="fas fa-chalkboard-teacher"></i>
+                <span>Staff Management</span>
+            </a>
+            <a href="manage-finance.html" class="nav-link">
+                <i class="fas fa-file-invoice-dollar"></i>
+                <span>Fees & Finance</span>
+            </a>
         </nav>
+
+        <div class="sidebar-footer">
+            <a href="login.html" class="nav-link logout-btn">
+                <i class="fas fa-sign-out-alt"></i>
+                <span>Logout</span>
+            </a>
+        </div>
     </aside>
 
+    <!-- MAIN CONTENT -->
     <main class="main-content">
+
+        <!-- TOP HEADER -->
         <header class="main-header">
             <div class="header-left">
-                <button id="open-sidebar" class="menu-toggle"><i class="fas fa-bars"></i></button>
+                <button id="open-sidebar" class="menu-toggle" aria-label="Open sidebar">
+                    <i class="fas fa-bars"></i>
+                </button>
                 <div class="school-branding">
-                    <h1>ST. LAWRENCE INTERNATIONAL SCHOOL</h1>
-                    <p class="sub-text">Staff Directory Control Panel</p>
+                    <h1 class="school-name">ST. LAWRENCE INTERNATIONAL SCHOOL</h1>
+                    <p class="school-subtitle">Staff Directory Control Panel</p>
                 </div>
+            </div>
+            <div class="header-right">
+                <div class="header-date" id="header-date"></div>
+                <button id="theme-toggle" class="theme-toggle" aria-label="Toggle theme">
+                    <i class="fas fa-moon" id="theme-icon-moon"></i>
+                    <i class="fas fa-sun" id="theme-icon-sun"></i>
+                    <div class="toggle-slider"></div>
+                </button>
             </div>
         </header>
 
-        <div class="content-body">
-            <!-- STAFF STATISTICS -->
-            <div class="stats-overview-grid">
-                <div class="stat-card">
-                    <div class="stat-icon-box bg-blue-tint"><i class="fas fa-users"></i></div>
-                    <div class="stat-details">
-                        <span class="stat-title">Total Staff</span>
-                        <h2 id="count-total-staff">0</h2>
+        <!-- DECORATIVE GLOW SPOTS -->
+        <div class="glow-spot glow-1"></div>
+        <div class="glow-spot glow-2"></div>
+
+        <!-- PAGE TITLE SECTION -->
+        <section class="page-title-section">
+            <h2 class="page-title">Staff Management</h2>
+            <p class="page-description">Select a staff category to view, add, or manage members.</p>
+            <div class="title-divider"></div>
+        </section>
+
+        <!-- STAFF CARDS CONTAINER -->
+        <section class="staff-cards-container">
+
+            <!-- TEACHING STAFF CARD -->
+            <div class="staff-card teaching-card" id="teaching-card" onclick="onCardClick('Teaching')">
+                <div class="card-glow"></div>
+                <div class="card-content">
+                    <div class="icon-wrapper teaching-icon">
+                        <i class="fas fa-chalkboard-teacher"></i>
                     </div>
-                </div>
-                <div class="stat-card" style="border-bottom-color: #9b59b6;">
-                    <div class="stat-icon-box" style="background: rgba(155, 89, 182, 0.1); color: #9b59b6;"><i class="fas fa-chalkboard-teacher"></i></div>
-                    <div class="stat-details">
-                        <span class="stat-title">Teaching Staff</span>
-                        <h2 id="count-teaching">0</h2>
+                    <h3 class="card-title">Teaching Staff</h3>
+                    <p class="card-description">Manage teachers, professors, and academic instructors</p>
+                    <div class="card-counter">
+                        <span class="counter-number" id="teaching-count" data-target="0">0</span>
+                        <span class="counter-label">Members</span>
                     </div>
-                </div>
-                <div class="stat-card" style="border-bottom-color: #e67e22;">
-                    <div class="stat-icon-box" style="background: rgba(230, 126, 34, 0.1); color: #e67e22;"><i class="fas fa-user-tie"></i></div>
-                    <div class="stat-details">
-                        <span class="stat-title">Non-Teaching</span>
-                        <h2 id="count-non-teaching">0</h2>
+                    <div class="card-action">
+                        <span>Manage Teachers</span>
+                        <i class="fas fa-arrow-right"></i>
                     </div>
                 </div>
             </div>
 
-            <div class="staff-category-container">
-                <!-- TEACHING STAFF SECTION -->
-                <div class="category-block teaching">
-                    <div class="category-header">
-                        <i class="fas fa-apple-alt"></i>
-                        <h3>Teaching Department</h3>
-                        <p>Faculty and Academic Instructors</p>
+            <!-- NON-TEACHING STAFF CARD -->
+            <div class="staff-card nonteaching-card" id="nonteaching-card" onclick="onCardClick('Non-Teaching')">
+                <div class="card-glow"></div>
+                <div class="card-content">
+                    <div class="icon-wrapper nonteaching-icon">
+                        <i class="fas fa-users-cog"></i>
                     </div>
-                    <div class="category-actions">
-                        <button class="btn-action add" onclick="openStaffModal('Teaching')">
-                            <i class="fas fa-plus"></i> Add Teacher
-                        </button>
-                        <button class="btn-action view" onclick="openDirectoryModal('Teaching')">
-                            <i class="fas fa-list"></i> View & Edit
-                        </button>
+                    <h3 class="card-title">Non-Teaching Staff</h3>
+                    <p class="card-description">Manage administrative, support, and maintenance staff</p>
+                    <div class="card-counter">
+                        <span class="counter-number" id="nonteaching-count" data-target="0">0</span>
+                        <span class="counter-label">Members</span>
                     </div>
-                </div>
-
-                <!-- NON-TEACHING STAFF SECTION -->
-                <div class="category-block administrative">
-                    <div class="category-header">
-                        <i class="fas fa-briefcase"></i>
-                        <h3>Non-Teaching Staff</h3>
-                        <p>Admin, Security, and Support</p>
-                    </div>
-                    <div class="category-actions">
-                        <button class="btn-action add" onclick="openStaffModal('Non-Teaching')">
-                            <i class="fas fa-plus"></i> Add Support Staff
-                        </button>
-                        <button class="btn-action view" onclick="openDirectoryModal('Non-Teaching')">
-                            <i class="fas fa-list"></i> View & Edit
-                        </button>
+                    <div class="card-action">
+                        <span>Manage Staff</span>
+                        <i class="fas fa-arrow-right"></i>
                     </div>
                 </div>
             </div>
-        </div>
-    </main>
 
-    <!-- MODAL: ADD/EDIT STAFF -->
-    <div id="staff-form-modal" class="modal-overlay">
-        <div class="modal-container">
-            <div class="modal-header">
-                <h3 id="modal-title">Staff Registration</h3>
-                <button class="close-modal-btn" onclick="closeModal('staff-form-modal')">&times;</button>
+        </section>
+
+        <!-- TOTAL STAFF SUMMARY BAR -->
+        <section class="summary-bar" id="summary-bar">
+            <div class="summary-item">
+                <i class="fas fa-users"></i>
+                <span>Total Staff: <strong id="total-count">0</strong></span>
             </div>
-            <form id="staff-form" class="modal-body-scroll">
-                <input type="hidden" id="staff-id" name="id">
-                <input type="hidden" id="staff-category" name="category">
+            <div class="summary-item">
+                <i class="fas fa-circle dot-teaching"></i>
+                <span>Teaching: <strong id="summary-teaching">0</strong></span>
+            </div>
+            <div class="summary-item">
+                <i class="fas fa-circle dot-nonteaching"></i>
+                <span>Non-Teaching: <strong id="summary-nonteaching">0</strong></span>
+            </div>
+        </section>
+
+        <!-- DIRECTORY VIEW (Hidden by default) -->
+        <section id="directory-view" class="directory-view d-none">
+            <div class="view-header">
+                <button class="back-btn" onclick="showCardsView()">
+                    <i class="fas fa-arrow-left"></i> Back to Categories
+                </button>
+                <h2 id="directory-title" class="view-title">Staff Directory</h2>
+            </div>
+            
+            <div class="table-controls">
+                <div class="search-box">
+                    <i class="fas fa-search"></i>
+                    <input type="text" id="staff-search" placeholder="Search by name, ID, or subject..." onkeyup="filterDirectory()">
+                </div>
+                <button class="btn btn-primary" onclick="openAddForm()">
+                    <i class="fas fa-plus"></i> Add Staff
+                </button>
+            </div>
+
+            <div class="table-container">
+                <table class="staff-table">
+                    <thead id="directory-thead">
+                        <!-- Headers populated by JS -->
+                    </thead>
+                    <tbody id="directory-tbody">
+                        <!-- Rows populated by JS -->
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- PROFILE VIEW (Hidden by default) -->
+        <section id="profile-view" class="profile-view d-none">
+            <div class="view-header">
+                <button class="back-btn" onclick="showDirectoryView('Teaching')">
+                    <i class="fas fa-arrow-left"></i> Back to Directory
+                </button>
+            </div>
+            
+            <div class="profile-card">
+                <div class="profile-banner"></div>
+                <div class="profile-avatar">
+                    <span id="profile-initials"></span>
+                </div>
                 
-                <div class="form-input-grid">
-                    <div class="form-input-group">
-                        <label>Full Name *</label>
-                        <input type="text" name="name" required>
-                    </div>
-                    <div class="form-input-group">
-                        <label>Employee ID</label>
-                        <input type="text" id="display-id" readonly class="input-readonly">
-                    </div>
-                    <div class="form-input-group">
-                        <label>Designation/Role *</label>
-                        <input type="text" name="designation" placeholder="e.g. Senior Teacher, Guard" required>
-                    </div>
-                    <div class="form-input-group">
-                        <label>Department / Subject</label>
-                        <input type="text" name="department" placeholder="e.g. Mathematics, Accounts">
-                    </div>
-                    <div class="form-input-group">
-                        <label>Contact Number *</label>
-                        <input type="tel" name="phone" required>
-                    </div>
-                    <div class="form-input-group">
-                        <label>Joining Date</label>
-                        <input type="date" name="joinDate">
-                    </div>
+                <div class="profile-header-info">
+                    <h3 id="profile-name" class="profile-name"></h3>
+                    <p id="profile-id" class="profile-id"></p>
                 </div>
-                <div class="modal-sticky-footer">
-                    <button type="button" class="btn-ghost" onclick="closeModal('staff-form-modal')">Cancel</button>
-                    <button type="submit" class="btn-primary">Save Employee Record</button>
-                </div>
-            </form>
-        </div>
-    </div>
 
-    <!-- MODAL: VIEW DIRECTORY -->
-    <div id="directory-modal" class="modal-overlay">
-        <div class="modal-container wider">
-            <div class="modal-header accent-bg">
-                <h3 id="directory-title">Staff Directory</h3>
-                <button class="close-modal-btn" onclick="closeModal('directory-modal')">&times;</button>
-            </div>
-            <div class="modal-body-scroll">
-                <div class="table-controls">
-                    <input type="text" id="staff-search" placeholder="Search by name or ID..." oninput="refreshTable()">
+                <div class="profile-details-grid" id="profile-details-grid">
+                    <!-- Populated dynamically by JS -->
                 </div>
-                <div class="data-table-wrapper">
-                    <table class="student-table">
-                        <thead>
-                            <tr>
-                                <th>Emp ID</th>
-                                <th>Name</th>
-                                <th>Role</th>
-                                <th>Dept/Subject</th>
-                                <th>Contact</th>
-                                <th>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody id="staff-table-body"></tbody>
-                    </table>
+
+                <div class="profile-actions">
+                    <button class="btn btn-edit" onclick="openEditForm()"><i class="fas fa-edit"></i> Edit</button>
+                    <button class="btn btn-remove" onclick="confirmRemove()"><i class="fas fa-trash-alt"></i> Remove</button>
+                </div>
+            </div>
+        </section>
+
+        <!-- CONFIRMATION MODAL (Hidden by default) -->
+        <div id="confirm-modal" class="modal-overlay d-none">
+            <div class="modal-content">
+                <div class="modal-icon warning"><i class="fas fa-exclamation-triangle"></i></div>
+                <h3 id="confirm-modal-title">Remove Staff</h3>
+                <p>Are you sure you want to remove <strong id="remove-target-name"></strong> from the directory? This action cannot be undone.</p>
+                <div class="modal-actions">
+                    <button class="btn btn-cancel" onclick="closeConfirmModal()">Cancel</button>
+                    <button class="btn btn-danger" onclick="executeRemove()">Yes, Remove</button>
                 </div>
             </div>
         </div>
-    </div>
+
+        <!-- FORM MODAL (Hidden by default) -->
+        <div id="form-modal" class="modal-overlay d-none">
+            <div class="modal-content form-modal-content">
+                <h3 id="form-modal-title">Add Staff</h3>
+                <form id="staff-form" onsubmit="handleFormSubmit(event)">
+                    <div id="form-dynamic-fields" class="form-grid">
+                        <!-- Populated by JS -->
+                    </div>
+                    <div class="modal-actions mt-20">
+                        <button type="button" class="btn btn-cancel" onclick="closeFormModal()">Cancel</button>
+                        <button type="submit" class="btn btn-primary">Save Details</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+    </main>
 
     <script src="manage-staff.js"></script>
 </body>
