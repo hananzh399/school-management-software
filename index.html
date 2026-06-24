@@ -3,131 +3,199 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>EduFlow Pro | Admin Dashboard</title>
-    <link rel="stylesheet" href="admin.css">
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <title>Dashboard | EduFlow Pro</title>
+    <meta name="description" content="EduFlow Pro Dashboard - Financial and Operational Overview.">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="manage-staff.css">
+    <link rel="stylesheet" href="index.css">
 </head>
 <body>
 
-    <!-- SIDEBAR NAVIGATION -->
+    <!-- SIDEBAR -->
     <aside id="sidebar" class="sidebar">
         <div class="sidebar-header">
             <div class="brand">
-                <i class="fas fa-graduation-cap"></i>
-                <span>EduFlow Admin</span>
+                <div class="brand-icon">
+                    <i class="fas fa-graduation-cap"></i>
+                </div>
+                <span>EduFlow Pro</span>
             </div>
-            <button id="close-sidebar" class="close-btn"><i class="fas fa-times"></i></button>
+            <button id="close-sidebar" class="close-btn" aria-label="Close sidebar">
+                <i class="fas fa-times"></i>
+            </button>
         </div>
 
         <nav class="sidebar-nav">
-            <div class="nav-label">Main Menu</div>
-            <a href="admin.html" class="nav-link active">
-                <i class="fas fa-th-large"></i> <span>Dashboard</span>
+            <div class="nav-label">Core Modules</div>
+            <a href="index.html" class="nav-link active">
+                <i class="fas fa-th-large"></i>
+                <span>Dashboard</span>
             </a>
-            <!-- LINK TO THE NEW PAGE -->
             <a href="manage-students.html" class="nav-link">
-                <i class="fas fa-user-graduate"></i> <span>Student Management</span>
+                <i class="fas fa-user-graduate"></i>
+                <span>Student Management</span>
             </a>
             <a href="manage-staff.html" class="nav-link">
-                <i class="fas fa-chalkboard-teacher"></i> <span>Staff Management</span>
+                <i class="fas fa-chalkboard-teacher"></i>
+                <span>Staff Management</span>
             </a>
-            
-            <div class="nav-label">Finance</div>
             <a href="manage-finance.html" class="nav-link">
-    <i class="fas fa-file-invoice-dollar"></i> <span>Fees & Finance</span>
-</a>
-
-            <div class="sidebar-footer">
-                <hr>
-                <a href="#" class="nav-link logout">
-                    <i class="fas fa-sign-out-alt"></i> <span>Logout</span>
-                </a>
-            </div>
+                <i class="fas fa-file-invoice-dollar"></i>
+                <span>Fees & Finance</span>
+            </a>
         </nav>
+
+        <div class="sidebar-footer">
+            <a href="login.html" class="nav-link logout-btn">
+                <i class="fas fa-sign-out-alt"></i>
+                <span>Logout</span>
+            </a>
+        </div>
     </aside>
 
-    <!-- MAIN CONTENT AREA -->
-    <div class="main-content">
+    <!-- MAIN CONTENT -->
+    <main class="main-content">
+
+        <!-- TOP HEADER -->
         <header class="main-header">
             <div class="header-left">
-                <button id="open-sidebar" class="menu-toggle">
+                <button id="open-sidebar" class="menu-toggle" aria-label="Open sidebar">
                     <i class="fas fa-bars"></i>
                 </button>
-                <div class="school-name">
-                    <h1>ST. LAWRENCE INTERNATIONAL SCHOOL</h1>
+                <div class="school-branding">
+                    <h1 class="school-name">ST. LAWRENCE INTERNATIONAL SCHOOL</h1>
+                    <p class="school-subtitle">Command Center & Analytics</p>
                 </div>
             </div>
             <div class="header-right">
-                <div class="admin-user">
-                    <div class="user-text">
-                        <span class="user-name">Super Admin</span>
-                        <span class="user-role">Administrator</span>
-                    </div>
-                    <img src="https://ui-avatars.com/api/?name=Admin&background=3498db&color=fff" alt="Admin">
-                </div>
+                <div class="header-date" id="header-date"></div>
+                <button id="theme-toggle" class="theme-toggle" aria-label="Toggle theme">
+                    <i class="fas fa-moon" id="theme-icon-moon"></i>
+                    <i class="fas fa-sun" id="theme-icon-sun"></i>
+                    <div class="toggle-slider"></div>
+                </button>
             </div>
         </header>
 
-        <div class="content-body">
-            <!-- DASHBOARD OVERVIEW -->
-            <section id="dashboard-view" class="content-section">
-                <div class="section-title">
-                    <h2>Administrative Overview</h2>
-                    <p>Real-time data and school statistics</p>
-                </div>
+        <!-- DECORATIVE GLOW SPOTS -->
+        <div class="glow-spot glow-1"></div>
+        <div class="glow-spot glow-2"></div>
 
-                <div class="stats-hero-grid">
-                    <div class="attendance-card student">
-                        <div class="card-icon"><i class="fas fa-user-check"></i></div>
-                        <div class="card-data">
-                            <h3>Student Attendance</h3>
-                            <div class="value">1,150 <small>/ 1,248</small></div>
-                            <div class="progress-bar"><div style="width: 92%"></div></div>
-                            <p>92% Present Today</p>
+        <!-- PAGE TITLE SECTION -->
+        <section class="page-title-section">
+            <h2 class="page-title">Executive Overview</h2>
+            <p class="page-description">Real-time overview of school operations, finances, and staff.</p>
+            <div class="title-divider"></div>
+        </section>
+
+        <!-- DASHBOARD GRID -->
+        <section class="dashboard-grid">
+
+            <!-- Demographics Overview -->
+            <div class="dash-card demo-card">
+                <div class="card-glow demo-glow"></div>
+                <div class="dash-card-header">
+                    <h3><i class="fas fa-users"></i> School Headcount</h3>
+                </div>
+                <div class="dash-card-body">
+                    <div class="metric">
+                        <span class="metric-label">Total Students</span>
+                        <span class="metric-value" id="total-students">0</span>
+                    </div>
+                    <div class="metric">
+                        <span class="metric-label">Total Staff</span>
+                        <span class="metric-value" id="total-staff">0</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Revenue: Fees & Fines -->
+            <div class="dash-card revenue-card">
+                <div class="card-glow revenue-glow"></div>
+                <div class="dash-card-header">
+                    <h3><i class="fas fa-wallet"></i> Revenue Overview</h3>
+                </div>
+                <div class="dash-card-body">
+                    <div class="metric-group">
+                        <div class="metric">
+                            <span class="metric-label">Expected Fees</span>
+                            <span class="metric-value text-blue">RS <span id="expected-fees">0</span></span>
+                        </div>
+                        <div class="metric">
+                            <span class="metric-label">Collected Fees</span>
+                            <span class="metric-value text-green">RS <span id="collected-fees">0</span></span>
+                        </div>
+                        <div class="metric">
+                            <span class="metric-label">Pending Fees</span>
+                            <span class="metric-value text-yellow">RS <span id="pending-fees">0</span></span>
+                        </div>
+                        <div class="metric">
+                            <span class="metric-label">Student Late Fines</span>
+                            <span class="metric-value text-green">RS <span id="student-late-fines">0</span></span>
+                        </div>
+                        <div class="metric">
+                            <span class="metric-label">Other Fines</span>
+                            <span class="metric-value text-green">RS <span id="student-other-fines">0</span></span>
                         </div>
                     </div>
-                    <div class="attendance-card staff">
-                        <div class="card-icon"><i class="fas fa-clipboard-user"></i></div>
-                        <div class="card-data">
-                            <h3>Staff Attendance</h3>
-                            <div class="value">82 <small>/ 86</small></div>
-                            <div class="progress-bar"><div style="width: 95%"></div></div>
-                            <p>95% Present Today</p>
+                </div>
+            </div>
+
+            <!-- Expenses: Salaries & Operational -->
+            <div class="dash-card expense-card">
+                <div class="card-glow expense-glow"></div>
+                <div class="dash-card-header">
+                    <h3><i class="fas fa-file-invoice-dollar"></i> Expenses & Adjustments</h3>
+                </div>
+                <div class="dash-card-body">
+                    <div class="metric-group">
+                        <div class="metric">
+                            <span class="metric-label">Base Salary Expenses</span>
+                            <span class="metric-value text-red">RS <span id="base-salaries">0</span></span>
+                        </div>
+                        <div class="metric">
+                            <span class="metric-label">Staff Fines (Deducted)</span>
+                            <span class="metric-value text-green">RS <span id="staff-fines">0</span></span>
+                        </div>
+                        <div class="metric">
+                            <span class="metric-label">Other Expenses</span>
+                            <span class="metric-value text-red">RS <span id="other-expenses">0</span></span>
+                        </div>
+                        <div class="metric total-expense-metric">
+                            <span class="metric-label">Total Net Expenses</span>
+                            <span class="metric-value text-red">RS <span id="net-expenses">0</span></span>
                         </div>
                     </div>
                 </div>
+            </div>
 
-                <div class="fee-status-highlight">
-                    <div class="fee-info">
-                        <i class="fas fa-calendar-alt"></i>
-                        <span>Fee Status: <strong>May 2026</strong></span>
-                    </div>
-                    <div class="fee-values">
-                        <div class="val">Expected: <strong>$60,000</strong></div>
-                        <div class="val text-success">Received: <strong>$48,500</strong></div>
-                        <div class="val text-danger">Pending: <strong>$11,500</strong></div>
+            <!-- Profit & Loss (Bottom Line) -->
+            <div class="dash-card profit-card">
+                <div class="card-glow profit-glow"></div>
+                <div class="dash-card-header">
+                    <h3><i class="fas fa-chart-line"></i> Net Profit</h3>
+                    <span class="trend up" id="profit-trend"><i class="fas fa-arrow-up"></i> 0% vs last month</span>
+                </div>
+                <div class="dash-card-body">
+                    <div class="metric-group">
+                        <div class="metric main-metric">
+                            <span class="metric-label">Current Month</span>
+                            <span class="metric-value highlight-profit">RS <span id="net-profit">0</span></span>
+                        </div>
+                        <div class="metric main-metric past-metric">
+                            <span class="metric-label">Past Month</span>
+                            <span class="metric-value" style="color:var(--text-secondary);">RS <span id="past-month-profit">0</span></span>
+                        </div>
                     </div>
                 </div>
+            </div>
 
-                <div class="small-stats-grid">
-                    <div class="stat-card">
-                        <i class="fas fa-chart-line" style="color:var(--accent); font-size: 2rem; margin-right: 15px;"></i>
-                        <div><h4>$450,000</h4><p>Total Revenue</p></div>
-                    </div>
-                    <div class="stat-card">
-                        <i class="fas fa-file-invoice-dollar" style="color:var(--danger); font-size: 2rem; margin-right: 15px;"></i>
-                        <div><h4>$310,000</h4><p>Total Expenses</p></div>
-                    </div>
-                </div>
-            </section>
-        </div>
-    </div>
+        </section>
 
-    <script>
-        // Minimal script for sidebar only
-        const sidebar = document.getElementById('sidebar');
-        document.getElementById('open-sidebar').onclick = () => sidebar.classList.add('active');
-        document.getElementById('close-sidebar').onclick = () => sidebar.classList.remove('active');
-    </script>
+    </main>
+
+    <script src="shared-data.js"></script>
+    <script src="index.js"></script>
 </body>
 </html>
