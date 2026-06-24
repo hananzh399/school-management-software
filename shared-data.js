@@ -120,6 +120,14 @@ function calculateFinancials() {
         netProfit,
         lastMonthProfit: db.finances.historical.lastMonthProfit
     };
+    // keep totals derived from lists (single source of truth)
+db.finances.expenses.other = db.finances.expenses.list.reduce((s, e) => s + Number(e.amount || 0), 0);
+db.students.fines.other   = db.students.fines.list.reduce((s, f) => s + Number(f.amount || 0), 0);
+const totalStaffBonuses   = db.finances.staffBonuses.reduce((s, b) => s + Number(b.amount || 0), 0);
+
+// include bonuses in expenses
+const netExpenses = totalBaseSalaries + db.finances.expenses.other + totalStaffBonuses - totalStaffFines;
+
 }
 const DEFAULT_DATA = {
     staff: {
