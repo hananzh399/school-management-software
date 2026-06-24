@@ -9,7 +9,7 @@
     margin-top: 24px;
 }
 
-/ Centered sub-page cards (Add / View pairs) /
+/* Centered sub-page cards (Add / View pairs) */
 .finance-cards-container.sub-cards {
     grid-template-columns: repeat(auto-fit, minmax(280px, 320px));
     justify-content: center;
@@ -72,7 +72,7 @@
     to   { opacity: 1; transform: translateY(0); }
 }
 
-/ Sub-page title section: title centered, back button pinned to left /
+/* Sub-page title section: title centered, back button pinned to left */
 .sub-title-section {
     position: relative;
     text-align: center;
@@ -89,7 +89,7 @@
     margin-right: auto;
 }
 
-/ Back Button — pinned to top-left of sub-page /
+/* Back Button — pinned to top-left of sub-page */
 .back-btn {
     position: absolute;
     left: 0;
@@ -114,7 +114,7 @@
     background: var(--bg-hover, rgba(255,255,255,0.05));
 }
 
-/ Centered block utility for forms / tables on sub-pages /
+/* Centered block utility for forms / tables on sub-pages */
 .centered-block {
     margin-left: auto;
     margin-right: auto;
@@ -249,7 +249,7 @@
 .finance-table tbody tr:hover { background: var(--bg-hover, rgba(255,255,255,0.03)); }
 
 .empty-row { text-align: center; color: var(--text-secondary); padding: 32px !important; }
-/ ===== FIX: Student select list white in dark mode ===== /
+/* ===== FIX: Student select list white in dark mode ===== */
 @media (prefers-color-scheme: dark) {
   #page-add-student-fine select,
   #page-add-student-fine select option,
@@ -267,7 +267,7 @@
   }
 }
 
-/ If your app toggles dark mode with a class instead of system preference /
+/* If your app toggles dark mode with a class instead of system preference */
 body.dark #page-add-student-fine select,
 body.dark #page-add-student-fine select option,
 body.dark #page-add-student-fine input,
