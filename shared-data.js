@@ -120,42 +120,6 @@ function calculateFinancials() {
         netProfit,
         lastMonthProfit: db.finances.historical.lastMonthProfit
     };
-    // keep totals derived from lists (single source of truth)
-db.finances.expenses.other = db.finances.expenses.list.reduce((s, e) => s + Number(e.amount || 0), 0);
-db.students.fines.other   = db.students.fines.list.reduce((s, f) => s + Number(f.amount || 0), 0);
-const totalStaffBonuses   = db.finances.staffBonuses.reduce((s, b) => s + Number(b.amount || 0), 0);
-
-// include bonuses in expenses
-const netExpenses = totalBaseSalaries + db.finances.expenses.other + totalStaffBonuses - totalStaffFines;
-
-}return {
-   ...,
-   bonuses: { total: totalStaffBonuses, list: db.finances.staffBonuses }
-};
-
-const DEFAULT_DATA = {
-    staff: {
-        'Teaching': [ /* ...existing... */ ],
-        'Non-Teaching': [ /* ...existing... */ ]
-    },
-    students: {
-        totalCount: 1245,
-        withPendingFees: 125,
-        list: [],                 // NEW: [{id, name, class, ...}] for student fines dropdown
-        fines: {
-            lateFees: 0,
-            other: 0,             // change from 12000 → 0, will be summed from list below
-            list: []              // NEW: [{studentId, name, amount, description, date}]
-        }
-    },
-    finances: {
-        fees: { expected: 4500000, collected: 3800000, pending: 700000 },
-        expenses: {
-            other: 0,             // will be summed from list
-            list: []              // NEW: [{description, amount, date}]
-        },
-        staffBonuses: [],         // NEW: [{staffId, name, job, amount, description, date}]
-        historical: { lastMonthProfit: 1400000 }
-    }
+    //
 };
 
