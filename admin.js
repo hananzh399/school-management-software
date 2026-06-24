@@ -1,144 +1,137 @@
+/**
+ * EDUFLOW PRO - DASHBOARD LOGIC
+ */
+
 document.addEventListener('DOMContentLoaded', () => {
-    // DOM Elements
+    initTheme();
+    initSidebar();
+    initDate();
+    calculateAndLoadDashboardData();
+});
+
+/* ============================================
+   THEME TOGGLE
+   ============================================ */
+function initTheme() {
+    const toggleBtn = document.getElementById('theme-toggle');
+    const root = document.documentElement;
+    
+    const savedTheme = localStorage.getItem('eduflow-theme') || 'dark';
+    root.setAttribute('data-theme', savedTheme);
+
+    toggleBtn.addEventListener('click', () => {
+        const currentTheme = root.getAttribute('data-theme');
+        const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+        
+        root.setAttribute('data-theme', newTheme);
+        localStorage.setItem('eduflow-theme', newTheme);
+    });
+}
+
+/* ============================================
+   SIDEBAR TOGGLE
+   ============================================ */
+function initSidebar() {
     const sidebar = document.getElementById('sidebar');
-    const openSidebarBtn = document.getElementById('open-sidebar');
-    const closeSidebarBtn = document.getElementById('close-sidebar');
-    const navLinks = document.querySelectorAll('.nav-link');
-    const sections = document.querySelectorAll('.content-section');
+    const openBtn = document.getElementById('open-sidebar');
+    const closeBtn = document.getElementById('close-sidebar');
 
-    const modal = document.getElementById('student-modal');
-    const closeFormBtns = document.querySelectorAll('.close-modal-btn');
-    const admissionForm = document.getElementById('student-admission-form');
+    const overlay = document.createElement('div');
+    overlay.className = 'sidebar-overlay';
+    document.body.appendChild(overlay);
 
-    // Navigation Logic
-    function navigateTo(sectionId) {
-        sections.forEach(s => s.classList.remove('active'));
-        document.getElementById(sectionId).classList.add('active');
-        
-        // Update Sidebar Active Link
-        navLinks.forEach(link => {
-            link.classList.remove('active');
-            if (link.getAttribute('data-view') === sectionId) {
-                link.classList.add('active');
-            }
-        });
-        
-        // Auto-close sidebar on mobile
+    openBtn.addEventListener('click', () => {
+        sidebar.classList.add('active');
+        overlay.classList.add('active');
+    });
+
+    closeBtn.addEventListener('click', closeSidebar);
+    overlay.addEventListener('click', closeSidebar);
+
+    function closeSidebar() {
         sidebar.classList.remove('active');
-        window.scrollTo(0, 0);
+        overlay.classList.remove('active');
+    }
+}
+
+/* ============================================
+   HEADER DATE
+   ============================================ */
+function initDate() {
+    const dateEl = document.getElementById('header-date');
+    const now = new Date();
+    const options = { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' };
+    dateEl.textContent = now.toLocaleDateString('en-US', options);
+}
+
+/* ============================================
+   DASHBOARD DATA & LOGIC SIMULATION
+   ============================================ */
+
+function calculateAndLoadDashboardData() {
+    const data = calculateFinancials();
+    
+    // 5. Update the UI
+    // Demographics
+    animateCounter('total-students', data.db.students.totalCount);
+    
+    const totalStaff = data.db.staff['Teaching'].length + data.db.staff['Non-Teaching'].length;
+    animateCounter('total-staff', totalStaff);
+
+    // Revenue
+    animateCounter('expected-fees', data.fees.expected);
+    animateCounter('collected-fees', data.fees.collected);
+    animateCounter('pending-fees', data.fees.pending);
+    animateCounter('student-late-fines', data.fines.studentLate); 
+    animateCounter('student-other-fines', data.fines.studentOther); 
+
+    // Expenses
+    animateCounter('base-salaries', data.salaries.total);
+    animateCounter('staff-fines', data.fines.staffTotal);
+    animateCounter('other-expenses', data.db.finances.expenses.other);
+    animateCounter('net-expenses', data.netExpenses);
+
+    // Profit
+    animateCounter('net-profit', data.netProfit);
+    animateCounter('past-month-profit', data.lastMonthProfit);
+    
+    // Update Trend UI
+    const lastMonth = data.lastMonthProfit;
+    const profitDiff = data.netProfit - lastMonth;
+    const percentChange = ((profitDiff / lastMonth) * 100).toFixed(1);
+
+    const trendEl = document.getElementById('profit-trend');
+    if (profitDiff >= 0) {
+        trendEl.className = 'trend up';
+        trendEl.innerHTML = `<i class="fas fa-arrow-up"></i> ${percentChange}% vs last month`;
+    } else {
+        trendEl.className = 'trend down';
+        trendEl.innerHTML = `<i class="fas fa-arrow-down"></i> ${Math.abs(percentChange)}% vs last month`;
+    }
+}
+
+/* ============================================
+   COUNTER ANIMATION & FORMATTING
+   ============================================ */
+function animateCounter(elementId, target) {
+    const el = document.getElementById(elementId);
+    if (target === 0) {
+        el.textContent = '0';
+        return;
     }
 
-    // Sidebar Toggles
-    openSidebarBtn.addEventListener('click', () => sidebar.classList.add('active'));
-    closeSidebarBtn.addEventListener('click', () => sidebar.classList.remove('active'));
+    let current = 0;
+    const duration = 1200; // ms
+    const stepTime = 30; // ms
+    const increment = Math.max(1, Math.floor(target / (duration / stepTime)));
 
-    // Sidebar Link Clicking
-    navLinks.forEach(link => {
-        link.addEventListener('click', (e) => {
-            const view = link.getAttribute('data-view');
-            if (view) {
-                e.preventDefault();
-                navigateTo(view);
-            }
-        });
-    });
-
-    // Global Nav Function for buttons
-    window.navigateTo = navigateTo;
-
-    // MODAL LOGIC
-    window.openStudentModal = () => {
-        modal.style.display = 'block';
-    };
-
-    closeFormBtns.forEach(btn => {
-        btn.addEventListener('click', () => {
-            modal.style.display = 'none';
-        });
-    });
-
-    // Image Preview Logic (Student Photo)
-    const photoInput = document.getElementById('student-photo');
-    const photoPreview = document.getElementById('student-img-preview');
-
-    photoInput.addEventListener('change', function() {
-        const file = this.files[0];
-        if (file) {
-            const reader = new FileReader();
-            reader.onload = (e) => {
-                photoPreview.src = e.target.result;
-            }
-            reader.readAsDataURL(file);
+    const timer = setInterval(() => {
+        current += increment;
+        if (current >= target) {
+            current = target;
+            clearInterval(timer);
         }
-    });
-
-    // Certificate Preview Logic
-    const certInput = document.getElementById('cert-upload');
-    const certPreviewContainer = document.getElementById('cert-preview-container');
-
-    certInput.addEventListener('change', function() {
-        const file = this.files[0];
-        if (file) {
-            certPreviewContainer.innerHTML = `<span>Selected: ${file.name}</span>`;
-            
-            if (file.type.startsWith('image/')) {
-                const reader = new FileReader();
-                reader.onload = (e) => {
-                    const img = document.createElement('img');
-                    img.src = e.target.result;
-                    img.style.display = 'block';
-                    img.style.maxWidth = '100%';
-                    img.style.marginTop = '10px';
-                    certPreviewContainer.appendChild(img);
-                }
-                reader.readAsDataURL(file);
-            }
-        }
-    });
-
-    // Auto-Age Calculation
-    const dobInput = document.getElementById('student-dob');
-    const ageInput = document.getElementById('student-age');
-
-    dobInput.addEventListener('change', () => {
-        const birthDate = new Date(dobInput.value);
-        const today = new Date();
-        
-        let age = today.getFullYear() - birthDate.getFullYear();
-        const m = today.getMonth() - birthDate.getMonth();
-        
-        if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
-            age--;
-        }
-        
-        ageInput.value = age >= 0 ? `${age} Years Old` : 'Invalid Date';
-    });
-
-    // Form Submission & Success Toast
-    admissionForm.addEventListener('submit', (e) => {
-        e.preventDefault();
-
-        // 1. Show Toast
-        const toast = document.getElementById('toast-msg');
-        toast.classList.add('show');
-
-        // 2. Hide Modal
-        modal.style.display = 'none';
-
-        // 3. Reset Form & Previews after a delay
-        setTimeout(() => {
-            toast.classList.remove('show');
-            admissionForm.reset();
-            photoPreview.src = "https://via.placeholder.com/150?text=Student+Photo";
-            certPreviewContainer.innerHTML = "<span>No file selected</span>";
-            ageInput.value = "";
-        }, 3000);
-    });
-
-    // Close modal on outside click
-    window.onclick = (event) => {
-        if (event.target == modal) {
-            modal.style.display = "none";
-        }
-    };
-});
+        // Format with commas for readability
+        el.textContent = current.toLocaleString();
+    }, stepTime);
+}
