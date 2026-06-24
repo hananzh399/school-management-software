@@ -121,3 +121,29 @@ function calculateFinancials() {
         lastMonthProfit: db.finances.historical.lastMonthProfit
     };
 }
+const DEFAULT_DATA = {
+    staff: {
+        'Teaching': [ /* ...existing... */ ],
+        'Non-Teaching': [ /* ...existing... */ ]
+    },
+    students: {
+        totalCount: 1245,
+        withPendingFees: 125,
+        list: [],                 // NEW: [{id, name, class, ...}] for student fines dropdown
+        fines: {
+            lateFees: 0,
+            other: 0,             // change from 12000 → 0, will be summed from list below
+            list: []              // NEW: [{studentId, name, amount, description, date}]
+        }
+    },
+    finances: {
+        fees: { expected: 4500000, collected: 3800000, pending: 700000 },
+        expenses: {
+            other: 0,             // will be summed from list
+            list: []              // NEW: [{description, amount, date}]
+        },
+        staffBonuses: [],         // NEW: [{staffId, name, job, amount, description, date}]
+        historical: { lastMonthProfit: 1400000 }
+    }
+};
+
