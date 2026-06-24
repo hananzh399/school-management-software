@@ -193,38 +193,8 @@ function showDirectoryView(category) {
 /* ============================================
    SAMPLE DATA & TABLE POPULATION
    ============================================ */
-let staffData = {
-    'Teaching': [
-        {
-            id: "TCH-9021",
-            name: "Taha Khan",
-            qualification: "M.Sc. Mathematics, B.Ed",
-            subjects: "Mathematics, Physics",
-            classes: "Grade 9, Grade 10",
-            incharge: "Grade 10-A",
-            gender: "Male",
-            salary: "$4,500",
-            joined: "Aug 15, 2021",
-            cnic: "42101-1234567-1",
-            phone: "+1 (555) 123-4567",
-            address: "123 Education Lane, Knowledge City, ST 12345"
-        }
-    ],
-    'Non-Teaching': [
-        {
-            id: "NTS-4012",
-            name: "John Doe",
-            job: "Maintenance Supervisor",
-            startTime: "07:00 AM",
-            endTime: "04:00 PM",
-            gender: "Male",
-            salary: "$3,200",
-            cnic: "12345-6789012-3",
-            phone: "+1 (555) 987-6543",
-            address: "456 Facility Rd, Knowledge City, ST 12345"
-        }
-    ]
-};
+// Read from global state instead of local variable
+let staffData = getGlobalData().staff;
 
 let currentProfileId = null;
 
@@ -376,6 +346,11 @@ function executeRemove() {
     // Remove from array
     staffData[currentCategory] = staffData[currentCategory].filter(s => s.id !== currentProfileId);
     
+    // Save to global state
+    const db = getGlobalData();
+    db.staff = staffData;
+    saveGlobalData(db);
+
     // Update counts silently
     loadStaffCounts(false);
 
@@ -553,8 +528,14 @@ function handleFormSubmit(e) {
         // Add new
         const prefix = currentCategory === 'Teaching' ? 'TCH-' : 'NTS-';
         newData.id = prefix + Math.floor(1000 + Math.random() * 9000);
+        newData.fines = 0; // Initialize fines
         staffData[currentCategory].push(newData);
     }
+
+    // Save to global state
+    const db = getGlobalData();
+    db.staff = staffData;
+    saveGlobalData(db);
 
     // Refresh directory table and update counts silently
     populateDirectory(currentCategory);
