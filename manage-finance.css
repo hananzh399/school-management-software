@@ -9,6 +9,15 @@
     margin-top: 24px;
 }
 
+/* Centered sub-page cards (Add / View pairs) */
+.finance-cards-container.sub-cards {
+    grid-template-columns: repeat(auto-fit, minmax(280px, 320px));
+    justify-content: center;
+    max-width: 720px;
+    margin-left: auto;
+    margin-right: auto;
+}
+
 .finance-card {
     background: var(--bg-card);
     border: 1px solid var(--border-subtle);
@@ -30,64 +39,213 @@
 }
 
 .icon-wrapper {
-    width: 64px;
-    height: 64px;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 28px;
-    margin: 0 auto 20px;
-    position: relative;
-    z-index: 1;
+    width: 64px; height: 64px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 28px; margin: 0 auto 20px;
+    position: relative; z-index: 1;
 }
 
-.card-title {
-    font-size: 18px;
-    font-weight: 700;
-    margin-bottom: 8px;
-    position: relative;
-    z-index: 1;
-}
+.card-title { font-size: 18px; font-weight: 700; margin-bottom: 8px; position: relative; z-index: 1; }
+.card-description { font-size: 14px; color: var(--text-secondary); position: relative; z-index: 1; }
 
-.card-description {
-    font-size: 14px;
-    color: var(--text-secondary);
-    position: relative;
-    z-index: 1;
-}
+.revenue-theme .icon-wrapper { background: rgba(16, 185, 129, 0.1); color: #10b981; }
+.revenue-theme:hover { border-color: rgba(16, 185, 129, 0.3); }
+.expense-theme .icon-wrapper { background: rgba(239, 68, 68, 0.1); color: #ef4444; }
+.expense-theme:hover { border-color: rgba(239, 68, 68, 0.3); }
 
-/* Revenue Themes */
-.revenue-theme .icon-wrapper {
-    background: rgba(16, 185, 129, 0.1);
-    color: #10b981;
-}
-.revenue-theme:hover {
-    border-color: rgba(16, 185, 129, 0.3);
-}
-
-/* Expense Themes */
-.expense-theme .icon-wrapper {
-    background: rgba(239, 68, 68, 0.1);
-    color: #ef4444;
-}
-.expense-theme:hover {
-    border-color: rgba(239, 68, 68, 0.3);
-}
-
-/* Glow */
 .card-glow {
-    position: absolute;
-    inset: 0;
+    position: absolute; inset: 0;
     border-radius: var(--radius-lg);
-    opacity: 0;
-    transition: opacity var(--transition);
-    z-index: 0;
+    opacity: 0; transition: opacity var(--transition); z-index: 0;
 }
-
 .revenue-theme .card-glow { background: radial-gradient(circle at 50% 0%, rgba(16, 185, 129, 0.15), transparent 70%); }
 .expense-theme .card-glow { background: radial-gradient(circle at 50% 0%, rgba(239, 68, 68, 0.15), transparent 70%); }
+.finance-card:hover .card-glow { opacity: 1; }
 
-.finance-card:hover .card-glow {
-    opacity: 1;
+/* ============================================
+   SUB-PAGE STYLES
+   ============================================ */
+
+.sub-page { animation: fadeInPage 0.2s ease; }
+@keyframes fadeInPage {
+    from { opacity: 0; transform: translateY(8px); }
+    to   { opacity: 1; transform: translateY(0); }
 }
+
+/* Sub-page title section: title centered, back button pinned to left */
+.sub-title-section {
+    position: relative;
+    text-align: center;
+    padding-top: 8px;
+}
+
+.sub-title-section .page-title,
+.sub-title-section .page-description {
+    text-align: center;
+}
+
+.sub-title-section .title-divider {
+    margin-left: auto;
+    margin-right: auto;
+}
+
+/* Back Button — pinned to top-left of sub-page */
+.back-btn {
+    position: absolute;
+    left: 0;
+    top: 0;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--bg-card);
+    border: 1px solid var(--border-subtle);
+    color: var(--text-primary);
+    padding: 8px 16px;
+    border-radius: var(--radius-md, 8px);
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+    z-index: 2;
+}
+
+.back-btn:hover {
+    border-color: var(--border-hover);
+    background: var(--bg-hover, rgba(255,255,255,0.05));
+}
+
+/* Centered block utility for forms / tables on sub-pages */
+.centered-block {
+    margin-left: auto;
+    margin-right: auto;
+}
+
+/* ============================================
+   FORM PAGE CONTAINER
+   ============================================ */
+
+.form-page-container {
+    background: var(--bg-card);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-lg);
+    padding: 32px;
+    max-width: 600px;
+    margin-top: 8px;
+}
+
+.form-group { display: flex; flex-direction: column; gap: 8px; margin-bottom: 20px; }
+.form-group label { font-size: 14px; font-weight: 600; color: var(--text-secondary); }
+
+.form-group input,
+.form-group select {
+    background: var(--bg-input, rgba(255,255,255,0.05));
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-md, 8px);
+    color: var(--text-primary);
+    padding: 10px 14px;
+    font-size: 15px;
+    font-family: inherit;
+    transition: border-color 0.2s;
+}
+
+.form-group input:focus,
+.form-group select:focus { outline: none; border-color: var(--border-hover); }
+
+.mt-20 { margin-top: 20px; }
+
+.modal-actions { display: flex; gap: 12px; justify-content: flex-end; }
+
+.btn {
+    padding: 10px 24px;
+    border-radius: var(--radius-md, 8px);
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    border: none;
+    font-family: inherit;
+    transition: all 0.2s;
+}
+
+.btn-primary { background: var(--accent, #6366f1); color: #fff; }
+.btn-primary:hover { opacity: 0.88; }
+
+.btn-cancel {
+    background: var(--bg-card);
+    border: 1px solid var(--border-subtle);
+    color: var(--text-primary);
+}
+.btn-cancel:hover { border-color: var(--border-hover); }
+
+/* ============================================
+   STAFF CATEGORY TOGGLE
+   ============================================ */
+
+.staff-category-toggle { display: flex; gap: 10px; }
+
+.category-btn {
+    flex: 1; padding: 10px;
+    border-radius: var(--radius-md, 8px);
+    border: 1px solid var(--border-subtle);
+    background: var(--bg-card);
+    color: var(--text-secondary);
+    font-size: 14px; font-weight: 600;
+    cursor: pointer; font-family: inherit;
+    transition: all 0.2s;
+}
+.category-btn.active {
+    background: var(--accent, #6366f1);
+    border-color: var(--accent, #6366f1);
+    color: #fff;
+}
+
+/* ============================================
+   STAFF MEMBERS LIST
+   ============================================ */
+
+.staff-members-list {
+    display: flex; flex-direction: column; gap: 8px;
+    max-height: 260px; overflow-y: auto; padding-right: 4px;
+}
+
+.staff-member-item {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 12px 14px;
+    background: var(--bg-input, rgba(255,255,255,0.04));
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-md, 8px);
+    cursor: pointer; transition: all 0.15s;
+}
+.staff-member-item:hover { border-color: var(--border-hover); }
+.staff-member-item.selected { border-color: var(--accent, #6366f1); background: rgba(99, 102, 241, 0.08); }
+
+.staff-member-info { display: flex; flex-direction: column; gap: 2px; }
+.staff-member-name { font-size: 15px; font-weight: 600; color: var(--text-primary); }
+.staff-member-role { font-size: 12px; color: var(--text-secondary); }
+
+.staff-member-check { color: var(--accent, #6366f1); font-size: 14px; opacity: 0; transition: opacity 0.15s; }
+.staff-member-item.selected .staff-member-check { opacity: 1; }
+
+/* ============================================
+   FINANCE TABLE
+   ============================================ */
+
+.table-container {
+    overflow-x: auto;
+    margin-top: 8px;
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-lg);
+    max-width: 960px;
+}
+
+.finance-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.finance-table thead tr { background: var(--bg-card); border-bottom: 1px solid var(--border-subtle); }
+.finance-table th {
+    padding: 14px 18px; text-align: left;
+    font-weight: 600; color: var(--text-secondary);
+    font-size: 13px; text-transform: uppercase; letter-spacing: 0.04em;
+}
+.finance-table td { padding: 13px 18px; color: var(--text-primary); border-bottom: 1px solid var(--border-subtle); }
+.finance-table tbody tr:last-child td { border-bottom: none; }
+.finance-table tbody tr:hover { background: var(--bg-hover, rgba(255,255,255,0.03)); }
+
+.empty-row { text-align: center; color: var(--text-secondary); padding: 32px !important; }
