@@ -120,6 +120,4 @@ function calculateFinancials() {
         netProfit,
         lastMonthProfit: db.finances.historical.lastMonthProfit
     };
-    //
-};
-
+}
