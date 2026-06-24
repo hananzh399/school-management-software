@@ -15,53 +15,31 @@
     <aside id="sidebar" class="sidebar">
         <div class="sidebar-header">
             <div class="brand">
-                <div class="brand-icon">
-                    <i class="fas fa-graduation-cap"></i>
-                </div>
+                <div class="brand-icon"><i class="fas fa-graduation-cap"></i></div>
                 <span>EduFlow Pro</span>
             </div>
-            <button id="close-sidebar" class="close-btn" aria-label="Close sidebar">
-                <i class="fas fa-times"></i>
-            </button>
+            <button id="close-sidebar" class="close-btn" aria-label="Close sidebar"><i class="fas fa-times"></i></button>
         </div>
 
         <nav class="sidebar-nav">
             <div class="nav-label">Core Modules</div>
-            <a href="index.html" class="nav-link">
-                <i class="fas fa-th-large"></i>
-                <span>Dashboard</span>
-            </a>
-            <a href="manage-students.html" class="nav-link">
-                <i class="fas fa-user-graduate"></i>
-                <span>Student Management</span>
-            </a>
-            <a href="manage-staff.html" class="nav-link">
-                <i class="fas fa-chalkboard-teacher"></i>
-                <span>Staff Management</span>
-            </a>
-            <a href="manage-finance.html" class="nav-link active">
-                <i class="fas fa-file-invoice-dollar"></i>
-                <span>Fees & Finance</span>
-            </a>
+            <a href="index.html" class="nav-link"><i class="fas fa-th-large"></i><span>Dashboard</span></a>
+            <a href="manage-students.html" class="nav-link"><i class="fas fa-user-graduate"></i><span>Student Management</span></a>
+            <a href="manage-staff.html" class="nav-link"><i class="fas fa-chalkboard-teacher"></i><span>Staff Management</span></a>
+            <a href="manage-finance.html" class="nav-link active"><i class="fas fa-file-invoice-dollar"></i><span>Fees & Finance</span></a>
         </nav>
 
         <div class="sidebar-footer">
-            <a href="login.html" class="nav-link logout-btn">
-                <i class="fas fa-sign-out-alt"></i>
-                <span>Logout</span>
-            </a>
+            <a href="login.html" class="nav-link logout-btn"><i class="fas fa-sign-out-alt"></i><span>Logout</span></a>
         </div>
     </aside>
 
     <!-- MAIN CONTENT -->
     <main class="main-content">
 
-        <!-- TOP HEADER -->
         <header class="main-header">
             <div class="header-left">
-                <button id="open-sidebar" class="menu-toggle" aria-label="Open sidebar">
-                    <i class="fas fa-bars"></i>
-                </button>
+                <button id="open-sidebar" class="menu-toggle" aria-label="Open sidebar"><i class="fas fa-bars"></i></button>
                 <div class="school-branding">
                     <h1 class="school-name">ST. LAWRENCE INTERNATIONAL SCHOOL</h1>
                     <p class="school-subtitle">Finance Control Panel</p>
@@ -77,53 +55,407 @@
             </div>
         </header>
 
-        <!-- DECORATIVE GLOW SPOTS -->
         <div class="glow-spot glow-1"></div>
         <div class="glow-spot glow-2"></div>
 
-        <!-- PAGE TITLE SECTION -->
-        <section class="page-title-section">
-            <h2 class="page-title">Fees & Finance</h2>
-            <p class="page-description">Manage collections, salaries, fines, and operational expenses.</p>
-            <div class="title-divider"></div>
-        </section>
+        <!-- ===================== PAGE: MAIN ===================== -->
+        <div id="page-main">
+            <section class="page-title-section">
+                <h2 class="page-title">Fees & Finance</h2>
+                <p class="page-description">Manage collections, salaries, fines, and operational expenses.</p>
+                <div class="title-divider"></div>
+            </section>
 
-        <!-- FINANCE CARDS CONTAINER -->
-        <section class="finance-cards-container">
+            <section class="finance-cards-container">
+                <!-- Kept (not worked on for now) -->
+                <div class="finance-card revenue-theme" onclick="openModal('fee-modal')">
+                    <div class="card-glow"></div>
+                    <div class="icon-wrapper"><i class="fas fa-hand-holding-usd"></i></div>
+                    <h3 class="card-title">Collect Student Fee</h3>
+                    <p class="card-description">Record tuition and outstanding balances.</p>
+                </div>
 
-            <!-- Revenue Actions -->
-            <div class="finance-card revenue-theme" onclick="openModal('fee-modal')">
-                <div class="card-glow"></div>
-                <div class="icon-wrapper"><i class="fas fa-hand-holding-usd"></i></div>
-                <h3 class="card-title">Collect Student Fee</h3>
-                <p class="card-description">Record tuition and outstanding balances.</p>
+                <div class="finance-card revenue-theme" onclick="showPage('page-student-fine')">
+                    <div class="card-glow"></div>
+                    <div class="icon-wrapper"><i class="fas fa-exclamation-circle"></i></div>
+                    <h3 class="card-title">Student Fines</h3>
+                    <p class="card-description">Attendance fine.</p>
+                </div>
+
+                <div class="finance-card expense-theme" onclick="showPage('page-staff-hub')">
+                    <div class="card-glow"></div>
+                    <div class="icon-wrapper"><i class="fas fa-file-invoice"></i></div>
+                    <h3 class="card-title">Staff Fine or Bonus</h3>
+                    <p class="card-description">Attendance fine.</p>
+                </div>
+
+                <div class="finance-card expense-theme" onclick="showPage('page-expense-hub')">
+                    <div class="card-glow"></div>
+                    <div class="icon-wrapper"><i class="fas fa-tools"></i></div>
+                    <h3 class="card-title">Other Expenses</h3>
+                    <p class="card-description">Attendance fine.</p>
+                </div>
+            </section>
+        </div>
+
+        <!-- ===================== PAGE: STUDENT FINE HUB ===================== -->
+        <div id="page-student-fine" class="sub-page d-none">
+            <section class="page-title-section sub-title-section">
+                <button class="back-btn" onclick="showPage('page-main')"><i class="fas fa-arrow-left"></i> Back</button>
+                <h2 class="page-title">Student Fines</h2>
+                <p class="page-description">Add fines to students or view all students with fines.</p>
+                <div class="title-divider"></div>
+            </section>
+
+            <section class="finance-cards-container sub-cards">
+                <div class="finance-card revenue-theme" onclick="showPage('page-add-student-fine')">
+                    <div class="card-glow"></div>
+                    <div class="icon-wrapper"><i class="fas fa-plus-circle"></i></div>
+                    <h3 class="card-title">Add Fine</h3>
+                    <p class="card-description">Assign a fine with description to a student.</p>
+                </div>
+                <div class="finance-card expense-theme" onclick="showPage('page-view-student-fines')">
+                    <div class="card-glow"></div>
+                    <div class="icon-wrapper"><i class="fas fa-list-alt"></i></div>
+                    <h3 class="card-title">View Students with Fine</h3>
+                    <p class="card-description">See all students who have fines logged.</p>
+                </div>
+            </section>
+        </div>
+
+        <!-- ===================== PAGE: ADD STUDENT FINE ===================== -->
+        <div id="page-add-student-fine" class="sub-page d-none">
+            <section class="page-title-section sub-title-section">
+                <button class="back-btn" onclick="showPage('page-student-fine')"><i class="fas fa-arrow-left"></i> Back</button>
+                <h2 class="page-title">Add Student Fine</h2>
+                <p class="page-description">Select a student and enter fine details.</p>
+                <div class="title-divider"></div>
+            </section>
+
+            <div class="form-page-container centered-block">
+                <div class="form-group full-width">
+                    <label>Select Student</label>
+                    <select id="student-select"><option value="">Loading students...</option></select>
+                </div>
+                <div class="form-group full-width">
+                    <label>Fine Amount (RS)</label>
+                    <input type="number" id="student-fine-amount" min="1" placeholder="Enter amount">
+                </div>
+                <div class="form-group full-width">
+                    <label>Fine Description / Cause</label>
+                    <input type="text" id="student-fine-desc" placeholder="e.g. Disciplinary action, damage to property">
+                </div>
+                <div class="modal-actions mt-20">
+                    <button type="button" class="btn btn-cancel" onclick="showPage('page-student-fine')">Cancel</button>
+                    <button type="button" class="btn btn-primary" onclick="handleAddStudentFine()">Add Fine</button>
+                </div>
             </div>
+        </div>
 
-            <div class="finance-card revenue-theme" onclick="openModal('student-fine-modal')">
-                <div class="card-glow"></div>
-                <div class="icon-wrapper"><i class="fas fa-exclamation-circle"></i></div>
-                <h3 class="card-title">Log Student Fine</h3>
-                <p class="card-description">Add disciplinary or miscellaneous student fines.</p>
+        <!-- ===================== PAGE: VIEW STUDENT FINES ===================== -->
+        <div id="page-view-student-fines" class="sub-page d-none">
+            <section class="page-title-section sub-title-section">
+                <button class="back-btn" onclick="showPage('page-student-fine')"><i class="fas fa-arrow-left"></i> Back</button>
+                <h2 class="page-title">Student Fines</h2>
+                <p class="page-description">All students with recorded fines.</p>
+                <div class="title-divider"></div>
+            </section>
+
+            <div class="table-container centered-block">
+                <table class="finance-table">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Class</th>
+                            <th>Fine Amount (RS)</th>
+                            <th>Cause</th>
+                        </tr>
+                    </thead>
+                    <tbody id="student-fines-tbody">
+                        <tr><td colspan="4" class="empty-row">No fines recorded yet.</td></tr>
+                    </tbody>
+                </table>
             </div>
+        </div>
 
-            <!-- Expense Actions -->
-            <div class="finance-card expense-theme" onclick="openModal('staff-fine-modal')">
-                <div class="card-glow"></div>
-                <div class="icon-wrapper"><i class="fas fa-file-invoice"></i></div>
-                <h3 class="card-title">Log Staff Fine</h3>
-                <p class="card-description">Deduct from teaching or non-teaching salaries.</p>
+        <!-- ===================== PAGE: STAFF HUB (Bonus / Fine) ===================== -->
+        <div id="page-staff-hub" class="sub-page d-none">
+            <section class="page-title-section sub-title-section">
+                <button class="back-btn" onclick="showPage('page-main')"><i class="fas fa-arrow-left"></i> Back</button>
+                <h2 class="page-title">Staff Fine or Bonus</h2>
+                <p class="page-description">Choose to manage staff bonuses or staff fines.</p>
+                <div class="title-divider"></div>
+            </section>
+
+            <section class="finance-cards-container sub-cards">
+                <div class="finance-card revenue-theme" onclick="showPage('page-staff-bonus')">
+                    <div class="card-glow"></div>
+                    <div class="icon-wrapper"><i class="fas fa-gift"></i></div>
+                    <h3 class="card-title">Staff Bonus</h3>
+                    <p class="card-description">Reward teaching or non-teaching staff.</p>
+                </div>
+                <div class="finance-card expense-theme" onclick="showPage('page-staff-fine')">
+                    <div class="card-glow"></div>
+                    <div class="icon-wrapper"><i class="fas fa-file-invoice"></i></div>
+                    <h3 class="card-title">Staff Fine</h3>
+                    <p class="card-description">Deduct from teaching or non-teaching salaries.</p>
+                </div>
+            </section>
+        </div>
+
+        <!-- ===================== PAGE: STAFF BONUS HUB ===================== -->
+        <div id="page-staff-bonus" class="sub-page d-none">
+            <section class="page-title-section sub-title-section">
+                <button class="back-btn" onclick="showPage('page-staff-hub')"><i class="fas fa-arrow-left"></i> Back</button>
+                <h2 class="page-title">Staff Bonus</h2>
+                <p class="page-description">Add a bonus or view all staff with bonuses.</p>
+                <div class="title-divider"></div>
+            </section>
+
+            <section class="finance-cards-container sub-cards">
+                <div class="finance-card revenue-theme" onclick="showPage('page-add-staff-bonus')">
+                    <div class="card-glow"></div>
+                    <div class="icon-wrapper"><i class="fas fa-plus-circle"></i></div>
+                    <h3 class="card-title">Add Bonus</h3>
+                    <p class="card-description">Assign a bonus with description to a staff member.</p>
+                </div>
+                <div class="finance-card expense-theme" onclick="showPage('page-view-staff-bonus')">
+                    <div class="card-glow"></div>
+                    <div class="icon-wrapper"><i class="fas fa-list-alt"></i></div>
+                    <h3 class="card-title">View Staff with Bonus</h3>
+                    <p class="card-description">See all staff members who have bonuses logged.</p>
+                </div>
+            </section>
+        </div>
+
+        <!-- ===================== PAGE: ADD STAFF BONUS ===================== -->
+        <div id="page-add-staff-bonus" class="sub-page d-none">
+            <section class="page-title-section sub-title-section">
+                <button class="back-btn" onclick="showPage('page-staff-bonus')"><i class="fas fa-arrow-left"></i> Back</button>
+                <h2 class="page-title">Add Staff Bonus</h2>
+                <p class="page-description">Select staff category then member to assign bonus.</p>
+                <div class="title-divider"></div>
+            </section>
+
+            <div class="form-page-container centered-block">
+                <div class="form-group full-width">
+                    <label>Staff Category</label>
+                    <div class="staff-category-toggle">
+                        <button type="button" class="category-btn active" id="btn-bonus-teaching" onclick="selectBonusCategory('Teaching')">Teaching</button>
+                        <button type="button" class="category-btn" id="btn-bonus-non-teaching" onclick="selectBonusCategory('Non-Teaching')">Non-Teaching</button>
+                    </div>
+                </div>
+
+                <div class="form-group full-width">
+                    <label>Staff Members</label>
+                    <div id="bonus-members-list" class="staff-members-list"></div>
+                </div>
+
+                <div class="form-group full-width">
+                    <label>Bonus Amount (RS)</label>
+                    <input type="number" id="staff-bonus-amount" min="1" placeholder="Enter amount">
+                </div>
+                <div class="form-group full-width">
+                    <label>Bonus Description</label>
+                    <input type="text" id="staff-bonus-desc" placeholder="e.g. Performance bonus, Eid bonus">
+                </div>
+                <div class="modal-actions mt-20">
+                    <button type="button" class="btn btn-cancel" onclick="showPage('page-staff-bonus')">Cancel</button>
+                    <button type="button" class="btn btn-primary" onclick="handleAddStaffBonus()">Add Bonus</button>
+                </div>
             </div>
+        </div>
 
-            <div class="finance-card expense-theme" onclick="openModal('expense-modal')">
-                <div class="card-glow"></div>
-                <div class="icon-wrapper"><i class="fas fa-tools"></i></div>
-                <h3 class="card-title">Add Extra Expense</h3>
-                <p class="card-description">Record utilities, maintenance, or supplies.</p>
+        <!-- ===================== PAGE: VIEW STAFF BONUS ===================== -->
+        <div id="page-view-staff-bonus" class="sub-page d-none">
+            <section class="page-title-section sub-title-section">
+                <button class="back-btn" onclick="showPage('page-staff-bonus')"><i class="fas fa-arrow-left"></i> Back</button>
+                <h2 class="page-title">Staff Bonuses</h2>
+                <p class="page-description">All staff members with recorded bonuses.</p>
+                <div class="title-divider"></div>
+            </section>
+
+            <div class="table-container centered-block">
+                <table class="finance-table">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Job</th>
+                            <th>Amount (RS)</th>
+                            <th>Description</th>
+                        </tr>
+                    </thead>
+                    <tbody id="staff-bonus-tbody">
+                        <tr><td colspan="4" class="empty-row">No bonuses recorded yet.</td></tr>
+                    </tbody>
+                </table>
             </div>
+        </div>
 
-        </section>
+        <!-- ===================== PAGE: STAFF FINE HUB ===================== -->
+        <div id="page-staff-fine" class="sub-page d-none">
+            <section class="page-title-section sub-title-section">
+                <button class="back-btn" onclick="showPage('page-staff-hub')"><i class="fas fa-arrow-left"></i> Back</button>
+                <h2 class="page-title">Staff Fines</h2>
+                <p class="page-description">Add fines to staff members or view all staff with fines.</p>
+                <div class="title-divider"></div>
+            </section>
 
-        <!-- STUDENT FEE MODAL -->
+            <section class="finance-cards-container sub-cards">
+                <div class="finance-card expense-theme" onclick="showPage('page-add-staff-fine')">
+                    <div class="card-glow"></div>
+                    <div class="icon-wrapper"><i class="fas fa-plus-circle"></i></div>
+                    <h3 class="card-title">Add Fine</h3>
+                    <p class="card-description">Assign a fine with description to a staff member.</p>
+                </div>
+                <div class="finance-card revenue-theme" onclick="showPage('page-view-staff-fines')">
+                    <div class="card-glow"></div>
+                    <div class="icon-wrapper"><i class="fas fa-list-alt"></i></div>
+                    <h3 class="card-title">View Staff with Fine</h3>
+                    <p class="card-description">See all staff members who have fines logged.</p>
+                </div>
+            </section>
+        </div>
+
+        <!-- ===================== PAGE: ADD STAFF FINE ===================== -->
+        <div id="page-add-staff-fine" class="sub-page d-none">
+            <section class="page-title-section sub-title-section">
+                <button class="back-btn" onclick="showPage('page-staff-fine')"><i class="fas fa-arrow-left"></i> Back</button>
+                <h2 class="page-title">Add Staff Fine</h2>
+                <p class="page-description">Select staff category then member to assign fine.</p>
+                <div class="title-divider"></div>
+            </section>
+
+            <div class="form-page-container centered-block">
+                <div class="form-group full-width">
+                    <label>Staff Category</label>
+                    <div class="staff-category-toggle">
+                        <button type="button" class="category-btn active" id="btn-teaching" onclick="selectStaffCategory('Teaching')">Teaching</button>
+                        <button type="button" class="category-btn" id="btn-non-teaching" onclick="selectStaffCategory('Non-Teaching')">Non-Teaching</button>
+                    </div>
+                </div>
+
+                <div class="form-group full-width">
+                    <label>Staff Members</label>
+                    <div id="staff-members-list" class="staff-members-list"></div>
+                </div>
+
+                <div class="form-group full-width">
+                    <label>Fine Amount (RS)</label>
+                    <input type="number" id="staff-fine-amount" min="1" placeholder="Enter amount">
+                </div>
+                <div class="form-group full-width">
+                    <label>Fine Description / Cause</label>
+                    <input type="text" id="staff-fine-desc" placeholder="e.g. Late attendance, misconduct">
+                </div>
+                <div class="modal-actions mt-20">
+                    <button type="button" class="btn btn-cancel" onclick="showPage('page-staff-fine')">Cancel</button>
+                    <button type="button" class="btn btn-primary" onclick="handleAddStaffFine()">Add Fine</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- ===================== PAGE: VIEW STAFF FINES ===================== -->
+        <div id="page-view-staff-fines" class="sub-page d-none">
+            <section class="page-title-section sub-title-section">
+                <button class="back-btn" onclick="showPage('page-staff-fine')"><i class="fas fa-arrow-left"></i> Back</button>
+                <h2 class="page-title">Staff Fines</h2>
+                <p class="page-description">All staff members with recorded fines.</p>
+                <div class="title-divider"></div>
+            </section>
+
+            <div class="table-container centered-block">
+                <table class="finance-table">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Job / Role</th>
+                            <th>Fine Amount (RS)</th>
+                            <th>Cause</th>
+                        </tr>
+                    </thead>
+                    <tbody id="staff-fines-tbody">
+                        <tr><td colspan="4" class="empty-row">No fines recorded yet.</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- ===================== PAGE: EXPENSE HUB ===================== -->
+        <div id="page-expense-hub" class="sub-page d-none">
+            <section class="page-title-section sub-title-section">
+                <button class="back-btn" onclick="showPage('page-main')"><i class="fas fa-arrow-left"></i> Back</button>
+                <h2 class="page-title">Other Expenses</h2>
+                <p class="page-description">Add a new expense or view all logged expenses.</p>
+                <div class="title-divider"></div>
+            </section>
+
+            <section class="finance-cards-container sub-cards">
+                <div class="finance-card expense-theme" onclick="showPage('page-add-expense')">
+                    <div class="card-glow"></div>
+                    <div class="icon-wrapper"><i class="fas fa-plus-circle"></i></div>
+                    <h3 class="card-title">Add Expense</h3>
+                    <p class="card-description">Record utilities, maintenance or supplies.</p>
+                </div>
+                <div class="finance-card revenue-theme" onclick="showPage('page-view-expenses')">
+                    <div class="card-glow"></div>
+                    <div class="icon-wrapper"><i class="fas fa-list-alt"></i></div>
+                    <h3 class="card-title">View Expense</h3>
+                    <p class="card-description">See all recorded operational expenses.</p>
+                </div>
+            </section>
+        </div>
+
+        <!-- ===================== PAGE: ADD EXPENSE ===================== -->
+        <div id="page-add-expense" class="sub-page d-none">
+            <section class="page-title-section sub-title-section">
+                <button class="back-btn" onclick="showPage('page-expense-hub')"><i class="fas fa-arrow-left"></i> Back</button>
+                <h2 class="page-title">Add Expense</h2>
+                <p class="page-description">Record utilities, maintenance, supplies or any operational expense.</p>
+                <div class="title-divider"></div>
+            </section>
+
+            <div class="form-page-container centered-block">
+                <div class="form-group full-width">
+                    <label>Expense Amount (RS)</label>
+                    <input type="number" id="exp-amount" min="1" placeholder="Enter amount">
+                </div>
+                <div class="form-group full-width">
+                    <label>Description</label>
+                    <input type="text" id="exp-desc" placeholder="e.g. Electricity bill, maintenance supplies">
+                </div>
+                <div class="modal-actions mt-20">
+                    <button type="button" class="btn btn-cancel" onclick="showPage('page-expense-hub')">Cancel</button>
+                    <button type="button" class="btn btn-primary" onclick="handleExpenseSubmitNew()">Log Expense</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- ===================== PAGE: VIEW EXPENSES ===================== -->
+        <div id="page-view-expenses" class="sub-page d-none">
+            <section class="page-title-section sub-title-section">
+                <button class="back-btn" onclick="showPage('page-expense-hub')"><i class="fas fa-arrow-left"></i> Back</button>
+                <h2 class="page-title">Expenses</h2>
+                <p class="page-description">All recorded operational expenses.</p>
+                <div class="title-divider"></div>
+            </section>
+
+            <div class="table-container centered-block">
+                <table class="finance-table">
+                    <thead>
+                        <tr>
+                            <th>Expense of</th>
+                            <th>Expense Amount (RS)</th>
+                        </tr>
+                    </thead>
+                    <tbody id="expenses-tbody">
+                        <tr><td colspan="2" class="empty-row">No expenses recorded yet.</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- ===================== STUDENT FEE MODAL (unchanged) ===================== -->
         <div id="fee-modal" class="modal-overlay d-none">
             <div class="modal-content form-modal-content">
                 <h3>Collect Fee</h3>
@@ -140,74 +472,9 @@
             </div>
         </div>
 
-        <!-- STUDENT FINE MODAL -->
-        <div id="student-fine-modal" class="modal-overlay d-none">
-            <div class="modal-content form-modal-content">
-                <h3>Log Student Fine</h3>
-                <form onsubmit="handleStudentFineSubmit(event)">
-                    <div class="form-group full-width">
-                        <label>Fine Amount (RS)</label>
-                        <input type="number" id="sfine-amount" required min="1">
-                    </div>
-                    <div class="modal-actions mt-20">
-                        <button type="button" class="btn btn-cancel" onclick="closeModal('student-fine-modal')">Cancel</button>
-                        <button type="submit" class="btn btn-primary">Log Fine</button>
-                    </div>
-                </form>
-            </div>
-        </div>
-
-        <!-- STAFF FINE MODAL -->
-        <div id="staff-fine-modal" class="modal-overlay d-none">
-            <div class="modal-content form-modal-content">
-                <h3>Log Staff Fine</h3>
-                <form onsubmit="handleStaffFineSubmit(event)">
-                    <div class="form-group full-width">
-                        <label>Staff Category</label>
-                        <select id="staff-category" required onchange="populateStaffDropdown()">
-                            <option value="">Select Category...</option>
-                            <option value="Teaching">Teaching</option>
-                            <option value="Non-Teaching">Non-Teaching</option>
-                        </select>
-                    </div>
-                    <div class="form-group full-width">
-                        <label>Staff Member</label>
-                        <select id="staff-member" required>
-                            <option value="">Select Category First...</option>
-                        </select>
-                    </div>
-                    <div class="form-group full-width">
-                        <label>Fine Amount (RS)</label>
-                        <input type="number" id="tfine-amount" required min="1">
-                    </div>
-                    <div class="modal-actions mt-20">
-                        <button type="button" class="btn btn-cancel" onclick="closeModal('staff-fine-modal')">Cancel</button>
-                        <button type="submit" class="btn btn-primary">Log Fine</button>
-                    </div>
-                </form>
-            </div>
-        </div>
-
-        <!-- EXPENSE MODAL -->
-        <div id="expense-modal" class="modal-overlay d-none">
-            <div class="modal-content form-modal-content">
-                <h3>Add Operational Expense</h3>
-                <form onsubmit="handleExpenseSubmit(event)">
-                    <div class="form-group full-width">
-                        <label>Expense Amount (RS)</label>
-                        <input type="number" id="exp-amount" required min="1">
-                    </div>
-                    <div class="modal-actions mt-20">
-                        <button type="button" class="btn btn-cancel" onclick="closeModal('expense-modal')">Cancel</button>
-                        <button type="submit" class="btn btn-primary">Log Expense</button>
-                    </div>
-                </form>
-            </div>
-        </div>
-
     </main>
 
-    <script src="sharedfile.js"></script>
+    <script src="shared-data.js"></script>
     <script src="manage-finance.js"></script>
 </body>
 </html>
