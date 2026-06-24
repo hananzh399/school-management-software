@@ -128,7 +128,11 @@ const totalStaffBonuses   = db.finances.staffBonuses.reduce((s, b) => s + Number
 // include bonuses in expenses
 const netExpenses = totalBaseSalaries + db.finances.expenses.other + totalStaffBonuses - totalStaffFines;
 
-}
+}return {
+   ...,
+   bonuses: { total: totalStaffBonuses, list: db.finances.staffBonuses }
+};
+
 const DEFAULT_DATA = {
     staff: {
         'Teaching': [ /* ...existing... */ ],
