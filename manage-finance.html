@@ -88,6 +88,14 @@
                     <h3 class="card-title">Staff Fine or Bonus</h3>
                     <p class="card-description">Late, Disciplinary or Attendance fine</p>
                 </div>
+                
+                <!-- New Salary Card -->
+                 <div class="finance-card salary-theme" onclick="showPage('page-salary-hub')">
+                 <div class="card-glow"></div>
+                 <div class="icon-wrapper"><i class="fas fa-money-check-alt"></i></div>
+                 <h3 class="card-title">Manage Salaries</h3>
+                 <p class="card-description">Process payroll and view payment history.</p>
+                 </div>
 
                 <div class="finance-card expense-theme" onclick="showPage('page-expense-hub')">
                     <div class="card-glow"></div>
@@ -517,7 +525,217 @@
         </div>
 
 
+        <!-- ===================== PAGE: SALARY HUB ===================== -->
+<div id="page-salary-hub" class="sub-page d-none">
+    <section class="page-title-section sub-title-section">
+        <button class="back-btn" onclick="showPage('page-main')"><i class="fas fa-arrow-left"></i> Back</button>
+        <h2 class="page-title">Manage Salaries</h2>
+        <p class="page-description">Select staff category to manage monthly payroll.</p>
+        <div class="title-divider"></div>
+    </section>
 
+    <section class="finance-cards-container sub-cards">
+        <div class="finance-card salary-theme" onclick="showPage('page-salary-teaching')">
+            <div class="card-glow"></div>
+            <div class="icon-wrapper"><i class="fas fa-chalkboard-teacher"></i></div>
+            <h3 class="card-title">Teaching Staff</h3>
+            <p class="card-description">Manage salaries for teachers and instructors.</p>
+        </div>
+        <div class="finance-card salary-theme" onclick="showPage('page-salary-non-teaching')">
+            <div class="card-glow"></div>
+            <div class="icon-wrapper"><i class="fas fa-user-tie"></i></div>
+            <h3 class="card-title">Non-Teaching Staff</h3>
+            <p class="card-description">Manage salaries for admin and support staff.</p>
+        </div>
+    </section>
+</div>
+
+<!-- ===================== PAGE: TEACHING SALARY ===================== -->
+<div id="page-salary-teaching" class="sub-page d-none">
+    <section class="page-title-section sub-title-section">
+        <button class="back-btn" onclick="showPage('page-salary-hub')"><i class="fas fa-arrow-left"></i> Back</button>
+        <h2 class="page-title">Teaching Staff Payroll</h2>
+        <p class="page-description">Monitor and process monthly salaries for teachers.</p>
+        <div class="title-divider"></div>
+    </section>
+
+    <!-- Search & Filter Bar -->
+    <div class="centered-block" style="max-width: 960px; margin-bottom: 20px;">
+        <div class="search-filter-box">
+            <div class="search-grid">
+                <div class="search-group" style="grid-column: span 2;">
+                    <label>Search Teacher</label>
+                    <div style="position: relative;">
+                        <i class="fas fa-search" style="position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--text-light);"></i>
+                        <input type="text" id="teacher-salary-search" placeholder="Enter Name or Teacher ID..." style="padding-left: 35px; width: 100%;" oninput="filterTeachingSalaries()">
+                    </div>
+                </div>
+                <div class="search-group">
+                    <label>Current Month</label>
+                    <input type="text" id="current-salary-month" readonly style="background: var(--bg-input); font-weight: 700; text-align: center;">
+                </div>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- Salary Table -->
+    <div class="table-container centered-block">
+        <table class="finance-table">
+            <thead>
+                <tr>
+                    <th>Teacher ID</th>
+                    <th>Teacher Name</th>
+                    <th>Designation/Subject</th>
+                    <th>Basic Salary</th>
+                    <th>Taken Advance</th>
+                    <th>Status</th>
+                </tr>
+            </thead>
+            <tbody id="teaching-salary-tbody">
+                <!-- Data populated via JS -->
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- ===================== PAGE: NON-TEACHING SALARY ===================== -->
+<div id="page-salary-non-teaching" class="sub-page d-none">
+    <section class="page-title-section sub-title-section">
+        <button class="back-btn" onclick="showPage('page-salary-hub')"><i class="fas fa-arrow-left"></i> Back</button>
+        <h2 class="page-title">Non-Teaching Staff Payroll</h2>
+        <p class="page-description">Monitor and process monthly salaries for workers.</p>
+        <div class="title-divider"></div>
+    </section>
+
+    <!-- Search & Filter Bar -->
+    <div class="centered-block" style="max-width: 960px; margin-bottom: 20px;">
+        <div class="search-filter-box">
+            <div class="search-grid">
+                <div class="search-group" style="grid-column: span 2;">
+                    <label>Search Worker</label>
+                    <div style="position: relative;">
+                        <i class="fas fa-search" style="position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--text-light);"></i>
+                        <input type="text" id="worker-salary-search" placeholder="Enter Name or Worker ID..." style="padding-left: 35px; width: 100%;" oninput="filterNonTeachingSalaries()">
+                    </div>
+                </div>
+                <div class="search-group">
+                    <label>Current Month</label>
+                    <input type="text" id="current-salary-month-nt" readonly style="background: var(--bg-input); font-weight: 700; text-align: center;">
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Salary Table -->
+    <div class="table-container centered-block">
+        <table class="finance-table">
+            <thead>
+                <tr>
+                    <th>Worker ID</th>
+                    <th>Worker Name</th>
+                    <th>Job</th>
+                    <th>Basic Salary</th>
+                    <th>Taken Advance</th>
+                    <th>Status</th>
+                </tr>
+            </thead>
+            <tbody id="non-teaching-salary-tbody">
+                <!-- Data populated via JS -->
+            </tbody>
+        </table>
+    </div>
+</div>
+
+        <!-- Shared Salary Breakdown Overlay (used by Teaching & Non-Teaching) -->
+    <!-- Salary Breakdown Overlay (appears over the table when a teacher row is clicked) -->
+    <div id="salary-breakdown-backdrop" class="sbp-backdrop d-none" onclick="closeSalaryBreakdown()"></div>
+    <div id="salary-breakdown-panel" class="salary-breakdown-panel salary-breakdown-overlay d-none centered-block" data-teacher-id="">
+        <div class="sbp-header">
+            <div class="sbp-teacher-info">
+                <div class="sbp-avatar"><i class="fas fa-user-tie"></i></div>
+                <div>
+                    <div class="sbp-teacher-name" id="sbp-teacher-name">—</div>
+                    <div class="sbp-teacher-id" id="sbp-teacher-id">—</div>
+                </div>
+            </div>
+            <button class="sbp-close-btn" onclick="closeSalaryBreakdown()" title="Close"><i class="fas fa-times"></i></button>
+        </div>
+
+        <!-- Formula Banner -->
+        <div class="sbp-formula-box">
+            <span class="sbp-formula-text">
+                <i class="fas fa-calculator"></i>
+                &nbsp; Net Payable = &nbsp;
+                <span class="f-total">Total Salary</span>
+                &nbsp;+&nbsp;
+                <span class="f-bonus">Bonus</span>
+                &nbsp;−&nbsp;
+                <span class="f-security">Security</span>
+                &nbsp;−&nbsp;
+                <span class="f-deduct">Salary Deducted</span>
+                &nbsp;−&nbsp;
+                <span class="f-fine">Fine</span>
+                &nbsp;−&nbsp;
+                <span class="f-advance">Advance Taken</span>
+            </span>
+        </div>
+
+        <!-- Breakdown Cards -->
+        <div class="sbp-cards-grid">
+            <div class="sbp-card sbp-c-blue">
+                <label><i class="fas fa-money-bill-wave"></i> Total Salary</label>
+                <input type="text" id="sbp-total-salary" readonly>
+            </div>
+            <div class="sbp-card sbp-c-green">
+                <label><i class="fas fa-gift"></i> Bonus</label>
+                <input type="text" id="sbp-bonus" readonly>
+            </div>
+            <div class="sbp-card sbp-c-orange">
+                <label><i class="fas fa-shield-alt"></i> Security</label>
+                <input type="text" id="sbp-security" readonly>
+            </div>
+            <div class="sbp-card sbp-c-red">
+                <label><i class="fas fa-cut"></i> Fee Deducted</label>
+                <input type="text" id="sbp-fee-deducted" readonly>
+            </div>
+            <div class="sbp-card sbp-c-purple">
+                <label><i class="fas fa-exclamation-triangle"></i> Fine</label>
+                <input type="text" id="sbp-fine" readonly>
+            </div>
+            <div class="sbp-card sbp-c-yellow">
+                <label><i class="fas fa-hand-holding"></i> Advance Taken</label>
+                <input type="text" id="sbp-advance-taken" readonly>
+            </div>
+            <div class="sbp-card sbp-c-grand">
+                <label><i class="fas fa-hand-holding-usd"></i> Net Payable</label>
+                <input type="text" id="sbp-net-payable" readonly>
+            </div>
+        </div>
+
+        <!-- Pay Advance Salary Section -->
+        <div class="sbp-advance-section" style="margin-top:18px; padding:14px 16px; border:1px dashed var(--border-subtle); border-radius:var(--radius-md); background:rgba(234,179,8,0.05);">
+            <button type="button" class="sbp-btn" id="sbp-toggle-advance-btn" onclick="toggleAdvancePay()" style="background:rgba(234,179,8,0.15); color:#eab308; border:1px solid rgba(234,179,8,0.35);">
+                <i class="fas fa-hand-holding-usd"></i> Pay Advance Salary
+            </button>
+            <div id="sbp-advance-input-wrap" class="d-none" style="display:flex; gap:8px; align-items:center; margin-top:12px;">
+                <input type="number" min="1" id="sbp-advance-amount" placeholder="Enter advance amount..." style="flex:1; padding:10px 12px; border-radius:var(--radius-sm); border:1px solid var(--border-subtle); background:var(--bg-input); color:var(--text-primary);">
+                <button type="button" class="sbp-btn sbp-btn-pay" onclick="payAdvanceSalary()" style="padding:10px 18px;">
+                    <i class="fas fa-check"></i> Pay
+                </button>
+            </div>
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="sbp-actions">
+            <button type="button" class="sbp-btn sbp-btn-cancel" onclick="closeSalaryBreakdown()">
+                <i class="fas fa-times"></i> Cancel
+            </button>
+            <button type="button" class="sbp-btn sbp-btn-pay" onclick="payCurrentSalary()">
+                <i class="fas fa-check"></i> Pay
+            </button>
+        </div>
+    </div>
 
         <!-- ===================== VOUCHER VIEW MODAL ===================== -->
         <div id="voucher-modal-overlay" class="voucher-modal-overlay" style="display:none;">
