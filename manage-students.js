@@ -150,10 +150,50 @@ document.addEventListener('DOMContentLoaded', () => {
     if (admissionDateInput) admissionDateInput.valueAsDate = new Date();
     updateDashboardStats();
 
+    // ── THEME TOGGLE ─────────────────────────────────────────────────────────
+    (function initTheme() {
+        const toggleBtn = document.getElementById('theme-toggle');
+        const root = document.documentElement;
+        const savedTheme = localStorage.getItem('eduflow-theme') || 'dark';
+        root.setAttribute('data-theme', savedTheme);
+        if (toggleBtn) {
+            toggleBtn.addEventListener('click', () => {
+                const current = root.getAttribute('data-theme');
+                const next = current === 'dark' ? 'light' : 'dark';
+                root.setAttribute('data-theme', next);
+                localStorage.setItem('eduflow-theme', next);
+            });
+        }
+    })();
+
+    // ── HEADER DATE ──────────────────────────────────────────────────────────
+    (function initDate() {
+        const dateEl = document.getElementById('header-date');
+        if (dateEl) {
+            const now = new Date();
+            const options = { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' };
+            dateEl.textContent = now.toLocaleDateString('en-US', options);
+        }
+    })();
+
     // ── 2. SIDEBAR & NAVIGATION CONTROLS ────────────────────────────────────
 
-    if (openSidebarBtn)  openSidebarBtn.addEventListener ('click', () => sidebar.classList.add   ('active'));
-    if (closeSidebarBtn) closeSidebarBtn.addEventListener('click', () => sidebar.classList.remove('active'));
+    // Create overlay for sidebar
+    const sidebarOverlay = document.createElement('div');
+    sidebarOverlay.className = 'sidebar-overlay';
+    document.body.appendChild(sidebarOverlay);
+
+    function closeSidebar() {
+        sidebar.classList.remove('active');
+        sidebarOverlay.classList.remove('active');
+    }
+
+    if (openSidebarBtn)  openSidebarBtn.addEventListener ('click', () => {
+        sidebar.classList.add('active');
+        sidebarOverlay.classList.add('active');
+    });
+    if (closeSidebarBtn) closeSidebarBtn.addEventListener('click', closeSidebar);
+    sidebarOverlay.addEventListener('click', closeSidebar);
 
     // ── 3. MODAL ARCHITECTURE ────────────────────────────────────────────────
 
