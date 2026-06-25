@@ -84,7 +84,11 @@ const ALL_PAGES = [
     'page-view-staff-fines',
     'page-expense-hub',
     'page-add-expense',
-    'page-view-expenses'
+    'page-view-expenses',
+    // Salary pages
+    'page-salary-hub',
+    'page-salary-teaching',
+    'page-salary-non-teaching'
 ];
 
 function showPage(pageId) {
@@ -115,6 +119,8 @@ function showPage(pageId) {
     if (pageId === 'page-view-staff-fines') renderStaffFinesTable();
     if (pageId === 'page-view-staff-bonus') renderStaffBonusTable();
     if (pageId === 'page-view-expenses') renderExpensesTable();
+    if (pageId === 'page-salary-teaching') initTeachingSalaryPage();
+    if (pageId === 'page-salary-non-teaching') initNonTeachingSalaryPage();
 }
 
 /* ============================================
@@ -1707,5 +1713,279 @@ function saveFeesToVoucher() {
     if (classTitle) {
         const className = classTitle.innerText.replace('Fee Records: ', '');
         renderFees(className);
+    }
+}
+
+/* ============================================
+   ADVANCE SALARY STORAGE HELPERS
+   ============================================ */
+function getAdvanceRecords() {
+    return JSON.parse(localStorage.getItem('eduflow-staff-advances') || '[]');
+}
+function saveAdvanceRecords(list) {
+    localStorage.setItem('eduflow-staff-advances', JSON.stringify(list));
+}
+function getTotalAdvance(staffId) {
+    return getAdvanceRecords()
+        .filter(r => r.staffId === staffId)
+        .reduce((s, r) => s + (Number(r.amount) || 0), 0);
+}
+
+/* ============================================
+   TEACHING SALARY PAGE
+   ============================================ */
+function initTeachingSalaryPage() {
+    const monthYear = new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+    document.getElementById('current-salary-month').value = monthYear;
+    renderTeachingSalaries();
+}
+
+function renderTeachingSalaries(filterText = '') {
+    const tbody = document.getElementById('teaching-salary-tbody');
+    const db = getGlobalData();
+    const teachingStaff = db.staff.Teaching || [];
+    const currentMonthKey = getCurrentMonthKey();
+
+    const filtered = teachingStaff.filter(t =>
+        t.name.toLowerCase().includes(filterText.toLowerCase()) ||
+        t.id.toLowerCase().includes(filterText.toLowerCase())
+    );
+
+    if (filtered.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" class="empty-row">No matching teaching staff found.</td></tr>';
+        return;
+    }
+
+    tbody.innerHTML = filtered.map(t => {
+        const isPaid = (t.salaryHistory || []).some(h => h.monthKey === currentMonthKey);
+        const advance = getTotalAdvance(t.id);
+        return `
+            <tr class="salary-row-clickable" onclick="showSalaryBreakdown('${t.id}', 'Teaching')" title="Click to view salary breakdown">
+                <td class="teacher-id-cell">${t.id}</td>
+                <td>
+                    <div style="font-weight:600;">${t.name}</div>
+                    <div style="font-size:11px; color:var(--text-secondary);">${t.email || ''}</div>
+                </td>
+                <td>${t.subjects || 'General Teacher'}</td>
+                <td><strong>RS ${(Number(t.salary) || 0).toLocaleString()}</strong></td>
+                <td><strong style="color:#eab308;">RS ${advance.toLocaleString()}</strong></td>
+                <td>
+                    <span class="status-badge ${isPaid ? 'status-paid' : 'status-pending'}">
+                        <i class="fas ${isPaid ? 'fa-check-circle' : 'fa-clock'}"></i>
+                        ${isPaid ? 'Paid' : 'Pending'}
+                    </span>
+                </td>
+            </tr>
+        `;
+    }).join('');
+}
+
+function filterTeachingSalaries() {
+    renderTeachingSalaries(document.getElementById('teacher-salary-search').value);
+}
+
+/* ============================================
+   NON-TEACHING SALARY PAGE
+   ============================================ */
+function initNonTeachingSalaryPage() {
+    const monthYear = new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+    const el = document.getElementById('current-salary-month-nt');
+    if (el) el.value = monthYear;
+    renderNonTeachingSalaries();
+}
+
+function renderNonTeachingSalaries(filterText = '') {
+    const tbody = document.getElementById('non-teaching-salary-tbody');
+    if (!tbody) return;
+    const db = getGlobalData();
+    const workers = db.staff['Non-Teaching'] || [];
+    const currentMonthKey = getCurrentMonthKey();
+
+    const filtered = workers.filter(w =>
+        w.name.toLowerCase().includes(filterText.toLowerCase()) ||
+        w.id.toLowerCase().includes(filterText.toLowerCase())
+    );
+
+    if (filtered.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" class="empty-row">No matching workers found.</td></tr>';
+        return;
+    }
+
+    tbody.innerHTML = filtered.map(w => {
+        const isPaid = (w.salaryHistory || []).some(h => h.monthKey === currentMonthKey);
+        const advance = getTotalAdvance(w.id);
+        return `
+            <tr class="salary-row-clickable" onclick="showSalaryBreakdown('${w.id}', 'Non-Teaching')" title="Click to view salary breakdown">
+                <td class="teacher-id-cell">${w.id}</td>
+                <td>
+                    <div style="font-weight:600;">${w.name}</div>
+                    <div style="font-size:11px; color:var(--text-secondary);">${w.email || ''}</div>
+                </td>
+                <td>${w.job || 'Worker'}</td>
+                <td><strong>RS ${(Number(w.salary) || 0).toLocaleString()}</strong></td>
+                <td><strong style="color:#eab308;">RS ${advance.toLocaleString()}</strong></td>
+                <td>
+                    <span class="status-badge ${isPaid ? 'status-paid' : 'status-pending'}">
+                        <i class="fas ${isPaid ? 'fa-check-circle' : 'fa-clock'}"></i>
+                        ${isPaid ? 'Paid' : 'Pending'}
+                    </span>
+                </td>
+            </tr>
+        `;
+    }).join('');
+}
+
+function filterNonTeachingSalaries() {
+    const el = document.getElementById('worker-salary-search');
+    renderNonTeachingSalaries(el ? el.value : '');
+}
+
+/* ============================================
+   SALARY BREAKDOWN PANEL (shared)
+   ============================================ */
+function showSalaryBreakdown(staffId, category = 'Teaching') {
+    const db = getGlobalData();
+    let list = db.staff[category] || [];
+    let staff = list.find(s => s.id === staffId);
+    if (!staff) {
+        // Fallback: scan all staff categories (key for non-teaching may differ)
+        for (const key of Object.keys(db.staff || {})) {
+            const found = (db.staff[key] || []).find(s => s.id === staffId);
+            if (found) { staff = found; category = key; break; }
+        }
+    }
+    if (!staff) return;
+
+    const bonusRecords = JSON.parse(localStorage.getItem('eduflow-staff-bonuses') || '[]');
+    const fineRecords  = JSON.parse(localStorage.getItem('eduflow-staff-fines') || '[]');
+
+    const totalBonus = bonusRecords
+        .filter(r => r.staffId === staffId)
+        .reduce((s, r) => s + (Number(r.amount) || 0), 0);
+
+    const totalFine = fineRecords
+        .filter(r => r.staffId === staffId)
+        .reduce((s, r) => s + (Number(r.amount) || 0), 0);
+
+    const baseSalary    = Number(staff.salary) || 0;
+    const security      = Number(staff.security) || 0;
+    const feeDeducted   = Number(staff.feeDeducted) || 0;
+    const advanceTaken  = getTotalAdvance(staffId);
+    const netPayable    = baseSalary + totalBonus - security - feeDeducted - totalFine - advanceTaken;
+    const fmt = n => 'RS ' + Math.max(0, n).toLocaleString();
+
+    document.getElementById('sbp-teacher-name').textContent = staff.name;
+    document.getElementById('sbp-teacher-id').textContent   = staff.id;
+    document.getElementById('sbp-total-salary').value   = fmt(baseSalary);
+    document.getElementById('sbp-bonus').value          = fmt(totalBonus);
+    document.getElementById('sbp-security').value       = fmt(security);
+    document.getElementById('sbp-fee-deducted').value   = fmt(feeDeducted);
+    document.getElementById('sbp-fine').value           = fmt(totalFine);
+    document.getElementById('sbp-advance-taken').value  = fmt(advanceTaken);
+    document.getElementById('sbp-net-payable').value    = 'RS ' + netPayable.toLocaleString();
+
+    // reset advance input UI
+    const wrap = document.getElementById('sbp-advance-input-wrap');
+    if (wrap) wrap.classList.add('d-none');
+    const amt = document.getElementById('sbp-advance-amount');
+    if (amt) amt.value = '';
+
+    const panel = document.getElementById('salary-breakdown-panel');
+    panel.dataset.teacherId = staffId;
+    panel.dataset.category  = category;
+    panel.classList.remove('d-none');
+    const backdrop = document.getElementById('salary-breakdown-backdrop');
+    if (backdrop) backdrop.classList.remove('d-none');
+    document.body.style.overflow = 'hidden';
+}
+
+function closeSalaryBreakdown() {
+    document.getElementById('salary-breakdown-panel').classList.add('d-none');
+    const backdrop = document.getElementById('salary-breakdown-backdrop');
+    if (backdrop) backdrop.classList.add('d-none');
+    document.body.style.overflow = '';
+}
+
+function payCurrentSalary() {
+    const panel = document.getElementById('salary-breakdown-panel');
+    const staffId  = panel && panel.dataset.teacherId;
+    const category = (panel && panel.dataset.category) || 'Teaching';
+    if (!staffId) return;
+    processSalaryPayment(staffId, category);
+    closeSalaryBreakdown();
+}
+
+function processSalaryPayment(staffId, category = 'Teaching') {
+    const db = getGlobalData();
+    const list = db.staff[category] || [];
+    const staff = list.find(s => s.id === staffId);
+    if (!staff) return;
+
+    if (confirm(`Confirm salary payment of RS ${Number(staff.salary).toLocaleString()} to ${staff.name}?`)) {
+        if (!staff.salaryHistory) staff.salaryHistory = [];
+
+        staff.salaryHistory.push({
+            date: new Date().toISOString(),
+            monthKey: getCurrentMonthKey(),
+            amount: staff.salary,
+            status: 'Paid'
+        });
+
+        saveGlobalData(db);
+        alert(`Salary processed successfully for ${staff.name}`);
+        if (category === 'Teaching') {
+            renderTeachingSalaries(document.getElementById('teacher-salary-search').value);
+        } else {
+            const sEl = document.getElementById('worker-salary-search');
+            renderNonTeachingSalaries(sEl ? sEl.value : '');
+        }
+    }
+}
+
+/* ============================================
+   ADVANCE SALARY — UI + PAYMENT
+   ============================================ */
+function toggleAdvancePay() {
+    const wrap = document.getElementById('sbp-advance-input-wrap');
+    if (!wrap) return;
+    wrap.classList.toggle('d-none');
+    if (!wrap.classList.contains('d-none')) {
+        const amt = document.getElementById('sbp-advance-amount');
+        if (amt) amt.focus();
+    }
+}
+
+function payAdvanceSalary() {
+    const panel = document.getElementById('salary-breakdown-panel');
+    const staffId  = panel && panel.dataset.teacherId;
+    const category = (panel && panel.dataset.category) || 'Teaching';
+    if (!staffId) return;
+
+    const amtEl = document.getElementById('sbp-advance-amount');
+    const amount = Number(amtEl && amtEl.value);
+    if (!amount || amount <= 0) {
+        alert('Please enter a valid advance amount.');
+        return;
+    }
+
+    const list = getAdvanceRecords();
+    list.push({
+        staffId,
+        category,
+        amount,
+        date: new Date().toISOString(),
+        monthKey: getCurrentMonthKey()
+    });
+    saveAdvanceRecords(list);
+
+    alert(`Advance of RS ${amount.toLocaleString()} recorded.`);
+
+    // Refresh the breakdown panel + the underlying table
+    showSalaryBreakdown(staffId, category);
+    if (category === 'Teaching') {
+        renderTeachingSalaries(document.getElementById('teacher-salary-search').value);
+    } else {
+        const sEl = document.getElementById('worker-salary-search');
+        renderNonTeachingSalaries(sEl ? sEl.value : '');
     }
 }
