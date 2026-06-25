@@ -139,6 +139,7 @@ function calculateFinancials() {
             teaching: totalTeacherSalaries,
             nonTeaching: totalNonTeachingSalaries
         },
+        staffBonusTotal: totalStaffBonus,
         fines: {
             staffTotal: totalStaffFines,
             studentTotal: totalStudentFines,
