@@ -54,50 +54,86 @@ function saveGlobalData(data) {
     localStorage.setItem('eduflow-db', JSON.stringify(data));
 }
 
-// Helpers for Dashboard Calculations
 function calculateFinancials() {
     const db = getGlobalData();
-    
-    // 1. Calculate Staff Salaries & Fines
-    let totalBaseSalaries = 0;
-    let totalTeacherSalaries = 0;
-    let totalNonTeachingSalaries = 0;
-    let totalTeacherFines = 0;
-    let totalNonTeachingFines = 0;
+
+    // ── REAL student count from edu_students ──────────────────────────────
+    const allStudents = JSON.parse(localStorage.getItem('edu_students') || '[]');
+    const realStudentCount = allStudents.length;
+
+    // ── REAL fee totals computed from every student's feePayments ────────
+    const currentMonthKey = (() => {
+        const n = new Date();
+        return `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,'0')}`;
+    })();
+
+    let totalCollected = 0;
+    let totalPending   = 0;
+    let pendingCount   = 0;
+
+    allStudents.forEach(s => {
+        // Monthly expected (what the fee table shows as "pending")
+        const tuition   = Number(s.standardFee)       || 0;
+        const transport = Number(s.transportFee)       || 0;
+        const tDisc     = Number(s.tuitionDiscount)    || 0;
+        const trDisc    = Number(s.transportDiscount)  || 0;
+        const sibDisc   = Number(s.siblingDiscount)    || 0;
+        const monthly   = Math.max(0, tuition + transport - tDisc - trDisc - sibDisc);
+
+        const payments   = s.feePayments || [];
+        const paidThisMonth = payments
+            .filter(p => p.monthKey === currentMonthKey)
+            .reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
+
+        // Lifetime collected
+        const lifetimeCollected = payments
+            .reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
+
+        totalCollected += lifetimeCollected;
+
+        const pendingThisMonth = Math.max(0, monthly - paidThisMonth);
+        totalPending += pendingThisMonth;
+        if (pendingThisMonth > 0) pendingCount++;
+    });
+
+    // ── STAFF salaries + fines ────────────────────────────────────────────
+    let totalTeacherSalaries = 0, totalNonTeachingSalaries = 0;
+    let totalTeacherFines = 0,    totalNonTeachingFines = 0;
 
     db.staff['Teaching'].forEach(s => {
         totalTeacherSalaries += Number(s.salary) || 0;
-        totalTeacherFines += Number(s.fines) || 0;
+        totalTeacherFines    += Number(s.fines)  || 0;
     });
-
     db.staff['Non-Teaching'].forEach(s => {
         totalNonTeachingSalaries += Number(s.salary) || 0;
-        totalNonTeachingFines += Number(s.fines) || 0;
+        totalNonTeachingFines    += Number(s.fines)  || 0;
     });
 
-    totalBaseSalaries = totalTeacherSalaries + totalNonTeachingSalaries;
-    const totalStaffFines = totalTeacherFines + totalNonTeachingFines;
+    const totalBaseSalaries = totalTeacherSalaries + totalNonTeachingSalaries;
+    const totalStaffFines   = totalTeacherFines + totalNonTeachingFines;
 
-    // 2. Student Late Fees
+    // ── STUDENT fines ─────────────────────────────────────────────────────
+    const studentFinesRaw   = JSON.parse(localStorage.getItem('eduflow-student-fines') || '[]');
+    const totalStudentFines = studentFinesRaw.reduce((sum, f) => sum + (Number(f.amount) || 0), 0);
+
+    // ── OTHER expenses ────────────────────────────────────────────────────
+    const otherExpensesRaw  = JSON.parse(localStorage.getItem('eduflow-other-expenses') || '[]');
+    const totalOtherExpenses= otherExpensesRaw.reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
+
+    // ── STAFF bonus (reduces net profit, counts as expense) ──────────────
+    const staffBonusRaw     = JSON.parse(localStorage.getItem('eduflow-staff-bonus') || '[]');
+    const totalStaffBonus   = staffBonusRaw.reduce((sum, b) => sum + (Number(b.amount) || 0), 0);
+
     const autoLateFeePerStudent = 150;
-    const totalAutoLateFees = db.students.withPendingFees * autoLateFeePerStudent;
-    db.students.fines.lateFees = totalAutoLateFees;
+    const autoLateFees = pendingCount * autoLateFeePerStudent;
 
-    const adjustedPendingFees = db.finances.fees.pending + totalAutoLateFees;
-    const adjustedExpectedFees = db.finances.fees.expected + totalAutoLateFees;
-    
-    // Total net expenses (Base + Other - Staff Fines)
-    const netExpenses = totalBaseSalaries + db.finances.expenses.other - totalStaffFines;
-    
-    // Total Revenue (Collected + All Student Fines)
-    const totalStudentFines = db.students.fines.lateFees + db.students.fines.other;
-    const totalRevenueCollected = db.finances.fees.collected + totalStudentFines;
-    
-    // Net Profit
+    const netExpenses = totalBaseSalaries + totalOtherExpenses + totalStaffBonus - totalStaffFines;
+    const totalRevenueCollected = totalCollected + totalStudentFines + autoLateFees;
     const netProfit = totalRevenueCollected - netExpenses;
 
     return {
         db,
+        realStudentCount,
         salaries: {
             total: totalBaseSalaries,
             teaching: totalTeacherSalaries,
@@ -105,19 +141,17 @@ function calculateFinancials() {
         },
         fines: {
             staffTotal: totalStaffFines,
-            teaching: totalTeacherFines,
-            nonTeaching: totalNonTeachingFines,
             studentTotal: totalStudentFines,
-            studentLate: db.students.fines.lateFees,
-            studentOther: db.students.fines.other
+            studentLate: autoLateFees,
+            studentOther: totalStudentFines
         },
         fees: {
-            expected: adjustedExpectedFees,
-            collected: db.finances.fees.collected,
-            pending: adjustedPendingFees
+            expected: totalCollected + totalPending,
+            collected: totalCollected,
+            pending: totalPending
         },
         netExpenses,
         netProfit,
-        lastMonthProfit: db.finances.historical.lastMonthProfit
+        lastMonthProfit: db.finances.historical.lastMonthProfit || 0
     };
 }
