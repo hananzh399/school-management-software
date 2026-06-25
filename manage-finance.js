@@ -106,14 +106,16 @@ function showPage(pageId) {
         selectedStaffId = null;
         document.getElementById('btn-teaching').classList.add('active');
         document.getElementById('btn-non-teaching').classList.remove('active');
-        renderStaffMembersList('Teaching');
+        const sf = document.getElementById('staff-fine-search'); if (sf) sf.value = '';
+        renderStaffMembersList('Teaching', '');
     }
     if (pageId === 'page-add-staff-bonus') {
         selectedBonusCategory = 'Teaching';
         selectedBonusStaffId = null;
         document.getElementById('btn-bonus-teaching').classList.add('active');
         document.getElementById('btn-bonus-non-teaching').classList.remove('active');
-        renderBonusMembersList('Teaching');
+        const bs = document.getElementById('bonus-search'); if (bs) bs.value = '';
+        renderBonusMembersList('Teaching', '');
     }
     if (pageId === 'page-view-student-fines') renderStudentFinesTable();
     if (pageId === 'page-view-staff-fines') renderStaffFinesTable();
@@ -151,58 +153,129 @@ function saveStudentFinesData(arr) {
     localStorage.setItem('eduflow-student-fines', JSON.stringify(arr));
 }
 
-function getStudentList() {
-    const db = getGlobalData();
-    if (db.students && Array.isArray(db.students.records) && db.students.records.length > 0) {
-        return db.students.records;
-    }
-    return [
-        { id: 'STU-001', name: 'Ali Hassan',    className: 'Grade 9-A' },
-        { id: 'STU-002', name: 'Sara Malik',    className: 'Grade 10-B' },
-        { id: 'STU-003', name: 'Usman Ahmed',   className: 'Grade 8-C' },
-        { id: 'STU-004', name: 'Fatima Noor',   className: 'Grade 11-A' },
-        { id: 'STU-005', name: 'Hamza Raza',    className: 'Grade 7-B' },
-    ];
+/* ============================================
+   STUDENT FINES  (real DB + search)
+   ============================================ */
+function getRealStudents() {
+    return JSON.parse(localStorage.getItem('edu_students') || '[]');
 }
 
+let selectedStudentFineId = null;
+
+// Reset the Add-Student-Fine page each time it opens
 function populateStudentDropdown() {
-    const select = document.getElementById('student-select');
-    select.innerHTML = '<option value="">Select Student...</option>';
-    getStudentList().forEach(s => {
-        const opt = document.createElement('option');
-        opt.value = s.id;
-        opt.textContent = `${s.name} — ${s.className} (${s.id})`;
-        select.appendChild(opt);
-    });
+    selectedStudentFineId = null;
+    const input = document.getElementById('student-fine-search');
+    if (input) input.value = '';
+    renderStudentSearchResults('');
+}
+
+function studentMatchesQuery(s, query) {
+    const name = (s.fullName || s.name || '').toLowerCase();
+    const guardian = (s.guardianName || '').toLowerCase();
+    const q = (query || '').trim().toLowerCase();
+    if (!q) return true;
+    // "Name~Guardian" => BOTH must match
+    if (q.includes('~')) {
+        const parts = q.split('~');
+        const namePart = (parts[0] || '').trim();
+        const guardianPart = (parts[1] || '').trim();
+        const nameOk = !namePart || name.includes(namePart);
+        const guardianOk = !guardianPart || guardian.includes(guardianPart);
+        return nameOk && guardianOk;
+    }
+    // single term => match student name OR guardian name
+    return name.includes(q) || guardian.includes(q);
+}
+
+function searchStudentsForFine() {
+    const q = document.getElementById('student-fine-search').value;
+    renderStudentSearchResults(q);
+}
+
+function renderStudentSearchResults(query) {
+    const container = document.getElementById('student-fine-results');
+    if (!container) return;
+    const students = getRealStudents();
+
+    if (students.length === 0) {
+        container.innerHTML = '<p class="search-empty">No students found. Add students from Admissions first.</p>';
+        return;
+    }
+
+    const q = (query || '').trim();
+    const matches = q ? students.filter(s => studentMatchesQuery(s, q)) : students;
+
+    if (matches.length === 0) {
+        container.innerHTML = '<p class="search-empty">No students match your search.</p>';
+        return;
+    }
+
+    container.innerHTML = matches.map((s, index) => {
+        const id = s.id || s.regNo || '';
+        const name = s.fullName || s.name || 'Unnamed';
+        const cls = s.studentClass || s.className || '-';
+        const father = s.guardianName || '-';
+        const active = (String(id) === String(selectedStudentFineId)) ? 'selected' : '';
+        return `
+        <div class="staff-member-item ${active}" id="stu-fine-item-${index}" onclick="selectStudentForFine('${id}', ${index})">
+            <div class="staff-member-info">
+                <span class="staff-member-name">${name}</span>
+                <span class="staff-member-role"><b>ID:</b> ${id} &nbsp;&bull;&nbsp; <b>Class:</b> ${cls} &nbsp;&bull;&nbsp; <b>Father:</b> ${father}</span>
+            </div>
+            <div class="staff-member-check"><i class="fas fa-check"></i></div>
+        </div>`;
+    }).join('');
+}
+
+function selectStudentForFine(id, index) {
+    selectedStudentFineId = id;
+    document.querySelectorAll('#student-fine-results .staff-member-item').forEach(el => el.classList.remove('selected'));
+    const item = document.getElementById('stu-fine-item-' + index);
+    if (item) item.classList.add('selected');
 }
 
 function handleAddStudentFine() {
-    const studentId = document.getElementById('student-select').value;
     const amount = Number(document.getElementById('student-fine-amount').value);
     const desc = document.getElementById('student-fine-desc').value.trim();
 
-    if (!studentId) { alert('Please select a student.'); return; }
+    if (!selectedStudentFineId) { alert('Please search and select a student.'); return; }
     if (!amount || amount < 1) { alert('Please enter a valid fine amount.'); return; }
     if (!desc) { alert('Please enter a fine description/cause.'); return; }
 
-    const students = getStudentList();
-    const student = students.find(s => s.id === studentId);
+    const students = getRealStudents();
+    const idx = students.findIndex(s => String(s.id || s.regNo) === String(selectedStudentFineId));
+    if (idx === -1) { alert('Student not found.'); return; }
+    const student = students[idx];
 
+    const name = student.fullName || student.name || 'Unnamed';
+    const cls = student.studentClass || student.className || '-';
+    const father = student.guardianName || '-';
+
+    // 1) Log the fine record (shown in View Records of student fines)
     const fines = getStudentFinesData();
     fines.push({
-        id: studentId, name: student.name, className: student.className,
+        id: student.id || student.regNo, name: name, className: cls, father: father,
         amount: amount, cause: desc, date: new Date().toLocaleDateString('en-US')
     });
     saveStudentFinesData(fines);
 
+    // 2) Send the fine to the student's FEE BILL (adds to outstanding arrears)
+    student.arrears = (Number(student.arrears) || 0) + amount;
+    students[idx] = student;
+    localStorage.setItem('edu_students', JSON.stringify(students));
+
+    // 3) Update global finance counters so the DASHBOARD reflects it in real time
     const db = getGlobalData();
-    db.students.fines.other += amount;
+    if (!db.students) db.students = {};
+    if (!db.students.fines) db.students.fines = { lateFees: 0, other: 0 };
+    db.students.fines.other = (Number(db.students.fines.other) || 0) + amount;
     saveGlobalData(db);
 
-    alert(`Fine of RS ${amount.toLocaleString()} added to ${student.name}.`);
-    document.getElementById('student-select').value = '';
+    alert(`Fine of RS ${amount.toLocaleString()} added to ${name} and posted to their fee bill.`);
     document.getElementById('student-fine-amount').value = '';
     document.getElementById('student-fine-desc').value = '';
+    selectedStudentFineId = null;
     showPage('page-student-fine');
 }
 
@@ -210,15 +283,16 @@ function renderStudentFinesTable() {
     const tbody = document.getElementById('student-fines-tbody');
     const fines = getStudentFinesData();
     if (fines.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="4" class="empty-row">No fines recorded yet.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="5" class="empty-row">No fines recorded yet.</td></tr>';
         return;
     }
     tbody.innerHTML = fines.map(f => `
         <tr>
+            <td>${f.id || '-'}</td>
             <td>${f.name}</td>
-            <td>${f.className}</td>
-            <td>RS ${Number(f.amount).toLocaleString()}</td>
-            <td>${f.cause}</td>
+            <td>${f.className || '-'}</td>
+            <td>${f.father || '-'}</td>
+            <td>RS ${Number(f.amount).toLocaleString()} <span style="color:var(--text-secondary);font-size:12px;">(${f.cause})</span></td>
         </tr>
     `).join('');
 }
@@ -242,24 +316,48 @@ function selectStaffCategory(category) {
     selectedStaffId = null;
     document.getElementById('btn-teaching').classList.toggle('active', category === 'Teaching');
     document.getElementById('btn-non-teaching').classList.toggle('active', category === 'Non-Teaching');
-    renderStaffMembersList(category);
+    const search = document.getElementById('staff-fine-search');
+    if (search) search.value = '';
+    renderStaffMembersList(category, '');
 }
 
-function renderStaffMembersList(category) {
+function staffMatchesQuery(s, q) {
+    q = (q || '').trim().toLowerCase();
+    if (!q) return true;
+    return (s.name || '').toLowerCase().includes(q) ||
+           (s.id || '').toLowerCase().includes(q) ||
+           (s.subjects || '').toLowerCase().includes(q) ||
+           (s.classes || '').toLowerCase().includes(q) ||
+           (s.job || '').toLowerCase().includes(q);
+}
+
+function staffSubLine(s, category) {
+    if (category === 'Teaching') {
+        return `<b>ID:</b> ${s.id} &nbsp;&bull;&nbsp; <b>Class:</b> ${s.classes || '-'} &nbsp;&bull;&nbsp; <b>Subject:</b> ${s.subjects || '-'}`;
+    }
+    return `<b>ID:</b> ${s.id} &nbsp;&bull;&nbsp; <b>Job:</b> ${s.job || 'Staff'}`;
+}
+
+function filterStaffFineList() {
+    renderStaffMembersList(selectedStaffCategory, document.getElementById('staff-fine-search').value);
+}
+
+function renderStaffMembersList(category, query) {
     const container = document.getElementById('staff-members-list');
     const db = getGlobalData();
-    const members = db.staff[category] || [];
+    let members = db.staff[category] || [];
+    members = members.filter(s => staffMatchesQuery(s, query));
     if (members.length === 0) {
-        container.innerHTML = '<p style="color:var(--text-secondary);font-size:14px;">No staff found in this category.</p>';
+        container.innerHTML = '<p class="search-empty">No staff found in this category.</p>';
         return;
     }
     container.innerHTML = members.map(s => {
-        const role = category === 'Teaching' ? (s.subjects || 'Teacher') : (s.job || 'Staff');
+        const active = (String(s.id) === String(selectedStaffId)) ? 'selected' : '';
         return `
-        <div class="staff-member-item" id="staff-item-${s.id}" onclick="selectStaffMember('${s.id}')">
+        <div class="staff-member-item ${active}" id="staff-item-${s.id}" onclick="selectStaffMember('${s.id}')">
             <div class="staff-member-info">
                 <span class="staff-member-name">${s.name}</span>
-                <span class="staff-member-role">${role} &bull; ${s.id}</span>
+                <span class="staff-member-role">${staffSubLine(s, category)}</span>
             </div>
             <div class="staff-member-check"><i class="fas fa-check"></i></div>
         </div>`;
@@ -294,7 +392,7 @@ function handleAddStaffFine() {
         : (members[idx].job || 'Staff');
 
     finesLog.push({
-        id: members[idx].id, name: members[idx].name, role: role,
+        staffId: members[idx].id, id: members[idx].id, name: members[idx].name, role: role,
         category: selectedStaffCategory, amount: amount, cause: desc,
         date: new Date().toLocaleDateString('en-US')
     });
@@ -342,24 +440,31 @@ function selectBonusCategory(category) {
     selectedBonusStaffId = null;
     document.getElementById('btn-bonus-teaching').classList.toggle('active', category === 'Teaching');
     document.getElementById('btn-bonus-non-teaching').classList.toggle('active', category === 'Non-Teaching');
-    renderBonusMembersList(category);
+    const search = document.getElementById('bonus-search');
+    if (search) search.value = '';
+    renderBonusMembersList(category, '');
 }
 
-function renderBonusMembersList(category) {
+function filterBonusList() {
+    renderBonusMembersList(selectedBonusCategory, document.getElementById('bonus-search').value);
+}
+
+function renderBonusMembersList(category, query) {
     const container = document.getElementById('bonus-members-list');
     const db = getGlobalData();
-    const members = db.staff[category] || [];
+    let members = db.staff[category] || [];
+    members = members.filter(s => staffMatchesQuery(s, query));
     if (members.length === 0) {
-        container.innerHTML = '<p style="color:var(--text-secondary);font-size:14px;">No staff found in this category.</p>';
+        container.innerHTML = '<p class="search-empty">No staff found in this category.</p>';
         return;
     }
     container.innerHTML = members.map(s => {
-        const role = category === 'Teaching' ? (s.subjects || 'Teacher') : (s.job || 'Staff');
+        const active = (String(s.id) === String(selectedBonusStaffId)) ? 'selected' : '';
         return `
-        <div class="staff-member-item" id="bonus-item-${s.id}" onclick="selectBonusStaff('${s.id}')">
+        <div class="staff-member-item ${active}" id="bonus-item-${s.id}" onclick="selectBonusStaff('${s.id}')">
             <div class="staff-member-info">
                 <span class="staff-member-name">${s.name}</span>
-                <span class="staff-member-role">${role} &bull; ${s.id}</span>
+                <span class="staff-member-role">${staffSubLine(s, category)}</span>
             </div>
             <div class="staff-member-check"><i class="fas fa-check"></i></div>
         </div>`;
@@ -391,7 +496,7 @@ function handleAddStaffBonus() {
 
     const log = getStaffBonusData();
     log.push({
-        id: members[idx].id, name: members[idx].name, role: role,
+        staffId: members[idx].id, id: members[idx].id, name: members[idx].name, role: role,
         category: selectedBonusCategory, amount: amount, description: desc,
         date: new Date().toLocaleDateString('en-US')
     });
@@ -1856,15 +1961,16 @@ function showSalaryBreakdown(staffId, category = 'Teaching') {
     }
     if (!staff) return;
 
-    const bonusRecords = JSON.parse(localStorage.getItem('eduflow-staff-bonuses') || '[]');
+    const bonusRecords = JSON.parse(localStorage.getItem('eduflow-staff-bonus') || '[]');
     const fineRecords  = JSON.parse(localStorage.getItem('eduflow-staff-fines') || '[]');
+    const matchStaff = r => String(r.staffId) === String(staffId) || String(r.id) === String(staffId);
 
     const totalBonus = bonusRecords
-        .filter(r => r.staffId === staffId)
+        .filter(matchStaff)
         .reduce((s, r) => s + (Number(r.amount) || 0), 0);
 
     const totalFine = fineRecords
-        .filter(r => r.staffId === staffId)
+        .filter(matchStaff)
         .reduce((s, r) => s + (Number(r.amount) || 0), 0);
 
     const baseSalary    = Number(staff.salary) || 0;
@@ -1989,3 +2095,89 @@ function payAdvanceSalary() {
         renderNonTeachingSalaries(sEl ? sEl.value : '');
     }
 }
+
+/* ============================================================
+   PUBLIC DEDUCTION API
+   ------------------------------------------------------------
+   Use these from ANY other page (just include manage-finance.js
+   on that page, or copy this block) to control the per-staff
+   "Security" and "Fee Deducted" values that drive Net Payable
+   in the Staff Salary breakdown panel.
+
+   Quick reference (call from console or another script):
+
+     // Set one staff member
+     EduFlowFinance.setStaffSecurity('STF-001', 2000);
+     EduFlowFinance.setStaffFeeDeducted('STF-001', 500);
+
+     // Read current values
+     EduFlowFinance.getStaffDeductions('STF-001');
+     // => { security: 2000, feeDeducted: 500 }
+
+     // Apply the same defaults to EVERY staff member
+     EduFlowFinance.setAllStaffDeductionDefaults({
+         security: 1000,
+         feeDeducted: 250
+     });
+
+   Net Payable formula (already wired in showSalaryBreakdown):
+     baseSalary + totalBonus
+       - security - feeDeducted - totalFine - advanceTaken
+   Bonus and Fine totals come live from the records added on the
+   "Add Staff Bonus" / "Add Staff Fine" pages, so every new entry
+   updates the salary panel automatically.
+   ============================================================ */
+function setStaffDeduction(staffId, field, value) {
+    if (field !== 'security' && field !== 'feeDeducted') return false;
+    const db = getGlobalData();
+    if (!db || !db.staff) return false;
+    for (const cat of Object.keys(db.staff)) {
+        const list = db.staff[cat] || [];
+        const i = list.findIndex(s => String(s.id) === String(staffId));
+        if (i !== -1) {
+            list[i][field] = Math.max(0, Number(value) || 0);
+            saveGlobalData(db);
+            return true;
+        }
+    }
+    return false;
+}
+function setStaffSecurity(staffId, value)    { return setStaffDeduction(staffId, 'security',    value); }
+function setStaffFeeDeducted(staffId, value) { return setStaffDeduction(staffId, 'feeDeducted', value); }
+
+function getStaffDeductions(staffId) {
+    const db = getGlobalData();
+    if (!db || !db.staff) return null;
+    for (const cat of Object.keys(db.staff)) {
+        const s = (db.staff[cat] || []).find(x => String(x.id) === String(staffId));
+        if (s) {
+            return {
+                security:    Number(s.security)    || 0,
+                feeDeducted: Number(s.feeDeducted) || 0
+            };
+        }
+    }
+    return null;
+}
+
+function setAllStaffDeductionDefaults(opts) {
+    opts = opts || {};
+    const db = getGlobalData();
+    if (!db || !db.staff) return;
+    for (const cat of Object.keys(db.staff)) {
+        (db.staff[cat] || []).forEach(s => {
+            if (opts.security    !== undefined) s.security    = Math.max(0, Number(opts.security)    || 0);
+            if (opts.feeDeducted !== undefined) s.feeDeducted = Math.max(0, Number(opts.feeDeducted) || 0);
+        });
+    }
+    saveGlobalData(db);
+}
+
+// Expose globally so other pages / settings panels can drive these values.
+window.EduFlowFinance = Object.assign(window.EduFlowFinance || {}, {
+    setStaffSecurity,
+    setStaffFeeDeducted,
+    setStaffDeduction,
+    getStaffDeductions,
+    setAllStaffDeductionDefaults
+});
