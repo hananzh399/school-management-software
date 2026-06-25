@@ -7,6 +7,14 @@ document.addEventListener('DOMContentLoaded', () => {
     initSidebar();
     initDate();
     calculateAndLoadDashboardData();
+    // Add this inside DOMContentLoaded in index.js
+window.addEventListener('storage', (e) => {
+    if (['edu_students', 'eduflow-db', 'eduflow-student-fines',
+         'eduflow-staff-fines', 'eduflow-staff-bonus', 'eduflow-other-expenses'].includes(e.key)) {
+        calculateAndLoadDashboardData();
+    }
+});
+
 });
 
 /* ============================================
@@ -73,7 +81,7 @@ function calculateAndLoadDashboardData() {
     
     // 5. Update the UI
     // Demographics
-    animateCounter('total-students', data.db.students.totalCount);
+    animateCounter('total-students', data.realStudentCount);
     
     const totalStaff = data.db.staff['Teaching'].length + data.db.staff['Non-Teaching'].length;
     animateCounter('total-staff', totalStaff);
