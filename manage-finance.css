@@ -1907,3 +1907,384 @@
     background: linear-gradient(135deg, #6d28d9, #4c1d95) !important;
     box-shadow: 0 10px 24px -4px rgba(124,58,237,0.55) !important;
 }
+
+/* Salary Theme Colors */
+.salary-theme .icon-wrapper { 
+    background: rgba(124, 58, 237, 0.1); 
+    color: #7c3aed; 
+}
+.salary-theme:hover { 
+    border-color: rgba(124, 58, 237, 0.3); 
+}
+.salary-theme .card-glow { 
+    background: radial-gradient(circle at 50% 0%, rgba(124, 58, 237, 0.15), transparent 70%); 
+}
+/* Salary Specific Status Badges */
+.status-badge {
+    padding: 6px 12px;
+    border-radius: 20px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+}
+.status-paid {
+    background: rgba(16, 185, 129, 0.15);
+    color: #10b981;
+    border: 1px solid rgba(16, 185, 129, 0.3);
+}
+.status-pending {
+    background: rgba(245, 158, 11, 0.15);
+    color: #f59e0b;
+    border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
+.teacher-id-cell {
+    font-family: 'Monospace', sans-serif;
+    font-weight: 700;
+    color: var(--accent);
+}
+
+/* Pay Button Style */
+.btn-pay {
+    background: var(--accent);
+    color: white;
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 12px;
+    text-decoration: none;
+    transition: 0.3s;
+}
+.btn-pay:hover {
+    filter: brightness(1.2);
+}
+/* --- THEME AWARE SEARCH BAR --- */
+[data-theme="dark"] .search-filter-box {
+    background: var(--bg-card);
+    border-color: var(--border-subtle);
+}
+[data-theme="dark"] .search-group input {
+    background: var(--bg-input);
+    color: var(--text-primary);
+    border-color: var(--border-subtle);
+}
+
+/* --- SALARY CALCULATION DASHBOARD --- */
+.salary-calc-container {
+    background: var(--bg-card);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-lg);
+    padding: 24px;
+    margin-bottom: 24px;
+    animation: fadeInPage 0.3s ease;
+}
+
+.formula-box {
+    background: linear-gradient(135deg, #6366f1, #a855f7);
+    color: white;
+    padding: 20px;
+    border-radius: 12px;
+    text-align: center;
+    font-weight: 700;
+    font-size: 1.1rem;
+    margin-bottom: 20px;
+    box-shadow: 0 4px 15px rgba(99, 102, 241, 0.3);
+}
+
+.calc-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 15px;
+}
+
+.calc-card {
+    padding: 15px;
+    border-radius: 12px;
+    text-align: center;
+    border: 1px solid rgba(255,255,255,0.1);
+}
+
+.calc-card label {
+    display: block;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    font-weight: 800;
+    margin-bottom: 5px;
+    opacity: 0.8;
+}
+
+.calc-card input {
+    width: 100%;
+    background: transparent;
+    border: none;
+    text-align: center;
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: inherit;
+    pointer-events: none; /* Read only */
+}
+
+/* Calc Card Colors */
+.c-blue { background: rgba(59, 130, 246, 0.15); color: #3b82f6; }
+.c-green { background: rgba(16, 185, 129, 0.15); color: #10b981; }
+.c-red { background: rgba(239, 68, 68, 0.15); color: #ef4444; }
+.c-orange { background: rgba(245, 158, 11, 0.15); color: #f59e0b; }
+.c-purple { background: rgba(139, 92, 246, 0.15); color: #8b5cf6; }
+.c-grand { background: var(--accent); color: white; grid-column: span 1; }
+
+.salary-row-clickable {
+    cursor: pointer;
+    transition: background 0.2s;
+}
+.salary-row-clickable:hover {
+    background: var(--bg-hover) !important;
+}
+/* ============================================
+   SALARY BREAKDOWN PANEL
+   ============================================ */
+.salary-breakdown-panel {
+    background: var(--bg-card);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-lg);
+    padding: 24px;
+    margin-bottom: 20px;
+    max-width: 960px;
+    animation: fadeInPage 0.3s ease;
+    position: relative;
+}
+
+.sbp-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 18px;
+}
+
+.sbp-teacher-info {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+}
+
+.sbp-avatar {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #6366f1, #a855f7);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+    color: #fff;
+    flex-shrink: 0;
+}
+
+.sbp-teacher-name {
+    font-size: 1.15rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    line-height: 1.2;
+}
+
+.sbp-teacher-id {
+    font-size: 0.8rem;
+    color: var(--accent, #6366f1);
+    font-weight: 600;
+    font-family: monospace;
+    margin-top: 2px;
+}
+
+.sbp-close-btn {
+    background: var(--bg-input, rgba(255,255,255,0.05));
+    border: 1px solid var(--border-subtle);
+    border-radius: 8px;
+    color: var(--text-secondary);
+    width: 34px;
+    height: 34px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 14px;
+    transition: all 0.2s;
+}
+.sbp-close-btn:hover {
+    border-color: var(--border-hover);
+    color: var(--text-primary);
+}
+
+/* Formula banner */
+.sbp-formula-box {
+    background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 50%, #a855f7 100%);
+    border-radius: 12px;
+    padding: 16px 22px;
+    text-align: center;
+    margin-bottom: 20px;
+    box-shadow: 0 4px 18px rgba(99, 102, 241, 0.35);
+}
+
+.sbp-formula-text {
+    font-size: 1rem;
+    font-weight: 700;
+    color: rgba(255,255,255,0.92);
+    letter-spacing: 0.01em;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 4px;
+}
+
+.sbp-formula-text .f-total   { color: #93c5fd; }
+.sbp-formula-text .f-bonus   { color: #6ee7b7; }
+.sbp-formula-text .f-security{ color: #fcd34d; }
+.sbp-formula-text .f-deduct  { color: #fca5a5; }
+.sbp-formula-text .f-fine    { color: #f9a8d4; }
+
+/* Cards grid */
+.sbp-cards-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 14px;
+}
+
+.sbp-card {
+    border-radius: 14px;
+    padding: 16px 14px 14px;
+    text-align: center;
+    border: 1px solid rgba(255,255,255,0.08);
+    transition: transform 0.2s;
+}
+.sbp-card:hover { transform: translateY(-2px); }
+
+.sbp-card label {
+    display: block;
+    font-size: 0.68rem;
+    text-transform: uppercase;
+    font-weight: 800;
+    letter-spacing: 0.06em;
+    margin-bottom: 8px;
+    opacity: 0.85;
+}
+
+.sbp-card input {
+    width: 100%;
+    background: transparent;
+    border: none;
+    outline: none;
+    text-align: center;
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: inherit;
+    pointer-events: none;
+    font-family: inherit;
+}
+
+/* Card color variants */
+.sbp-c-blue   { background: rgba(59,130,246,0.14);  color: #3b82f6; }
+.sbp-c-green  { background: rgba(16,185,129,0.14);  color: #10b981; }
+.sbp-c-orange { background: rgba(245,158,11,0.14);  color: #f59e0b; }
+.sbp-c-red    { background: rgba(239,68,68,0.14);   color: #ef4444; }
+.sbp-c-purple { background: rgba(168,85,247,0.14);  color: #a855f7; }
+.sbp-c-grand  { 
+    background: linear-gradient(135deg, #4f46e5, #7c3aed); 
+    color: #fff;
+    grid-column: span 2;
+    box-shadow: 0 4px 14px rgba(99,102,241,0.3);
+}
+.sbp-c-grand label { opacity: 1; }
+.sbp-c-grand input { font-size: 1.25rem; }
+
+/* Dark mode search bar — strengthen overrides */
+[data-theme="dark"] #page-salary-teaching .search-filter-box {
+    background: var(--bg-card) !important;
+    border-color: var(--border-subtle) !important;
+}
+[data-theme="dark"] #page-salary-teaching #teacher-salary-search,
+[data-theme="dark"] #page-salary-teaching #current-salary-month {
+    background: var(--bg-input, rgba(255,255,255,0.06)) !important;
+    color: var(--text-primary) !important;
+    border-color: var(--border-subtle) !important;
+}
+[data-theme="dark"] #page-salary-teaching .search-filter-box label {
+    color: var(--text-secondary) !important;
+}
+[data-theme="dark"] #page-salary-teaching .search-filter-box i {
+    color: var(--text-secondary) !important;
+}
+
+/* Light mode search bar */
+[data-theme="light"] #page-salary-teaching #teacher-salary-search,
+[data-theme="light"] #page-salary-teaching #current-salary-month {
+    background: #ffffff !important;
+    color: #1e293b !important;
+    border-color: #e2e8f0 !important;
+}
+
+/* ============================================
+   SALARY BREAKDOWN OVERLAY (over table)
+   ============================================ */
+.sbp-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.55);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    z-index: 9998;
+    animation: fadeInPage 0.2s ease;
+}
+
+.salary-breakdown-panel.salary-breakdown-overlay {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 9999;
+    width: calc(100% - 32px);
+    max-width: 880px;
+    max-height: 90vh;
+    overflow-y: auto;
+    box-shadow: 0 25px 60px rgba(0,0,0,0.5);
+}
+
+.sbp-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+    margin-top: 20px;
+    padding-top: 18px;
+    border-top: 1px solid var(--border-subtle);
+}
+
+.sbp-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 22px;
+    border-radius: var(--radius-md, 8px);
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    border: 1px solid transparent;
+    transition: all var(--transition, 0.2s ease);
+}
+
+.sbp-btn-cancel {
+    background: transparent;
+    color: var(--text-secondary);
+    border-color: var(--border-subtle);
+}
+.sbp-btn-cancel:hover {
+    background: rgba(239, 68, 68, 0.1);
+    color: #ef4444;
+    border-color: rgba(239, 68, 68, 0.4);
+}
+
+.sbp-btn-pay {
+    background: linear-gradient(135deg, #10b981, #059669);
+    color: #fff;
+    box-shadow: 0 4px 14px rgba(16, 185, 129, 0.35);
+}
+.sbp-btn-pay:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 20px rgba(16, 185, 129, 0.5);
+}
