@@ -453,6 +453,26 @@ input:focus, select:focus, textarea:focus {
     color: #1e40af;
 }
 
+/* Promotion Status Badges (Promote Mode) */
+.promotion-status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    border-radius: 20px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    white-space: nowrap;
+}
+.promotion-status-badge.promoted {
+    background: #dcfce7;
+    color: #166534;
+}
+.promotion-status-badge.pending {
+    background: #fef3c7;
+    color: #92400e;
+}
+
 /* Horizontal Section Dividers */
 .form-divider {
     border: 0;
@@ -665,3 +685,43 @@ input:focus, select:focus, textarea:focus {
     box-shadow: var(--shadow-md);
     transform: scale(1.01);
 }
+/* Add this to manage-students.css */
+#view-modal .modal-body-scroll {
+    max-height: 70vh; /* Limits height so it's forced to scroll */
+    overflow-y: auto;
+}
+
+.data-table-wrapper {
+    margin-top: 10px;
+    max-height: 100%;
+}
+
+/* --- BUTTON SECONDARY (used for Export, Promote, Take Books, Add Fee) --- */
+.btn-secondary {
+    background: var(--accent);
+    color: white;
+    border: none;
+    padding: 12px 22px;
+    border-radius: 10px;
+    font-weight: 600;
+    font-size: 0.9rem;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    transition: var(--transition);
+    white-space: nowrap;
+}
+.btn-secondary:hover { background: var(--accent-hover); transform: translateY(-2px); }
+
+/* --- TABLE CONTROLS WRAP (4 search bars + buttons) --- */
+.table-controls { align-items: center; }
+.table-controls .search-box-wrapper { min-width: 180px; flex: 1 1 180px; }
+.table-controls .search-box-wrapper input { width: 100%; padding-left: 40px; border-radius: 30px; }
+
+/* --- OTHER FEES ROWS --- */
+.other-fee-row input { background: #fff; }
+
+/* --- PROMOTE MODE CHECKBOX COLUMN --- */
+#promote-checkbox-header { width: 40px; text-align: center; }
+.promote-checkbox { cursor: pointer; }
