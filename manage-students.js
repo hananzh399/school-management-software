@@ -570,12 +570,16 @@ if (classSelect) {
             const formData   = new FormData(admissionForm);
             const studentData= Object.fromEntries(formData);
 
+            // Strip the hidden _editRegNo field — it is a UI-only sentinel
+            // and must never appear as a data field in the student record
+            delete studentData['_editRegNo'];
+
             studentData.photo      = previewImg.src;
             studentData.age        = ageInput.value;
             studentData.netPayable = netTotalInput.value;
             studentData.rollNo     = rollNoInput.value;
 
-            const existingId = editIdHidden.value;
+            const existingId = editIdHidden.value.trim();
 
             if (existingId) {
     // ── UPDATE MODE ──────────────────────────────────────────────
@@ -891,24 +895,35 @@ if (classSelect) {
         return;
     }
 
-    // Close any other open modals first. The view-modal and student-modal
-    // share the same z-index, and view-modal comes later in the DOM, so if
-    // it stays open it visually/functionally covers the edit form modal —
-    // this was why the Edit button appeared to do nothing.
     closeModal('view-modal');
     closeModal('profile-modal');
 
-    // Set the hidden field strictly to regNo
-    editIdHidden.value = student.regNo; 
+    // Reset the form so no stale values linger from a previous new-admission session
+    admissionForm.reset();
 
-    // Populate all form fields
+    // CRITICAL FIX: clear pendingRegNo so the submit handler never treats this
+    // as a new registration or triggers the sibling detection path
+    delete admissionForm.dataset.pendingRegNo;
+
+    // Set the hidden field strictly to regNo — this is what flags UPDATE mode
+    editIdHidden.value = student.regNo;
+
+    // Populate form fields — skip system/computed fields that must be preserved
+    // exactly from the stored record and must not be overwritten by FormData
+    const SKIP_FIELDS = new Set([
+        '_editRegNo', 'regNo', 'id', 'siblingGroupId',
+        'isSibling', 'siblingOf', 'hasSiblings', 'promoted',
+        'photo', 'age', 'netPayable', 'rollNo', 'certData', 'otherFeesData'
+    ]);
+
     Object.keys(student).forEach(key => {
+        if (SKIP_FIELDS.has(key)) return;
         const input = admissionForm.querySelector(`[name="${key}"]`);
         if (input) {
             if (input.type === 'checkbox') {
                 input.checked = (student[key] === 'on' || student[key] === true);
             } else {
-                input.value = student[key];
+                input.value = student[key] ?? '';
             }
         }
     });
