@@ -238,6 +238,14 @@ document.addEventListener('DOMContentLoaded', () => {
             renderStudentTable();
         }
 
+        if (modalId === 'view-only-modal') {
+            ['vo-search-name','vo-search-father','vo-search-class'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.value = '';
+            });
+            renderViewOnlyTable();
+        }
+
         modal.style.display = 'block';
         document.body.style.overflow = 'hidden';
     };
@@ -811,6 +819,60 @@ if (classSelect) {
             tbody.innerHTML += row;
         });
     };
+
+
+    // ── VIEW-ONLY TABLE (read-only directory, no edit/delete) ────────────────
+
+    window.renderViewOnlyTable = function() {
+        const db    = getDatabase();
+        const tbody = document.getElementById('vo-student-tbody');
+        if (!tbody) return;
+
+        tbody.innerHTML = '';
+
+        const qName   = (document.getElementById('vo-search-name')   ? document.getElementById('vo-search-name').value   : '').toLowerCase().trim();
+        const qFather = (document.getElementById('vo-search-father') ? document.getElementById('vo-search-father').value : '').toLowerCase().trim();
+        const qClass  = (document.getElementById('vo-search-class')  ? document.getElementById('vo-search-class').value  : '').toLowerCase().trim();
+
+        const filtered = db.filter(s => {
+            const matchName   = !qName   || (s.fullName     || '').toLowerCase().includes(qName);
+            const matchFather = !qFather || (s.guardianName || '').toLowerCase().includes(qFather);
+            const matchClass  = !qClass  || (s.studentClass || '').toLowerCase().includes(qClass);
+            return matchName && matchFather && matchClass;
+        });
+
+        if (filtered.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:50px;color:#94a3b8;">No students found.</td></tr>';
+            return;
+        }
+
+        filtered.forEach(s => {
+            const displayId  = s.regNo || s.id;
+            const siblingTag = (s.isSibling && s.siblingOf)
+                ? `<br><span class="sibling-tag"><i class="fas fa-user-friends"></i> Sibling of ${s.siblingOf}</span>`
+                : '';
+
+            tbody.innerHTML += `
+                <tr>
+                    <td><span class="hrk-id-badge">${displayId}</span></td>
+                    <td><strong>${s.fullName}</strong>${siblingTag}</td>
+                    <td>${s.guardianName}</td>
+                    <td><span style="background:#f1f5f9;padding:4px 8px;border-radius:4px;font-size:0.85rem;font-weight:600;">${s.studentClass}</span></td>
+                    <td>${s.gender}</td>
+                    <td style="text-align:center;">
+                        <button class="btn-icon view" onclick="viewFullProfile('${s.regNo}')" title="View Profile">
+                            <i class="fas fa-eye"></i>
+                        </button>
+                    </td>
+                </tr>`;
+        });
+    };
+
+    // Wire view-only search inputs to re-render on type
+    ['vo-search-name','vo-search-father','vo-search-class'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.addEventListener('input', renderViewOnlyTable);
+    });
 
     // ── PROMOTE ALL STUDENTS ─────────────────────────────────────────────────
 
