@@ -210,8 +210,10 @@
 
             <div class="form-page-container centered-block">
                 <div class="form-group full-width">
-                    <label>Select Student</label>
-                    <select id="student-select"><option value="">Loading students...</option></select>
+                    <label>Search Student</label>
+                    <input type="text" id="student-fine-search" class="fine-search-input" oninput="searchStudentsForFine()" placeholder="Search by name, or Name~Guardian (e.g. Hanan~Habib)">
+                    <p class="search-hint">Tip: type a name, or use <strong>Name~Guardian</strong> to match both (e.g. <em>Hanan~Habib</em>). Results show ID, Name, Class &amp; Father.</p>
+                    <div id="student-fine-results" class="staff-members-list fine-results-list"></div>
                 </div>
                 <div class="form-group full-width">
                     <label>Fine Amount (RS)</label>
@@ -241,14 +243,15 @@
                 <table class="finance-table">
                     <thead>
                         <tr>
+                            <th>Student ID</th>
                             <th>Name</th>
                             <th>Class</th>
-                            <th>Fine Amount (RS)</th>
-                            <th>Cause</th>
+                            <th>Father Name</th>
+                            <th>Fine (Amount &amp; Cause)</th>
                         </tr>
                     </thead>
                     <tbody id="student-fines-tbody">
-                        <tr><td colspan="4" class="empty-row">No fines recorded yet.</td></tr>
+                        <tr><td colspan="5" class="empty-row">No fines recorded yet.</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -323,8 +326,10 @@
                 </div>
 
                 <div class="form-group full-width">
-                    <label>Staff Members</label>
-                    <div id="bonus-members-list" class="staff-members-list"></div>
+                    <label>Search Staff</label>
+                    <input type="text" id="bonus-search" class="fine-search-input" oninput="filterBonusList()" placeholder="Search teacher / staff by name, ID, subject or class">
+                    <p class="search-hint">Results show ID, Name, Class &amp; Subject (or Job for non-teaching).</p>
+                    <div id="bonus-members-list" class="staff-members-list fine-results-list"></div>
                 </div>
 
                 <div class="form-group full-width">
@@ -412,8 +417,10 @@
                 </div>
 
                 <div class="form-group full-width">
-                    <label>Staff Members</label>
-                    <div id="staff-members-list" class="staff-members-list"></div>
+                    <label>Search Staff</label>
+                    <input type="text" id="staff-fine-search" class="fine-search-input" oninput="filterStaffFineList()" placeholder="Search teacher / staff by name, ID, subject or class">
+                    <p class="search-hint">Results show ID, Name, Class &amp; Subject (or Job for non-teaching).</p>
+                    <div id="staff-members-list" class="staff-members-list fine-results-list"></div>
                 </div>
 
                 <div class="form-group full-width">
@@ -723,8 +730,8 @@
         </div>
 
         <!-- Pay Advance Salary Section -->
-        <div class="sbp-advance-section" style="margin-top:18px; padding:14px 16px; border:1px dashed var(--border-subtle); border-radius:var(--radius-md); background:rgba(234,179,8,0.05);">
-            <button type="button" class="sbp-btn" id="sbp-toggle-advance-btn" onclick="toggleAdvancePay()" style="background:rgba(234,179,8,0.15); color:#eab308; border:1px solid rgba(234,179,8,0.35);">
+        <div class="sbp-advance-section" style="margin-top:18px; padding:0; border:none; background:transparent;">
+            <button type="button" class="sbp-btn" id="sbp-toggle-advance-btn" onclick="toggleAdvancePay()" style="background:transparent; color:#14306b; border:1px dashed #cbd5e1; width:100%; justify-content:center; padding:12px;">
                 <i class="fas fa-hand-holding-usd"></i> Pay Advance Salary
             </button>
             <div id="sbp-advance-input-wrap" class="d-none" style="display:flex; gap:8px; align-items:center; margin-top:12px;">
