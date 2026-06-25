@@ -2166,21 +2166,25 @@
    SALARY BREAKDOWN PANEL
    ============================================ */
 .salary-breakdown-panel {
-    background: var(--bg-card);
-    border: 1px solid var(--border-subtle);
-    border-radius: var(--radius-lg);
-    padding: 24px;
+    background: #ffffff;
+    border: 1px solid #e9edf3;
+    border-radius: 22px;
+    padding: 26px;
     margin-bottom: 20px;
     max-width: 960px;
     animation: fadeInPage 0.3s ease;
     position: relative;
+}
+[data-theme="dark"] .salary-breakdown-panel {
+    background: var(--bg-card);
+    border-color: var(--border-subtle);
 }
 
 .sbp-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    margin-bottom: 18px;
+    margin-bottom: 20px;
 }
 
 .sbp-teacher-info {
@@ -2190,40 +2194,41 @@
 }
 
 .sbp-avatar {
-    width: 48px;
-    height: 48px;
+    width: 50px;
+    height: 50px;
     border-radius: 50%;
-    background: linear-gradient(135deg, #6366f1, #a855f7);
+    background: #e7edfb;
     display: flex;
     align-items: center;
     justify-content: center;
     font-size: 20px;
-    color: #fff;
+    color: #1e3a8a;
     flex-shrink: 0;
 }
 
 .sbp-teacher-name {
-    font-size: 1.15rem;
-    font-weight: 700;
-    color: var(--text-primary);
+    font-size: 1.2rem;
+    font-weight: 800;
+    color: #0f172a;
     line-height: 1.2;
 }
+[data-theme="dark"] .sbp-teacher-name { color: var(--text-primary); }
 
 .sbp-teacher-id {
-    font-size: 0.8rem;
-    color: var(--accent, #6366f1);
-    font-weight: 600;
+    font-size: 0.85rem;
+    color: #1d4ed8;
+    font-weight: 700;
     font-family: monospace;
-    margin-top: 2px;
+    margin-top: 3px;
 }
 
 .sbp-close-btn {
-    background: var(--bg-input, rgba(255,255,255,0.05));
-    border: 1px solid var(--border-subtle);
-    border-radius: 8px;
-    color: var(--text-secondary);
-    width: 34px;
-    height: 34px;
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    color: #64748b;
+    width: 36px;
+    height: 36px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -2232,62 +2237,68 @@
     transition: all 0.2s;
 }
 .sbp-close-btn:hover {
-    border-color: var(--border-hover);
-    color: var(--text-primary);
+    border-color: #cbd5e1;
+    color: #0f172a;
 }
 
 /* Formula banner */
 .sbp-formula-box {
-    background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 50%, #a855f7 100%);
-    border-radius: 12px;
-    padding: 16px 22px;
+    background: #14306b;
+    border-radius: 16px;
+    padding: 20px 24px;
     text-align: center;
-    margin-bottom: 20px;
-    box-shadow: 0 4px 18px rgba(99, 102, 241, 0.35);
+    margin-bottom: 22px;
+    box-shadow: none;
 }
 
 .sbp-formula-text {
-    font-size: 1rem;
+    font-size: 1.05rem;
     font-weight: 700;
-    color: rgba(255,255,255,0.92);
+    color: rgba(255,255,255,0.95);
     letter-spacing: 0.01em;
     display: flex;
     align-items: center;
     justify-content: center;
     flex-wrap: wrap;
     gap: 4px;
+    line-height: 1.7;
 }
 
-.sbp-formula-text .f-total   { color: #93c5fd; }
-.sbp-formula-text .f-bonus   { color: #6ee7b7; }
-.sbp-formula-text .f-security{ color: #fcd34d; }
-.sbp-formula-text .f-deduct  { color: #fca5a5; }
-.sbp-formula-text .f-fine    { color: #f9a8d4; }
+.sbp-formula-text .f-total,
+.sbp-formula-text .f-bonus,
+.sbp-formula-text .f-security,
+.sbp-formula-text .f-deduct,
+.sbp-formula-text .f-fine,
+.sbp-formula-text .f-advance {
+    color: rgba(255,255,255,0.95);
+}
 
 /* Cards grid */
 .sbp-cards-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-    gap: 14px;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
 }
 
 .sbp-card {
-    border-radius: 14px;
-    padding: 16px 14px 14px;
-    text-align: center;
-    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 16px;
+    padding: 18px 16px;
+    text-align: left;
+    border: none;
     transition: transform 0.2s;
 }
 .sbp-card:hover { transform: translateY(-2px); }
 
 .sbp-card label {
-    display: block;
-    font-size: 0.68rem;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.72rem;
     text-transform: uppercase;
     font-weight: 800;
-    letter-spacing: 0.06em;
-    margin-bottom: 8px;
-    opacity: 0.85;
+    letter-spacing: 0.04em;
+    margin-bottom: 10px;
+    opacity: 0.9;
 }
 
 .sbp-card input {
@@ -2295,28 +2306,46 @@
     background: transparent;
     border: none;
     outline: none;
-    text-align: center;
-    font-size: 1.05rem;
-    font-weight: 700;
+    text-align: left;
+    font-size: 1.5rem;
+    font-weight: 800;
     color: inherit;
     pointer-events: none;
     font-family: inherit;
 }
 
-/* Card color variants */
-.sbp-c-blue   { background: rgba(59,130,246,0.14);  color: #3b82f6; }
-.sbp-c-green  { background: rgba(16,185,129,0.14);  color: #10b981; }
-.sbp-c-orange { background: rgba(245,158,11,0.14);  color: #f59e0b; }
-.sbp-c-red    { background: rgba(239,68,68,0.14);   color: #ef4444; }
-.sbp-c-purple { background: rgba(168,85,247,0.14);  color: #a855f7; }
-.sbp-c-grand  { 
-    background: linear-gradient(135deg, #4f46e5, #7c3aed); 
-    color: #fff;
+/* Card color variants - flat pastel, light-mode first */
+.sbp-c-blue   { background: #e9eefb; color: #1d4ed8; }
+.sbp-c-green  { background: #e6f6ee; color: #15803d; }
+.sbp-c-orange { background: #fbf1e2; color: #b8860b; }
+.sbp-c-red    { background: #fbe9e9; color: #dc2626; }
+.sbp-c-purple { background: #eeecfb; color: #6d28d9; }
+.sbp-c-yellow { background: #eef0f3; color: #334155; }
+.sbp-c-grand  {
+    background: #14306b;
+    color: #ffffff;
     grid-column: span 2;
-    box-shadow: 0 4px 14px rgba(99,102,241,0.3);
+    border-radius: 18px;
+    text-align: center;
+    padding: 22px 16px;
+    box-shadow: none;
 }
-.sbp-c-grand label { opacity: 1; }
-.sbp-c-grand input { font-size: 1.25rem; }
+.sbp-c-grand label {
+    justify-content: center;
+    opacity: 1;
+    color: rgba(255,255,255,0.85);
+}
+.sbp-c-grand input {
+    text-align: center;
+    font-size: 1.75rem;
+}
+
+[data-theme="dark"] .sbp-c-blue   { background: rgba(59,130,246,0.14);  color: #60a5fa; }
+[data-theme="dark"] .sbp-c-green  { background: rgba(16,185,129,0.14);  color: #34d399; }
+[data-theme="dark"] .sbp-c-orange { background: rgba(245,158,11,0.14);  color: #fbbf24; }
+[data-theme="dark"] .sbp-c-red    { background: rgba(239,68,68,0.14);   color: #f87171; }
+[data-theme="dark"] .sbp-c-purple { background: rgba(168,85,247,0.14);  color: #c084fc; }
+[data-theme="dark"] .sbp-c-yellow { background: rgba(148,163,184,0.14); color: #cbd5e1; }
 
 /* Dark mode search bar — strengthen overrides */
 [data-theme="dark"] #page-salary-teaching .search-filter-box {
@@ -2393,22 +2422,91 @@
 }
 
 .sbp-btn-cancel {
-    background: transparent;
-    color: var(--text-secondary);
-    border-color: var(--border-subtle);
+    background: #ffffff;
+    color: #475569;
+    border: 1px solid #e2e8f0;
 }
 .sbp-btn-cancel:hover {
-    background: rgba(239, 68, 68, 0.1);
-    color: #ef4444;
-    border-color: rgba(239, 68, 68, 0.4);
+    background: #fbe9e9;
+    color: #dc2626;
+    border-color: rgba(220, 38, 38, 0.3);
 }
 
 .sbp-btn-pay {
-    background: linear-gradient(135deg, #10b981, #059669);
+    background: #14306b;
     color: #fff;
-    box-shadow: 0 4px 14px rgba(16, 185, 129, 0.35);
+    box-shadow: none;
 }
 .sbp-btn-pay:hover {
     transform: translateY(-1px);
-    box-shadow: 0 6px 20px rgba(16, 185, 129, 0.5);
+    background: #0f2554;
+}
+
+
+/* ===== Fine/Bonus search + results (added) ===== */
+.fine-search-input {
+    width: 100%;
+    padding: 12px 14px;
+    border-radius: 10px;
+    border: 1px solid var(--border-color, rgba(255,255,255,0.12));
+    background: var(--input-bg, rgba(255,255,255,0.04));
+    color: var(--text-primary, #fff);
+    font-size: 14px;
+    outline: none;
+    transition: border-color .2s ease, box-shadow .2s ease;
+}
+.fine-search-input:focus {
+    border-color: var(--accent, #6366f1);
+    box-shadow: 0 0 0 3px rgba(99,102,241,0.25);
+}
+.search-hint {
+    margin: 8px 2px 0;
+    font-size: 12px;
+    color: var(--text-secondary, #9aa0aa);
+}
+.fine-results-list {
+    margin-top: 12px;
+    max-height: 340px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+.search-empty {
+    padding: 16px;
+    text-align: center;
+    color: var(--text-secondary, #9aa0aa);
+    font-size: 14px;
+}
+
+/* ============================================
+   SCROLLABLE SELECT LISTS
+   Used on Add Staff Fine / Add Staff Bonus / Add Student Fine
+   Shows ~2 items, the rest are reachable by scrolling inside the list
+   so the page itself doesn't grow tall.
+   ============================================ */
+#staff-members-list,
+#bonus-members-list,
+#student-fine-results {
+    max-height: 180px;            /* ~2 items visible */
+    overflow-y: auto;
+    padding-right: 6px;
+    scrollbar-width: thin;
+    scrollbar-color: var(--border-hover) transparent;
+}
+#staff-members-list::-webkit-scrollbar,
+#bonus-members-list::-webkit-scrollbar,
+#student-fine-results::-webkit-scrollbar {
+    width: 6px;
+}
+#staff-members-list::-webkit-scrollbar-track,
+#bonus-members-list::-webkit-scrollbar-track,
+#student-fine-results::-webkit-scrollbar-track {
+    background: transparent;
+}
+#staff-members-list::-webkit-scrollbar-thumb,
+#bonus-members-list::-webkit-scrollbar-thumb,
+#student-fine-results::-webkit-scrollbar-thumb {
+    background: var(--border-hover);
+    border-radius: 3px;
 }
