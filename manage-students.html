@@ -39,14 +39,17 @@
             <a href="#" class="nav-link">
                 <i class="fas fa-money-bill-wave"></i> <span>Fee & Finances</span>
             </a>
-            <a href="#" class="nav-link">
+             <a href="manage-staff.html" class="nav-link">
+                <i class="fas fa-chalkboard-teacher"></i> <span>Staff Management</span>
+            </a>
+            <!-- <a href="#" class="nav-link">
                 <i class="fas fa-clipboard-list"></i> <span>Attendance Tracking</span>
             </a>
             <a href="#" class="nav-link">
                 <i class="fas fa-book-open"></i> <span>Curriculum & Exams</span>
-            </a>
+            </a> -->
 
-            <div class="nav-label">Administrative</div>
+            <!-- <div class="nav-label">Administrative</div>
             <a href="#" class="nav-link">
                 <i class="fas fa-users-cog"></i> <span>Staff Directory</span>
             </a>
@@ -55,7 +58,7 @@
             </a>
             <a href="#" class="nav-link">
                 <i class="fas fa-bell"></i> <span>Global Notices</span>
-            </a>
+            </a> -->
 
             <div class="sidebar-footer">
                 <hr class="nav-divider">
@@ -76,10 +79,10 @@
                 </button>
                 <div class="school-branding">
                     <h1>ST. LAWRENCE INTERNATIONAL SCHOOL</h1>
-                    <p class="sub-text">Academic Session 2024-2025</p>
+                    <p class="sub-text">Academic Session 2026-2027</p>
                 </div>
             </div>
-            <div class="header-right">
+            <!-- <div class="header-right">
                 <div class="user-profile-widget">
                     <div class="text-right">
                         <span class="profile-name">Administrator</span>
@@ -87,7 +90,7 @@
                     </div>
                     <img src="https://ui-avatars.com/api/?name=Admin&background=3498db&color=fff" alt="User">
                 </div>
-            </div>
+            </div> -->
         </header>
 
         <!-- DASHBOARD BODY -->
@@ -128,12 +131,12 @@
             <section class="management-section">
                 <div class="section-header-flex">
                     <div class="header-info">
-                        <h2><i class="fas fa-sliders-h"></i> Operational Control</h2>
-                        <p>Select an action below to manage student database records.</p>
+                        <h2><i class="fas fa-sliders-h"></i> Student Management</h2>
+                        <p>Mangage Students Here. Here You Can (Add, View, Update & Delete) Students.</p>
                     </div>
-                    <a href="admin.html" class="action-back-btn">
+                    <!-- <a href="admin.html" class="action-back-btn">
                         <i class="fas fa-chevron-left"></i> Dashboard
-                    </a>
+                    </a> -->
                 </div>
 
                 <!-- ACTION GRID CARDS -->
@@ -194,7 +197,7 @@
             <button class="close-modal-btn" onclick="closeModal('student-modal')">&times;</button>
         </div>
         <form id="student-admission-form" class="modal-body-scroll">
-            <input type="hidden" id="edit-student-id" name="id">
+            <input type="hidden" id="edit-student-id" name="_editRegNo">
 
             <!-- SECTION: STUDENT PHOTO -->
             <div class="image-upload-wrapper">
@@ -222,13 +225,20 @@
                 <div class="form-input-group">
                     <label>Class / Grade *</label>
                     <select name="studentClass" required>
-                        <option value="">Select Class</option>
-                        <option value="Playgroup">Playgroup</option>
-                        <option value="Nursery">Nursery</option>
-                        <option value="KG">KG</option>
-                        <option value="Grade 1">Grade 1</option>
-                        <option value="Grade 2">Grade 2</option>
-                        <!-- Add more as needed -->
+                         <option value="">Select Class</option>
+        <option value="Montessori">Montessori</option>
+        <option value="Nursery">Nursery</option>
+        <option value="Prep">Prep</option>
+        <option value="Grade 1">Grade 1</option>
+        <option value="Grade 2">Grade 2</option>
+        <option value="Grade 3">Grade 3</option>
+        <option value="Grade 4">Grade 4</option>
+        <option value="Grade 5">Grade 5</option>
+        <option value="Grade 6">Grade 6</option>
+        <option value="Grade 7">Grade 7</option>
+        <option value="Grade 8">Grade 8</option>
+        <option value="Grade 9">Grade 9</option>
+        <option value="Grade 10">Grade 10</option>
                     </select>
                 </div>
                 <div class="form-input-group">
@@ -370,8 +380,8 @@
             <div class="form-section-label"><i class="fas fa-file-invoice-dollar"></i> Financial Profile</div>
 <div class="form-input-grid">
     <div class="form-input-group">
-        <label>Standard Tuition Fee *</label>
-        <input type="number" id="fee-standard" name="standardFee" required placeholder="5000">
+        <label>Standard Tuition Fee <span style="font-weight:400;color:var(--text-muted)">(Auto — by Class)</span></label>
+        <input type="number" id="fee-standard" name="standardFee" required readonly class="input-readonly" placeholder="Select class first">
     </div>
     <div class="form-input-group">
         <label>Admission Fee</label>
@@ -385,7 +395,83 @@
         <label>Transport Discount</label>
         <input type="number" id="fee-discount-transport" name="transportDiscount" value="0">
     </div>
-    
+    <div class="form-input-group">
+        <label>Sibling Discount</label>
+        <input type="number" id="fee-discount-sibling" name="siblingDiscount" value="0">
+    </div>
+</div>
+
+<!-- TAKE BOOKS TOGGLE -->
+<!-- <div class="form-input-grid" style="margin-top:15px;">
+    <div class="form-input-group full-span">
+        <button type="button" id="take-books-btn" class="btn-secondary" style="width:fit-content;">
+            <i class="fas fa-book"></i> Take Books
+        </button>
+    </div>
+</div>
+
+<div id="books-fee-panel" class="form-input-grid" style="display:none; margin-top:10px; background:#f8fafc; padding:18px; border-radius:10px; border:1px solid var(--border-color);">
+    <div class="form-input-group">
+        <label>Books Fee</label>
+        <input type="number" id="fee-books" name="booksFee" value="0">
+    </div>
+    <div class="form-input-group">
+        <label>Books Discount</label>
+        <input type="number" id="fee-books-discount" name="booksDiscount" value="0">
+    </div>
+</div> -->
+
+<!-- OTHER FEES SECTION -->
+<!-- <div class="form-input-grid" style="margin-top:20px;">
+    <div class="form-input-group full-span" style="flex-direction:row; justify-content:space-between; align-items:center;">
+        <label style="margin-bottom:0;"><i class="fas fa-receipt"></i> Other Fees</label>
+        <button type="button" id="add-other-fee-btn" class="btn-secondary" style="font-size:0.8rem; padding:6px 14px;">
+            <i class="fas fa-plus"></i> Add Fee
+        </button>
+    </div>
+</div>
+<div id="other-fees-container" style="display:flex; flex-direction:column; gap:12px; margin-top:5px;"></div>
+<input type="hidden" id="other-fees-data" name="otherFeesData" value="[]"> -->
+
+<!-- ANNUAL FUND SECTION -->
+<div class="form-input-grid" style="margin-top:20px;">
+    <div class="form-input-group full-span" style="flex-direction:row; justify-content:space-between; align-items:center;">
+        <label style="margin-bottom:0;"><i class="fas fa-calendar-check"></i> Annual Fund</label>
+        <div style="display:flex; align-items:center; gap:10px;">
+            <input type="checkbox" id="annual-fund-enabled" name="annualFundEnabled" style="width:20px; height:20px;">
+            <label for="annual-fund-enabled" style="margin-bottom:0; font-weight:500;">Enable Annual Fund</label>
+        </div>
+    </div>
+</div>
+<div id="annual-fund-panel" style="display:none; background:#fffbeb; padding:18px; border-radius:10px; border:1px solid #fbbf24; margin-top:10px;">
+    <div class="form-input-grid">
+        <div class="form-input-group">
+            <label><i class="fas fa-calendar-alt"></i> Apply in Month</label>
+            <select id="annual-fund-month" name="annualFundMonth">
+                <option value="">Select Month</option>
+                <option value="1">January</option>
+                <option value="2">February</option>
+                <option value="3">March</option>
+                <option value="4">April</option>
+                <option value="5">May</option>
+                <option value="6">June</option>
+                <option value="7">July</option>
+                <option value="8">August</option>
+                <option value="9">September</option>
+                <option value="10">October</option>
+                <option value="11">November</option>
+                <option value="12">December</option>
+            </select>
+        </div>
+        <div class="form-input-group">
+            <label>Annual Fund Amount (Rs.)</label>
+            <input type="number" id="annual-fund-amount" name="annualFundAmount" placeholder="From settings" readonly class="input-readonly">
+            <small style="color:#92400e; margin-top:4px; display:block;"><i class="fas fa-info-circle"></i> Amount set in settings. Only appears in voucher for the selected month.</small>
+        </div>
+    </div>
+</div>
+
+<div class="form-input-grid" style="margin-top:20px;">
     <!-- THE TOTAL FIELD -->
     <div class="form-input-group">
         <label style="color: #2c3e50; font-weight: 800;">Net Payable (First Month)</label>
@@ -423,26 +509,47 @@
                 <h3><i class="fas fa-database"></i> Registered Student Database</h3>
                 <button class="close-modal-btn" onclick="closeModal('view-modal')">&times;</button>
             </div>
-            <div class="modal-body">
-                <div class="table-controls">
+            <div class="modal-body modal-body-scroll">
+                <div class="table-controls" style="flex-wrap:wrap;">
                     <div class="search-box-wrapper">
                         <i class="fas fa-search"></i>
-                        <input type="text" id="search-db" placeholder="Filter by name, ID, or class...">
+                        <input type="text" id="search-name" placeholder="Search by name...">
                     </div>
+                    <div class="search-box-wrapper">
+                        <i class="fas fa-user-shield"></i>
+                        <input type="text" id="search-father" placeholder="Search by father's name...">
+                    </div>
+                    <div class="search-box-wrapper">
+                        <i class="fas fa-chalkboard"></i>
+                        <input type="text" id="search-class" placeholder="Search by class...">
+                    </div>
+                    <div class="search-box-wrapper">
+                        <i class="fas fa-id-badge"></i>
+                        <input type="text" id="search-id" placeholder="Search by ID...">
+                    </div>
+                    <button onclick="togglePromoteMode()" id="promote-all-btn" class="btn-secondary">
+                        <i class="fas fa-graduation-cap"></i> Promote All Students
+                    </button>
                     <button onclick="exportToCSV()" class="btn-secondary">
                         <i class="fas fa-file-export"></i> Export CSV
                     </button>
+                </div>
+                <div id="promote-actions-bar" style="display:none; justify-content:flex-end; gap:12px; margin-bottom:15px;">
+                    <button onclick="togglePromoteMode()" class="btn-ghost"><i class="fas fa-times"></i> Cancel</button>
+                    <button onclick="confirmPromotion()" class="btn-primary"><i class="fas fa-check"></i> Confirm Promotion</button>
                 </div>
 
                 <div class="data-table-wrapper">
                     <table class="student-table">
                         <thead>
                             <tr>
+                                <th id="promote-checkbox-header" style="display:none;"><i class="fas fa-check-square"></i></th>
                                 <th>Student ID</th>
                                 <th>Name</th>
                                 <th>Guardian</th>
                                 <th>Class</th>
                                 <th>Gender</th>
+                                <th id="promote-status-header" style="display:none;">Promotion Status</th>
                                 <th class="text-center">Actions</th>
                             </tr>
                         </thead>
