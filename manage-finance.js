@@ -6,6 +6,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initTheme();
     initSidebar();
     initDate();
+    initAtvVoucherModal();
 });
 
 /* ============================================
@@ -631,6 +632,14 @@ function escapeForAttr(str) {
         .replace(/>/g, '&gt;');
 }
 
+function escapeHtml(str) {
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+}
+
 
 /**
  * Switcher function for Finance Modules
@@ -656,7 +665,10 @@ function backToClassSelection() {
 /**
  * VOUCHER PREVIEW LOGIC
  */
-function viewVoucher(studentId, fullName) {
+let currentVoucherStudentId = null;
+let currentVoucherStudentName = null;
+
+function viewVoucher(studentId, fullName, isPaidBill = false) {
     const students = JSON.parse(localStorage.getItem('edu_students') || '[]');
     const student = findStudentExact(students, studentId, fullName);
     if (!student) {
@@ -664,9 +676,27 @@ function viewVoucher(studentId, fullName) {
         return;
     }
 
-    const html = buildVoucherHTML(student);
+    currentVoucherStudentId = studentId;
+    currentVoucherStudentName = fullName;
+
+    let html = buildVoucherHTML(student);
+    if (isPaidBill) {
+        html = '<div style="position:relative;">' + html + '<div class="paid-stamp-overlay">PAID</div></div>';
+        const editBtn = document.getElementById('edit-voucher-btn');
+        if(editBtn) editBtn.style.display = 'none';
+    } else {
+        const editBtn = document.getElementById('edit-voucher-btn');
+        if(editBtn) editBtn.style.display = 'inline-block';
+    }
+
     document.getElementById('voucher-render-target').innerHTML = html;
     document.getElementById('voucher-modal-overlay').style.display = 'flex';
+}
+
+function openVoucherEditModal() {
+    if (currentVoucherStudentId) {
+        openInlineVoucherEditor(currentVoucherStudentId, currentVoucherStudentName);
+    }
 }
 
 function closeVoucherModal() {
@@ -690,17 +720,22 @@ function computeFeeBreakdown(s) {
     // Always use HRK_77-prefixed registration ID for display
     const regNo = s.regNo && String(s.regNo).startsWith('HRK_') ? s.regNo : `HRK_77${String(s.id).padStart(3, '0')}`;
 
+    // If the admin saved a custom voucher (via Edit Voucher), the saved fee
+    // rows REPLACE the base charges — otherwise they would be double-counted
+    // (once as base charges and again as additional fees).
+    const usingCustomVoucher = s.voucherCustomFees === true || s.voucherCustomFees === 'true';
+
     // --- 1. Core Charges (stored in DB, shown in table) ---
-    const tuitionFee = Number(s.standardFee) || 0;
-    const transportFee = Number(s.transportFee) || 0;
-    const admissionFee = Number(s.admissionFee) || 0;
-    const otherFee = Number(s.otherFee) || 0;
+    const tuitionFee   = usingCustomVoucher ? 0 : (Number(s.standardFee)   || 0);
+    const transportFee = usingCustomVoucher ? 0 : (Number(s.transportFee)  || 0);
+    const admissionFee = usingCustomVoucher ? 0 : (Number(s.admissionFee)  || 0);
+    const otherFee     = usingCustomVoucher ? 0 : (Number(s.otherFee)      || 0);
     const otherFeeLabel = s.otherFeeLabel || 'Other Charges';
 
     // --- 2. Voucher-Only: Books Fee ---
     const booksFeeEnabled = s.takesBooks === true || s.booksFee > 0;
-    const booksFee     = Number(s.booksFee) || 0;
-    const booksDiscount= Number(s.booksDiscount) || 0;
+    const booksFee     = usingCustomVoucher ? 0 : (Number(s.booksFee) || 0);
+    const booksDiscount= usingCustomVoucher ? 0 : (Number(s.booksDiscount) || 0);
     const booksNet     = Math.max(0, booksFee - booksDiscount);
 
     // --- 3. Voucher-Only: Additional (Other) Fees ---
@@ -783,7 +818,10 @@ function computeFeeBreakdown(s) {
     // Voucher grand total (core + voucher-only items)
     const additionalFeesNet = additionalFees.reduce((sum, f) =>
         sum + Math.max(0, (parseFloat(f.amount)||0) - (parseFloat(f.discount)||0)), 0);
-    const voucherTotal = totalWithinDueDate + booksNet + additionalFeesNet + (showAnnualFund ? annualFundAmt : 0);
+    const bulkVoucherDiscount = Math.max(0, Number(s.voucherBulkDiscount) || 0);
+    const voucherTotal = Math.max(0,
+        totalWithinDueDate + booksNet + additionalFeesNet + (showAnnualFund ? annualFundAmt : 0) - bulkVoucherDiscount
+    );
 
     // Dates — due date is NEXT month's configured day
     const nextMonth = new Date(today.getFullYear(), today.getMonth() + 1, VOUCHER_SETTINGS.dueDayOfMonth);
@@ -828,27 +866,24 @@ function buildVoucherHTML(s) {
 
     // Build Charges Rows
     let rowsHTML = `
-        <tr><td>Tuition Fee</td><td>${f.monthLabel}</td><td>Rs. ${f.tuitionFee.toLocaleString()}</td></tr>
+        ${f.tuitionFee > 0 ? `<tr><td>Tuition Fee</td><td>${f.monthLabel}</td><td>Rs. ${f.tuitionFee.toLocaleString()}</td></tr>` : ''}
         ${f.transportFee > 0 ? `<tr><td>Transportation Fee</td><td>${f.monthLabel}</td><td>Rs. ${f.transportFee.toLocaleString()}</td></tr>` : ''}
         ${f.admissionFee > 0 ? `<tr><td>Admission Fee</td><td>One-time</td><td>Rs. ${f.admissionFee.toLocaleString()}</td></tr>` : ''}
         ${f.otherFee > 0 ? `<tr><td>${f.otherFeeLabel}</td><td>-</td><td>Rs. ${f.otherFee.toLocaleString()}</td></tr>` : ''}
     `;
 
     // ── Voucher-Only: Books Fee ──────────────────────────────────────────────
+    // (Books discount, if any, is shown in the unified Discounts Breakdown below.)
     if (f.booksFee > 0) {
         rowsHTML += `<tr><td>Books Fee</td><td>${f.monthLabel}</td><td>Rs. ${f.booksFee.toLocaleString()}</td></tr>`;
-        if (f.booksDiscount > 0) {
-            rowsHTML += `<tr class="voucher-row-discount"><td>- Books Discount</td><td>-</td><td>- Rs. ${f.booksDiscount.toLocaleString()}</td></tr>`;
-        }
     }
 
     // ── Voucher-Only: Additional Fees ────────────────────────────────────────
+    // Per-row discounts are aggregated into the Discounts Breakdown section
+    // below instead of being rendered inline under each fee row.
     f.additionalFees.forEach(fee => {
         if (!fee.description && !fee.amount) return;
         rowsHTML += `<tr><td>${fee.description || 'Additional Fee'}</td><td>${f.monthLabel}</td><td>Rs. ${parseFloat(fee.amount||0).toLocaleString()}</td></tr>`;
-        if (parseFloat(fee.discount||0) > 0) {
-            rowsHTML += `<tr class="voucher-row-discount"><td>- ${fee.description || 'Additional Fee'} Discount</td><td>-</td><td>- Rs. ${parseFloat(fee.discount).toLocaleString()}</td></tr>`;
-        }
     });
 
     // ── Voucher-Only: Annual Fund (only in designated month) ─────────────────
@@ -856,14 +891,33 @@ function buildVoucherHTML(s) {
         rowsHTML += `<tr style="background:#fffbeb;"><td><strong>Annual Fund</strong></td><td>Annual (${today.toLocaleDateString('en-GB', { month: 'long' })} only)</td><td>Rs. ${f.annualFundAmt.toLocaleString()}</td></tr>`;
     }
 
-    // Build Discount Rows (If any exist)
-    if (f.totalDiscounts > 0) {
-        rowsHTML += `<tr class="voucher-row-discount"><td colspan="2"><strong>Discounts Breakdown:</strong></td><td></td></tr>`;
-        if (f.tDisc > 0) rowsHTML += `<tr class="voucher-row-discount"><td>- Tuition Concession</td><td>-</td><td>- Rs. ${f.tDisc.toLocaleString()}</td></tr>`;
-        if (f.trDisc > 0) rowsHTML += `<tr class="voucher-row-discount"><td>- Transport Subsidy</td><td>-</td><td>- Rs. ${f.trDisc.toLocaleString()}</td></tr>`;
-        if (f.sibDisc > 0) rowsHTML += `<tr class="voucher-row-discount"><td>- Sibling Discount</td><td>-</td><td>- Rs. ${f.sibDisc.toLocaleString()}</td></tr>`;
+    // ── Unified Discounts Breakdown ─────────────────────────────────────────
+    // Collect every discount (form-level concessions, books, per-row edited
+    // discounts, and one-time bulk discount) into a single breakdown block
+    // so admins can see exactly what was deducted and why.
+    const breakdownDiscounts = [];
+    if (f.tDisc  > 0) breakdownDiscounts.push({ label: 'Tuition Concession',  amount: f.tDisc  });
+    if (f.trDisc > 0) breakdownDiscounts.push({ label: 'Transport Subsidy',   amount: f.trDisc });
+    if (f.sibDisc> 0) breakdownDiscounts.push({ label: 'Sibling Discount',    amount: f.sibDisc});
+    if (f.booksDiscount > 0) breakdownDiscounts.push({ label: 'Books Discount', amount: f.booksDiscount });
+    f.additionalFees.forEach(fee => {
+        const d = parseFloat(fee.discount || 0);
+        if (d > 0) breakdownDiscounts.push({
+            label: `${fee.description || 'Additional Fee'} Discount`,
+            amount: d
+        });
+    });
+    const bulkVoucherDisc = Math.max(0, Number(s.voucherBulkDiscount) || 0);
+    if (bulkVoucherDisc > 0) breakdownDiscounts.push({ label: 'One-time Voucher Discount', amount: bulkVoucherDisc });
+
+    const breakdownTotal = breakdownDiscounts.reduce((sum, d) => sum + d.amount, 0);
+    if (breakdownTotal > 0) {
+        rowsHTML += `<tr class="voucher-row-discount"><td colspan="3"><strong>Discounts Breakdown:</strong></td></tr>`;
+        breakdownDiscounts.forEach(d => {
+            rowsHTML += `<tr class="voucher-row-discount"><td>- ${d.label}</td><td>-</td><td>- Rs. ${d.amount.toLocaleString()}</td></tr>`;
+        });
         rowsHTML += `<tr class="voucher-row-discount" style="background:#f0fdf4; border-top:1px solid #bbf7d0">
-            <td><strong>Total Monthly Discount</strong></td><td>Valid till ${f.discountDeadline}</td><td><strong>- Rs. ${f.totalDiscounts.toLocaleString()}</strong></td></tr>`;
+            <td><strong>Total Discounts</strong></td><td>Valid till ${f.discountDeadline}</td><td><strong>- Rs. ${breakdownTotal.toLocaleString()}</strong></td></tr>`;
     }
 
     // Arrears Row (may include auto-rolled previous-month unpaid)
@@ -887,6 +941,11 @@ function buildVoucherHTML(s) {
                 </tr>`;
         }
     }
+
+    const savedNote = (s.voucherNote || '').trim();
+    const defaultNote = 'Arrears are included in the Net Payable amount. Please clear all dues.';
+    const noteText = savedNote || defaultNote;
+    const noteClass = savedNote ? 'voucher-note voucher-note-custom' : 'voucher-note';
 
     const copy = (label) => `
         <div class="voucher-copy">
@@ -938,7 +997,7 @@ function buildVoucherHTML(s) {
             </table>
 
             <div class="voucher-footer">
-                <div class="voucher-note"><i class="fas fa-info-circle"></i> Arrears are included in the Net Payable amount. Please clear all dues.</div>
+                <div class="${noteClass}"><i class="fas fa-info-circle"></i> ${escapeHtml(noteText)}</div>
                 <div class="voucher-signature">
                     <div class="sig-line"></div>
                     <span>Principal / Accounts</span>
@@ -1032,13 +1091,36 @@ function renderFees(className) {
         const hasArrears = f.arrears > 0;
         const hasFines = f.monthlyFineTotal > 0;
 
+        const hasPaidThisMonth = payments.some(p => p.monthKey === currentMonthKey);
+
         let statusBadge = '';
-        if (isPaid) {
+        if (hasPaidThisMonth) {
             statusBadge = `<span class="fee-status-badge fee-paid"><i class="fas fa-check-circle"></i> Paid</span>`;
         } else if (hasArrears) {
             statusBadge = `<span class="fee-status-badge fee-overdue"><i class="fas fa-exclamation-circle"></i> Arrears</span>`;
         } else {
             statusBadge = `<span class="fee-status-badge fee-pending"><i class="fas fa-clock"></i> Pending</span>`;
+        }
+
+        let actionButtons = '';
+        if (hasPaidThisMonth) {
+            actionButtons = `
+                <button class="btn-tiny" onclick="viewVoucher('${s.id}', '${escapeForAttr(s.fullName||'')}', true)">
+                    <i class="fas fa-eye"></i> View Paid Bill
+                </button>
+            `;
+        } else {
+            actionButtons = `
+                <button class="btn-tiny" onclick="viewVoucher('${s.id}', '${escapeForAttr(s.fullName||'')}', false)">
+                    <i class="fas fa-eye"></i> View Voucher
+                </button>
+                <!--<button class="btn-tiny btn-add-to-voucher" onclick="openAddToVoucherModal('${s.id}', '${escapeForAttr(s.fullName||'')}', true)">
+                    <i class="fas fa-edit"></i> Edit Voucher
+                </button>-->
+                <button class="btn-tiny btn-add-fees" onclick="openAddFeesModal('${s.id}', '${escapeForAttr(s.fullName||'')}')">
+                    <i class="fas fa-plus-circle"></i> Pay Fee
+                </button>
+            `;
         }
 
         tbody.innerHTML += `
@@ -1056,12 +1138,7 @@ function renderFees(className) {
                 </td>
                 <td>${statusBadge}</td>
                 <td class="fee-actions-cell">
-                    <button class="btn-tiny" onclick="viewVoucher('${s.id}', '${escapeForAttr(s.fullName||'')}')">
-                        <i class="fas fa-eye"></i> Voucher
-                    </button>
-                    <button class="btn-tiny btn-add-fees" onclick="openAddFeesModal('${s.id}', '${escapeForAttr(s.fullName||'')}')">
-                        <i class="fas fa-plus-circle"></i> Add Fees
-                    </button>
+                    ${actionButtons}
                 </td>
             </tr>
         `;
@@ -1134,6 +1211,8 @@ function findStudentExact(students, studentId, fullName) {
     return students.find(s => String(s.id) === String(studentId));
 }
 
+let afmCurrentPendingAmount = 0;
+
 function openAddFeesModal(studentId, fullName) {
     const students = JSON.parse(localStorage.getItem('edu_students') || '[]');
     const student = findStudentExact(students, studentId, fullName);
@@ -1142,304 +1221,104 @@ function openAddFeesModal(studentId, fullName) {
 
     document.getElementById('add-fees-student-id').value = studentId;
 
-    // Pre-fill month
-    const now = new Date();
-    document.getElementById('af-fee-month').value = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-
-    // Reset bulk discount & notes
-    document.getElementById('afm-bulk-discount').value = '';
-    document.getElementById('af-fee-notes').value = '';
-
-    // Reset fee rows — start with standard fees from student record
-    afmFeeRows = [];
-    afmNextRowId = 1;
-
-    const f = computeFeeBreakdown(student);
-
-    // Auto-populate rows based on student's fee structure
-    if (f.tuitionFee > 0) addFeeItemRow('tuition', f.tuitionFee, f.tDisc);
-    if (f.transportFee > 0) addFeeItemRow('transport', f.transportFee, f.trDisc);
-    if (f.admissionFee > 0) addFeeItemRow('admission', f.admissionFee, 0);
-    if (f.otherFee > 0) addFeeItemRow('other', f.otherFee, 0);
-    // If nothing set up, add one empty row
-    if (afmFeeRows.length === 0) addFeeItemRow('tuition', 0, 0);
+    // Reset inputs
+    const discountInput = document.getElementById('afm-pay-discount');
+    if(discountInput) discountInput.value = '';
+    
+    const amountInput = document.getElementById('afm-pay-amount');
+    if(amountInput) amountInput.value = '';
+    
+    const notesInput = document.getElementById('af-fee-notes');
+    if(notesInput) notesInput.value = '';
 
     renderAddFeesModal(student);
     document.getElementById('add-fees-modal').style.display = 'flex';
-}
-
-function addFeeItemRow(typeVal, amount, discount, customLabel) {
-    const id = afmNextRowId++;
-    const row = {
-        id,
-        type: typeVal || 'custom',
-        amount: amount || 0,
-        discount: discount || 0,
-        customLabel: customLabel || ''
-    };
-    // Preset seeding (called with arguments) appends; user clicks (no args)
-    // prepend so the new fields appear at the top of the list.
-    if (typeVal === undefined) {
-        afmFeeRows.unshift(row);
-    } else {
-        afmFeeRows.push(row);
-    }
-    renderFeeRows();
-    recalcAFTotal();
-    // Make the brand-new row visible immediately
-    if (typeVal === undefined) {
-        const wrap = document.getElementById('afm-fee-rows-container');
-        if (wrap) wrap.scrollTop = 0;
-        const newRow = document.getElementById('afm-row-' + id);
-        if (newRow && newRow.scrollIntoView) newRow.scrollIntoView({ block: 'nearest' });
-        // Focus the category select for the new row
-        const sel = newRow && newRow.querySelector('select');
-        if (sel) sel.focus();
-    }
-}
-
-function removeFeeRow(id) {
-    afmFeeRows = afmFeeRows.filter(r => r.id !== id);
-    renderFeeRows();
-    recalcAFTotal();
-}
-
-function updateFeeRow(id, field, value) {
-    const row = afmFeeRows.find(r => r.id === id);
-    if (!row) return;
-    if (field === 'type') {
-        row.type = value;
-        // Auto-fill amount from student data if applicable
-        const studentId = document.getElementById('add-fees-student-id').value;
-        const students = JSON.parse(localStorage.getItem('edu_students') || '[]');
-        const student = afmCurrentStudent || students.find(s => String(s.id) === String(studentId));
-        if (student) {
-            const preset = FEE_TYPE_PRESETS.find(p => p.value === value);
-            if (preset && preset.key && student[preset.key]) {
-                row.amount = Number(student[preset.key]) || 0;
-            }
-            if (value === 'arrears') {
-                row.amount = Number(student.arrears) || 0;
-            }
-        }
-        renderFeeRows();
-    } else if (field === 'amount') {
-        row.amount = parseFloat(value) || 0;
-    } else if (field === 'discount') {
-        row.discount = parseFloat(value) || 0;
-    } else if (field === 'customLabel') {
-        row.customLabel = value;
-    }
-    recalcAFTotal();
-}
-
-function renderFeeRows() {
-    const container = document.getElementById('afm-fee-rows-container');
-    if (!container) return;
-
-    let html = '';
-    afmFeeRows.forEach(row => {
-        const net = Math.max(0, row.amount - row.discount);
-        const selectedOptions = FEE_TYPE_PRESETS.map(p =>
-            `<option value="${p.value}" ${p.value === row.type ? 'selected' : ''}>${p.label}</option>`
-        ).join('');
-
-        const customNameInput = row.type === 'custom'
-            ? `<input type="text" class="afm-input" style="margin-top:6px;" placeholder="Name this category…"
-                       value="${(row.customLabel||'').replace(/"/g,'&quot;')}"
-                       oninput="updateFeeRow(${row.id},'customLabel',this.value)">`
-            : '';
-
-        html += `
-        <div class="afm-fee-row" id="afm-row-${row.id}">
-            <div class="afm-fee-row-type">
-                <select class="afm-input afm-row-select" onchange="updateFeeRow(${row.id},'type',this.value)">
-                    ${selectedOptions}
-                </select>
-                ${customNameInput}
-            </div>
-            <div class="afm-fee-row-amt">
-                <div class="afm-input-with-prefix">
-                    <span class="afm-prefix">Rs.</span>
-                    <input type="number" class="afm-input afm-no-left-radius" value="${row.amount || ''}" placeholder="0" min="0"
-                        onchange="updateFeeRow(${row.id},'amount',this.value)"
-                        oninput="updateFeeRow(${row.id},'amount',this.value)">
-                </div>
-            </div>
-            <div class="afm-fee-row-disc">
-                <div class="afm-input-with-prefix afm-disc-input">
-                    <span class="afm-prefix afm-disc-prefix">- Rs.</span>
-                    <input type="number" class="afm-input afm-no-left-radius" value="${row.discount || ''}" placeholder="0" min="0"
-                        onchange="updateFeeRow(${row.id},'discount',this.value)"
-                        oninput="updateFeeRow(${row.id},'discount',this.value)">
-                </div>
-            </div>
-            <div class="afm-fee-row-net">
-                <span class="afm-net-badge ${net > 0 ? '' : 'afm-net-zero'}" id="afm-net-${row.id}">Rs. ${net.toLocaleString()}</span>
-            </div>
-            <div class="afm-fee-row-del">
-                ${afmFeeRows.length > 1 ? `<button class="afm-del-btn" onclick="removeFeeRow(${row.id})" title="Remove"><i class="fas fa-trash-alt"></i></button>` : ''}
-            </div>
-        </div>`;
-    });
-
-    container.innerHTML = html;
-}
-
-function recalcAFTotal() {
-    // Update net badges live
-    afmFeeRows.forEach(row => {
-        const net = Math.max(0, row.amount - row.discount);
-        const el = document.getElementById(`afm-net-${row.id}`);
-        if (el) {
-            el.textContent = `Rs. ${net.toLocaleString()}`;
-            el.classList.toggle('afm-net-zero', net === 0);
-        }
-    });
-
-    const bulkDisc = parseFloat(document.getElementById('afm-bulk-discount')?.value) || 0;
-
-    const gross = afmFeeRows.reduce((s, r) => s + (r.amount || 0), 0);
-    const itemDiscTotal = afmFeeRows.reduce((s, r) => s + (r.discount || 0), 0);
-    const afterItemDisc = Math.max(0, gross - itemDiscTotal);
-    const afterBulkDisc = Math.max(0, afterItemDisc - bulkDisc);
-
-    // Check for arrears rows
-    const arrearsRow = afmFeeRows.find(r => r.type === 'arrears');
-    const arrearsAmt = arrearsRow ? (arrearsRow.amount || 0) : 0;
-
-    // Update summary panel
-    const set = (id, txt) => { const el = document.getElementById(id); if (el) el.textContent = txt; };
-    set('afm-t-gross', `Rs. ${gross.toLocaleString()}`);
-    set('afm-t-item-disc', `- Rs. ${itemDiscTotal.toLocaleString()}`);
-    set('afm-t-bulk-disc', `- Rs. ${bulkDisc.toLocaleString()}`);
-    set('afm-t-grand', `Rs. ${afterBulkDisc.toLocaleString()}`);
-
-    // Hide arrears row in totals (arrears included in gross already)
-    const arrearsRowEl = document.getElementById('afm-arrears-row');
-    if (arrearsRowEl) arrearsRowEl.style.display = 'none';
-
-    // Per-fee discount breakdown
-    const discBreakEl = document.getElementById('afm-discount-breakdown');
-    if (discBreakEl) {
-        const rowsWithDisc = afmFeeRows.filter(r => r.discount > 0);
-        if (rowsWithDisc.length > 0) {
-            discBreakEl.innerHTML = rowsWithDisc.map(r => {
-                const preset = FEE_TYPE_PRESETS.find(p => p.value === r.type);
-                const label = preset ? preset.label : r.type;
-                return `<div class="afm-disc-break-row">
-                    <span>${label}</span>
-                    <strong style="color:#16a34a;">- Rs. ${r.discount.toLocaleString()}</strong>
-                </div>`;
-            }).join('');
-        } else {
-            discBreakEl.innerHTML = '';
-        }
-    }
-
-    // Combined discount card
-    const totalDisc = itemDiscTotal + bulkDisc;
-    const combCard = document.getElementById('afm-combined-disc-card');
-    if (combCard) {
-        if (totalDisc > 0) {
-            combCard.style.display = 'block';
-            const cdcItems = document.getElementById('afm-cdc-items');
-            if (cdcItems) {
-                let html = '';
-                afmFeeRows.filter(r => r.discount > 0).forEach(r => {
-                    const preset = FEE_TYPE_PRESETS.find(p => p.value === r.type);
-                    html += `<div class="afm-cdc-row"><span>${preset ? preset.label : r.type}</span><strong>Rs. ${r.discount.toLocaleString()}</strong></div>`;
-                });
-                if (bulkDisc > 0) html += `<div class="afm-cdc-row"><span>Bulk Discount</span><strong>Rs. ${bulkDisc.toLocaleString()}</strong></div>`;
-                cdcItems.innerHTML = html;
-            }
-            const cdcTotal = document.getElementById('afm-cdc-total-amt');
-            if (cdcTotal) cdcTotal.textContent = `Rs. ${totalDisc.toLocaleString()}`;
-        } else {
-            combCard.style.display = 'none';
-        }
-    }
 }
 
 function renderAddFeesModal(student) {
     const f = computeFeeBreakdown(student);
     const payments = student.feePayments || [];
     const currentMonthKey = getCurrentMonthKey();
-    const thisMonthPaid = payments.filter(p => p.monthKey === currentMonthKey).reduce((sum, p) => sum + p.amount, 0);
+    const thisMonthPaid = payments
+        .filter(p => p.monthKey === currentMonthKey)
+        .reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
 
-    // Header subtitle
-    const headerSub = document.getElementById('afm-header-subtitle');
-    if (headerSub) headerSub.textContent = `${student.fullName} · ${student.studentClass || ''}`;
-
-    // Student summary banner
-    const photoHtml = student.photo
-        ? `<img src="${student.photo}" class="af-student-photo">`
-        : `<div class="af-student-photo af-photo-placeholder"><i class="fas fa-user"></i></div>`;
-
-    const pendingAmount = Math.max(0, f.totalWithinDueDate - thisMonthPaid);
-
-    document.getElementById('add-fees-student-summary').innerHTML = `
-        <div class="af-summary-inner">
-            ${photoHtml}
-            <div class="af-summary-details">
-                <div class="af-summary-name">${student.fullName}</div>
-                <div class="af-summary-meta">
-                    <span><i class="fas fa-id-card"></i> ${f.regNo}</span>
-                    <span><i class="fas fa-layer-group"></i> ${student.studentClass || '-'}</span>
-                    <span><i class="fas fa-user-friends"></i> ${student.guardianName || '-'}</span>
-                </div>
-            </div>
-            <div class="af-summary-amounts">
-                <div class="af-amount-box af-amount-total">
-                    <span>Monthly Total</span>
-                    <strong>Rs. ${f.totalWithinDueDate.toLocaleString()}</strong>
-                </div>
-                <div class="af-amount-box ${pendingAmount > 0 ? 'af-amount-pending' : 'af-amount-clear'}">
-                    <span>${pendingAmount > 0 ? 'Pending' : 'Cleared'}</span>
-                    <strong>Rs. ${pendingAmount.toLocaleString()}</strong>
-                </div>
-                ${thisMonthPaid > 0 ? `<div class="af-amount-box af-amount-clear"><span>Paid This Month</span><strong>Rs. ${thisMonthPaid.toLocaleString()}</strong></div>` : ''}
-            </div>
-        </div>
-    `;
-
-    // Arrears alert
-    const arrearsAlert = document.getElementById('afm-arrears-alert');
-    if (f.arrears > 0 && arrearsAlert) {
-        arrearsAlert.style.display = 'flex';
-        document.getElementById('afm-arrears-amount-text').textContent = `Rs. ${f.arrears.toLocaleString()} in previous dues have been added to this month's fee.`;
-        document.getElementById('afm-arrears-badge').textContent = `Rs. ${f.arrears.toLocaleString()}`;
-    } else if (arrearsAlert) {
-        arrearsAlert.style.display = 'none';
+    // Left panel: show ONE copy of the voucher (Student Copy) only.
+    let voucherHTML = buildVoucherHTML(student);
+    const previewContainer = document.getElementById('afm-voucher-preview-container');
+    if (previewContainer) {
+        previewContainer.innerHTML = voucherHTML;
+        // Hide the School Copy so the admin sees just the saved/edited voucher.
+        const copies = previewContainer.querySelectorAll('.voucher-copy');
+        if (copies.length > 1) copies[0].style.display = 'none';
     }
 
-    // Render fee rows + recalc
-    renderFeeRows();
-    recalcAFTotal();
+    // Header strip: name, monthly total, paid so far
+    const headerEl = document.getElementById('afm-pay-header');
+    if (headerEl) {
+        headerEl.innerHTML = `
+            <div class="afm-pay-header-name">${student.fullName || 'Student'}</div>
+            <div class="afm-pay-header-stats">
+                <div><span>Monthly Total</span><strong>Rs. ${f.voucherTotal.toLocaleString()}</strong></div>
+                <div><span>Paid This Month</span><strong style="color:#16a34a;">Rs. ${thisMonthPaid.toLocaleString()}</strong></div>
+                <div><span>Remaining</span><strong style="color:#c2410c;">Rs. ${Math.max(0, f.voucherTotal - thisMonthPaid).toLocaleString()}</strong></div>
+            </div>`;
+    }
 
-    // Payment history
-    renderPaymentHistory(student);
+    // Hide the extras (arrears alert + history) — the user wants only voucher + summary.
+    const arrAlert = document.getElementById('afm-arrears-alert');
+    if (arrAlert) arrAlert.style.display = 'none';
+    const history = document.querySelector('#add-fees-modal .af-history-panel');
+    if (history) history.style.display = 'none';
+
+    // Right panel summary
+    const pendingAmount = Math.max(0, f.voucherTotal - thisMonthPaid);
+    afmCurrentPendingAmount = pendingAmount;
+
+    const payableEl = document.getElementById('afm-t-payable');
+    if (payableEl) {
+        payableEl.textContent = `Rs. ${pendingAmount.toLocaleString()}`;
+    }
+
+    recalcSimpleAFTotal();
 }
 
-function saveStudentFeePayment() {
+function recalcSimpleAFTotal() {
+    const discountInput = document.getElementById('afm-pay-discount');
+    const amountInput = document.getElementById('afm-pay-amount');
+
+    const discount = discountInput ? (parseFloat(discountInput.value) || 0) : 0;
+    const paid = amountInput ? (parseFloat(amountInput.value) || 0) : 0;
+
+    // Net payable after the on-the-spot discount
+    const gross = afmCurrentPendingAmount;
+    const netPayable = Math.max(0, gross - discount);
+    const remaining = Math.max(0, netPayable - paid);
+
+    const set = (id, txt, color) => {
+        const el = document.getElementById(id);
+        if (el) { el.textContent = txt; if (color) el.style.color = color; }
+    };
+    set('afm-t-gross-sum', `Rs. ${gross.toLocaleString()}`);
+    set('afm-t-disc-sum',  `- Rs. ${discount.toLocaleString()}`, '#16a34a');
+    set('afm-t-payable',   `Rs. ${netPayable.toLocaleString()}`);
+    set('afm-t-paid-sum',  `Rs. ${paid.toLocaleString()}`, '#16a34a');
+    set('afm-t-remaining', `Rs. ${remaining.toLocaleString()}`, remaining > 0 ? '#c2410c' : '#16a34a');
+}
+
+function saveSimpleStudentFeePayment() {
     const studentId = document.getElementById('add-fees-student-id').value;
-    const monthValue = document.getElementById('af-fee-month').value;
     const method = document.getElementById('af-payment-method').value;
     const notes = document.getElementById('af-fee-notes').value;
-    const bulkDisc = parseFloat(document.getElementById('afm-bulk-discount').value) || 0;
+    const discount = parseFloat(document.getElementById('afm-pay-discount').value) || 0;
+    const paid = parseFloat(document.getElementById('afm-pay-amount').value) || 0;
 
-    if (!monthValue) { alert('Please select a payment month.'); return; }
-    if (afmFeeRows.length === 0) { alert('Please add at least one fee item.'); return; }
+    if (paid <= 0 && discount <= 0) { alert('Please enter a valid amount or discount.'); return; }
 
-    const totalGross = afmFeeRows.reduce((s, r) => s + (r.amount || 0), 0);
-    if (totalGross <= 0) { alert('Please enter valid fee amounts.'); return; }
-
+    const monthValue = getCurrentMonthKey();
     const [year, month] = monthValue.split('-');
     const monthLabel = new Date(parseInt(year), parseInt(month) - 1, 1)
         .toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
-
-    const itemDiscTotal = afmFeeRows.reduce((s, r) => s + (r.discount || 0), 0);
-    const grandTotal = Math.max(0, totalGross - itemDiscTotal - bulkDisc);
 
     let students = JSON.parse(localStorage.getItem('edu_students') || '[]');
     const wantName = afmCurrentStudent ? afmCurrentStudent.fullName : null;
@@ -1450,56 +1329,32 @@ function saveStudentFeePayment() {
 
     if (!students[idx].feePayments) students[idx].feePayments = [];
 
-    // Build fee items snapshot
-    const feeItemsSnapshot = afmFeeRows.map(r => {
-        const preset = FEE_TYPE_PRESETS.find(p => p.value === r.type);
-        const label = (r.type === 'custom' && r.customLabel)
-            ? r.customLabel
-            : (preset ? preset.label : r.type);
-        return {
-            type: r.type,
-            label,
-            customLabel: r.customLabel || '',
-            amount: r.amount,
-            discount: r.discount,
-            net: Math.max(0, r.amount - r.discount)
-        };
-    });
-
+    // We treat `amount` as the EFFECTIVE coverage (cash paid + admin discount)
+    // so that a fee paid e.g. Rs. 4500 + Rs. 500 discount on a Rs. 5000 bill
+    // marks the month as fully paid and doesn't roll over to next month's arrears.
+    const effective = paid + discount;
     const payment = {
         id: Date.now(),
         monthKey: monthValue,
         monthLabel,
-        feeType: feeItemsSnapshot.map(i => i.label.replace(/^[^\s]+\s/, '')).join(' + '),
-        feeItems: feeItemsSnapshot,
-        amount: grandTotal,
-        grossAmount: totalGross,
-        itemDiscounts: itemDiscTotal,
-        bulkDiscount: bulkDisc,
+        feeType: "Voucher Payment",
+        feeItems: [{ type: 'voucher', label: 'Voucher Payment', amount: paid + discount, discount: discount, net: paid }],
+        amount: effective,
+        cashPaid: paid,
+        grossAmount: paid + discount,
+        itemDiscounts: 0,
+        bulkDiscount: discount,
         method,
         notes,
         date: new Date().toISOString()
     };
 
     students[idx].feePayments.push(payment);
-
-    // Clear arrears if an arrears row was included
-    const arrearsRow = afmFeeRows.find(r => r.type === 'arrears');
-    if (arrearsRow && arrearsRow.amount > 0) {
-        const remaining = Math.max(0, (Number(students[idx].arrears) || 0) - arrearsRow.amount);
-        students[idx].arrears = remaining;
-    }
-
     localStorage.setItem('edu_students', JSON.stringify(students));
 
-    showFeeSuccessToast(`Rs. ${grandTotal.toLocaleString()} recorded for ${students[idx].fullName}`);
+    showFeeSuccessToast(`Rs. ${paid.toLocaleString()} recorded for ${students[idx].fullName}`);
 
-    // Reset form
-    document.getElementById('af-fee-notes').value = '';
-    document.getElementById('afm-bulk-discount').value = '';
-
-    // Re-render modal
-    renderAddFeesModal(students[idx]);
+    closeAddFeesModal();
 
     // Refresh table
     const classTitle = document.getElementById('selected-class-title');
@@ -1583,7 +1438,69 @@ const ATV_FEE_PRESETS = [
     { value: 'custom',     label: '✏️ Custom Category' },
 ];
 
-function openAddToVoucherModal(studentId, fullName) {
+function initAtvVoucherModal() {
+    const addBtn = document.getElementById('atv-add-fee-btn');
+    if (addBtn && !addBtn.dataset.bound) {
+        addBtn.dataset.bound = '1';
+        addBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            atvAddManualFeeRow();
+        });
+    }
+
+    const modalBox = document.querySelector('#add-to-voucher-modal .voucher-modal-box');
+    if (modalBox && !modalBox.dataset.bound) {
+        modalBox.dataset.bound = '1';
+        modalBox.addEventListener('click', (e) => e.stopPropagation());
+    }
+}
+
+function atvAddManualFeeRow() {
+    atvAddFeeRow('custom', 0, 0, '', { manual: true });
+}
+
+function atvScrollToFeeRow(rowId) {
+    requestAnimationFrame(() => {
+        const newRow = document.getElementById('atv-row-' + rowId);
+        if (!newRow) return;
+
+        const listScroller = document.getElementById('atv-fee-rows-container');
+        if (listScroller) {
+            const rowTop = newRow.offsetTop;
+            listScroller.scrollTo({ top: Math.max(0, rowTop - 12), behavior: 'smooth' });
+        }
+
+        const modalScroller = newRow.closest('.voucher-modal-scroll');
+        if (modalScroller) {
+            const rowRect = newRow.getBoundingClientRect();
+            const scrRect = modalScroller.getBoundingClientRect();
+            if (rowRect.bottom > scrRect.bottom || rowRect.top < scrRect.top) {
+                const offset = (rowRect.top - scrRect.top) + modalScroller.scrollTop - 24;
+                modalScroller.scrollTo({ top: Math.max(0, offset), behavior: 'smooth' });
+            }
+        } else {
+            newRow.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+        }
+
+        newRow.style.transition = 'background-color 0.6s ease';
+        newRow.style.backgroundColor = '#eff6ff';
+        setTimeout(() => { newRow.style.backgroundColor = ''; }, 900);
+
+        const sel = newRow.querySelector('select');
+        if (sel) sel.focus();
+    });
+}
+
+function atvUpdateFeeRowCount() {
+    const countEl = document.getElementById('atv-fee-row-count');
+    if (countEl) {
+        const n = atvFeeRows.length;
+        countEl.textContent = n ? `${n} item${n === 1 ? '' : 's'}` : '';
+    }
+}
+
+function openAddToVoucherModal(studentId, fullName, editMode) {
     const students = JSON.parse(localStorage.getItem('edu_students') || '[]');
     const student = findStudentExact(students, studentId, fullName);
     if (!student) { alert('Student not found.'); return; }
@@ -1592,18 +1509,48 @@ function openAddToVoucherModal(studentId, fullName) {
     document.getElementById('atv-student-id').dataset.fullName = student.fullName || '';
     document.getElementById('atv-header-subtitle').textContent = `${student.fullName} · ${student.studentClass || ''}`;
 
-    // Reset rows — seed with student's standard fees
+    const titleEl = document.getElementById('atv-modal-title');
+    if (titleEl) titleEl.textContent = editMode ? 'Edit Voucher' : 'Add Fees to Voucher';
+
+    // Reset rows
     atvFeeRows = [];
     atvNextRowId = 1;
     const f = computeFeeBreakdown(student);
-    if (f.tuitionFee > 0)   atvAddFeeRow('tuition',   f.tuitionFee,   f.tDisc);
-    if (f.transportFee > 0) atvAddFeeRow('transport', f.transportFee, f.trDisc);
-    if (f.admissionFee > 0) atvAddFeeRow('admission', f.admissionFee, 0);
-    if (f.otherFee > 0)     atvAddFeeRow('other',     f.otherFee,     0);
+
+    // If this student already has a saved (edited) voucher, seed rows from THAT
+    // so the admin sees the same voucher they previously saved. Otherwise,
+    // seed from the standard fee profile.
+    let savedFees = [];
+    try { savedFees = JSON.parse(student.otherFeesData || '[]'); } catch(e) { savedFees = []; }
+    const hasSaved = student.voucherCustomFees === true && Array.isArray(savedFees) && savedFees.length > 0;
+
+    if (hasSaved) {
+        savedFees.forEach(fee => {
+            // Try to map description back to a preset value
+            const preset = ATV_FEE_PRESETS.find(p =>
+                p.label.toLowerCase().includes(String(fee.description||'').toLowerCase()) ||
+                String(fee.description||'').toLowerCase().includes(p.value)
+            );
+            const type = preset ? preset.value : 'custom';
+            atvAddFeeRow(type, parseFloat(fee.amount)||0, parseFloat(fee.discount)||0,
+                         type === 'custom' ? (fee.description || '') : '');
+        });
+    } else {
+        if (f.tuitionFee > 0)   atvAddFeeRow('tuition',   f.tuitionFee,   f.tDisc);
+        if (f.transportFee > 0) atvAddFeeRow('transport', f.transportFee, f.trDisc);
+        if (f.booksFee > 0)     atvAddFeeRow('book',      f.booksFee,     f.booksDiscount);
+        if (f.admissionFee > 0) atvAddFeeRow('admission', f.admissionFee, 0);
+        if (f.otherFee > 0)     atvAddFeeRow('other',     f.otherFee,     0);
+        if (f.showAnnualFund)   atvAddFeeRow('annual',    f.annualFundAmt, 0);
+    }
     if (atvFeeRows.length === 0) atvAddFeeRow('tuition', 0, 0);
 
-    // Reset bulk discount
-    document.getElementById('atv-bulk-discount').value = '';
+    // Reset bulk discount (preload from saved if present)
+    document.getElementById('atv-bulk-discount').value =
+        Number(student.voucherBulkDiscount) > 0 ? Number(student.voucherBulkDiscount) : '';
+
+    const noteEl = document.getElementById('atv-voucher-note');
+    if (noteEl) noteEl.value = student.voucherNote || '';
 
     // Show due / expiry dates from VOUCHER_SETTINGS
     document.getElementById('atv-due-date-display').textContent = f.dueDateStr;
@@ -1632,52 +1579,39 @@ function openAddToVoucherModal(studentId, fullName) {
 
     atvRenderRows();
     atvRecalc();
+    initAtvVoucherModal();
     document.getElementById('add-to-voucher-modal').style.display = 'flex';
 }
 
 function closeAddToVoucherModal() {
     document.getElementById('add-to-voucher-modal').style.display = 'none';
+    const titleEl = document.getElementById('atv-modal-title');
+    if (titleEl) titleEl.textContent = 'Edit Voucher';
 }
 
-function atvAddFeeRow(typeVal, amount, discount, customLabel) {
+function atvAddFeeRow(typeVal, amount, discount, customLabel, options) {
+    options = options || {};
+    // Inline onclick may pass the click event as the first argument.
+    if (typeVal && typeof typeVal !== 'string') typeVal = undefined;
+    if (typeof amount !== 'number' && typeof amount !== 'string') amount = 0;
+    if (typeof discount !== 'number' && typeof discount !== 'string') discount = 0;
+    if (customLabel && typeof customLabel !== 'string') customLabel = '';
+
     const id = atvNextRowId++;
-    const isManualAdd = typeVal === undefined;
+    const isManualAdd = options.manual === true || typeVal === undefined;
     const row = {
         id,
         type: typeVal || 'custom',
-        amount: amount || 0,
-        discount: discount || 0,
+        amount: Number(amount) || 0,
+        discount: Number(discount) || 0,
         customLabel: customLabel || ''
     };
-    // Always append to the bottom so the new row appears right where the user
-    // expects (below the existing fees) instead of being hidden above them.
     atvFeeRows.push(row);
     atvRenderRows();
     atvRecalc();
 
     if (isManualAdd) {
-        // Scroll the modal so the new row is visible, then focus the category select.
-        const newRow = document.getElementById('atv-row-' + id);
-        if (newRow) {
-            const scroller = newRow.closest('.voucher-modal-scroll')
-                || document.querySelector('#add-to-voucher-modal .voucher-modal-scroll');
-            if (scroller) {
-                // Bring the new row into view within the modal's scroll container.
-                const rowRect = newRow.getBoundingClientRect();
-                const scrRect = scroller.getBoundingClientRect();
-                const offset  = (rowRect.top - scrRect.top) + scroller.scrollTop - 40;
-                scroller.scrollTo({ top: offset, behavior: 'smooth' });
-            } else if (newRow.scrollIntoView) {
-                newRow.scrollIntoView({ block: 'center', behavior: 'smooth' });
-            }
-            // Brief highlight so the user notices the new row.
-            newRow.style.transition = 'background-color 0.6s ease';
-            newRow.style.backgroundColor = '#eff6ff';
-            setTimeout(() => { newRow.style.backgroundColor = ''; }, 800);
-
-            const sel = newRow.querySelector('select');
-            if (sel) sel.focus();
-        }
+        atvScrollToFeeRow(id);
     }
 }
 
@@ -1749,6 +1683,7 @@ function atvRenderRows() {
         </div>`;
     });
     container.innerHTML = html;
+    atvUpdateFeeRowCount();
 }
 
 function atvRecalc() {
@@ -1812,11 +1747,24 @@ function saveFeesToVoucher() {
         };
     });
 
-    // Merge with existing additional fees (or replace — here we replace for clarity)
+    // Replace previously-saved voucher items and mark this student as having
+    // a custom voucher so computeFeeBreakdown doesn't ALSO add the base
+    // tuition/transport charges (that's what caused the doubled total).
+    const noteEl = document.getElementById('atv-voucher-note');
     students[idx].otherFeesData = JSON.stringify(newFeeEntries);
     students[idx].voucherBulkDiscount = bulkDisc;
+    students[idx].voucherCustomFees = true;
+    students[idx].voucherNote = noteEl ? noteEl.value.trim() : '';
 
     localStorage.setItem('edu_students', JSON.stringify(students));
+
+    // Keep Pay Fee modal in sync if it is open for the same student
+    if (afmCurrentStudent &&
+        String(afmCurrentStudent.id) === String(students[idx].id) &&
+        afmCurrentStudent.fullName === students[idx].fullName) {
+        afmCurrentStudent = students[idx];
+        renderAddFeesModal(students[idx]);
+    }
 
     showFeeSuccessToast(`Fees saved to voucher for ${students[idx].fullName}`);
     closeAddToVoucherModal();
@@ -2280,6 +2228,14 @@ function setAllStaffDeductionDefaults(opts) {
     saveGlobalData(db);
 }
 
+window.atvAddFeeRow = atvAddFeeRow;
+window.atvAddManualFeeRow = atvAddManualFeeRow;
+window.atvRemoveRow = atvRemoveRow;
+window.atvUpdateRow = atvUpdateRow;
+window.saveFeesToVoucher = saveFeesToVoucher;
+window.openAddToVoucherModal = openAddToVoucherModal;
+window.closeAddToVoucherModal = closeAddToVoucherModal;
+
 // Expose globally so other pages / settings panels can drive these values.
 window.EduFlowFinance = Object.assign(window.EduFlowFinance || {}, {
     setStaffSecurity,
@@ -2288,3 +2244,201 @@ window.EduFlowFinance = Object.assign(window.EduFlowFinance || {}, {
     getStaffDeductions,
     setAllStaffDeductionDefaults
 });
+
+
+/* ============================================================
+   INLINE EDITABLE VOUCHER (click-to-edit replica of the voucher)
+   ============================================================ */
+let ievCurrentStudentId = null;
+let ievCurrentStudentName = '';
+let ievRows = [];   // [{description, period, amount}]
+
+let ievArrears = 0;
+
+function openInlineVoucherEditor(studentId, fullName) {
+    const students = JSON.parse(localStorage.getItem('edu_students') || '[]');
+    const student = findStudentExact(students, studentId, fullName);
+    if (!student) { alert('Student not found.'); return; }
+
+    ievCurrentStudentId = studentId;
+    ievCurrentStudentName = fullName;
+
+    // Build initial rows from current voucher breakdown so the editor mirrors
+    // whatever the user just saw in the "View Voucher" modal.
+    const f = computeFeeBreakdown(student);
+    const rows = [];
+    if (f.tuitionFee   > 0) rows.push({ description: 'Tuition Fee',        period: f.monthLabel, amount: f.tuitionFee,   discount: 0 });
+    if (f.transportFee > 0) rows.push({ description: 'Transportation Fee', period: f.monthLabel, amount: f.transportFee, discount: 0 });
+    if (f.admissionFee > 0) rows.push({ description: 'Admission Fee',      period: 'One-time',   amount: f.admissionFee, discount: 0 });
+    if (f.otherFee     > 0) rows.push({ description: f.otherFeeLabel,      period: '-',          amount: f.otherFee,     discount: 0 });
+    if (f.booksFee     > 0) rows.push({ description: 'Books Fee',          period: f.monthLabel, amount: f.booksFee,     discount: Number(student.booksDiscount) || 0 });
+    (f.additionalFees || []).forEach(fee => {
+        if (!fee.description && !fee.amount) return;
+        rows.push({
+            description: fee.description || 'Additional Fee',
+            period: f.monthLabel,
+            amount: parseFloat(fee.amount) || 0,
+            discount: parseFloat(fee.discount) || 0
+        });
+    });
+    if (f.showAnnualFund) rows.push({ description: 'Annual Fund', period: 'Annual', amount: f.annualFundAmt, discount: 0 });
+    if (rows.length === 0) rows.push({ description: '', period: '', amount: 0, discount: 0 });
+
+    ievRows = rows;
+    ievArrears = Number(f.arrears) || Number(student.arrears) || 0;
+
+    // Fill meta info
+    document.getElementById('iev-student-name').textContent = student.fullName || '';
+    document.getElementById('iev-student-reg').textContent  = f.regNo || '';
+    document.getElementById('iev-student-class').textContent= student.studentClass || '-';
+    document.getElementById('iev-month-label').textContent  = f.monthLabel;
+
+    const arrInput = document.getElementById('iev-arrears-input');
+    if (arrInput) arrInput.value = ievArrears;
+
+    const noteInput = document.getElementById('iev-note-input');
+    if (noteInput) noteInput.value = student.voucherNote || '';
+
+    closeVoucherModal();
+    renderInlineVoucherRows();
+    document.getElementById('iev-modal-overlay').style.display = 'flex';
+}
+
+function closeInlineVoucherEditor() {
+    document.getElementById('iev-modal-overlay').style.display = 'none';
+}
+
+function renderInlineVoucherRows() {
+    const tbody = document.getElementById('iev-rows-body');
+    tbody.innerHTML = ievRows.map((r, i) => `
+        <tr class="iev-row" data-i="${i}">
+            <td>
+                <input type="text" class="iev-input" value="${escapeHtml(r.description || '')}"
+                    placeholder="Fee description"
+                    oninput="ievUpdateRow(${i},'description',this.value)">
+            </td>
+            <td>
+                <input type="text" class="iev-input" value="${escapeHtml(r.period || '')}"
+                    placeholder="Period / note"
+                    oninput="ievUpdateRow(${i},'period',this.value)">
+            </td>
+            <td>
+                <div class="iev-amount-wrap">
+                    <span class="iev-rs">Rs.</span>
+                    <input type="number" min="0" class="iev-input iev-amount" value="${Number(r.amount)||0}"
+                        placeholder="0"
+                        oninput="ievUpdateRow(${i},'amount',this.value)">
+                </div>
+            </td>
+            <td>
+                <div class="iev-amount-wrap iev-discount-wrap">
+                    <span class="iev-rs">- Rs.</span>
+                    <input type="number" min="0" class="iev-input iev-amount iev-discount" value="${Number(r.discount)||0}"
+                        placeholder="0"
+                        oninput="ievUpdateRow(${i},'discount',this.value)">
+                </div>
+            </td>
+            <td class="iev-row-actions">
+                <button type="button" class="iev-del-btn" title="Delete row" onclick="ievDeleteRow(${i})">
+                    <i class="fas fa-trash"></i>
+                </button>
+            </td>
+        </tr>
+    `).join('');
+    ievRecalcTotal();
+}
+
+function ievUpdateRow(i, field, value) {
+    if (!ievRows[i]) return;
+    if (field === 'amount' || field === 'discount') {
+        ievRows[i][field] = Math.max(0, parseFloat(value) || 0);
+        ievRecalcTotal();
+    } else {
+        ievRows[i][field] = value;
+    }
+}
+
+function ievUpdateArrears(value) {
+    ievArrears = Math.max(0, parseFloat(value) || 0);
+    ievRecalcTotal();
+}
+
+function ievAddRow() {
+    ievRows.push({ description: '', period: '', amount: 0, discount: 0 });
+    renderInlineVoucherRows();
+    // focus the new row's description input
+    const tbody = document.getElementById('iev-rows-body');
+    const last = tbody.querySelector('tr:last-child input');
+    if (last) last.focus();
+}
+
+function ievDeleteRow(i) {
+    ievRows.splice(i, 1);
+    if (ievRows.length === 0) ievRows.push({ description: '', period: '', amount: 0, discount: 0 });
+    renderInlineVoucherRows();
+}
+
+function ievRecalcTotal() {
+    const subtotal = ievRows.reduce((s, r) => {
+        const net = Math.max(0, (Number(r.amount) || 0) - (Number(r.discount) || 0));
+        return s + net;
+    }, 0);
+    const total = subtotal + (Number(ievArrears) || 0);
+    const subEl = document.getElementById('iev-subtotal');
+    const el = document.getElementById('iev-total');
+    if (subEl) subEl.textContent = 'Rs. ' + subtotal.toLocaleString();
+    if (el) el.textContent = 'Rs. ' + total.toLocaleString();
+}
+
+function ievSave() {
+    const studentId = ievCurrentStudentId;
+    const fullName  = ievCurrentStudentName;
+    if (!studentId) return;
+
+    const cleanRows = ievRows
+        .map(r => ({
+            description: (r.description || '').trim(),
+            period: (r.period || '').trim(),
+            amount: Math.max(0, Number(r.amount) || 0),
+            discount: Math.max(0, Number(r.discount) || 0)
+        }))
+        .filter(r => r.description || r.amount > 0);
+
+    if (cleanRows.length === 0) { alert('Please add at least one fee row.'); return; }
+
+    let students = JSON.parse(localStorage.getItem('edu_students') || '[]');
+    let idx = students.findIndex(s => String(s.id) === String(studentId) && s.fullName === fullName);
+    if (idx === -1) idx = students.findIndex(s => String(s.id) === String(studentId));
+    if (idx === -1) { alert('Student not found.'); return; }
+
+    const noteEl = document.getElementById('iev-note-input');
+
+    // Mark as a custom voucher so base charges are not added on top, then
+    // store every editable row as an "additional fee" entry.
+    students[idx].otherFeesData      = JSON.stringify(cleanRows);
+    students[idx].voucherCustomFees  = true;
+    // Reset any prior bulk discount — per-row discounts now drive the math.
+    students[idx].voucherBulkDiscount = 0;
+    // Persist editable arrears + voucher note
+    students[idx].arrears     = Math.max(0, Number(ievArrears) || 0);
+    students[idx].voucherNote = noteEl ? noteEl.value.trim() : (students[idx].voucherNote || '');
+
+    localStorage.setItem('edu_students', JSON.stringify(students));
+
+    if (typeof showFeeSuccessToast === 'function') {
+        showFeeSuccessToast(`Voucher updated for ${students[idx].fullName}`);
+    }
+
+    closeInlineVoucherEditor();
+    // Re-open the read-only voucher with the new values.
+    viewVoucher(studentId, fullName);
+}
+
+window.openInlineVoucherEditor = openInlineVoucherEditor;
+window.closeInlineVoucherEditor = closeInlineVoucherEditor;
+window.ievAddRow    = ievAddRow;
+window.ievDeleteRow = ievDeleteRow;
+window.ievUpdateRow = ievUpdateRow;
+window.ievUpdateArrears = ievUpdateArrears;
+window.ievSave = ievSave;
+
