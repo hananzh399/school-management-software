@@ -262,8 +262,28 @@ function handleAddStudentFine() {
     });
     saveStudentFinesData(fines);
 
-    // 2) Send the fine to the student's FEE BILL (adds to outstanding arrears)
-    student.arrears = (Number(student.arrears) || 0) + amount;
+    // 2) Add the fine as a line item in the student's fee voucher (otherFeesData)
+    // so it shows up explicitly on their voucher. We do NOT touch arrears here.
+    let existingFees = [];
+    try { existingFees = JSON.parse(student.otherFeesData || '[]'); } catch(e) { existingFees = []; }
+    // If voucherCustomFees is not already set, seed the base charges first so they aren't lost
+    if (!student.voucherCustomFees) {
+        const baseRows = [];
+        if (Number(student.standardFee)  > 0) baseRows.push({ description: 'Tuition Fee',        period: new Date().toLocaleDateString('en-GB', { month: 'long', year: 'numeric' }), amount: Number(student.standardFee),  discount: Number(student.tuitionDiscount)   || 0 });
+        if (Number(student.transportFee) > 0) baseRows.push({ description: 'Transportation Fee', period: new Date().toLocaleDateString('en-GB', { month: 'long', year: 'numeric' }), amount: Number(student.transportFee), discount: Number(student.transportDiscount) || 0 });
+        if (Number(student.admissionFee) > 0) baseRows.push({ description: 'Admission Fee',      period: 'One-time',   amount: Number(student.admissionFee), discount: 0 });
+        if (Number(student.otherFee)     > 0) baseRows.push({ description: student.otherFeeLabel || 'Other Charges', period: '-', amount: Number(student.otherFee), discount: 0 });
+        if (Number(student.booksFee)     > 0) baseRows.push({ description: 'Books Fee',          period: new Date().toLocaleDateString('en-GB', { month: 'long', year: 'numeric' }), amount: Number(student.booksFee), discount: Number(student.booksDiscount) || 0 });
+        existingFees = [...baseRows, ...existingFees];
+    }
+    existingFees.push({
+        description: 'Fine: ' + desc,
+        period: new Date().toLocaleDateString('en-GB', { month: 'short', year: 'numeric' }),
+        amount: amount,
+        discount: 0
+    });
+    student.otherFeesData = JSON.stringify(existingFees);
+    student.voucherCustomFees = true;
     students[idx] = student;
     localStorage.setItem('edu_students', JSON.stringify(students));
 
@@ -1101,6 +1121,8 @@ function renderFees(className) {
         } else {
             statusBadge = `<span class="fee-status-badge fee-pending"><i class="fas fa-clock"></i> Pending</span>`;
         }
+        // If paid this month, never show arrears badge — it's already settled
+        const showArrearsInRow = hasArrears && !hasPaidThisMonth;
 
         let actionButtons = '';
         if (hasPaidThisMonth) {
@@ -1134,7 +1156,7 @@ function renderFees(className) {
                 <td>
                     <strong style="color:${isPaid ? '#27ae60' : '#c2410c'}">Rs. ${pendingAmount.toLocaleString()}</strong>
                     ${thisMonthPaid > 0 ? `<br><span style="font-size:0.72rem;color:#16a34a;"><i class="fas fa-check"></i> Rs. ${thisMonthPaid.toLocaleString()} paid</span>` : ''}
-                    ${hasArrears ? `<br><span style="font-size:0.72rem;color:#c2410c;">Arrears: Rs. ${f.arrears.toLocaleString()}</span>` : ''}
+                    ${showArrearsInRow ? `<br><span style="font-size:0.72rem;color:#c2410c;">Arrears: Rs. ${f.arrears.toLocaleString()}</span>` : ''}
                 </td>
                 <td>${statusBadge}</td>
                 <td class="fee-actions-cell">
