@@ -302,20 +302,22 @@ function showProfileView(staffId, category) {
         grid.innerHTML += createItem('Classes', staff.classes);
         grid.innerHTML += createItem('Class Incharge', staff.incharge);
         grid.innerHTML += createItem('Gender', staff.gender);
-        grid.innerHTML += createItem('Salary', staff.salary);
+        grid.innerHTML += createItem('Salary', formatCurrency(staff.salary));
         grid.innerHTML += createItem('Date Joined', staff.joined);
         grid.innerHTML += createItem('CNIC', staff.cnic);
         grid.innerHTML += createItem('Phone Number', staff.phone);
         grid.innerHTML += createItem('Address', staff.address, true);
+        grid.innerHTML += buildSecurityHTML(staff);
     } else {
         grid.innerHTML += createItem('Job Title', staff.job);
         grid.innerHTML += createItem('Gender', staff.gender);
-        grid.innerHTML += createItem('Salary', staff.salary);
+        grid.innerHTML += createItem('Salary', formatCurrency(staff.salary));
         grid.innerHTML += createItem('Start Time', staff.startTime);
         grid.innerHTML += createItem('End Time', staff.endTime);
         grid.innerHTML += createItem('CNIC', staff.cnic);
         grid.innerHTML += createItem('Phone Number', staff.phone);
         grid.innerHTML += createItem('Address', staff.address, true);
+        grid.innerHTML += buildSecurityHTML(staff);
     }
 }
 
@@ -393,11 +395,11 @@ function renderFormFields(category) {
     const grid = document.getElementById('form-dynamic-fields');
     grid.innerHTML = '';
 
-    const createInput = (id, label, type='text', fullWidth=false) => {
+    const createInput = (id, label, type='text', fullWidth=false, required=true) => {
         return `
             <div class="form-group ${fullWidth ? 'full-width' : ''}">
                 <label for="${id}">${label}</label>
-                <input type="${type}" id="${id}" name="${id}" required>
+                <input type="${type}" id="${id}" name="${id}" ${required ? 'required' : ''} ${type === 'number' ? 'min="0"' : ''}>
             </div>
         `;
     };
@@ -423,6 +425,13 @@ function renderFormFields(category) {
         grid.innerHTML += createInput('f-cnic', 'CNIC');
         grid.innerHTML += createInput('f-phone', 'Phone Number');
         grid.innerHTML += createInput('f-address', 'Address', 'text', true);
+        grid.innerHTML += `
+            <div class="form-group security-section-divider full-width">
+                <div class="security-divider-label"><i class="fas fa-shield-alt"></i> Security Deposit (Optional)</div>
+            </div>
+        `;
+        grid.innerHTML += createInput('f-security-total', 'Total Security Amount (PKR)', 'number', false, false);
+        grid.innerHTML += createInput('f-security-monthly', 'Monthly Deduction (PKR)', 'number', false, false);
     } else {
         grid.innerHTML += createInput('f-name', 'Staff Name');
         grid.innerHTML += createInput('f-job', 'Job Title');
@@ -442,6 +451,13 @@ function renderFormFields(category) {
         grid.innerHTML += createInput('f-cnic', 'CNIC');
         grid.innerHTML += createInput('f-phone', 'Phone Number');
         grid.innerHTML += createInput('f-address', 'Address', 'text', true);
+        grid.innerHTML += `
+            <div class="form-group security-section-divider full-width">
+                <div class="security-divider-label"><i class="fas fa-shield-alt"></i> Security Deposit (Optional)</div>
+            </div>
+        `;
+        grid.innerHTML += createInput('f-security-total', 'Total Security Amount (PKR)', 'number', false, false);
+        grid.innerHTML += createInput('f-security-monthly', 'Monthly Deduction (PKR)', 'number', false, false);
     }
 }
 
@@ -484,6 +500,10 @@ function openEditForm() {
         document.getElementById('f-cnic').value = staff.cnic;
     }
 
+    // Prefill security deposit
+    if (staff.securityTotal) document.getElementById('f-security-total').value = staff.securityTotal;
+    if (staff.securityMonthly) document.getElementById('f-security-monthly').value = staff.securityMonthly;
+
     document.getElementById('form-modal').classList.remove('d-none');
 }
 
@@ -502,6 +522,24 @@ function handleFormSubmit(e) {
         address: document.getElementById('f-address').value
     };
 
+    // Security deposit fields
+    const secTotal = parseFloat(document.getElementById('f-security-total').value) || 0;
+    const secMonthly = parseFloat(document.getElementById('f-security-monthly').value) || 0;
+    if (secTotal > 0) {
+        newData.securityTotal = secTotal;
+        newData.securityMonthly = secMonthly > 0 ? secMonthly : 0;
+        // In edit mode keep existing collected amount; in add mode start at 0
+        if (!isEditMode) {
+            newData.securityCollected = 0;
+        }
+    } else {
+        newData.securityTotal = 0;
+        newData.securityMonthly = 0;
+        if (!isEditMode) {
+            newData.securityCollected = 0;
+        }
+    }
+
     if (currentCategory === 'Teaching') {
         newData.qualification = document.getElementById('f-qualification').value;
         newData.subjects = document.getElementById('f-subjects').value;
@@ -517,10 +555,12 @@ function handleFormSubmit(e) {
     }
 
     if (isEditMode) {
-        // Update existing
+        // Update existing — preserve securityCollected from existing record
         let index = staffData[currentCategory].findIndex(s => s.id === currentProfileId);
         if (index > -1) {
-            staffData[currentCategory][index] = { ...staffData[currentCategory][index], ...newData };
+            const existing = staffData[currentCategory][index];
+            newData.securityCollected = existing.securityCollected || 0;
+            staffData[currentCategory][index] = { ...existing, ...newData };
         }
         // Update profile view text
         showProfileView(currentProfileId, currentCategory);
@@ -541,4 +581,134 @@ function handleFormSubmit(e) {
     populateDirectory(currentCategory);
     loadStaffCounts(false);
     closeFormModal();
+}
+
+
+/* ============================================
+   SECURITY DEPOSIT HELPERS
+   ============================================ */
+
+/**
+ * Format a number as PKR currency string.
+ */
+function formatCurrency(val) {
+    const n = parseFloat(val);
+    if (isNaN(n)) return val || '—';
+    return 'PKR ' + n.toLocaleString('en-PK');
+}
+
+/**
+ * Calculate security deposit status for a staff member.
+ * Returns { total, monthly, collected, remaining, monthsLeft, isDone }
+ */
+function getSecurityStatus(staff) {
+    const total     = parseFloat(staff.securityTotal)    || 0;
+    const monthly   = parseFloat(staff.securityMonthly)  || 0;
+    const collected = parseFloat(staff.securityCollected)|| 0;
+    const remaining = Math.max(0, total - collected);
+    const isDone    = total > 0 && collected >= total;
+    const monthsLeft = (monthly > 0 && !isDone) ? Math.ceil(remaining / monthly) : 0;
+    return { total, monthly, collected, remaining, monthsLeft, isDone };
+}
+
+/**
+ * Build the security deposit HTML block for the profile view.
+ */
+function buildSecurityHTML(staff) {
+    const s = getSecurityStatus(staff);
+
+    // No security configured
+    if (s.total === 0) {
+        return `
+        <div class="security-block full-width">
+            <div class="security-header">
+                <i class="fas fa-shield-alt"></i>
+                <span>Security Deposit</span>
+            </div>
+            <p class="security-none">No security deposit configured for this staff member.</p>
+        </div>`;
+    }
+
+    const pct = Math.min(100, Math.round((s.collected / s.total) * 100));
+    const statusClass = s.isDone ? 'status-done' : 'status-active';
+    const statusText  = s.isDone ? 'Fully Collected' : 'In Progress';
+    const netSalary   = parseFloat(staff.salary) - (s.isDone ? 0 : s.monthly);
+
+    return `
+    <div class="security-block full-width">
+        <div class="security-header">
+            <i class="fas fa-shield-alt"></i>
+            <span>Security Deposit</span>
+            <span class="security-status-badge ${statusClass}">${statusText}</span>
+        </div>
+
+        <div class="security-stats-grid">
+            <div class="sec-stat">
+                <span class="sec-stat-label">Total Security</span>
+                <span class="sec-stat-value">${formatCurrency(s.total)}</span>
+            </div>
+            <div class="sec-stat">
+                <span class="sec-stat-label">Monthly Deduction</span>
+                <span class="sec-stat-value deduction">${s.isDone ? '—' : formatCurrency(s.monthly)}</span>
+            </div>
+            <div class="sec-stat">
+                <span class="sec-stat-label">Amount Collected</span>
+                <span class="sec-stat-value collected">${formatCurrency(s.collected)}</span>
+            </div>
+            <div class="sec-stat">
+                <span class="sec-stat-label">Remaining</span>
+                <span class="sec-stat-value remaining">${s.isDone ? 'PKR 0' : formatCurrency(s.remaining)}</span>
+            </div>
+            <div class="sec-stat">
+                <span class="sec-stat-label">Gross Salary</span>
+                <span class="sec-stat-value">${formatCurrency(staff.salary)}</span>
+            </div>
+            <div class="sec-stat">
+                <span class="sec-stat-label">Net Salary (This Month)</span>
+                <span class="sec-stat-value net-salary">${formatCurrency(netSalary)}</span>
+            </div>
+        </div>
+
+        <div class="security-progress-wrap">
+            <div class="security-progress-labels">
+                <span>Collection Progress</span>
+                <span>${pct}% collected${!s.isDone ? ` · ~${s.monthsLeft} month${s.monthsLeft !== 1 ? 's' : ''} left` : ''}</span>
+            </div>
+            <div class="security-progress-bar">
+                <div class="security-progress-fill ${s.isDone ? 'progress-done' : ''}" style="width:${pct}%"></div>
+            </div>
+        </div>
+
+        ${!s.isDone ? `
+        <button class="btn btn-deduct-month" onclick="deductSecurityMonth('${staff.id}')">
+            <i class="fas fa-calendar-check"></i> Apply This Month's Deduction (${formatCurrency(s.monthly)})
+        </button>` : `
+        <div class="security-complete-notice">
+            <i class="fas fa-check-circle"></i> Security deposit fully collected — no further deductions.
+        </div>`}
+    </div>`;
+}
+
+/**
+ * Apply one month's security deduction for a staff member.
+ */
+function deductSecurityMonth(staffId) {
+    const idx = staffData[currentCategory].findIndex(s => s.id === staffId);
+    if (idx === -1) return;
+
+    const staff = staffData[currentCategory][idx];
+    const s = getSecurityStatus(staff);
+    if (s.isDone || s.monthly <= 0) return;
+
+    // Deduct — don't exceed total
+    const deductAmount = Math.min(s.monthly, s.remaining);
+    staffData[currentCategory][idx].securityCollected = (s.collected + deductAmount);
+
+    // Persist
+    const db = getGlobalData();
+    db.staff = staffData;
+    saveGlobalData(db);
+
+    // Refresh profile
+    showProfileView(staffId, currentCategory);
 }
