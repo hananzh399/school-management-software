@@ -1520,6 +1520,35 @@
     overflow: hidden;
     margin-bottom: 14px;
 }
+#atv-fee-rows-container {
+    max-height: 320px;
+    overflow-y: auto;
+    overflow-x: hidden;
+    scrollbar-width: thin;
+    scrollbar-color: #cbd5e1 transparent;
+}
+#atv-fee-rows-container::-webkit-scrollbar {
+    width: 6px;
+}
+#atv-fee-rows-container::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 3px;
+}
+.atv-fee-row-count {
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: #7c3aed;
+    background: #f5f3ff;
+    border: 1px solid #ddd6fe;
+    border-radius: 999px;
+    padding: 2px 10px;
+    margin-left: 4px;
+}
+.afm-add-fee-row-btn {
+    position: relative;
+    z-index: 2;
+    flex-shrink: 0;
+}
 .afm-fee-items-header {
     display: grid;
     grid-template-columns: 2fr 1.2fr 1.2fr 0.9fr 36px;
@@ -1909,6 +1938,52 @@
     background: linear-gradient(135deg, #6d28d9, #4c1d95) !important;
     box-shadow: 0 10px 24px -4px rgba(124,58,237,0.55) !important;
 }
+
+/* Voucher note field in edit modal */
+.atv-voucher-note-wrap {
+    margin-top: 4px;
+}
+.atv-note-label {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px;
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: #64748b;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin-bottom: 8px;
+}
+.atv-note-label i { color: #7c3aed; }
+.atv-note-hint {
+    font-weight: 500;
+    text-transform: none;
+    letter-spacing: 0;
+    font-size: 0.72rem;
+    color: #94a3b8;
+}
+.atv-voucher-note {
+    resize: vertical;
+    min-height: 72px;
+    font-family: inherit;
+    line-height: 1.5;
+}
+.voucher-note-custom {
+    max-width: 60%;
+    line-height: 1.45;
+    white-space: pre-wrap;
+    /* Yellow "sticky note" styling so a custom admin note stands out
+       clearly at the bottom of the voucher. */
+    background: #fef9c3;            /* yellow-100 */
+    border: 1px solid #fde047;       /* yellow-300 */
+    border-left: 4px solid #eab308;  /* yellow-500 accent */
+    color: #713f12;                  /* yellow-900 */
+    padding: 10px 12px;
+    border-radius: 8px;
+    font-weight: 500;
+}
+.voucher-note-custom i { color: #ca8a04; } /* yellow-600 icon */
 
 /* ============================================================
    ADDITIONS: numbered class cards, fee table redesign, search
@@ -2579,4 +2654,399 @@
 #student-fine-results::-webkit-scrollbar-thumb {
     background: var(--border-hover);
     border-radius: 3px;
+}
+
+/* PAID STAMP OVERLAY */
+.paid-stamp-overlay {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%) rotate(-15deg);
+    font-size: 5rem;
+    font-weight: 900;
+    color: rgba(22, 163, 74, 0.15); /* Green with opacity */
+    border: 10px solid rgba(22, 163, 74, 0.15);
+    padding: 15px 40px;
+    border-radius: 15px;
+    pointer-events: none;
+    z-index: 10;
+    letter-spacing: 8px;
+    text-transform: uppercase;
+}
+.voucher-sheet {
+    position: relative;
+}
+
+/* ============================================
+   PAY-FEE MODAL — header strip + action row
+   ============================================ */
+.afm-pay-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px;
+    padding: 14px 18px;
+    margin: 0 0 14px;
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-lg);
+    background: var(--bg-card);
+}
+.afm-pay-header-name {
+    font-size: 17px;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+.afm-pay-header-stats {
+    display: flex;
+    gap: 24px;
+    flex-wrap: wrap;
+}
+.afm-pay-header-stats > div {
+    display: flex;
+    flex-direction: column;
+    line-height: 1.15;
+}
+.afm-pay-header-stats span {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    color: var(--text-secondary);
+}
+.afm-pay-header-stats strong {
+    font-size: 16px;
+    font-weight: 700;
+}
+
+.afm-pay-action-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr auto;
+    align-items: end;
+    gap: 12px;
+    margin-top: 18px;
+    padding-top: 14px;
+    border-top: 1px dashed var(--border-subtle);
+}
+.afm-pay-action-row .afm-field-group { margin: 0; }
+.afm-pay-btn {
+    height: 44px;
+    padding: 0 26px;
+    white-space: nowrap;
+    margin: 0;
+}
+@media (max-width: 720px) {
+    .afm-pay-action-row { grid-template-columns: 1fr; }
+    .afm-pay-btn { width: 100%; }
+}
+
+
+/* ============================================
+   PAY-FEE MODAL — RESTRUCTURED LEFT STACK
+   (small student-copy voucher + discount + pay-bill)
+   ============================================ */
+.afm-left-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    min-width: 0;
+}
+.afm-voucher-panel {
+    padding: 0 !important;
+    overflow: hidden;
+    background: #f8fafc;
+}
+.afm-voucher-shrink {
+    transform: scale(0.72);
+    transform-origin: top left;
+    width: 139%;          /* 1 / 0.72 ≈ 1.39 to keep horizontal bounds */
+    margin-bottom: -28%;  /* pull the trailing whitespace back */
+    pointer-events: none; /* purely a preview */
+}
+.afm-panel-title {
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: #475569;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.afm-panel-title i { color: #7c3aed; }
+.afm-discount-panel { background: linear-gradient(180deg,#fdf4ff 0%,#ffffff 100%); border-color:#e9d5ff; }
+.afm-discount-panel .afm-panel-title i { color: #a855f7; }
+.afm-paybill-panel { background: linear-gradient(180deg,#eff6ff 0%,#ffffff 100%); border-color:#bfdbfe; }
+.afm-paybill-panel .afm-panel-title i { color: #2563eb; }
+
+.afm-inline-field {
+    display: flex;
+    align-items: stretch;
+    gap: 0;
+    max-width: 260px;
+}
+.afm-inline-field .afm-input {
+    border-top-right-radius: 0;
+    border-bottom-right-radius: 0;
+}
+.afm-inline-field .afm-rs-label {
+    display: inline-flex;
+    align-items: center;
+    padding: 0 14px;
+    background: #ede9fe;
+    color: #6d28d9;
+    font-weight: 700;
+    border: 1px solid #ddd6fe;
+    border-left: none;
+    border-radius: 0 8px 8px 0;
+    font-size: 0.85rem;
+}
+.afm-helper-text {
+    margin: 8px 0 0;
+    font-size: 0.75rem;
+    color: #64748b;
+}
+
+.afm-paybill-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin-bottom: 14px;
+}
+.afm-paybill-grid .afm-notes-group { grid-column: 1 / -1; }
+@media (max-width: 640px) {
+    .afm-paybill-grid { grid-template-columns: 1fr; }
+}
+
+.afm-paybill-panel .afm-pay-btn {
+    width: 100%;
+    margin-top: 4px;
+}
+
+.afm-total-divider {
+    height: 1px;
+    background: #e2e8f0;
+    margin: 8px 0;
+}
+
+
+/* ============================================================
+   INLINE EDITABLE VOUCHER MODAL
+   ============================================================ */
+.iev-box {
+    max-width: 880px;
+    width: 95%;
+    background: var(--bg-card);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-lg);
+    display: flex;
+    flex-direction: column;
+    max-height: 92vh;
+}
+.iev-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 18px 22px;
+    border-bottom: 1px solid var(--border-subtle);
+    background: linear-gradient(135deg, rgba(245,158,11,0.12), rgba(245,158,11,0.02));
+}
+.iev-header-left { display: flex; align-items: center; gap: 14px; }
+.iev-header-icon {
+    width: 44px; height: 44px; border-radius: 12px;
+    display: flex; align-items: center; justify-content: center;
+    background: #f59e0b; color: #fff; font-size: 18px;
+}
+.iev-header h3 { margin: 0; font-size: 18px; font-weight: 700; color: var(--text-primary); }
+.iev-header-sub { margin: 2px 0 0; font-size: 12px; color: var(--text-secondary); }
+
+.iev-scroll {
+    padding: 22px;
+    overflow-y: auto;
+    flex: 1;
+}
+
+.iev-meta-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 12px;
+    background: var(--bg-input, rgba(148,163,184,0.08));
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-md);
+    padding: 14px 16px;
+    margin-bottom: 18px;
+}
+.iev-meta-grid > div { display: flex; flex-direction: column; gap: 2px; }
+.iev-meta-grid span { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-secondary); }
+.iev-meta-grid strong { font-size: 14px; color: var(--text-primary); font-weight: 600; }
+
+.iev-table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    margin-bottom: 16px;
+}
+.iev-table thead th {
+    text-align: left;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    color: var(--text-secondary);
+    padding: 10px 8px;
+    border-bottom: 1px solid var(--border-subtle);
+    background: transparent;
+}
+.iev-table tbody td {
+    padding: 6px 6px;
+    border-bottom: 1px dashed var(--border-subtle);
+    vertical-align: middle;
+}
+.iev-row { transition: background 0.15s ease; }
+.iev-row:hover { background: rgba(245,158,11,0.04); }
+
+.iev-input {
+    width: 100%;
+    padding: 9px 10px;
+    border: 1px solid transparent;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--text-primary);
+    font-size: 14px;
+    font-family: inherit;
+    transition: all 0.15s ease;
+}
+.iev-input:hover { border-color: var(--border-subtle); background: var(--bg-input, rgba(148,163,184,0.06)); }
+.iev-input:focus {
+    outline: none;
+    border-color: #f59e0b;
+    background: var(--bg-card);
+    box-shadow: 0 0 0 3px rgba(245,158,11,0.18);
+}
+.iev-amount-wrap { display: flex; align-items: center; gap: 4px; }
+.iev-rs { font-size: 12px; color: var(--text-secondary); padding-left: 4px; }
+.iev-amount { text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }
+
+.iev-row-actions { text-align: right; }
+.iev-del-btn {
+    width: 32px; height: 32px;
+    border-radius: 8px;
+    border: 1px solid transparent;
+    background: transparent;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+.iev-del-btn:hover {
+    background: rgba(239,68,68,0.1);
+    color: #ef4444;
+    border-color: rgba(239,68,68,0.3);
+}
+
+.iev-total-row td {
+    padding: 14px 8px !important;
+    border-top: 2px solid var(--border-subtle);
+    border-bottom: none !important;
+    font-weight: 700;
+    font-size: 15px;
+    color: var(--text-primary);
+    background: rgba(16,185,129,0.08);
+}
+.iev-total-row td:nth-child(3) { text-align: right; color: #10b981; font-size: 16px; }
+
+.iev-add-row-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 16px;
+    border: 1px dashed var(--border-hover, #f59e0b);
+    border-radius: 10px;
+    background: transparent;
+    color: #f59e0b;
+    font-weight: 600;
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+.iev-add-row-btn:hover {
+    background: rgba(245,158,11,0.08);
+    transform: translateY(-1px);
+}
+
+.iev-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    padding: 14px 22px;
+    border-top: 1px solid var(--border-subtle);
+    background: var(--bg-card);
+}
+.iev-save-btn {
+    background: #10b981 !important;
+    color: #fff !important;
+    border: none !important;
+    padding: 10px 22px !important;
+    border-radius: 8px !important;
+    font-weight: 600 !important;
+    cursor: pointer;
+}
+.iev-save-btn:hover { background: #059669 !important; }
+
+@media (max-width: 640px) {
+    .iev-table thead { display: none; }
+    .iev-table tbody td { display: block; border-bottom: none; padding: 4px 0; }
+    .iev-table tbody tr {
+        display: block;
+        padding: 10px;
+        margin-bottom: 10px;
+        border: 1px solid var(--border-subtle);
+        border-radius: 10px;
+    }
+}
+
+
+/* ============================================
+   IEV — Discount / Arrears / Note additions
+   ============================================ */
+.iev-discount-wrap .iev-rs { color: #ef4444; font-weight: 600; }
+.iev-discount { color: #ef4444; }
+
+.iev-subtotal-row td,
+.iev-arrears-row td {
+    padding: 10px 12px;
+    font-weight: 600;
+    color: var(--text-secondary, #94a3b8);
+    border-top: 1px dashed var(--border-subtle, rgba(255,255,255,0.08));
+}
+.iev-arrears-row td:first-child i { margin-right: 6px; color: #f59e0b; }
+.iev-arrears-row .iev-amount-wrap { max-width: 200px; }
+
+.iev-note-section {
+    margin-top: 20px;
+    padding: 16px;
+    background: var(--bg-card, rgba(255,255,255,0.03));
+    border: 1px dashed var(--border-subtle, rgba(255,255,255,0.12));
+    border-radius: var(--radius-lg, 12px);
+}
+.iev-note-label {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 14px; font-weight: 600;
+    color: var(--text-primary, #f1f5f9);
+    margin-bottom: 8px;
+}
+.iev-note-label i { color: #facc15; }
+.iev-note-input {
+    width: 100%;
+    padding: 10px 12px;
+    font: inherit;
+    color: var(--text-primary, #f1f5f9);
+    background: var(--bg-input, rgba(0,0,0,0.25));
+    border: 1px solid var(--border-subtle, rgba(255,255,255,0.12));
+    border-radius: var(--radius-md, 8px);
+    resize: vertical;
+    min-height: 70px;
+    transition: border-color var(--transition, .2s ease);
+}
+.iev-note-input:focus {
+    outline: none;
+    border-color: var(--border-hover, #6366f1);
 }
