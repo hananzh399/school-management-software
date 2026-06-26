@@ -256,7 +256,8 @@ function handleAddStudentFine() {
     const fines = getStudentFinesData();
     fines.push({
         id: student.id || student.regNo, name: name, className: cls, father: father,
-        amount: amount, cause: desc, date: new Date().toLocaleDateString('en-US')
+        amount: amount, cause: desc, date: new Date().toLocaleDateString('en-US'),
+        monthKey: getCurrentMonthKey()
     });
     saveStudentFinesData(fines);
 
@@ -281,9 +282,11 @@ function handleAddStudentFine() {
 
 function renderStudentFinesTable() {
     const tbody = document.getElementById('student-fines-tbody');
-    const fines = getStudentFinesData();
+    const allFines = getStudentFinesData();
+    const currentMonthKey = getCurrentMonthKey();
+    const fines = allFines.filter(f => !f.monthKey || f.monthKey === currentMonthKey);
     if (fines.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="5" class="empty-row">No fines recorded yet.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="5" class="empty-row">No fines recorded this month.</td></tr>';
         return;
     }
     tbody.innerHTML = fines.map(f => `
@@ -394,7 +397,8 @@ function handleAddStaffFine() {
     finesLog.push({
         staffId: members[idx].id, id: members[idx].id, name: members[idx].name, role: role,
         category: selectedStaffCategory, amount: amount, cause: desc,
-        date: new Date().toLocaleDateString('en-US')
+        date: new Date().toLocaleDateString('en-US'),
+        monthKey: getCurrentMonthKey()
     });
     saveStaffFinesData(finesLog);
 
@@ -406,9 +410,11 @@ function handleAddStaffFine() {
 
 function renderStaffFinesTable() {
     const tbody = document.getElementById('staff-fines-tbody');
-    const fines = getStaffFinesData();
+    const allFines = getStaffFinesData();
+    const currentMonthKey = getCurrentMonthKey();
+    const fines = allFines.filter(f => !f.monthKey || f.monthKey === currentMonthKey);
     if (fines.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="4" class="empty-row">No fines recorded yet.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="4" class="empty-row">No fines recorded this month.</td></tr>';
         return;
     }
     tbody.innerHTML = fines.map(f => `
@@ -498,7 +504,8 @@ function handleAddStaffBonus() {
     log.push({
         staffId: members[idx].id, id: members[idx].id, name: members[idx].name, role: role,
         category: selectedBonusCategory, amount: amount, description: desc,
-        date: new Date().toLocaleDateString('en-US')
+        date: new Date().toLocaleDateString('en-US'),
+        monthKey: getCurrentMonthKey()
     });
     saveStaffBonusData(log);
 
@@ -510,9 +517,11 @@ function handleAddStaffBonus() {
 
 function renderStaffBonusTable() {
     const tbody = document.getElementById('staff-bonus-tbody');
-    const log = getStaffBonusData();
+    const allLog = getStaffBonusData();
+    const currentMonthKey = getCurrentMonthKey();
+    const log = allLog.filter(b => !b.monthKey || b.monthKey === currentMonthKey);
     if (log.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="4" class="empty-row">No bonuses recorded yet.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="4" class="empty-row">No bonuses recorded this month.</td></tr>';
         return;
     }
     tbody.innerHTML = log.map(b => `
@@ -543,7 +552,7 @@ function handleExpenseSubmitNew() {
     if (!desc) { alert('Please enter an expense description.'); return; }
 
     const list = getExpensesData();
-    list.push({ description: desc, amount: amount, date: new Date().toLocaleDateString('en-US') });
+    list.push({ description: desc, amount: amount, date: new Date().toLocaleDateString('en-US'), monthKey: getCurrentMonthKey() });
     saveExpensesData(list);
 
     const db = getGlobalData();
@@ -558,9 +567,11 @@ function handleExpenseSubmitNew() {
 
 function renderExpensesTable() {
     const tbody = document.getElementById('expenses-tbody');
-    const list = getExpensesData();
+    const allList = getExpensesData();
+    const currentMonthKey = getCurrentMonthKey();
+    const list = allList.filter(e => !e.monthKey || e.monthKey === currentMonthKey);
     if (list.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="2" class="empty-row">No expenses recorded yet.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="2" class="empty-row">No expenses recorded this month.</td></tr>';
         return;
     }
     tbody.innerHTML = list.map(e => `
@@ -1964,19 +1975,27 @@ function showSalaryBreakdown(staffId, category = 'Teaching') {
     const bonusRecords = JSON.parse(localStorage.getItem('eduflow-staff-bonus') || '[]');
     const fineRecords  = JSON.parse(localStorage.getItem('eduflow-staff-fines') || '[]');
     const matchStaff = r => String(r.staffId) === String(staffId) || String(r.id) === String(staffId);
+    const currentMonthKey = getCurrentMonthKey();
+    const matchMonth = r => !r.monthKey || r.monthKey === currentMonthKey;
 
     const totalBonus = bonusRecords
-        .filter(matchStaff)
+        .filter(r => matchStaff(r) && matchMonth(r))
         .reduce((s, r) => s + (Number(r.amount) || 0), 0);
 
     const totalFine = fineRecords
-        .filter(matchStaff)
+        .filter(r => matchStaff(r) && matchMonth(r))
         .reduce((s, r) => s + (Number(r.amount) || 0), 0);
 
     const baseSalary    = Number(staff.salary) || 0;
-    const security      = Number(staff.security) || 0;
     const feeDeducted   = Number(staff.feeDeducted) || 0;
     const advanceTaken  = getTotalAdvance(staffId);
+
+    // Security deposit auto-deduction (monthly until fully collected)
+    const secInfo       = computeMonthlySecurity(staff);
+    // Manual override (legacy) is added on top of the auto monthly deduction
+    const manualSecurity = Number(staff.security) || 0;
+    const security      = secInfo.monthlyDue + manualSecurity;
+
     const netPayable    = baseSalary + totalBonus - security - feeDeducted - totalFine - advanceTaken;
     const fmt = n => 'RS ' + Math.max(0, n).toLocaleString();
 
@@ -1984,11 +2003,14 @@ function showSalaryBreakdown(staffId, category = 'Teaching') {
     document.getElementById('sbp-teacher-id').textContent   = staff.id;
     document.getElementById('sbp-total-salary').value   = fmt(baseSalary);
     document.getElementById('sbp-bonus').value          = fmt(totalBonus);
-    document.getElementById('sbp-security').value       = fmt(security);
+    document.getElementById('sbp-security').value       = secInfo.total > 0
+        ? `${fmt(security)}  (${secInfo.collected.toLocaleString()} / ${secInfo.total.toLocaleString()})`
+        : fmt(security);
     document.getElementById('sbp-fee-deducted').value   = fmt(feeDeducted);
     document.getElementById('sbp-fine').value           = fmt(totalFine);
     document.getElementById('sbp-advance-taken').value  = fmt(advanceTaken);
     document.getElementById('sbp-net-payable').value    = 'RS ' + netPayable.toLocaleString();
+
 
     // reset advance input UI
     const wrap = document.getElementById('sbp-advance-input-wrap');
@@ -2003,6 +2025,22 @@ function showSalaryBreakdown(staffId, category = 'Teaching') {
     const backdrop = document.getElementById('salary-breakdown-backdrop');
     if (backdrop) backdrop.classList.remove('d-none');
     document.body.style.overflow = 'hidden';
+
+    // Show or hide the green "Paid" overlay
+    const isPaidThisMonth = (staff.salaryHistory || []).some(h => h.monthKey === getCurrentMonthKey());
+    let paidOverlay = panel.querySelector('.sbp-paid-overlay');
+    if (!paidOverlay) {
+        paidOverlay = document.createElement('div');
+        paidOverlay.className = 'sbp-paid-overlay';
+        paidOverlay.innerHTML = `
+            <div class="sbp-paid-badge">
+                <i class="fas fa-check-circle"></i>
+                <span>Paid for This Month</span>
+            </div>
+        `;
+        panel.appendChild(paidOverlay);
+    }
+    paidOverlay.style.display = isPaidThisMonth ? 'flex' : 'none';
 }
 
 function closeSalaryBreakdown() {
@@ -2017,6 +2055,10 @@ function payCurrentSalary() {
     const staffId  = panel && panel.dataset.teacherId;
     const category = (panel && panel.dataset.category) || 'Teaching';
     if (!staffId) return;
+    if (isStaffPaidThisMonth(staffId, category)) {
+        alert('Salary for this month has already been paid. No further actions can be performed until next month.');
+        return;
+    }
     processSalaryPayment(staffId, category);
     closeSalaryBreakdown();
 }
@@ -2030,15 +2072,26 @@ function processSalaryPayment(staffId, category = 'Teaching') {
     if (confirm(`Confirm salary payment of RS ${Number(staff.salary).toLocaleString()} to ${staff.name}?`)) {
         if (!staff.salaryHistory) staff.salaryHistory = [];
 
+
+
+        // Apply this month's security deduction (if any pending)
+        const secInfo = computeMonthlySecurity(staff);
+        const secDeducted = secInfo.monthlyDue;
+        if (secDeducted > 0) {
+            staff.securityCollected = (Number(staff.securityCollected) || 0) + secDeducted;
+        }
+
         staff.salaryHistory.push({
             date: new Date().toISOString(),
             monthKey: getCurrentMonthKey(),
             amount: staff.salary,
+            securityDeducted: secDeducted,
             status: 'Paid'
         });
 
         saveGlobalData(db);
-        alert(`Salary processed successfully for ${staff.name}`);
+        const note = secDeducted > 0 ? `\nSecurity deducted: RS ${secDeducted.toLocaleString()}` : '';
+        alert(`Salary processed successfully for ${staff.name}${note}`);
         if (category === 'Teaching') {
             renderTeachingSalaries(document.getElementById('teacher-salary-search').value);
         } else {
@@ -2049,9 +2102,58 @@ function processSalaryPayment(staffId, category = 'Teaching') {
 }
 
 /* ============================================
+   SECURITY DEPOSIT — MONTHLY DEDUCTION HELPER
+   --------------------------------------------
+   Returns the amount that should be deducted from this month's salary
+   for the staff member's security deposit. Once securityCollected
+   reaches securityTotal, monthlyDue returns 0.
+   If the current month's salary has already been paid (and the
+   security was already deducted as part of that payment), monthlyDue
+   also returns 0 to avoid double-counting in the breakdown panel.
+   ============================================ */
+function computeMonthlySecurity(staff) {
+    const total     = Number(staff.securityTotal)     || 0;
+    const monthly   = Number(staff.securityMonthly)   || 0;
+    const collected = Number(staff.securityCollected) || 0;
+    const remaining = Math.max(0, total - collected);
+
+    if (total <= 0 || monthly <= 0 || remaining <= 0) {
+        return { total, monthly, collected, remaining: 0, monthlyDue: 0 };
+    }
+
+    // If already paid this month, don't show pending deduction again.
+    const monthKey = getCurrentMonthKey();
+    const paidThisMonth = (staff.salaryHistory || []).some(h => h.monthKey === monthKey);
+    if (paidThisMonth) {
+        return { total, monthly, collected, remaining, monthlyDue: 0 };
+    }
+
+    return {
+        total, monthly, collected, remaining,
+        monthlyDue: Math.min(monthly, remaining)
+    };
+}
+
+
+/* ============================================
    ADVANCE SALARY — UI + PAYMENT
    ============================================ */
+function isStaffPaidThisMonth(staffId, category) {
+    const db = getGlobalData();
+    const list = db.staff[category] || [];
+    const staff = list.find(s => s.id === staffId);
+    if (!staff) return false;
+    return (staff.salaryHistory || []).some(h => h.monthKey === getCurrentMonthKey());
+}
+
 function toggleAdvancePay() {
+    const panel = document.getElementById('salary-breakdown-panel');
+    const staffId  = panel && panel.dataset.teacherId;
+    const category = (panel && panel.dataset.category) || 'Teaching';
+    if (staffId && isStaffPaidThisMonth(staffId, category)) {
+        alert('Salary for this month has already been paid. No further actions can be performed until next month.');
+        return;
+    }
     const wrap = document.getElementById('sbp-advance-input-wrap');
     if (!wrap) return;
     wrap.classList.toggle('d-none');
@@ -2066,6 +2168,11 @@ function payAdvanceSalary() {
     const staffId  = panel && panel.dataset.teacherId;
     const category = (panel && panel.dataset.category) || 'Teaching';
     if (!staffId) return;
+
+    if (isStaffPaidThisMonth(staffId, category)) {
+        alert('Salary for this month has already been paid. No further actions can be performed until next month.');
+        return;
+    }
 
     const amtEl = document.getElementById('sbp-advance-amount');
     const amount = Number(amtEl && amtEl.value);
