@@ -2443,7 +2443,77 @@
 }
 
 
-/* ===== Fine/Bonus search + results (added) ===== */
+/* ============================================
+   SALARY BREAKDOWN — PAID OVERLAY (green glass)
+   ============================================ */
+.sbp-paid-overlay {
+    position: absolute;
+    inset: 0;
+    border-radius: 22px;
+    /* Green glass wash over the entire panel */
+    background: rgba(16, 185, 129, 0.18);
+    backdrop-filter: blur(2px);
+    -webkit-backdrop-filter: blur(2px);
+    border: 2px solid rgba(16, 185, 129, 0.4);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+    /* Block ALL mouse interaction on buttons/inputs underneath */
+    pointer-events: all;
+    cursor: not-allowed;
+    animation: fadeInPage 0.25s ease;
+}
+
+.sbp-paid-badge {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    background: rgba(255, 255, 255, 0.55);
+    border: 2px solid rgba(16, 185, 129, 0.55);
+    border-radius: 20px;
+    padding: 28px 52px;
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    box-shadow: 0 8px 40px rgba(16, 185, 129, 0.25),
+                0 2px 12px rgba(0,0,0,0.08);
+    pointer-events: none;
+}
+
+.sbp-paid-badge i {
+    font-size: 3.2rem;
+    color: #059669;
+    filter: drop-shadow(0 0 14px rgba(16, 185, 129, 0.6));
+}
+
+.sbp-paid-badge span {
+    font-size: 1.35rem;
+    font-weight: 800;
+    color: #065f46;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+[data-theme="dark"] .sbp-paid-overlay {
+    background: rgba(16, 185, 129, 0.14);
+    border-color: rgba(16, 185, 129, 0.35);
+}
+
+[data-theme="dark"] .sbp-paid-badge {
+    background: rgba(6, 78, 59, 0.55);
+    border-color: rgba(16, 185, 129, 0.5);
+}
+
+[data-theme="dark"] .sbp-paid-badge i {
+    color: #34d399;
+}
+
+[data-theme="dark"] .sbp-paid-badge span {
+    color: #6ee7b7;
+}
+
+
 .fine-search-input {
     width: 100%;
     padding: 12px 14px;
