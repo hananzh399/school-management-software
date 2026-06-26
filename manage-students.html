@@ -42,6 +42,10 @@
                 <i class="fas fa-file-invoice-dollar"></i>
                 <span>Fees &amp; Finance</span>
             </a>
+            <a href="settings.html" class="nav-link">
+                <i class="fas fa-cog"></i>
+                <span>Admin Settings</span>
+            </a>
         </nav>
 
         <div class="sidebar-footer">
@@ -122,7 +126,7 @@
 
         <!-- MANAGEMENT CARDS SECTION -->
         <section class="management-section">
-            <div class="section-header-flex">
+            <div class="section-header-flex centered-heading">
                 <div class="header-info">
                     <h3 class="section-heading"><i class="fas fa-sliders-h"></i> Student Management</h3>
                     <p class="section-desc">Manage Students Here. Here You Can (Add, View, Update &amp; Delete) Students.</p>
@@ -256,7 +260,17 @@
                     </div>
                     <div class="form-input-group">
                         <label>Section *</label>
-                        <input type="text" name="section" placeholder="e.g. A, Blue, Rose" required>
+                        <select name="section" required>
+                            <option value="">Select Section</option>
+                            <option value="A">A</option>
+                            <option value="B">B</option>
+                            <option value="C">C</option>
+                            <option value="D">D</option>
+                            <option value="Rose">Rose</option>
+                            <option value="Blue">Blue</option>
+                            <option value="Green">Green</option>
+                            <option value="Gold">Gold</option>
+                        </select>
                     </div>
                 </div>
 
@@ -393,10 +407,10 @@
                         <label>Standard Tuition Fee <span style="font-weight:400;color:var(--text-muted)">(Auto — by Class)</span></label>
                         <input type="number" id="fee-standard" name="standardFee" required readonly class="input-readonly" placeholder="Select class first">
                     </div>
-                    <div class="form-input-group">
+                    <!-- <div class="form-input-group">
                         <label>Admission Fee</label>
                         <input type="number" id="fee-admission" name="admissionFee" value="0">
-                    </div>
+                    </div> -->
                     <div class="form-input-group">
                         <label>Tuition Discount</label>
                         <input type="number" id="fee-discount-tuition" name="tuitionDiscount" value="0">
