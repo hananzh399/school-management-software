@@ -50,34 +50,66 @@
 "use strict";
 
 // ============================================================================
-// ⚙️  SETTINGS — STANDARD FEE PER CLASS
+// ⚙️  SETTINGS — CLASS / SECTION / FEE / FUND CONFIGURATION
 // ----------------------------------------------------------------------------
-// To configure standard (tuition) fees for each class, edit the values below.
-// These values are read-only in the admission form and auto-populate when a
-// class is selected. They can be changed here until a Settings page is built.
+// All class structure, sections, monthly tuition, and annual fund values
+// are now managed centrally on the Settings page (settings.html).
+// They are persisted in localStorage under the key `edu_class_configs` and
+// read here at runtime so the admission form always stays in sync.
 //
-// Format:  'Class Name': fee_in_rupees
+// The helpers below provide safe defaults if settings have never been saved.
 // ============================================================================
-const CLASS_STANDARD_FEES = {
-    'Montessori': 3000,
-    'Nursery':    3500,
-    'Prep':       4000,
-    'Grade 1':    4500,
-    'Grade 2':    4500,
-    'Grade 3':    5000,
-    'Grade 4':    5000,
-    'Grade 5':    5500,
-    'Grade 6':    5500,
-    'Grade 7':    6000,
-    'Grade 8':    6000,
-    'Grade 9':    6500,
-    'Grade 10':   6500,
-};
+const SETTINGS_CLASSES_KEY = 'edu_class_configs';
 
-// ============================================================================
-// ⚙️  SETTINGS — ANNUAL FUND AMOUNT (added to voucher in the selected month)
-// ============================================================================
-const ANNUAL_FUND_AMOUNT = 2000; // Rs. — change this value as needed
+const DEFAULT_CLASS_CONFIGS = [
+    { name: 'Montessori', fee: 3000, fund: 2000, sections: ['A', 'B'] },
+    { name: 'Nursery',    fee: 3500, fund: 2000, sections: ['A', 'B'] },
+    { name: 'Prep',       fee: 4000, fund: 2000, sections: ['A', 'B'] },
+    { name: 'Grade 1',    fee: 4500, fund: 2000, sections: ['A', 'B'] },
+    { name: 'Grade 2',    fee: 4800, fund: 2000, sections: ['A', 'B'] },
+];
+
+/** Read class configs from settings page (localStorage), with fallback. */
+function getClassConfigs() {
+    try {
+        const raw = localStorage.getItem(SETTINGS_CLASSES_KEY);
+        const arr = raw ? JSON.parse(raw) : null;
+        if (Array.isArray(arr) && arr.length) return arr;
+    } catch (e) { /* ignore */ }
+    return DEFAULT_CLASS_CONFIGS;
+}
+
+/** Build a quick lookup map: { [className]: configObject } */
+function getClassConfigMap() {
+    const map = {};
+    getClassConfigs().forEach(c => { if (c && c.name) map[c.name] = c; });
+    return map;
+}
+
+/** Lookup standard tuition fee for a given class. */
+function getStandardFeeForClass(className) {
+    const c = getClassConfigMap()[className];
+    return c ? Number(c.fee) || 0 : 0;
+}
+
+/** Lookup annual fund amount for a given class (falls back to first class's fund). */
+function getAnnualFundForClass(className) {
+    const map = getClassConfigMap();
+    if (className && map[className] && map[className].fund != null) {
+        return Number(map[className].fund) || 0;
+    }
+    const first = getClassConfigs()[0];
+    return first ? Number(first.fund) || 0 : 0;
+}
+
+// Back-compat shims (read live from settings each access)
+const CLASS_STANDARD_FEES = new Proxy({}, {
+    get: (_t, prop) => getStandardFeeForClass(prop),
+    has: (_t, prop) => prop in getClassConfigMap(),
+});
+// ANNUAL_FUND_AMOUNT is now resolved per-class via getAnnualFundForClass().
+// Kept as a getter for any legacy reads (returns the first class's fund).
+const ANNUAL_FUND_AMOUNT = getAnnualFundForClass();
 
 // --- GLOBAL STATE & CONFIGURATION ---
 const DB_KEY        = 'edu_students';
@@ -391,28 +423,82 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // ── ANNUAL FUND TOGGLE ───────────────────────────────────────────────────
     if (annualFundEnabled) {
-        // Pre-fill the amount display from settings
-        if (annualFundAmount) annualFundAmount.value = ANNUAL_FUND_AMOUNT;
-
         annualFundEnabled.addEventListener('change', function() {
             annualFundPanel.style.display = this.checked ? 'block' : 'none';
         });
     }
 
-    const classSelect = admissionForm ? admissionForm.querySelector('[name="studentClass"]') : null;
-if (classSelect) {
-    classSelect.addEventListener('change', function() {
-        if (this.value) {
-            rollNoInput.value = generateClassRollNumber(this.value);
-            // Auto-populate standard fee from settings
-            const classFee = CLASS_STANDARD_FEES[this.value];
-            if (classFee !== undefined) {
-                feeStandard.value = classFee;
-                performFinancialAudit();
-            }
+    // ── CLASS / SECTION DROPDOWNS — POPULATED FROM SETTINGS ─────────────────
+    const classSelect   = admissionForm ? admissionForm.querySelector('[name="studentClass"]') : null;
+    const sectionSelect = admissionForm ? admissionForm.querySelector('[name="section"]')      : null;
+
+    /**
+     * Rebuild the Class <select> using the configs saved on the Settings page.
+     * Preserves the currently-selected class if it still exists.
+     */
+    function populateClassDropdown() {
+        if (!classSelect) return;
+        const previous = classSelect.value;
+        const configs  = getClassConfigs();
+        classSelect.innerHTML =
+            '<option value="">Select Class</option>' +
+            configs.map(c => `<option value="${c.name}">${c.name}</option>`).join('');
+        if (previous && configs.some(c => c.name === previous)) {
+            classSelect.value = previous;
+        }
+    }
+
+    /**
+     * Rebuild the Section <select> for the currently-selected class.
+     * If the class has no sections configured, falls back to a generic A/B/C.
+     */
+    function populateSectionDropdown(className) {
+        if (!sectionSelect) return;
+        const previous = sectionSelect.value;
+        const cfg = getClassConfigMap()[className];
+        const sections = (cfg && Array.isArray(cfg.sections) && cfg.sections.length)
+            ? cfg.sections
+            : (className ? ['A', 'B', 'C'] : []);
+        sectionSelect.innerHTML =
+            '<option value="">Select Section</option>' +
+            sections.map(s => `<option value="${s}">${s}</option>`).join('');
+        if (previous && sections.includes(previous)) {
+            sectionSelect.value = previous;
+        }
+    }
+
+    populateClassDropdown();
+    populateSectionDropdown('');
+
+    // Re-sync when the Settings page saves changes in another tab
+    window.addEventListener('storage', (e) => {
+        if (e.key === SETTINGS_CLASSES_KEY) {
+            populateClassDropdown();
+            populateSectionDropdown(classSelect ? classSelect.value : '');
         }
     });
-}
+
+    if (classSelect) {
+        classSelect.addEventListener('change', function() {
+            // Rebuild sections list for the chosen class
+            populateSectionDropdown(this.value);
+
+            if (this.value) {
+                rollNoInput.value = generateClassRollNumber(this.value);
+
+                // Auto-populate standard tuition fee from settings
+                const classFee = getStandardFeeForClass(this.value);
+                feeStandard.value = classFee;
+
+                // Auto-populate annual fund amount from settings
+                if (annualFundAmount) {
+                    annualFundAmount.value = getAnnualFundForClass(this.value);
+                }
+
+                performFinancialAudit();
+            }
+        });
+    }
 
     // ── 5. MEDIA & FILE HANDLING ─────────────────────────────────────────────
 
