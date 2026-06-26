@@ -71,11 +71,53 @@ function initDate() {
 }
 
 
+
+/* ============================================
+   STAFF BUCKET SANITIZER
+   ============================================ */
+function _looksNonTeachingMS(s) {
+    if (!s) return false;
+    if (s.type === 'Non-Teaching') return true;
+    if (s.type === 'Teaching') return false;
+    if (s.role || s.job || s.startTime || s.endTime) return true;
+    if (s.subjects || s.qualification || s.classes || s.incharge) return false;
+    return false;
+}
+function sanitizeStaffBuckets() {
+    const db = getGlobalData();
+    if (!db || !db.staff) return;
+    const teaching = Array.isArray(db.staff['Teaching']) ? db.staff['Teaching'] : [];
+    const nonTeaching = Array.isArray(db.staff['Non-Teaching']) ? db.staff['Non-Teaching'] : [];
+    const cleanT = [];
+    const cleanNT = [...nonTeaching];
+    let changed = false;
+    teaching.forEach(s => {
+        if (_looksNonTeachingMS(s)) {
+            cleanNT.push({ ...s, type: 'Non-Teaching' });
+            changed = true;
+        } else {
+            if (!s.type) changed = true;
+            cleanT.push({ ...s, type: s.type || 'Teaching' });
+        }
+    });
+    const stampedNT = cleanNT.map(s => {
+        if (!s.type) { changed = true; return { ...s, type: 'Non-Teaching' }; }
+        return s;
+    });
+    if (changed) {
+        db.staff['Teaching'] = cleanT;
+        db.staff['Non-Teaching'] = stampedNT;
+        saveGlobalData(db);
+    }
+}
+
 /* ============================================
    LOAD & COUNT STAFF
    ============================================ */
 function loadStaffCounts(animate = true) {
-    // Read directly from the live staffData array instead of localStorage
+    // Repair any cross-bucket leakage before counting.
+    sanitizeStaffBuckets();
+    staffData = getGlobalData().staff;
     const teachingCount = staffData['Teaching'].length;
     const nonTeachingCount = staffData['Non-Teaching'].length;
     const total = teachingCount + nonTeachingCount;
@@ -194,6 +236,7 @@ function showDirectoryView(category) {
    SAMPLE DATA & TABLE POPULATION
    ============================================ */
 // Read from global state instead of local variable
+sanitizeStaffBuckets();
 let staffData = getGlobalData().staff;
 
 let currentProfileId = null;
@@ -217,7 +260,12 @@ function populateDirectory(category, filterText = '') {
 
     tbody.innerHTML = '';
     
-    const staffList = staffData[category] || [];
+    const rawList = staffData[category] || [];
+    // Defensive filter: hide cross-bucket records.
+    const staffList = rawList.filter(s => {
+        const looksNT = _looksNonTeachingMS(s);
+        return category === 'Teaching' ? !looksNT : true;
+    });
     const lowerFilter = filterText.toLowerCase();
 
     staffList.forEach(s => {
@@ -568,7 +616,8 @@ function handleFormSubmit(e) {
         // Add new
         const prefix = currentCategory === 'Teaching' ? 'TCH-' : 'NTS-';
         newData.id = prefix + Math.floor(1000 + Math.random() * 9000);
-        newData.fines = 0; // Initialize fines
+        newData.fines = 0;
+        newData.type = currentCategory; // tag for bucket integrity
         staffData[currentCategory].push(newData);
     }
 
