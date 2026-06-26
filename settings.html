@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Admin Settings | EduFlow Pro</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+<link rel="stylesheet" href="settings.css">
+</head>
+<body>
+
+<!-- SIDEBAR OVERLAY -->
+<div class="sidebar-overlay" id="sidebar-overlay" onclick="closeSidebar()"></div>
+
+<!-- SIDEBAR -->
+<aside class="sidebar" id="sidebar">
+  <div class="sidebar-brand">
+    <div class="sidebar-brand-left">
+      <div class="brand-icon"><i class="fas fa-graduation-cap"></i></div>
+      <div class="brand-text">EduFlow <span>Admin</span></div>
+    </div>
+    <button class="sidebar-close-btn" onclick="closeSidebar()" title="Close menu">
+      <i class="fas fa-times"></i>
+    </button>
+  </div>
+  <nav class="nav-section">
+    <div class="nav-label">Core Modules</div>
+    <a href="index.html" class="nav-link"><i class="fas fa-th-large"></i> Dashboard Home</a>
+    <a href="manage-students.html" class="nav-link"><i class="fas fa-user-graduate"></i> Student Management</a>
+    <a href="manage-staff.html" class="nav-link"><i class="fas fa-chalkboard-teacher"></i><span>Staff Management</span></a>
+            <a href="manage-finance.html" class="nav-link active"><i class="fas fa-file-invoice-dollar"></i><span>Fees & Finance</span></a>
+    <!-- <a href="settings.html" class="nav-link active"><i class="fas fa-cog"></i> Admin Settings</a> -->
+  </nav>
+  <div class="sidebar-footer">
+    <a href="#" class="nav-link logout-btn"><i class="fas fa-sign-out-alt"></i> Logout</a>
+  </div>
+</aside>
+
+<!-- MAIN -->
+<div class="main-content">
+
+  <!-- TOP HEADER -->
+  <header class="top-header">
+    <div class="header-left">
+      <button class="menu-toggle-btn" onclick="openSidebar()" title="Open menu">
+        <i class="fas fa-bars"></i>
+      </button>
+      <div class="header-title">
+        <h1>System Configuration</h1>
+        <p>Manage classes, fees, fines &amp; staff</p>
+      </div>
+    </div>
+    <div class="header-actions">
+      <span class="badge-saved" id="saved-badge"><i class="fas fa-check-circle"></i> Saved</span>
+      <div class="admin-avatar">AD</div>
+    </div>
+  </header>
+
+  <div class="page-body">
+
+    <!-- TABS -->
+    <div class="page-tabs">
+      <button class="tab-btn active" onclick="switchTab('classes', this)">
+        <i class="fas fa-chalkboard-teacher"></i> Classes &amp; Fees
+      </button>
+      <button class="tab-btn" onclick="switchTab('latefee', this)">
+        <i class="fas fa-hourglass-half"></i> Late Fee
+      </button>
+      <button class="tab-btn" onclick="switchTab('staff', this)">
+        <i class="fas fa-users"></i> Staff
+      </button>
+      <button class="tab-btn" onclick="switchTab('variables', this)">
+        <i class="fas fa-sliders-h"></i> Pay Variables
+      </button>
+    </div>
+
+    <!-- ═══════════════════ TAB: CLASSES ═══════════════════ -->
+    <div class="tab-panel active" id="tab-classes">
+      <div class="section-card">
+        <div class="section-header">
+          <div class="section-header-info">
+            <h2><i class="fas fa-university"></i> Class Fee Structure</h2>
+            <p>Set monthly tuition and annual funds for each class. Changes apply to new admissions.</p>
+          </div>
+          <button class="btn-primary" onclick="addClassCard()">
+            <i class="fas fa-plus"></i> Add Class
+          </button>
+        </div>
+        <div class="class-grid" id="class-grid">
+          <!-- injected by JS -->
+        </div>
+      </div>
+    </div>
+
+
+
+    <!-- ═══════════════════ TAB: LATE FEE ═══════════════════ -->
+    <div class="tab-panel" id="tab-latefee">
+      <div class="section-card">
+        <div class="section-header">
+          <div class="section-header-info">
+            <h2><i class="fas fa-hourglass-half"></i> Late Fee Fine</h2>
+            <p>Set the fine charged when a student pays their monthly fee after the deadline.</p>
+          </div>
+        </div>
+
+        <div class="latefee-toggle-bar">
+          <div>
+            <div class="toggle-label">Late Fee Enabled</div>
+            <div class="toggle-sub">When off, no fine is applied no matter how late a payment is.</div>
+          </div>
+          <label class="toggle-switch">
+            <input type="checkbox" id="latefee-enabled" checked onchange="toggleLateFee()">
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+
+        <div id="latefee-disabled-msg" class="transport-disabled-msg">
+          <i class="fas fa-circle-check"></i>
+          Late fee is currently disabled. Enable it above to set a fine and deadline.
+        </div>
+
+        <div class="latefee-body" id="latefee-body">
+          <div class="variables-panel" style="padding: 24px;">
+
+            <div class="var-item">
+              <label>Fee Submission Deadline</label>
+              <div class="input-prefix-wrap">
+                <input type="number" id="latefee-deadline-day" class="var-input" value="10" min="1" max="28">
+                <span class="input-suffix">of every month</span>
+              </div>
+              <div class="var-hint">Fees paid on or before this day each month are on time.</div>
+            </div>
+
+            <div class="var-item">
+              <label>Fine Type</label>
+              <select id="latefee-type" class="var-input">
+                <option value="fixed">Fixed Rs amount</option>
+                <option value="percent">Percentage of monthly fee</option>
+              </select>
+              <div class="var-hint">How the late fine is calculated once the deadline passes.</div>
+            </div>
+
+            <div class="var-item">
+              <label>Fine Amount</label>
+              <div class="input-prefix-wrap">
+                <span class="input-prefix" id="latefee-amount-prefix">Rs</span>
+                <input type="number" id="latefee-amount" class="var-input" style="padding-left:28px;" value="200" min="0">
+              </div>
+              <div class="var-hint">E.g. Rs 200 flat, or 5% of that month's tuition fee.</div>
+            </div>
+
+            <div class="var-item">
+              <label>Grace Days</label>
+              <div class="input-prefix-wrap">
+                <input type="number" id="latefee-grace" class="var-input" value="0" min="0" max="15">
+                <span class="input-suffix">extra day(s) before fine starts</span>
+              </div>
+              <div class="var-hint">Optional buffer added on top of the deadline above.</div>
+            </div>
+
+          </div>
+
+          <div class="latefee-preview" id="latefee-preview">
+            <i class="fas fa-circle-info"></i>
+            <span id="latefee-preview-text">Fees paid after the 10th of the month will be fined Rs 200.</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════════ TAB: STAFF ═══════════════════ -->
+    <div class="tab-panel" id="tab-staff">
+      <div class="section-card">
+        <div class="section-header">
+          <div class="section-header-info">
+            <h2><i class="fas fa-users"></i> Staff Management</h2>
+            <p>Manage your teaching and non-teaching staff. Search, add, edit salaries, leave penalties, and bonuses.</p>
+          </div>
+        </div>
+
+        <!-- Staff sub-tabs -->
+        <div class="staff-subtabs">
+          <button class="staff-subtab-btn active" onclick="switchStaffSub('teaching', this)">
+            <i class="fas fa-chalkboard-teacher"></i> Teaching Staff
+            <span class="staff-count" id="teaching-count">0</span>
+          </button>
+          <button class="staff-subtab-btn" onclick="switchStaffSub('nonteaching', this)">
+            <i class="fas fa-user-cog"></i> Non-Teaching Staff
+            <span class="staff-count" id="nonteaching-count">0</span>
+          </button>
+        </div>
+
+        <!-- TEACHING STAFF SUB-PANEL -->
+        <div class="staff-subpanel active" id="staff-sub-teaching">
+          <div class="staff-toolbar">
+            <div class="staff-search-wrap">
+              <i class="fas fa-search"></i>
+              <input type="text" id="teaching-search" class="staff-search-input"
+                     placeholder="Search teaching staff by name or subject..."
+                     oninput="filterStaff('teaching', this.value)">
+            </div>
+            <!-- <button class="btn-primary" onclick="addTeacherCard()">
+              <i class="fas fa-plus"></i> Add Teacher
+            </button> -->
+          </div>
+          <div class="teacher-grid" id="teacher-grid">
+            <!-- injected by JS -->
+          </div>
+          <div class="staff-empty" id="teaching-empty" style="display:none;">
+            <i class="fas fa-user-slash"></i>
+            <p>No teaching staff match your search.</p>
+          </div>
+        </div>
+
+        <!-- NON-TEACHING STAFF SUB-PANEL -->
+        <div class="staff-subpanel" id="staff-sub-nonteaching">
+          <div class="staff-toolbar">
+            <div class="staff-search-wrap">
+              <i class="fas fa-search"></i>
+              <input type="text" id="nonteaching-search" class="staff-search-input"
+                     placeholder="Search non-teaching staff by name or role..."
+                     oninput="filterStaff('nonteaching', this.value)">
+            </div>
+            <button class="btn-primary" onclick="addNonTeachingCard()">
+              <i class="fas fa-plus"></i> Add Staff
+            </button>
+          </div>
+          <div class="teacher-grid" id="nonteaching-grid">
+            <!-- injected by JS -->
+          </div>
+          <div class="staff-empty" id="nonteaching-empty" style="display:none;">
+            <i class="fas fa-user-slash"></i>
+            <p>No non-teaching staff match your search.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════════ TAB: PAY VARIABLES ═══════════════════ -->
+    <div class="tab-panel" id="tab-variables">
+      <div class="section-card">
+        <div class="section-header">
+          <div class="section-header-info">
+            <h2><i class="fas fa-sliders-h"></i> Global Pay Variables</h2>
+            <p>These values are shared across all teacher pay calculations and apply automatically unless overridden per teacher.</p>
+          </div>
+        </div>
+        <div class="variables-panel">
+
+          <div class="var-item">
+            <label>Default Leave Penalty Type</label>
+            <select id="var-penalty-type" class="var-input">
+              <option value="percent">Percentage of salary per day</option>
+              <option value="fixed">Fixed Rs amount per day</option>
+            </select>
+            <div class="var-hint">Applied globally unless overridden per teacher.</div>
+          </div>
+
+          <div class="var-item">
+            <label>Default Leave Penalty Value</label>
+            <div class="input-prefix-wrap">
+              <span class="input-prefix" id="var-penalty-prefix">%</span>
+              <input type="number" id="var-penalty-value" class="var-input" style="padding-left:28px;" value="3" min="0">
+            </div>
+            <div class="var-hint">E.g. 3% per day absent, or Rs 500 flat per day.</div>
+          </div>
+
+          <div class="var-item">
+            <label>Full-Attendance Bonus (Rs)</label>
+            <div class="input-prefix-wrap">
+              <span class="input-prefix">Rs</span>
+              <input type="number" id="var-bonus" class="var-input" style="padding-left:28px;" value="1000" min="0">
+            </div>
+            <div class="var-hint">Bonus paid when a teacher has zero absences in a month.</div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /page-body -->
+
+  <!-- SAVE BAR -->
+  <div class="save-bar">
+    <p><i class="fas fa-info-circle"></i> All changes are applied immediately to student admission forms.</p>
+    <div style="display:flex;gap:10px;">
+      <button class="btn-outline" onclick="resetSettings()"><i class="fas fa-undo"></i> Reset</button>
+      <button class="btn-primary" onclick="saveAll()"><i class="fas fa-save"></i> Save All</button>
+    </div>
+  </div>
+
+</div><!-- /main-content -->
+
+<!-- DELETE CONFIRMATION MODAL -->
+<div class="modal-overlay" id="confirm-modal">
+  <div class="modal-box">
+    <div class="modal-icon"><i class="fas fa-trash-alt"></i></div>
+    <h3 id="modal-title">Delete this class?</h3>
+    <p id="modal-body">This will permanently remove the class and its fee configuration. Students already admitted won't be affected.</p>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeModal()">Cancel</button>
+      <button class="btn-danger" id="modal-confirm-btn">Delete</button>
+    </div>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div class="toast" id="toast">
+  <div class="toast-dot success" id="toast-dot"></div>
+  <div id="toast-text">Settings saved.</div>
+</div>
+
+<script src="shared-data.js"></script>
+<script src="settings.js"></script>
+
+</body>
+</html>

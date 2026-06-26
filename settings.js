@@ -1,0 +1,1034 @@
+// ═══════════════════════════════════════════════
+//  EduFlow Pro — Admin Settings
+//  settings.js
+// ═══════════════════════════════════════════════
+
+const CLASSES_KEY     = 'edu_class_configs';
+const LATEFEE_KEY     = 'edu_latefee_config';
+const TEACHERS_KEY    = 'edu_teacher_configs';
+const NONTEACHING_KEY = 'edu_nonteaching_configs';
+const VARIABLES_KEY   = 'edu_pay_variables';
+
+// ── Pending delete state ─────────────────────
+let _pendingDeleteEl   = null;
+let _pendingDeleteType = '';
+
+// ── Default data ─────────────────────────────
+const DEFAULT_CLASSES = [
+  { name: 'Montessori', fee: 3000, fund: 2000, sections: ['A', 'B'] },
+  { name: 'Nursery',    fee: 3500, fund: 2000, sections: ['A', 'B'] },
+  { name: 'Prep',       fee: 4000, fund: 2000, sections: ['A', 'B'] },
+  { name: 'Grade 1',    fee: 4500, fund: 2000, sections: ['A', 'B'] },
+  { name: 'Grade 2',    fee: 4800, fund: 2000, sections: ['A', 'B'] },
+];
+
+const DEFAULT_LATEFEE = {
+  enabled:     true,
+  deadlineDay: 10,
+  type:        'fixed',
+  amount:      200,
+  grace:       0,
+};
+
+const DEFAULT_TEACHERS = [
+  { name: 'Ayesha Siddiqui', subject: 'Mathematics',   salary: 28000, penaltyType: 'percent', penaltyValue: 3.5, bonus: 1500 },
+  { name: 'Tariq Mehmood',   subject: 'English',       salary: 26000, penaltyType: 'percent', penaltyValue: 3,   bonus: 1000 },
+  { name: 'Sana Fatima',     subject: 'Science',       salary: 27000, penaltyType: 'fixed',   penaltyValue: 500, bonus: 1200 },
+];
+
+const DEFAULT_NONTEACHING = [
+  { name: 'Imran Khan',   subject: 'Accountant',    salary: 22000, penaltyType: 'percent', penaltyValue: 3, bonus: 800 },
+  { name: 'Rabia Aslam',  subject: 'Receptionist',  salary: 18000, penaltyType: 'fixed',   penaltyValue: 400, bonus: 700 },
+  { name: 'Abdul Rehman', subject: 'Security Guard',salary: 16000, penaltyType: 'fixed',   penaltyValue: 350, bonus: 500 },
+];
+
+const DEFAULT_VARIABLES = {
+  penaltyType:    'percent',
+  penaltyValue:   3,
+  bonus:          1000,
+};
+
+const CLASS_ICONS  = ['fa-chalkboard','fa-book','fa-pencil-alt','fa-star','fa-medal','fa-award','fa-graduation-cap','fa-bookmark'];
+const CLASS_COLORS = ['#1a9e6e','#3b82f6','#8b5cf6','#f59e0b','#ef4444','#06b6d4'];
+
+// ═══════════════════════════════════════════════
+//  INIT
+// ═══════════════════════════════════════════════
+document.addEventListener('DOMContentLoaded', () => {
+  loadClasses();
+  loadLateFee();
+  loadTeachers();
+  loadNonTeaching();
+  updateStaffCounts();
+  loadVariables();
+  wirePayVariableLiveSync();
+  syncCardsFromVariables();
+
+  // Sync penalty prefix in variables panel
+  document.getElementById('var-penalty-type').addEventListener('change', function () {
+    document.getElementById('var-penalty-prefix').textContent = this.value === 'percent' ? '%' : 'Rs';
+  });
+
+  // Sync late fee fine type prefix + live preview
+  document.getElementById('latefee-type').addEventListener('change', () => {
+    syncLateFeePrefix();
+    updateLateFeePreview();
+  });
+  ['latefee-deadline-day', 'latefee-amount', 'latefee-grace'].forEach(id => {
+    document.getElementById(id).addEventListener('input', updateLateFeePreview);
+  });
+});
+
+// ═══════════════════════════════════════════════
+//  SIDEBAR
+// ═══════════════════════════════════════════════
+function openSidebar() {
+  document.getElementById('sidebar').classList.add('open');
+  document.getElementById('sidebar-overlay').classList.add('active');
+  document.body.style.overflow = 'hidden';
+}
+function closeSidebar() {
+  document.getElementById('sidebar').classList.remove('open');
+  document.getElementById('sidebar-overlay').classList.remove('active');
+  document.body.style.overflow = '';
+}
+
+// ═══════════════════════════════════════════════
+//  TABS
+// ═══════════════════════════════════════════════
+function switchTab(name, btn) {
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('tab-' + name).classList.add('active');
+  btn.classList.add('active');
+}
+
+// ═══════════════════════════════════════════════
+//  DELETE CONFIRM MODAL
+// ═══════════════════════════════════════════════
+function openDeleteModal(el, type) {
+  _pendingDeleteEl   = el;
+  _pendingDeleteType = type;
+
+  const titleMap = {
+    class: 'Delete this class?',
+    teacher: 'Remove this teacher?',
+    nonteaching: 'Remove this staff member?',
+  };
+  const bodyMap  = {
+    class:   'This will permanently remove the class and its fee configuration. Students already admitted won\'t be affected.',
+    teacher: 'This will remove the teacher record and their pay configuration from this system.',
+    nonteaching: 'This will remove the non-teaching staff record and their pay configuration from this system.',
+  };
+
+  document.getElementById('modal-title').textContent = titleMap[type] || 'Confirm deletion';
+  document.getElementById('modal-body').textContent  = bodyMap[type]  || 'Are you sure you want to delete this item?';
+  document.getElementById('confirm-modal').classList.add('active');
+}
+
+function closeModal() {
+  document.getElementById('confirm-modal').classList.remove('active');
+  _pendingDeleteEl   = null;
+  _pendingDeleteType = '';
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('modal-confirm-btn').addEventListener('click', () => {
+    if (_pendingDeleteEl) {
+      // If a linked teacher card is being deleted, also remove the
+      // matching staff record from the shared Staff Management store.
+      if (_pendingDeleteType === 'teacher') {
+        const staffId = _pendingDeleteEl.dataset && _pendingDeleteEl.dataset.staffId;
+        if (staffId) {
+          const shared = getSharedTeachers();
+          if (shared) setSharedTeachers(shared.filter(s => s.id !== staffId));
+        }
+      }
+      if (_pendingDeleteType === 'nonteaching') {
+        const staffId = _pendingDeleteEl.dataset && _pendingDeleteEl.dataset.staffId;
+        if (staffId) {
+          const shared = getSharedNonTeaching();
+          if (shared) setSharedNonTeaching(shared.filter(s => s.id !== staffId));
+        }
+      }
+      _pendingDeleteEl.remove();
+      updateStaffCounts();
+      showToast('Item deleted.', 'success');
+    }
+    closeModal();
+  });
+
+
+  // Close modal on overlay click
+  document.getElementById('confirm-modal').addEventListener('click', function (e) {
+    if (e.target === this) closeModal();
+  });
+});
+
+// ═══════════════════════════════════════════════
+//  CLASSES
+// ═══════════════════════════════════════════════
+function loadClasses() {
+  const saved = JSON.parse(localStorage.getItem(CLASSES_KEY)) || DEFAULT_CLASSES;
+  const grid  = document.getElementById('class-grid');
+  grid.innerHTML = '';
+  saved.forEach(c => appendClassCard(c.name, c.fee, c.fund, false, c.sections || []));
+}
+
+function appendClassCard(name, fee, fund, isNew = false, sections = []) {
+  const grid  = document.getElementById('class-grid');
+  const div   = document.createElement('div');
+  div.className = 'class-card' + (isNew ? ' is-new' : '');
+  const icon  = CLASS_ICONS[grid.children.length % CLASS_ICONS.length];
+  const color = CLASS_COLORS[grid.children.length % CLASS_COLORS.length];
+
+  div.innerHTML = `
+    <button class="delete-card-btn" title="Remove class">
+      <i class="fas fa-times"></i>
+    </button>
+    <div class="class-card-header">
+      <div class="class-icon" style="background:${color}22; color:${color}"><i class="fas ${icon}"></i></div>
+      <span class="class-badge ${isNew ? 'new-badge' : ''}">${isNew ? 'New' : 'Active'}</span>
+    </div>
+    <input type="text" class="class-name-input" value="${name}" placeholder="Class name (e.g. Grade 3)">
+    <div class="fee-row">
+      <div>
+        <div class="fee-label">Monthly Tuition</div>
+        <div class="input-prefix-wrap">
+          <span class="input-prefix">Rs</span>
+          <input type="number" class="fee-input-field" value="${fee}" placeholder="0" min="0">
+        </div>
+      </div>
+      <div>
+        <div class="fee-label">Annual Fund</div>
+        <div class="input-prefix-wrap">
+          <span class="input-prefix">Rs</span>
+          <input type="number" class="fund-input-field" value="${fund}" placeholder="0" min="0">
+        </div>
+      </div>
+    </div>
+
+    <div class="sections-block">
+      <div class="sections-header">
+        <div class="fee-label" style="margin:0;">Sections <span class="sections-count">(${sections.length})</span></div>
+        <button type="button" class="btn-add-section" title="Add section">
+          <i class="fas fa-plus"></i> Add
+        </button>
+      </div>
+      <div class="sections-list"></div>
+      <div class="sections-empty" style="${sections.length ? 'display:none' : ''}">
+        No sections yet. Click <b>Add</b> to create one (e.g. A, B, Rose).
+      </div>
+    </div>
+  `;
+
+  // Wire delete button to confirmation modal
+  div.querySelector('.delete-card-btn').addEventListener('click', () => {
+    openDeleteModal(div, 'class');
+  });
+
+  // Render existing sections
+  const listEl = div.querySelector('.sections-list');
+  sections.forEach(s => listEl.appendChild(buildSectionChip(s, div)));
+
+  // Add section button
+  div.querySelector('.btn-add-section').addEventListener('click', () => {
+    const chip = buildSectionChip('', div, true);
+    listEl.appendChild(chip);
+    chip.querySelector('input').focus();
+    updateSectionsCount(div);
+  });
+
+  grid.appendChild(div);
+}
+
+function buildSectionChip(value, cardEl, isNew = false) {
+  const chip = document.createElement('span');
+  chip.className = 'section-chip' + (isNew ? ' is-new' : '');
+  chip.innerHTML = `
+    <input type="text" class="section-chip-input" value="${value || ''}" placeholder="A" maxlength="20">
+    <button type="button" class="section-chip-remove" title="Remove section">
+      <i class="fas fa-times"></i>
+    </button>
+  `;
+  chip.querySelector('.section-chip-remove').addEventListener('click', () => {
+    chip.remove();
+    updateSectionsCount(cardEl);
+  });
+  return chip;
+}
+
+function updateSectionsCount(cardEl) {
+  const n = cardEl.querySelectorAll('.section-chip').length;
+  const countEl = cardEl.querySelector('.sections-count');
+  if (countEl) countEl.textContent = `(${n})`;
+  const emptyEl = cardEl.querySelector('.sections-empty');
+  if (emptyEl) emptyEl.style.display = n ? 'none' : '';
+}
+
+function addClassCard() {
+  appendClassCard('', 0, 0, true, []);
+  document.querySelector('.class-grid').lastElementChild.querySelector('.class-name-input').focus();
+}
+
+// ═══════════════════════════════════════════════
+//  LATE FEE
+// ═══════════════════════════════════════════════
+function loadLateFee() {
+  const saved = JSON.parse(localStorage.getItem(LATEFEE_KEY)) || DEFAULT_LATEFEE;
+
+  document.getElementById('latefee-enabled').checked  = saved.enabled !== false;
+  document.getElementById('latefee-deadline-day').value = saved.deadlineDay;
+  document.getElementById('latefee-type').value         = saved.type;
+  document.getElementById('latefee-amount').value       = saved.amount;
+  document.getElementById('latefee-grace').value        = saved.grace;
+
+  applyLateFeeToggle(saved.enabled !== false);
+  syncLateFeePrefix();
+  updateLateFeePreview();
+}
+
+function toggleLateFee() {
+  const enabled = document.getElementById('latefee-enabled').checked;
+  applyLateFeeToggle(enabled);
+}
+
+function applyLateFeeToggle(enabled) {
+  document.getElementById('latefee-body').classList.toggle('hidden', !enabled);
+  document.getElementById('latefee-disabled-msg').style.display = enabled ? 'none' : 'block';
+}
+
+function syncLateFeePrefix() {
+  const type = document.getElementById('latefee-type').value;
+  document.getElementById('latefee-amount-prefix').textContent = type === 'percent' ? '%' : 'Rs';
+}
+
+function updateLateFeePreview() {
+  const day    = parseInt(document.getElementById('latefee-deadline-day').value, 10)  || 0;
+  const grace  = parseInt(document.getElementById('latefee-grace').value, 10)          || 0;
+  const type   = document.getElementById('latefee-type').value;
+  const amount = parseFloat(document.getElementById('latefee-amount').value)           || 0;
+  const cutoff = day + grace;
+
+  const amountText = type === 'percent'
+    ? `${amount}% of that month's tuition fee`
+    : `Rs ${amount.toLocaleString()}`;
+
+  document.getElementById('latefee-preview-text').textContent =
+    `Fees paid after day ${cutoff} of the month will be fined ${amountText}.`;
+}
+
+// ═══════════════════════════════════════════════
+//  TEACHERS  (linked to Staff Management — Teaching staff)
+// ═══════════════════════════════════════════════
+
+// --- Shared store helpers (uses shared-data.js when present) ---
+function _hasSharedStore() {
+  return typeof getGlobalData === 'function' && typeof saveGlobalData === 'function';
+}
+function getSharedTeachers() {
+  if (_hasSharedStore()) {
+    const db = getGlobalData();
+    if (db && db.staff && Array.isArray(db.staff['Teaching'])) {
+      return db.staff['Teaching'];
+    }
+  }
+  return null;
+}
+function setSharedTeachers(list) {
+  if (!_hasSharedStore()) return false;
+  const db = getGlobalData();
+  db.staff = db.staff || { 'Teaching': [], 'Non-Teaching': [] };
+  db.staff['Teaching'] = list;
+  saveGlobalData(db);
+  return true;
+}
+
+/**
+ * Map a Teaching-staff record (from manage-staff.js) into the
+ * shape used by the Teachers cards in settings.
+ */
+function _staffToTeacher(s) {
+  return {
+    id:           s.id || null,
+    name:         s.name || '',
+    subject:      s.subjects || s.subject || '',
+    salary:       parseFloat(s.salary) || 0,
+    penaltyType:  s.penaltyType  ?? undefined,
+    penaltyValue: s.penaltyValue ?? undefined,
+    bonus:        s.bonus        ?? undefined,
+    _linked:      !!s.id, // came from the shared staff directory
+  };
+}
+
+function loadTeachers() {
+  _sanitizeStaffBuckets();
+  const grid = document.getElementById('teacher-grid');
+  grid.innerHTML = '';
+
+  // 1. Prefer the live Teaching-staff list from Staff Management.
+  const sharedTeaching = getSharedTeachers();
+  if (sharedTeaching && sharedTeaching.length) {
+    sharedTeaching.forEach(s => appendTeacherCard(_staffToTeacher(s), false));
+    return;
+  }
+
+  // 2. Fallback: legacy localStorage list (or seed defaults).
+  const saved = JSON.parse(localStorage.getItem(TEACHERS_KEY)) || DEFAULT_TEACHERS;
+  saved.forEach(t => appendTeacherCard(t, false));
+}
+
+// Re-sync teachers if the staff list is updated in another tab.
+window.addEventListener('storage', (e) => {
+  if (e.key && e.key.toLowerCase().includes('staff')) {
+    if (document.getElementById('teacher-grid')) loadTeachers();
+  }
+});
+
+function appendTeacherCard(t = {}, isNew = true) {
+  const grid = document.getElementById('teacher-grid');
+  const vars = getVariables();
+  const div  = document.createElement('div');
+  div.className = 'teacher-card' + (isNew ? ' is-new' : '');
+
+  // Remember whether this card is linked to a Staff-Management record.
+  if (t.id) div.dataset.staffId = t.id;
+
+  const salary       = t.salary       ?? 25000;
+  const customPType  = t.penaltyType  != null && t.penaltyType  !== '';
+  const customPVal   = t.penaltyValue != null && t.penaltyValue !== '';
+  const customBonus  = t.bonus        != null && t.bonus        !== '';
+  const penaltyType  = customPType ? t.penaltyType  : vars.penaltyType;
+  const penaltyValue = customPVal  ? t.penaltyValue : vars.penaltyValue;
+  const bonus        = customBonus ? t.bonus        : vars.bonus;
+
+  const linkedBadge = t.id
+    ? `<span class="teacher-badge" style="background:#eff6ff;color:#1d4ed8;margin-left:6px;" title="Synced from Staff Management"><i class="fas fa-link"></i> ${t.id}</span>`
+    : '';
+
+  div.innerHTML = `
+    <button class="delete-card-btn" title="Remove teacher">
+      <i class="fas fa-times"></i>
+    </button>
+    <div class="teacher-card-header">
+      <div class="teacher-avatar"><i class="fas fa-user-tie"></i></div>
+      <span class="teacher-badge ${isNew ? 'new-badge' : ''}">${isNew ? 'New' : 'Active'}</span>
+      ${linkedBadge}
+    </div>
+    <input type="text" class="teacher-name-input" value="${t.name || ''}" placeholder="Teacher full name">
+    <input type="text" class="teacher-subject-input" value="${t.subject || ''}" placeholder="Subject / Role">
+
+
+    <div class="pay-grid">
+      <div>
+        <div class="pay-label">Monthly Salary</div>
+        <div class="input-prefix-wrap">
+          <span class="input-prefix">Rs</span>
+          <input type="number" class="pay-input teacher-salary" value="${salary}" min="0">
+        </div>
+      </div>
+      <div>
+        <div class="pay-label">Leave Penalty <span class="var-src-tag var-src-penaltyType">(src: pay variable)</span></div>
+        <select class="penalty-type-select teacher-penalty-type">
+          <option value="percent" ${penaltyType === 'percent' ? 'selected' : ''}>% per day</option>
+          <option value="fixed"   ${penaltyType === 'fixed'   ? 'selected' : ''}>Rs per day</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="penalty-section">
+      <div class="penalty-section-title"><i class="fas fa-calendar-times" style="margin-right:4px;color:var(--red);"></i>Absence Deduction &amp; Attendance Bonus</div>
+      <div class="pay-grid">
+        <div>
+          <div class="pay-label">Deduction Value <span class="var-src-tag var-src-penaltyValue">(src: pay variable)</span></div>
+          <div class="input-prefix-wrap">
+            <span class="input-prefix teacher-penalty-prefix">${penaltyType === 'percent' ? '%' : 'Rs'}</span>
+            <input type="number" class="pay-input teacher-penalty-value" value="${penaltyValue}" min="0" step="0.5">
+          </div>
+          <div class="var-hint" style="font-size:11px;color:var(--text-light);margin-top:4px;">Per day of leave taken</div>
+        </div>
+        <div>
+          <div class="bonus-label-row"><i class="fas fa-star"></i> Full-Attendance Bonus <span class="var-src-tag var-src-bonus">(src: pay variable)</span></div>
+          <div class="input-prefix-wrap">
+            <span class="input-prefix">Rs</span>
+            <input type="number" class="pay-input teacher-bonus" value="${bonus}" min="0">
+          </div>
+          <div class="var-hint" style="font-size:11px;color:var(--text-light);margin-top:4px;">Paid if zero absences</div>
+        </div>
+      </div>
+    </div>
+  `;
+
+  // Delete with confirmation
+  div.querySelector('.delete-card-btn').addEventListener('click', () => {
+    openDeleteModal(div, 'teacher');
+  });
+
+  // Sync penalty prefix label when type changes
+  div.querySelector('.teacher-penalty-type').addEventListener('change', function () {
+    div.querySelector('.teacher-penalty-prefix').textContent = this.value === 'percent' ? '%' : 'Rs';
+  });
+
+  _attachVarSync(div, 'penaltyType',  customPType);
+  _attachVarSync(div, 'penaltyValue', customPVal);
+  _attachVarSync(div, 'bonus',        customBonus);
+
+  grid.appendChild(div);
+  return div;
+}
+
+function addTeacherCard() {
+  // Disabled: add teachers from Staff Management page.
+  showToast('Add teachers from the Staff Management page.', 'success');
+}
+
+
+// ═══════════════════════════════════════════════
+//  VARIABLES
+// ═══════════════════════════════════════════════
+function getVariables() {
+  return JSON.parse(localStorage.getItem(VARIABLES_KEY)) || DEFAULT_VARIABLES;
+}
+
+function loadVariables() {
+  const v = getVariables();
+  document.getElementById('var-penalty-type').value    = v.penaltyType;
+  document.getElementById('var-penalty-value').value   = v.penaltyValue;
+  document.getElementById('var-penalty-prefix').textContent = v.penaltyType === 'percent' ? '%' : 'Rs';
+  document.getElementById('var-bonus').value           = v.bonus;
+}
+
+
+
+// ═══════════════════════════════════════════════
+//  PAY-VARIABLE LIVE SYNC HELPERS
+// ═══════════════════════════════════════════════
+function _attachVarSync(card, fieldKey, isCustom) {
+  const labelSel = {
+    penaltyType:  '.var-src-penaltyType',
+    penaltyValue: '.var-src-penaltyValue',
+    bonus:        '.var-src-bonus',
+  }[fieldKey];
+  const inputSel = {
+    penaltyType:  '.teacher-penalty-type',
+    penaltyValue: '.teacher-penalty-value',
+    bonus:        '.teacher-bonus',
+  }[fieldKey];
+  const input = card.querySelector(inputSel);
+  const label = card.querySelector(labelSel);
+  if (!input) return;
+  card.dataset[fieldKey + 'Custom'] = isCustom ? '1' : '0';
+  if (label) label.style.display = isCustom ? 'none' : '';
+  const markCustom = () => {
+    card.dataset[fieldKey + 'Custom'] = '1';
+    if (label) label.style.display = 'none';
+  };
+  input.addEventListener('input',  markCustom);
+  input.addEventListener('change', markCustom);
+}
+
+function syncCardsFromVariables() {
+  const v = {
+    penaltyType:  document.getElementById('var-penalty-type').value,
+    penaltyValue: parseFloat(document.getElementById('var-penalty-value').value) || 0,
+    bonus:        parseFloat(document.getElementById('var-bonus').value) || 0,
+  };
+  document.querySelectorAll('#teacher-grid .teacher-card, #nonteaching-grid .teacher-card').forEach(card => {
+    const sel = card.querySelector('.teacher-penalty-type');
+    const pref = card.querySelector('.teacher-penalty-prefix');
+    if (card.dataset.penaltyTypeCustom !== '1') {
+      if (sel) sel.value = v.penaltyType;
+      if (pref) pref.textContent = v.penaltyType === 'percent' ? '%' : 'Rs';
+    } else if (sel && pref) {
+      pref.textContent = sel.value === 'percent' ? '%' : 'Rs';
+    }
+    if (card.dataset.penaltyValueCustom !== '1') {
+      const inp = card.querySelector('.teacher-penalty-value');
+      if (inp) inp.value = v.penaltyValue;
+    }
+    if (card.dataset.bonusCustom !== '1') {
+      const inp = card.querySelector('.teacher-bonus');
+      if (inp) inp.value = v.bonus;
+    }
+  });
+}
+
+function persistVariablesLive() {
+  const vars = {
+    penaltyType:  document.getElementById('var-penalty-type').value,
+    penaltyValue: parseFloat(document.getElementById('var-penalty-value').value) || 0,
+    bonus:        parseFloat(document.getElementById('var-bonus').value) || 0,
+  };
+  localStorage.setItem(VARIABLES_KEY, JSON.stringify(vars));
+}
+
+function wirePayVariableLiveSync() {
+  ['var-penalty-type', 'var-penalty-value', 'var-bonus'].forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const handler = () => {
+      if (id === 'var-penalty-type') {
+        document.getElementById('var-penalty-prefix').textContent =
+          el.value === 'percent' ? '%' : 'Rs';
+      }
+      syncCardsFromVariables();
+      persistVariablesLive();
+    };
+    el.addEventListener('input', handler);
+    el.addEventListener('change', handler);
+  });
+}
+
+// ═══════════════════════════════════════════════
+//  STAFF BUCKET SANITIZER (settings)
+// ═══════════════════════════════════════════════
+function _looksNonTeaching(s) {
+  if (!s) return false;
+  if (s.type === 'Non-Teaching') return true;
+  if (s.type === 'Teaching') return false;
+  if (s.role || s.job || s.startTime || s.endTime) return true;
+  if (s.subjects || s.qualification || s.classes || s.incharge) return false;
+  return false;
+}
+function _sanitizeStaffBuckets() {
+  if (!_hasSharedStore()) return;
+  const db = getGlobalData();
+  if (!db || !db.staff) return;
+  const teaching = Array.isArray(db.staff['Teaching']) ? db.staff['Teaching'] : [];
+  const nonTeaching = Array.isArray(db.staff['Non-Teaching']) ? db.staff['Non-Teaching'] : [];
+  const cleanT = [];
+  const cleanNT = [...nonTeaching];
+  let changed = false;
+  teaching.forEach(s => {
+    if (_looksNonTeaching(s)) {
+      cleanNT.push({ ...s, type: 'Non-Teaching' });
+      changed = true;
+    } else {
+      if (!s.type) changed = true;
+      cleanT.push({ ...s, type: s.type || 'Teaching' });
+    }
+  });
+  const stampedNT = cleanNT.map(s => {
+    if (!s.type) { changed = true; return { ...s, type: 'Non-Teaching' }; }
+    return s;
+  });
+  if (changed) {
+    db.staff['Teaching'] = cleanT;
+    db.staff['Non-Teaching'] = stampedNT;
+    saveGlobalData(db);
+  }
+}
+
+// ═══════════════════════════════════════════════
+//  SAVE ALL
+// ═══════════════════════════════════════════════
+function saveAll() {
+  // — Classes —
+  const cards   = document.querySelectorAll('.class-card');
+  const classes = [];
+  cards.forEach(card => {
+    const name = card.querySelector('.class-name-input').value.trim();
+    const fee  = parseFloat(card.querySelector('.fee-input-field').value)  || 0;
+    const fund = parseFloat(card.querySelector('.fund-input-field').value) || 0;
+    const sections = Array.from(card.querySelectorAll('.section-chip-input'))
+      .map(i => i.value.trim())
+      .filter(Boolean);
+    // De-duplicate (case-insensitive) preserving first occurrence
+    const seen = new Set();
+    const uniqueSections = sections.filter(s => {
+      const k = s.toLowerCase();
+      if (seen.has(k)) return false;
+      seen.add(k); return true;
+    });
+    if (name) classes.push({ name, fee, fund, sections: uniqueSections });
+  });
+  localStorage.setItem(CLASSES_KEY, JSON.stringify(classes));
+
+  // — Late Fee —
+  const lateFee = {
+    enabled:     document.getElementById('latefee-enabled').checked,
+    deadlineDay: parseInt(document.getElementById('latefee-deadline-day').value, 10) || 0,
+    type:        document.getElementById('latefee-type').value,
+    amount:      parseFloat(document.getElementById('latefee-amount').value) || 0,
+    grace:       parseInt(document.getElementById('latefee-grace').value, 10) || 0,
+  };
+  localStorage.setItem(LATEFEE_KEY, JSON.stringify(lateFee));
+
+  // — Teachers —
+  // Edits flow back into the shared Staff Management store so the
+  // Staff page and the Settings page stay in sync.
+  const teacherCards = document.querySelectorAll('.teacher-card');
+  const teachers     = [];
+  const sharedList   = getSharedTeachers();           // may be null
+  const sharedById   = {};
+  if (sharedList) sharedList.forEach(s => { sharedById[s.id] = s; });
+  const updatedShared = [];
+
+  teacherCards.forEach(card => {
+    const name  = card.querySelector('.teacher-name-input').value.trim();
+    const subj  = card.querySelector('.teacher-subject-input').value.trim();
+    const sal   = parseFloat(card.querySelector('.teacher-salary').value)        || 0;
+    const ptype = card.querySelector('.teacher-penalty-type').value;
+    const pval  = parseFloat(card.querySelector('.teacher-penalty-value').value) || 0;
+    const bon   = parseFloat(card.querySelector('.teacher-bonus').value)         || 0;
+    if (!name) return;
+
+    const ptCust = card.dataset.penaltyTypeCustom === '1';
+    const pvCust = card.dataset.penaltyValueCustom === '1';
+    const bnCust = card.dataset.bonusCustom === '1';
+    teachers.push({
+      name, subject: subj, salary: sal,
+      penaltyType:  ptCust ? ptype : null,
+      penaltyValue: pvCust ? pval  : null,
+      bonus:        bnCust ? bon   : null,
+    });
+
+    if (sharedList) {
+      const staffId = card.dataset.staffId;
+      const base = (staffId && sharedById[staffId]) ? sharedById[staffId] : {
+        id: 'TCH-' + Math.floor(1000 + Math.random() * 9000),
+        qualification: '', classes: '', incharge: '',
+        gender: 'Other', joined: new Date().toISOString().slice(0, 10),
+        cnic: '', phone: '', address: '', fines: 0,
+        securityTotal: 0, securityMonthly: 0, securityCollected: 0,
+      };
+      updatedShared.push({
+        ...base,
+        name,
+        subjects: subj,         // staff page uses "subjects"
+        type: 'Teaching',
+        salary: sal,
+        penaltyType:  ptCust ? ptype : null,
+        penaltyValue: pvCust ? pval  : null,
+        bonus:        bnCust ? bon   : null,
+      });
+    }
+  });
+  localStorage.setItem(TEACHERS_KEY, JSON.stringify(teachers));
+  if (sharedList) setSharedTeachers(updatedShared);
+
+  // — Non-Teaching Staff —
+  saveNonTeaching();
+
+
+  // — Variables —
+  const vars = {
+    penaltyType:   document.getElementById('var-penalty-type').value,
+    penaltyValue:  parseFloat(document.getElementById('var-penalty-value').value)  || 0,
+    bonus:         parseFloat(document.getElementById('var-bonus').value)           || 0,
+  };
+  localStorage.setItem(VARIABLES_KEY, JSON.stringify(vars));
+
+  showBadge();
+  showToast('All configurations saved successfully.', 'success');
+}
+
+// ═══════════════════════════════════════════════
+//  RESET
+// ═══════════════════════════════════════════════
+function resetSettings() {
+  if (!confirm('Reset all settings to defaults?')) return;
+  localStorage.removeItem(CLASSES_KEY);
+  localStorage.removeItem(LATEFEE_KEY);
+  localStorage.removeItem(TEACHERS_KEY);
+  localStorage.removeItem(NONTEACHING_KEY);
+  localStorage.removeItem(VARIABLES_KEY);
+  loadClasses();
+  loadLateFee();
+  loadTeachers();
+  loadNonTeaching();
+  loadVariables();
+  updateStaffCounts();
+  showToast('Settings reset to defaults.', 'success');
+}
+
+// ═══════════════════════════════════════════════
+//  UI HELPERS
+// ═══════════════════════════════════════════════
+function showBadge() {
+  const b = document.getElementById('saved-badge');
+  b.classList.add('show');
+  setTimeout(() => b.classList.remove('show'), 2500);
+}
+
+function showToast(msg, type = 'success') {
+  const t   = document.getElementById('toast');
+  const dot = document.getElementById('toast-dot');
+  document.getElementById('toast-text').textContent = msg;
+  dot.className = 'toast-dot ' + type;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 3000);
+}
+
+
+// ═══════════════════════════════════════════════
+//  STAFF SUB-TABS / SEARCH / COUNTS
+// ═══════════════════════════════════════════════
+function switchStaffSub(name, btn) {
+  document.querySelectorAll('.staff-subpanel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.staff-subtab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('staff-sub-' + name).classList.add('active');
+  btn.classList.add('active');
+}
+
+function filterStaff(which, query) {
+  const gridId = which === 'teaching' ? 'teacher-grid' : 'nonteaching-grid';
+  const emptyId = which === 'teaching' ? 'teaching-empty' : 'nonteaching-empty';
+  const q = (query || '').trim().toLowerCase();
+  const cards = document.querySelectorAll('#' + gridId + ' .teacher-card');
+  let visible = 0;
+  cards.forEach(card => {
+    const name = (card.querySelector('.teacher-name-input')?.value || '').toLowerCase();
+    const subj = (card.querySelector('.teacher-subject-input')?.value || '').toLowerCase();
+    const match = !q || name.includes(q) || subj.includes(q);
+    card.classList.toggle('is-hidden', !match);
+    if (match) visible++;
+  });
+  const emptyEl = document.getElementById(emptyId);
+  if (emptyEl) emptyEl.style.display = (cards.length > 0 && visible === 0) ? 'block' : 'none';
+}
+
+function updateStaffCounts() {
+  const t = document.querySelectorAll('#teacher-grid .teacher-card').length;
+  const n = document.querySelectorAll('#nonteaching-grid .teacher-card').length;
+  const tc = document.getElementById('teaching-count');
+  const nc = document.getElementById('nonteaching-count');
+  if (tc) tc.textContent = t;
+  if (nc) nc.textContent = n;
+}
+
+// ═══════════════════════════════════════════════
+//  NON-TEACHING STAFF (mirrors the teacher card UI)
+// ═══════════════════════════════════════════════
+function getSharedNonTeaching() {
+  if (_hasSharedStore()) {
+    const db = getGlobalData();
+    if (db && db.staff && Array.isArray(db.staff['Non-Teaching'])) {
+      return db.staff['Non-Teaching'];
+    }
+  }
+  return null;
+}
+function setSharedNonTeaching(list) {
+  if (!_hasSharedStore()) return false;
+  const db = getGlobalData();
+  db.staff = db.staff || { 'Teaching': [], 'Non-Teaching': [] };
+  db.staff['Non-Teaching'] = list;
+  saveGlobalData(db);
+  return true;
+}
+
+function _staffToNonTeacher(s) {
+  return {
+    id:           s.id || null,
+    name:         s.name || '',
+    subject:      s.role || s.subjects || s.subject || '',
+    salary:       parseFloat(s.salary) || 0,
+    penaltyType:  s.penaltyType  ?? undefined,
+    penaltyValue: s.penaltyValue ?? undefined,
+    bonus:        s.bonus        ?? undefined,
+    _linked:      !!s.id,
+  };
+}
+
+function loadNonTeaching() {
+  _sanitizeStaffBuckets();
+  const grid = document.getElementById('nonteaching-grid');
+  if (!grid) return;
+  grid.innerHTML = '';
+
+  const shared = getSharedNonTeaching();
+  if (shared && shared.length) {
+    shared.forEach(s => appendNonTeachingCard(_staffToNonTeacher(s), false));
+    return;
+  }
+  const saved = JSON.parse(localStorage.getItem(NONTEACHING_KEY)) || DEFAULT_NONTEACHING;
+  saved.forEach(t => appendNonTeachingCard(t, false));
+}
+
+function appendNonTeachingCard(t = {}, isNew = true) {
+  const grid = document.getElementById('nonteaching-grid');
+  const vars = getVariables();
+  const div  = document.createElement('div');
+  div.className = 'teacher-card is-nonteaching' + (isNew ? ' is-new' : '');
+  if (t.id) div.dataset.staffId = t.id;
+
+  const salary       = t.salary       ?? 20000;
+  const customPType  = t.penaltyType  != null && t.penaltyType  !== '';
+  const customPVal   = t.penaltyValue != null && t.penaltyValue !== '';
+  const customBonus  = t.bonus        != null && t.bonus        !== '';
+  const penaltyType  = customPType ? t.penaltyType  : vars.penaltyType;
+  const penaltyValue = customPVal  ? t.penaltyValue : vars.penaltyValue;
+  const bonus        = customBonus ? t.bonus        : vars.bonus;
+
+  const linkedBadge = t.id
+    ? `<span class="teacher-badge" style="background:#eff6ff;color:#1d4ed8;margin-left:6px;" title="Synced from Staff Management"><i class="fas fa-link"></i> ${t.id}</span>`
+    : '';
+
+  div.innerHTML = `
+    <button class="delete-card-btn" title="Remove staff member">
+      <i class="fas fa-times"></i>
+    </button>
+    <div class="teacher-card-header">
+      <div class="teacher-avatar"><i class="fas fa-user-cog"></i></div>
+      <span class="teacher-badge ${isNew ? 'new-badge' : ''}">${isNew ? 'New' : 'Active'}</span>
+      ${linkedBadge}
+    </div>
+    <input type="text" class="teacher-name-input" value="${t.name || ''}" placeholder="Staff full name">
+    <input type="text" class="teacher-subject-input" value="${t.subject || ''}" placeholder="Role (e.g. Accountant, Driver)">
+
+    <div class="pay-grid">
+      <div>
+        <div class="pay-label">Monthly Salary</div>
+        <div class="input-prefix-wrap">
+          <span class="input-prefix">Rs</span>
+          <input type="number" class="pay-input teacher-salary" value="${salary}" min="0">
+        </div>
+      </div>
+      <div>
+        <div class="pay-label">Leave Penalty <span class="var-src-tag var-src-penaltyType">(src: pay variable)</span></div>
+        <select class="penalty-type-select teacher-penalty-type">
+          <option value="percent" ${penaltyType === 'percent' ? 'selected' : ''}>% per day</option>
+          <option value="fixed"   ${penaltyType === 'fixed'   ? 'selected' : ''}>Rs per day</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="penalty-section">
+      <div class="penalty-section-title"><i class="fas fa-calendar-times" style="margin-right:4px;color:var(--red);"></i>Absence Deduction &amp; Attendance Bonus</div>
+      <div class="pay-grid">
+        <div>
+          <div class="pay-label">Deduction Value <span class="var-src-tag var-src-penaltyValue">(src: pay variable)</span></div>
+          <div class="input-prefix-wrap">
+            <span class="input-prefix teacher-penalty-prefix">${penaltyType === 'percent' ? '%' : 'Rs'}</span>
+            <input type="number" class="pay-input teacher-penalty-value" value="${penaltyValue}" min="0" step="0.5">
+          </div>
+          <div class="var-hint" style="font-size:11px;color:var(--text-light);margin-top:4px;">Per day of leave taken</div>
+        </div>
+        <div>
+          <div class="bonus-label-row"><i class="fas fa-star"></i> Full-Attendance Bonus <span class="var-src-tag var-src-bonus">(src: pay variable)</span></div>
+          <div class="input-prefix-wrap">
+            <span class="input-prefix">Rs</span>
+            <input type="number" class="pay-input teacher-bonus" value="${bonus}" min="0">
+          </div>
+          <div class="var-hint" style="font-size:11px;color:var(--text-light);margin-top:4px;">Paid if zero absences</div>
+        </div>
+      </div>
+    </div>
+  `;
+
+  div.querySelector('.delete-card-btn').addEventListener('click', () => {
+    openDeleteModal(div, 'nonteaching');
+  });
+  div.querySelector('.teacher-penalty-type').addEventListener('change', function () {
+    div.querySelector('.teacher-penalty-prefix').textContent = this.value === 'percent' ? '%' : 'Rs';
+  });
+  // Re-run active search filter when a name/role is edited
+  ['teacher-name-input', 'teacher-subject-input'].forEach(cls => {
+    const el = div.querySelector('.' + cls);
+    if (el) el.addEventListener('input', () => {
+      const q = document.getElementById('nonteaching-search')?.value || '';
+      filterStaff('nonteaching', q);
+    });
+  });
+
+  _attachVarSync(div, 'penaltyType',  customPType);
+  _attachVarSync(div, 'penaltyValue', customPVal);
+  _attachVarSync(div, 'bonus',        customBonus);
+
+  grid.appendChild(div);
+  updateStaffCounts();
+  return div;
+}
+
+function addNonTeachingCard() {
+  if (_hasSharedStore()) {
+    const shared = getSharedNonTeaching() || [];
+    const newId = 'NTS-' + Math.floor(1000 + Math.random() * 9000);
+    const newStaff = {
+      id: newId,
+      name: '',
+      role: '',
+      gender: 'Other',
+      salary: 20000,
+      joined: new Date().toISOString().slice(0, 10),
+      cnic: '', phone: '', address: '',
+      fines: 0, securityTotal: 0, securityMonthly: 0, securityCollected: 0,
+    };
+    shared.push(newStaff);
+    setSharedNonTeaching(shared);
+    const card = appendNonTeachingCard(_staffToNonTeacher(newStaff), true);
+    card.querySelector('.teacher-name-input').focus();
+    return;
+  }
+  const card = appendNonTeachingCard({}, true);
+  card.querySelector('.teacher-name-input').focus();
+}
+
+function saveNonTeaching() {
+  const cards = document.querySelectorAll('#nonteaching-grid .teacher-card');
+  const list  = [];
+  const sharedList = getSharedNonTeaching();
+  const sharedById = {};
+  if (sharedList) sharedList.forEach(s => { sharedById[s.id] = s; });
+  const updatedShared = [];
+
+  cards.forEach(card => {
+    const name  = card.querySelector('.teacher-name-input').value.trim();
+    const role  = card.querySelector('.teacher-subject-input').value.trim();
+    const sal   = parseFloat(card.querySelector('.teacher-salary').value)        || 0;
+    const ptype = card.querySelector('.teacher-penalty-type').value;
+    const pval  = parseFloat(card.querySelector('.teacher-penalty-value').value) || 0;
+    const bon   = parseFloat(card.querySelector('.teacher-bonus').value)         || 0;
+    if (!name) return;
+
+    const ptCust = card.dataset.penaltyTypeCustom === '1';
+    const pvCust = card.dataset.penaltyValueCustom === '1';
+    const bnCust = card.dataset.bonusCustom === '1';
+    list.push({
+      name, subject: role, salary: sal,
+      penaltyType:  ptCust ? ptype : null,
+      penaltyValue: pvCust ? pval  : null,
+      bonus:        bnCust ? bon   : null,
+    });
+
+    if (sharedList) {
+      const staffId = card.dataset.staffId;
+      const base = (staffId && sharedById[staffId]) ? sharedById[staffId] : {
+        id: 'NTS-' + Math.floor(1000 + Math.random() * 9000),
+        gender: 'Other', joined: new Date().toISOString().slice(0, 10),
+        cnic: '', phone: '', address: '', fines: 0,
+        securityTotal: 0, securityMonthly: 0, securityCollected: 0,
+      };
+      updatedShared.push({
+        ...base,
+        name,
+        role,
+        type: 'Non-Teaching',
+        salary: sal,
+        penaltyType:  ptCust ? ptype : null,
+        penaltyValue: pvCust ? pval  : null,
+        bonus:        bnCust ? bon   : null,
+      });
+    }
+  });
+  localStorage.setItem(NONTEACHING_KEY, JSON.stringify(list));
+  if (sharedList) setSharedNonTeaching(updatedShared);
+}
+
+// Keep teaching counts/search live as cards are added/edited
+const _origAppendTeacherCard = appendTeacherCard;
+appendTeacherCard = function (t, isNew) {
+  const card = _origAppendTeacherCard(t, isNew);
+  if (card) {
+    ['teacher-name-input', 'teacher-subject-input'].forEach(cls => {
+      const el = card.querySelector('.' + cls);
+      if (el) el.addEventListener('input', () => {
+        const q = document.getElementById('teaching-search')?.value || '';
+        filterStaff('teaching', q);
+      });
+    });
+  }
+  updateStaffCounts();
+  return card;
+};
