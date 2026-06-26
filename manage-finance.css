@@ -1421,8 +1421,8 @@
 
 /* Left panel */
 .afm-left-panel {
-    background: white;
-    border: 1px solid #e2e8f0;
+    background: var(--bg-card);
+    border: 1px solid var(--border-subtle);
     border-radius: 16px;
     padding: 20px;
 }
@@ -1438,7 +1438,7 @@
 .afm-label {
     font-size: 0.78rem;
     font-weight: 700;
-    color: #475569;
+    color: var(--text-secondary);
     text-transform: uppercase;
     letter-spacing: 0.04em;
     display: flex;
@@ -1447,13 +1447,13 @@
 }
 .afm-input {
     padding: 10px 13px;
-    border: 1.5px solid #cbd5e1;
+    border: 1.5px solid var(--border-subtle);
     border-radius: 10px;
     font-size: 0.9rem;
     outline: none;
     transition: border-color 0.2s, box-shadow 0.2s;
-    background: white;
-    color: #1e293b;
+    background: var(--bg-card);
+    color: var(--text-primary);
     box-sizing: border-box;
     width: 100%;
     font-family: inherit;
@@ -1467,7 +1467,7 @@
 .afm-section-label {
     font-size: 0.78rem;
     font-weight: 700;
-    color: #475569;
+    color: var(--text-secondary);
     text-transform: uppercase;
     letter-spacing: 0.04em;
     display: flex;
@@ -1497,7 +1497,7 @@
 
 /* Fee Items Table */
 .afm-fee-items-wrap {
-    border: 1px solid #e2e8f0;
+    border: 1px solid var(--border-subtle);
     border-radius: 12px;
     overflow: hidden;
     margin-bottom: 14px;
@@ -1536,10 +1536,10 @@
     grid-template-columns: 2fr 1.2fr 1.2fr 0.9fr 36px;
     gap: 8px;
     padding: 8px 14px;
-    background: #f1f5f9;
+    background: var(--bg-primary);
     font-size: 0.72rem;
     font-weight: 700;
-    color: #64748b;
+    color: var(--text-secondary);
     text-transform: uppercase;
     letter-spacing: 0.03em;
 }
@@ -1550,18 +1550,18 @@
     grid-template-columns: 2fr 1.2fr 1.2fr 0.9fr 36px;
     gap: 8px;
     padding: 8px 10px;
-    border-top: 1px solid #f1f5f9;
+    border-top: 1px solid var(--border-subtle);
     align-items: center;
     transition: background 0.15s;
 }
-.afm-fee-row:hover { background: #fafbfc; }
+.afm-fee-row:hover { background: var(--bg-card); }
 
 .afm-row-select { font-size: 0.83rem !important; padding: 8px 10px !important; }
 
 .afm-input-with-prefix {
     display: flex;
     align-items: center;
-    border: 1.5px solid #cbd5e1;
+    border: 1.5px solid var(--border-subtle);
     border-radius: 10px;
     overflow: hidden;
     transition: border-color 0.2s;
@@ -1572,12 +1572,12 @@
 }
 .afm-prefix {
     padding: 8px 8px;
-    background: #f8fafc;
-    color: #64748b;
+    background: var(--bg-primary);
+    color: var(--text-secondary);
     font-size: 0.75rem;
     font-weight: 600;
     white-space: nowrap;
-    border-right: 1px solid #e2e8f0;
+    border-right: 1px solid var(--border-subtle);
 }
 .afm-disc-prefix { background: #f0fdf4; color: #16a34a; border-right-color: #bbf7d0; }
 .afm-no-left-radius {
@@ -1657,8 +1657,8 @@
 
 /* Right panel */
 .afm-right-panel {
-    background: white;
-    border: 1px solid #e2e8f0;
+    background: var(--bg-card);
+    border: 1px solid var(--border-subtle);
     border-radius: 16px;
     padding: 20px;
     position: sticky;
@@ -1698,8 +1698,8 @@
 
 /* Totals box */
 .afm-totals-box {
-    background: #f8fafc;
-    border: 1px solid #e2e8f0;
+    background: var(--bg-card);
+    border: 1px solid var(--border-subtle);
     border-radius: 12px;
     padding: 12px;
     display: flex;
@@ -1712,10 +1712,10 @@
     align-items: center;
     font-size: 0.85rem;
 }
-.afm-total-row span { color: #64748b; }
-.afm-total-row strong { color: #1e293b; font-weight: 700; }
+.afm-total-row span { color: var(--text-secondary); }
+.afm-total-row strong { color: var(--text-primary); font-weight: 700; }
 .afm-disc-line span { font-size: 0.8rem; display: flex; align-items: center; gap: 5px; }
-.afm-total-divider { height: 1px; background: #e2e8f0; margin: 4px 0; }
+.afm-total-divider { height: 1px; background: var(--border-subtle); margin: 4px 0; }
 .afm-grand-total {
     background: linear-gradient(135deg, #eff6ff, #ecfdf5);
     border-radius: 10px;
@@ -1845,8 +1845,8 @@
 .atv-due-info-bar {
     display: flex;
     gap: 12px;
-    background: #f8fafc;
-    border: 1px solid #e2e8f0;
+    background: var(--bg-card);
+    border: 1px solid var(--border-subtle);
     border-radius: 12px;
     padding: 14px 18px;
     flex-wrap: wrap;
@@ -1856,13 +1856,13 @@
     align-items: center;
     gap: 8px;
     font-size: 0.85rem;
-    color: #475569;
+    color: var(--text-secondary);
     flex: 1;
     min-width: 140px;
 }
 .atv-due-item i { color: #7c3aed; font-size: 0.9rem; }
-.atv-due-item span { color: #64748b; }
-.atv-due-item strong { color: #1e293b; margin-left: auto; }
+.atv-due-item span { color: var(--text-secondary); }
+.atv-due-item strong { color: var(--text-primary); margin-left: auto; }
 .atv-fine-item i { color: #dc2626; }
 .atv-fine-item strong { color: #dc2626; }
 
@@ -1882,8 +1882,8 @@
 
 /* Totals summary box */
 .atv-totals-summary {
-    background: #f8fafc;
-    border: 1px solid #e2e8f0;
+    background: var(--bg-card);
+    border: 1px solid var(--border-subtle);
     border-radius: 12px;
     padding: 16px 20px;
     display: flex;
@@ -1894,7 +1894,7 @@
     display: flex;
     justify-content: space-between;
     font-size: 0.9rem;
-    color: #475569;
+    color: var(--text-secondary);
 }
 .atv-disc-row strong { color: #16a34a; }
 .atv-total-divider {
@@ -1904,7 +1904,7 @@
 .atv-grand {
     font-size: 1rem;
     font-weight: 700;
-    color: #1e293b;
+    color: var(--text-primary);
 }
 .atv-grand strong { color: #7c3aed; font-size: 1.05rem; }
 .atv-late-row { font-size: 0.82rem; }
@@ -2008,9 +2008,9 @@
     width: 100%;
     padding: 11px 14px 11px 38px;
     border-radius: 12px;
-    border: 1px solid var(--border-color, #e5e7eb);
-    background: var(--surface-color, #fff);
-    color: var(--text-primary, #111827);
+    border: 1px solid var(--border-subtle);
+    background: var(--bg-card);
+    color: var(--text-primary);
     font-size: 0.92rem;
     font-family: 'Inter', sans-serif;
     transition: border-color .2s, box-shadow .2s, background .2s;
@@ -2028,8 +2028,8 @@
 
 /* ---- Fee table redesign ---- */
 .fee-table-wrapper {
-    background: var(--surface-color, #fff);
-    border: 1px solid var(--border-color, #e5e7eb);
+    background: var(--bg-card);
+    border: 1px solid var(--border-subtle);
     border-radius: 16px;
     overflow: hidden;
     box-shadow: 0 4px 18px -8px rgba(15,23,42,0.10);
@@ -2043,21 +2043,22 @@
 }
 .fee-students-table thead th {
     background: linear-gradient(180deg, rgba(99,102,241,0.07), rgba(99,102,241,0.02));
-    color: var(--text-primary, #111827);
+    color: var(--text-primary);
     text-transform: uppercase;
     font-size: 0.72rem;
     font-weight: 700;
     letter-spacing: 0.6px;
     padding: 14px 16px;
     text-align: left;
-    border-bottom: 1px solid var(--border-color, #e5e7eb);
+    border-bottom: 1px solid var(--border-subtle);
     white-space: nowrap;
 }
 .fee-students-table tbody td {
     padding: 14px 16px;
-    border-bottom: 1px solid rgba(0,0,0,0.05);
+    border-bottom: 1px solid var(--border-subtle);
     vertical-align: middle;
-    color: var(--text-primary, #111827);
+    color: var(--text-primary);
+    background: transparent;
 }
 .fee-students-table tbody tr:last-child td { border-bottom: none; }
 .fee-students-table tbody tr {
