@@ -1402,6 +1402,8 @@ body {
     display: flex;
     align-items: center;
     justify-content: center;
+    padding: 20px;
+    overflow-y: auto;
 }
 
 .modal-content {
@@ -1497,11 +1499,35 @@ body {
 .form-modal-content {
     max-width: 600px;
     text-align: left;
+    max-height: 90vh;
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: var(--accent-teaching) transparent;
+}
+
+.form-modal-content::-webkit-scrollbar {
+    width: 6px;
+}
+
+.form-modal-content::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.form-modal-content::-webkit-scrollbar-thumb {
+    background: var(--accent-teaching);
+    border-radius: 10px;
 }
 
 .form-modal-content h3 {
     text-align: center;
     margin-bottom: 24px;
+    position: sticky;
+    top: 0;
+    background: var(--bg-secondary);
+    padding-top: 4px;
+    padding-bottom: 16px;
+    margin-bottom: 8px;
+    z-index: 1;
 }
 
 .form-grid {
@@ -1546,4 +1572,210 @@ body {
 
 .mt-20 {
     margin-top: 20px;
+}
+
+
+/* ============================================
+   SECURITY DEPOSIT — FORM DIVIDER
+   ============================================ */
+.security-section-divider {
+    margin-top: 8px;
+    margin-bottom: 4px;
+}
+
+.security-divider-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--accent-teaching-light);
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    padding: 10px 14px;
+    background: rgba(59, 130, 246, 0.07);
+    border: 1px solid rgba(59, 130, 246, 0.15);
+    border-radius: var(--radius-sm);
+}
+
+.security-divider-label i {
+    font-size: 14px;
+    opacity: 0.9;
+}
+
+
+/* ============================================
+   SECURITY DEPOSIT — PROFILE BLOCK
+   ============================================ */
+.security-block {
+    background: rgba(59, 130, 246, 0.04);
+    border: 1px solid rgba(59, 130, 246, 0.14);
+    border-radius: var(--radius-md);
+    padding: 22px 24px;
+    margin-top: 4px;
+}
+
+[data-theme="light"] .security-block {
+    background: rgba(37, 99, 235, 0.04);
+    border-color: rgba(37, 99, 235, 0.12);
+}
+
+.security-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 18px;
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--text-primary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.security-header i {
+    color: var(--accent-teaching-light);
+    font-size: 15px;
+}
+
+.security-status-badge {
+    margin-left: auto;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 3px 10px;
+    border-radius: 20px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.security-status-badge.status-active {
+    background: rgba(251, 191, 36, 0.12);
+    color: #fbbf24;
+    border: 1px solid rgba(251, 191, 36, 0.2);
+}
+
+.security-status-badge.status-done {
+    background: rgba(34, 197, 94, 0.12);
+    color: #22c55e;
+    border: 1px solid rgba(34, 197, 94, 0.2);
+}
+
+.security-none {
+    font-size: 13px;
+    color: var(--text-muted);
+    font-style: italic;
+}
+
+/* Stats grid */
+.security-stats-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 14px;
+    margin-bottom: 20px;
+}
+
+@media (max-width: 600px) {
+    .security-stats-grid {
+        grid-template-columns: 1fr 1fr;
+    }
+}
+
+.sec-stat {
+    background: var(--bg-primary);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-sm);
+    padding: 12px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.sec-stat-label {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+}
+
+.sec-stat-value {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.sec-stat-value.deduction   { color: #f87171; }
+.sec-stat-value.collected   { color: #34d399; }
+.sec-stat-value.remaining   { color: #fbbf24; }
+.sec-stat-value.net-salary  { color: var(--accent-teaching-light); }
+
+/* Progress bar */
+.security-progress-wrap {
+    margin-bottom: 18px;
+}
+
+.security-progress-labels {
+    display: flex;
+    justify-content: space-between;
+    font-size: 12px;
+    color: var(--text-secondary);
+    margin-bottom: 8px;
+}
+
+.security-progress-bar {
+    height: 10px;
+    background: var(--bg-primary);
+    border: 1px solid var(--border-subtle);
+    border-radius: 10px;
+    overflow: hidden;
+}
+
+.security-progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent-teaching), var(--accent-teaching-light));
+    border-radius: 10px;
+    transition: width 0.6s ease;
+}
+
+.security-progress-fill.progress-done {
+    background: linear-gradient(90deg, #16a34a, #22c55e);
+}
+
+/* Deduct button */
+.btn-deduct-month {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: rgba(59, 130, 246, 0.1);
+    color: var(--accent-teaching-light);
+    border: 1px solid rgba(59, 130, 246, 0.25);
+    border-radius: var(--radius-sm);
+    padding: 10px 18px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all var(--transition);
+}
+
+.btn-deduct-month:hover {
+    background: rgba(59, 130, 246, 0.18);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.2);
+}
+
+/* Complete notice */
+.security-complete-notice {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: rgba(34, 197, 94, 0.08);
+    border: 1px solid rgba(34, 197, 94, 0.18);
+    border-radius: var(--radius-sm);
+    padding: 12px 16px;
+    font-size: 13px;
+    font-weight: 600;
+    color: #22c55e;
+}
+
+.security-complete-notice i {
+    font-size: 16px;
 }
