@@ -80,7 +80,7 @@
             </div>
         </header>
 
-        <!-- DECORATIVE GLOWSPOTS -->
+        <!-- DECORATIVE GLOW SPOTS -->
         <div class="glow-spot glow-1"></div>
         <div class="glow-spot glow-2"></div>
 
@@ -126,51 +126,76 @@
 
         <!-- MANAGEMENT CARDS SECTION -->
         <section class="management-section">
-            <section class="page-title-section" style="margin-bottom:30px;">
-                <h2 class="page-title">Manage Students</h2>
-                <p class="page-description">Select an option below to manage student records.</p>
-                <div class="title-divider"></div>
-            </section>
+            <div class="section-header-flex centered-heading">
+                <div class="header-info">
+                    <h3 class="section-heading"><i class="fas fa-sliders-h"></i> Student Management</h3>
+                    <p class="section-desc">Manage Students Here. Here You Can (Add, View, Update &amp; Delete) Students.</p>
+                </div>
+            </div>
 
             <div class="management-grid">
                 <!-- Card: Add -->
                 <div class="manage-card admission-card" id="card-add-student" onclick="openModal('student-modal')">
                     <div class="card-glow"></div>
-                    <div class="m-icon-wrapper admission-icon">
-                        <i class="fas fa-user-plus"></i>
+                    <div class="card-content">
+                        <div class="m-icon-wrapper admission-icon">
+                            <i class="fas fa-plus-circle"></i>
+                        </div>
+                        <h3 class="card-title">New Admission</h3>
+                        <p class="card-description">Register a new student with full details and photo upload.</p>
+                        <div class="card-action">
+                            <span>Launch Form</span>
+                            <i class="fas fa-arrow-right"></i>
+                        </div>
                     </div>
-                    <h3 class="card-title">New Admission</h3>
-                    <p class="card-description">Register a new student with full details and photo upload.</p>
                 </div>
 
                 <!-- Card: View Database -->
                 <div class="manage-card viewdb-card" id="card-view-db" onclick="openModal('view-only-modal')">
                     <div class="card-glow"></div>
-                    <div class="m-icon-wrapper viewdb-icon">
-                        <i class="fas fa-database"></i>
+                    <div class="card-content">
+                        <div class="m-icon-wrapper viewdb-icon">
+                            <i class="fas fa-table"></i>
+                        </div>
+                        <h3 class="card-title">View Database</h3>
+                        <p class="card-description">Browse, search, and export the entire student roster.</p>
+                        <div class="card-action">
+                            <span>Open Records</span>
+                            <i class="fas fa-arrow-right"></i>
+                        </div>
                     </div>
-                    <h3 class="card-title">View Database</h3>
-                    <p class="card-description">Browse, search, and export the entire student roster.</p>
                 </div>
 
                 <!-- Card: Update Record -->
                 <div class="manage-card update-card" id="card-search-edit" onclick="openModal('view-modal')">
                     <div class="card-glow"></div>
-                    <div class="m-icon-wrapper update-icon">
-                        <i class="fas fa-pen-to-square"></i>
+                    <div class="card-content">
+                        <div class="m-icon-wrapper update-icon">
+                            <i class="fas fa-user-edit"></i>
+                        </div>
+                        <h3 class="card-title">Update Record</h3>
+                        <p class="card-description">Search specifically by ID to modify existing student info.</p>
+                        <div class="card-action">
+                            <span>Find &amp; Edit</span>
+                            <i class="fas fa-arrow-right"></i>
+                        </div>
                     </div>
-                    <h3 class="card-title">Update Record</h3>
-                    <p class="card-description">Search specifically by ID to modify existing student info.</p>
                 </div>
 
                 <!-- Card: Archive -->
                 <div class="manage-card archive-card" id="card-archive">
                     <div class="card-glow"></div>
-                    <div class="m-icon-wrapper archive-icon">
-                        <i class="fas fa-box-archive"></i>
+                    <div class="card-content">
+                        <div class="m-icon-wrapper archive-icon">
+                            <i class="fas fa-file-archive"></i>
+                        </div>
+                        <h3 class="card-title">Archive Center</h3>
+                        <p class="card-description">Manage graduated or withdrawn student archives.</p>
+                        <div class="card-action">
+                            <span>Open Archive</span>
+                            <i class="fas fa-arrow-right"></i>
+                        </div>
                     </div>
-                    <h3 class="card-title">Archive Center</h3>
-                    <p class="card-description">Manage graduated or withdrawn student archives.</p>
                 </div>
             </div>
         </section>
@@ -580,6 +605,7 @@
             </div>
             <div class="modal-sticky-footer">
                 <button class="btn-ghost" onclick="closeModal('profile-modal')"><i class="fas fa-times"></i> Close</button>
+                <button class="btn-secondary" onclick="shareStudentRecord()" id="share-record-btn" style="display:inline-flex;align-items:center;gap:8px;"><i class="fas fa-share-alt"></i> Share</button>
                 <button class="btn-primary-submit" onclick="window.print()"><i class="fas fa-print"></i> Print Record</button>
             </div>
         </div>
