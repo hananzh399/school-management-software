@@ -618,26 +618,55 @@ function renderExpensesTable() {
 const ANNUAL_FUND_AMOUNT = 2000; // Rs. — must match value in manage-students.js
 
 // ============================================================================
-// ⚙️  VOUCHER SETTINGS — configurable for the Settings page
-// These variables control voucher due dates, expiry, and late fine behaviour.
-// Export / import these via a settings page to allow admin customisation.
+// ⚙️  VOUCHER SETTINGS — read live from the Admin Settings page (settings.js)
+//     Key: 'edu_latefee_config'  (saved by settings.js → saveAll())
+//
+//     Shape stored by settings.js:
+//       { enabled, deadlineDay, type, amount, grace }
+//
+//     We derive:
+//       dueDayOfMonth   = deadlineDay
+//       expiryDayOfMonth= deadlineDay + grace   (last day without fine)
+//       lateFineEnabled = enabled
+//       lateFineType    = type   ('fixed' | 'percent')
+//       lateFineValue   = amount
+//       graceDays       = grace
 // ============================================================================
-const VOUCHER_SETTINGS = {
-    // Day of next month that the voucher is due (default: 10th)
-    dueDayOfMonth: 10,
 
-    // Day of next month that the voucher expires / last acceptable date
-    // (typically the same as dueDayOfMonth; change if you want a grace period)
-    expiryDayOfMonth: 10,
+/**
+ * Returns a live snapshot of voucher / late-fee settings.
+ * Falls back to safe defaults when nothing has been saved yet.
+ */
+function getVoucherSettings() {
+    let cfg = {};
+    try {
+        const raw = localStorage.getItem('edu_latefee_config');
+        if (raw) cfg = JSON.parse(raw);
+    } catch (e) { /* ignore */ }
 
-    // Late fine amount in Rupees added to the voucher if paid after due date
-    // Set to 0 to disable, or use lateFinePercent for a % of total instead
-    lateFineFixedAmount: 0,
+    const deadlineDay  = parseInt(cfg.deadlineDay, 10)  || 10;
+    const grace        = parseInt(cfg.grace,        10)  || 0;
+    const lateFineType = cfg.type   || 'fixed';
+    const lateFineVal  = parseFloat(cfg.amount)          || 200;
+    const enabled      = cfg.enabled !== false;           // default true
 
-    // Late fine as a percentage of the voucher grand total (e.g. 5 = 5%)
-    // If lateFineFixedAmount > 0 it takes precedence over this value
-    lateFinePercent: 5,
-};
+    return {
+        dueDayOfMonth:      deadlineDay,
+        // Grace days are added ON TOP of the deadline, so the fine only kicks
+        // in after (deadlineDay + grace).  The voucher shows both dates.
+        expiryDayOfMonth:   deadlineDay + grace,
+        graceDays:          grace,
+        lateFineEnabled:    enabled,
+        lateFineFixedAmount: (enabled && lateFineType === 'fixed')   ? lateFineVal : 0,
+        lateFinePercent:     (enabled && lateFineType === 'percent') ? lateFineVal : 0,
+    };
+}
+
+// Thin compatibility shim so any existing code that references VOUCHER_SETTINGS
+// still works — it just reads a fresh copy each time a property is accessed.
+const VOUCHER_SETTINGS = new Proxy({}, {
+    get(_, prop) { return getVoucherSettings()[prop]; }
+});
 // ============================================================================
 
 // Escape a string so it can be safely embedded inside a single-quoted
@@ -843,21 +872,31 @@ function computeFeeBreakdown(s) {
         totalWithinDueDate + booksNet + additionalFeesNet + (showAnnualFund ? annualFundAmt : 0) - bulkVoucherDiscount
     );
 
-    // Dates — due date is NEXT month's configured day
-    const nextMonth = new Date(today.getFullYear(), today.getMonth() + 1, VOUCHER_SETTINGS.dueDayOfMonth);
-    const expiryDate = new Date(today.getFullYear(), today.getMonth() + 1, VOUCHER_SETTINGS.expiryDayOfMonth);
-    const dueDate = nextMonth;
-    const dueDateStr = dueDate.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+    // --- 7. Live settings snapshot (reads 'edu_latefee_config' from localStorage) ---
+    const vs = getVoucherSettings();
+
+    // Dates — due date is NEXT month's deadline day (from settings)
+    // Grace period extends the "no fine" window by vs.graceDays extra days.
+    const dueDate    = new Date(today.getFullYear(), today.getMonth() + 1, vs.dueDayOfMonth);
+    const expiryDate = new Date(today.getFullYear(), today.getMonth() + 1, vs.expiryDayOfMonth);
+    const dueDateStr    = dueDate.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
     const expiryDateStr = expiryDate.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
     const discountDeadline = s.discountExpiry
         ? new Date(s.discountExpiry).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
         : dueDateStr;
 
-    // Late Surcharge — uses fixed amount or percentage from VOUCHER_SETTINGS
-    const lateFeeSurcharge = VOUCHER_SETTINGS.lateFineFixedAmount > 0
-        ? VOUCHER_SETTINGS.lateFineFixedAmount
-        : Math.round(voucherTotal * (VOUCHER_SETTINGS.lateFinePercent / 100));
+    // Late Surcharge — uses fixed amount or percentage from live settings.
+    // If late fee is disabled in Admin Settings the surcharge is Rs. 0.
+    const lateFeeSurcharge = vs.lateFineEnabled
+        ? (vs.lateFineFixedAmount > 0
+            ? vs.lateFineFixedAmount
+            : Math.round(voucherTotal * (vs.lateFinePercent / 100)))
+        : 0;
     const totalAfterDueDate = voucherTotal + lateFeeSurcharge;
+
+    // Grace info — surfaced so the voucher HTML can show the right label
+    const graceDays       = vs.graceDays;
+    const lateFineEnabled = vs.lateFineEnabled;
 
     return {
         regNo, monthLabel, dueDateStr, expiryDateStr,
@@ -873,7 +912,9 @@ function computeFeeBreakdown(s) {
         totalWithinDueDate,  // core total for table display
         voucherTotal,        // grand total for the voucher
         lateFeeSurcharge, totalAfterDueDate,
-        discountDeadline
+        discountDeadline,
+        // Late fee settings (live from Admin Settings)
+        graceDays, lateFineEnabled
     };
 }
 
@@ -1006,13 +1047,14 @@ function buildVoucherHTML(s) {
                 </tbody>
                 <tfoot>
                     <tr class="voucher-total-row voucher-total-ontime">
-                        <td colspan="2"><i class="fas fa-wallet"></i> NET PAYABLE / REMAINING BALANCE</td>
+                        <td colspan="2"><i class="fas fa-wallet"></i> NET PAYABLE (on or before ${f.dueDateStr})</td>
                         <td>Rs. ${f.voucherTotal.toLocaleString()}</td>
                     </tr>
+                    ${f.lateFineEnabled ? `
                     <tr class="voucher-total-row voucher-total-late">
-                        <td colspan="2"><i class="fas fa-exclamation-triangle"></i> Payable After Due Date (Incl. Surcharge)</td>
+                        <td colspan="2"><i class="fas fa-exclamation-triangle"></i> Payable After Due Date (incl. late fine Rs. ${f.lateFeeSurcharge.toLocaleString()})</td>
                         <td>Rs. ${f.totalAfterDueDate.toLocaleString()}</td>
-                    </tr>
+                    </tr>` : ''}
                 </tfoot>
             </table>
 
@@ -1106,7 +1148,7 @@ function renderFees(className) {
         const currentMonthKey = getCurrentMonthKey();
         const payments = s.feePayments || [];
         const thisMonthPaid = payments.filter(p => p.monthKey === currentMonthKey).reduce((sum, p) => sum + p.amount, 0);
-        const pendingAmount = Math.max(0, f.totalWithinDueDate - thisMonthPaid);
+        const pendingAmount = Math.max(0, f.voucherTotal - thisMonthPaid);
         const isPaid = pendingAmount <= 0;
         const hasArrears = f.arrears > 0;
         const hasFines = f.monthlyFineTotal > 0;
@@ -1574,12 +1616,15 @@ function openAddToVoucherModal(studentId, fullName, editMode) {
     const noteEl = document.getElementById('atv-voucher-note');
     if (noteEl) noteEl.value = student.voucherNote || '';
 
-    // Show due / expiry dates from VOUCHER_SETTINGS
+    // Show due / expiry dates from live settings
+    const _vs = getVoucherSettings();
     document.getElementById('atv-due-date-display').textContent = f.dueDateStr;
     document.getElementById('atv-expiry-date-display').textContent = f.expiryDateStr;
-    const lateLabel = VOUCHER_SETTINGS.lateFineFixedAmount > 0
-        ? `Rs. ${VOUCHER_SETTINGS.lateFineFixedAmount.toLocaleString()} fixed`
-        : `${VOUCHER_SETTINGS.lateFinePercent}% of total`;
+    const lateLabel = !_vs.lateFineEnabled
+        ? 'Disabled'
+        : (_vs.lateFineFixedAmount > 0
+            ? `Rs. ${_vs.lateFineFixedAmount.toLocaleString()} fixed`
+            : `${_vs.lateFinePercent}% of total`);
     document.getElementById('atv-late-fine-display').textContent = lateLabel;
 
     // Render student banner
@@ -1725,9 +1770,12 @@ function atvRecalc() {
     const totalDisc = itemDisc + bulkDisc;
     const voucherTotal = Math.max(0, gross - totalDisc);
 
-    const lateExtra = VOUCHER_SETTINGS.lateFineFixedAmount > 0
-        ? VOUCHER_SETTINGS.lateFineFixedAmount
-        : Math.round(voucherTotal * (VOUCHER_SETTINGS.lateFinePercent / 100));
+    const vs = getVoucherSettings();
+    const lateExtra = vs.lateFineEnabled
+        ? (vs.lateFineFixedAmount > 0
+            ? vs.lateFineFixedAmount
+            : Math.round(voucherTotal * (vs.lateFinePercent / 100)))
+        : 0;
     const lateTotal = voucherTotal + lateExtra;
 
     const set = (id, txt) => { const el = document.getElementById(id); if (el) el.textContent = txt; };
