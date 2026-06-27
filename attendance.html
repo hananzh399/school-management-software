@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Attendance | EduFlow Pro</title>
+    <meta name="description" content="EduFlow Pro Attendance — Mark and review staff and student attendance.">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="/attendance.css">
+</head>
+<body>
+    <aside id="sidebar" class="sidebar">
+        <div class="sidebar-header">
+            <div class="brand">
+                <div class="brand-icon"><i class="fas fa-graduation-cap"></i></div>
+                <span>EduFlow Pro</span>
+            </div>
+            <button id="close-sidebar" class="close-btn" aria-label="Close sidebar">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        <nav class="sidebar-nav">
+            <div class="nav-label">Core Modules</div>
+            <a href="index.html" class="nav-link"><i class="fas fa-th-large"></i><span>Dashboard</span></a>
+            <a href="manage-students.html" class="nav-link"><i class="fas fa-user-graduate"></i><span>Student Management</span></a>
+            <a href="manage-staff.html" class="nav-link"><i class="fas fa-chalkboard-teacher"></i><span>Staff Management</span></a>
+            <a href="attendance.html" class="nav-link active"><i class="fas fa-clipboard-check"></i><span>Attendance</span></a>
+            <a href="manage-finance.html" class="nav-link"><i class="fas fa-file-invoice-dollar"></i><span>Fees &amp; Finance</span></a>
+            <a href="settings.html" class="nav-link"><i class="fas fa-cog"></i><span>Admin Settings</span></a>
+        </nav>
+        <div class="sidebar-footer">
+            <a href="#" class="nav-link logout-btn"><i class="fas fa-sign-out-alt"></i><span>Logout</span></a>
+        </div>
+    </aside>
+    <div id="sidebar-overlay" class="sidebar-overlay"></div>
+
+    <main class="main-content">
+        <header class="main-header">
+            <div class="header-left">
+                <button id="open-sidebar" class="menu-toggle" aria-label="Open sidebar">
+                    <i class="fas fa-bars"></i>
+                </button>
+                <div>
+                    <div class="school-name">ST. LAWRENCE INTERNATIONAL SCHOOL</div>
+                    <div class="school-subtitle">Daily Attendance Register</div>
+                </div>
+            </div>
+            <div class="header-right">
+                <div class="header-date" id="header-date"></div>
+                <button id="theme-toggle" class="theme-toggle" aria-label="Toggle theme">
+                    <i id="theme-icon-moon" class="fas fa-moon"></i>
+                    <i id="theme-icon-sun" class="fas fa-sun"></i>
+                    <span class="toggle-slider"></span>
+                </button>
+            </div>
+        </header>
+
+        <section class="page-title-section">
+            <h1 class="page-title">Attendance</h1>
+            <p class="page-description">Mark, save, and review daily attendance for staff and students.</p>
+            <div class="title-divider"></div>
+        </section>
+
+        <!-- STAGE 1: Pick mode -->
+        <section id="stage-mode" class="stage">
+            <div class="choice-grid">
+                <button class="choice-card" data-mode="staff">
+                    <div class="choice-icon icon-indigo"><i class="fas fa-chalkboard-teacher"></i></div>
+                    <h3>Staff Attendance</h3>
+                    <p>Mark or review attendance for teaching &amp; non-teaching staff.</p>
+                </button>
+                <button class="choice-card" data-mode="student">
+                    <div class="choice-icon icon-emerald"><i class="fas fa-user-graduate"></i></div>
+                    <h3>Student Attendance</h3>
+                    <p>Select a class, mark daily status, and review records.</p>
+                </button>
+            </div>
+        </section>
+
+        <!-- STAGE 2: Add vs View -->
+        <section id="stage-submode" class="stage hidden">
+            <div class="stage-header">
+                <button class="back-btn" data-back="mode"><i class="fas fa-arrow-left"></i> Back</button>
+                <h2 class="stage-title" id="submode-title">Choose Action</h2>
+            </div>
+            <div class="choice-grid">
+                <button class="choice-card" data-action="add">
+                    <div class="choice-icon icon-indigo"><i class="fas fa-plus-circle"></i></div>
+                    <h3>Add Attendance</h3>
+                    <p>Mark today's attendance using the entry form.</p>
+                </button>
+                <button class="choice-card" data-action="view">
+                    <div class="choice-icon icon-emerald"><i class="fas fa-chart-line"></i></div>
+                    <h3>View Attendance</h3>
+                    <p>Search records and review analytics.</p>
+                </button>
+            </div>
+        </section>
+
+        <!-- STAGE 3: Pick a class (student/add) -->
+        <section id="stage-classes" class="stage hidden">
+            <div class="stage-header">
+                <button class="back-btn" data-back="submode"><i class="fas fa-arrow-left"></i> Back</button>
+                <h2 class="stage-title">Select Class</h2>
+            </div>
+            <div id="classes-grid" class="classes-grid"></div>
+        </section>
+
+        <!-- STAGE 4: Student attendance table -->
+        <section id="stage-table" class="stage hidden">
+            <div class="stage-header">
+                <button class="back-btn" data-back="classes"><i class="fas fa-arrow-left"></i> Back</button>
+                <h2 class="stage-title" id="table-title">Attendance</h2>
+            </div>
+
+            <div class="toolbar">
+                <div class="search-wrap">
+                    <i class="fas fa-search"></i>
+                    <input id="search-input" type="text" placeholder="Search by ID, name, or guardian" />
+                    <span class="tilde-hint">name~guardian</span>
+                </div>
+                <div class="section-select" id="section-select">
+                    <button class="section-trigger" id="section-trigger">
+                        <span id="section-label">All Sections</span>
+                        <i class="fas fa-chevron-down"></i>
+                    </button>
+                    <div class="section-dropdown hidden" id="section-dropdown">
+                        <div class="dropdown-list" id="section-list"></div>
+                    </div>
+                </div>
+                <div class="bulk-actions">
+                    <button class="bulk-btn bulk-present" data-bulk="present">All Present</button>
+                    <button class="bulk-btn bulk-absent"  data-bulk="absent">All Absent</button>
+                    <button class="bulk-btn bulk-leave"   data-bulk="leave">All Leave</button>
+                </div>
+            </div>
+
+            <div class="table-card">
+                <div class="table-scroll">
+                    <table class="attendance-table">
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>Student ID</th>
+                                <th>Name</th>
+                                <th>Section</th>
+                                <th>Guardian</th>
+                                <th class="th-status">Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="attendance-tbody"></tbody>
+                    </table>
+                    <div id="empty-state" class="empty-state hidden">
+                        <i class="fas fa-inbox"></i>
+                        <p>No students match your search.</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="save-bar">
+                <div class="summary" id="summary"></div>
+                <button id="save-btn" class="save-btn"><i class="fas fa-save"></i> Save Attendance</button>
+            </div>
+        </section>
+
+        <!-- STAGE 5: Staff attendance table (Add) -->
+        <section id="stage-staff" class="stage hidden">
+            <div class="stage-header">
+                <button class="back-btn" data-back="submode"><i class="fas fa-arrow-left"></i> Back</button>
+                <h2 class="stage-title">Staff Attendance</h2>
+            </div>
+            <div class="toolbar">
+                <div class="search-wrap">
+                    <i class="fas fa-search"></i>
+                    <input id="staff-search" type="text" placeholder="Search staff by ID or name" />
+                </div>
+                <div class="bulk-actions">
+                    <button class="bulk-btn bulk-present" data-staff-bulk="present">All Present</button>
+                    <button class="bulk-btn bulk-absent"  data-staff-bulk="absent">All Absent</button>
+                    <button class="bulk-btn bulk-leave"   data-staff-bulk="leave">All Leave</button>
+                </div>
+            </div>
+            <div class="table-card">
+                <div class="table-scroll">
+                    <table class="attendance-table">
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>Staff ID</th>
+                                <th>Name</th>
+                                <th>Role</th>
+                                <th>Department</th>
+                                <th class="th-status">Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="staff-tbody"></tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="save-bar">
+                <div class="summary" id="staff-summary"></div>
+                <button id="staff-save-btn" class="save-btn"><i class="fas fa-save"></i> Save Attendance</button>
+            </div>
+        </section>
+
+        <!-- STAGE 6: View Attendance (analytics) -->
+        <section id="stage-view" class="stage hidden">
+            <div class="stage-header">
+                <button class="back-btn" data-back="submode"><i class="fas fa-arrow-left"></i> Back</button>
+                <h2 class="stage-title" id="view-title">View Attendance</h2>
+            </div>
+
+            <div class="toolbar">
+                <div class="search-wrap">
+                    <i class="fas fa-search"></i>
+                    <input id="view-search" type="text" placeholder="Search by name or ID" />
+                </div>
+                <div class="quick-filters" id="view-filters">
+                    <button class="filter-btn active" data-range="7">Last 1 Week</button>
+                    <button class="filter-btn" data-range="30">Last 1 Month</button>
+                    <button class="filter-btn" data-range="365">Last 1 Year</button>
+                </div>
+            </div>
+
+            <div class="kpi-grid" id="view-kpis"></div>
+
+            <div class="table-card">
+                <div class="table-scroll">
+                    <table class="attendance-table">
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>ID</th>
+                                <th>Name</th>
+                                <th class="th-status">Present</th>
+                                <th class="th-status">Absent</th>
+                                <th class="th-status">Leave</th>
+                                <th class="th-status">Latest Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="view-tbody"></tbody>
+                    </table>
+                    <div id="view-empty" class="empty-state hidden">
+                        <i class="fas fa-inbox"></i>
+                        <p>No records match your search.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <div id="toast" class="toast hidden"></div>
+    </main>
+
+    <script src="/attendance.js"></script>
+</body>
+</html>
