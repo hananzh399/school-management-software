@@ -319,16 +319,16 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function performFinancialAudit() {
-        const standard     = parseFloat(feeStandard.value)      || 0;
-        const admission    = parseFloat(feeAdmission.value)     || 0;
-        const tDisc        = parseFloat(feeTuitionDisc.value)   || 0;
-        const trDisc       = parseFloat(feeTransDisc.value)     || 0;
+        const standard     = parseFloat(feeStandard ? feeStandard.value : 0)      || 0;
+        const admission    = parseFloat(feeAdmission ? feeAdmission.value : 0)     || 0;
+        const tDisc        = parseFloat(feeTuitionDisc ? feeTuitionDisc.value : 0)   || 0;
+        const trDisc       = parseFloat(feeTransDisc ? feeTransDisc.value : 0)     || 0;
         const sibDisc      = parseFloat(feeSiblingDisc ? feeSiblingDisc.value : 0) || 0;
-        const monthlyTrans = parseFloat(transportFeeInput.value) || 0;
+        const monthlyTrans = parseFloat(transportFeeInput ? transportFeeInput.value : 0) || 0;
         // NOTE: Books fee and Other fees are intentionally excluded from the
         // database net total — they appear only on the voucher at print time.
         const netTotal = (standard + admission + monthlyTrans) - (tDisc + trDisc + sibDisc);
-        netTotalInput.value = Math.max(0, netTotal).toFixed(0);
+        if (netTotalInput) netTotalInput.value = Math.max(0, netTotal).toFixed(0);
     }
 
     [feeStandard, feeAdmission, feeTuitionDisc, feeTransDisc, feeSiblingDisc, transportFeeInput, feeBooks, feeBooksDisc].forEach(el => {
@@ -1043,8 +1043,11 @@ document.addEventListener('DOMContentLoaded', () => {
         return;
     }
 
-    closeModal('view-modal');
-    closeModal('profile-modal');
+    // Close any open modals first, then open admission form
+    ['view-modal', 'profile-modal', 'view-only-modal'].forEach(id => {
+        const m = document.getElementById(id);
+        if (m) m.style.display = 'none';
+    });
 
     // Reset the form so no stale values linger from a previous new-admission session
     admissionForm.reset();
@@ -1108,6 +1111,18 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('form-submit-btn').innerText  = 'Save Changes';
 
     ageInput.value = calculateAge(student.dob);
+
+    // ── FIX: Restore financial fields that are skipped by SKIP_FIELDS ──────
+    // standardFee is readonly (auto-set by class), so manually restore it
+    if (feeStandard) feeStandard.value = student.standardFee || getStandardFeeForClass(student.studentClass) || 0;
+    if (feeAdmission) feeAdmission.value = student.admissionFee || 0;
+    if (transportFeeInput) transportFeeInput.value = student.transportFee || 0;
+    if (feeTuitionDisc) feeTuitionDisc.value = student.tuitionDiscount || 0;
+    if (feeTransDisc) feeTransDisc.value = student.transportDiscount || 0;
+    if (feeSiblingDisc) feeSiblingDisc.value = student.siblingDiscount || 0;
+    if (feeBooks) feeBooks.value = student.booksFee || 0;
+    if (feeBooksDisc) feeBooksDisc.value = student.booksDiscount || 0;
+
     performFinancialAudit();
 
     const modal = document.getElementById('student-modal');
@@ -1318,7 +1333,122 @@ document.addEventListener('DOMContentLoaded', () => {
 
         document.getElementById('profile-content').innerHTML = profileContent;
         document.getElementById('profile-modal').style.display = 'block';
+        // Store the currently viewed student's regNo for share functionality
+        document.getElementById('profile-modal').dataset.currentRegNo = s.regNo || s.id;
     };
+
+    // ── SHARE STUDENT RECORD ─────────────────────────────────────────────────
+
+    window.shareStudentRecord = function() {
+        const modal = document.getElementById('profile-modal');
+        const regNo = modal ? modal.dataset.currentRegNo : null;
+        if (!regNo) return;
+
+        const db = getDatabase();
+        const s  = db.find(x => x.regNo === regNo) || db.find(x => x.id === regNo);
+        if (!s) return;
+
+        const safeStr = v => (v && String(v).trim() !== '') ? String(v).trim() : 'N/A';
+
+        const totalDiscount = (
+            parseFloat(s.tuitionDiscount  || 0) +
+            parseFloat(s.transportDiscount|| 0) +
+            parseFloat(s.siblingDiscount  || 0) +
+            parseFloat(s.booksDiscount    || 0)
+        ).toFixed(0);
+
+        const lines = [
+            `🏫 *ST. LAWRENCE INTERNATIONAL SCHOOL*`,
+            `📋 *Student Record — ${safeStr(s.fullName)}*`,
+            ``,
+            `🆔 *Registration No:* ${safeStr(s.regNo || s.id)}`,
+            `📚 *Class:* ${safeStr(s.studentClass)}  |  *Section:* ${safeStr(s.section)}`,
+            `🔢 *Roll No:* ${safeStr(s.rollNo)}`,
+            `📅 *Admission Date:* ${safeStr(s.admissionDate)}`,
+            ``,
+            `👤 *Personal Details*`,
+            `• Name: ${safeStr(s.fullName)}`,
+            `• Gender: ${safeStr(s.gender)}`,
+            `• Date of Birth: ${safeStr(s.dob)}`,
+            `• Age: ${safeStr(s.age)}`,
+            `• B-Form / CNIC: ${safeStr(s.studentBform)}`,
+            s.medicalIssues ? `• Medical: ${safeStr(s.medicalIssues)}` : null,
+            ``,
+            `👨‍👩‍👦 *Guardian & Contact*`,
+            `• Guardian: ${safeStr(s.guardianName)} (${safeStr(s.guardianRole)})`,
+            `• Guardian CNIC: ${safeStr(s.guardianCnic)}`,
+            `• Phone 1: ${safeStr(s.phone1)}`,
+            `• Phone 2: ${safeStr(s.phone2)}`,
+            `• Address: ${safeStr(s.permanentAddress)}`,
+            ``,
+            `💰 *Finance Summary*`,
+            `• Tuition Fee: Rs. ${safeStr(s.standardFee)}`,
+            parseFloat(s.admissionFee||0) > 0 ? `• Admission Fee: Rs. ${safeStr(s.admissionFee)}` : null,
+            parseFloat(s.transportFee||0) > 0 ? `• Transport Fee: Rs. ${safeStr(s.transportFee)}` : null,
+            parseFloat(totalDiscount) > 0 ? `• Total Discount: − Rs. ${totalDiscount}` : null,
+            `• ✅ *Net Payable: Rs. ${safeStr(s.netPayable)}*`,
+            ``,
+            `_Shared via EduFlow Pro_`
+        ].filter(l => l !== null).join('\n');
+
+        // Try Web Share API first (mobile / modern browsers)
+        if (navigator.share) {
+            navigator.share({
+                title: `Student Record — ${s.fullName}`,
+                text: lines
+            }).catch(() => {});
+        } else {
+            // Fallback: open share picker modal
+            openSharePicker(lines, s.fullName);
+        }
+    };
+
+    function openSharePicker(text, studentName) {
+        const existing = document.getElementById('share-picker-overlay');
+        if (existing) existing.remove();
+
+        const encoded = encodeURIComponent(text);
+        const waUrl   = `https://wa.me/?text=${encoded}`;
+        const emailUrl= `mailto:?subject=${encodeURIComponent('Student Record — ' + studentName)}&body=${encoded}`;
+        const smsUrl  = `sms:?body=${encoded}`;
+
+        const overlay = document.createElement('div');
+        overlay.id = 'share-picker-overlay';
+        overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.65);z-index:9999;display:flex;align-items:center;justify-content:center;';
+        overlay.innerHTML = `
+            <div style="background:var(--card-bg,#1e293b);border-radius:18px;padding:32px 28px;min-width:300px;max-width:380px;box-shadow:0 20px 60px rgba(0,0,0,0.5);text-align:center;">
+                <h3 style="margin:0 0 6px;font-size:1.1rem;color:var(--text-primary,#f1f5f9);"><i class="fas fa-share-alt"></i> Share Student Record</h3>
+                <p style="margin:0 0 24px;font-size:0.82rem;color:var(--text-muted,#94a3b8);">${studentName}</p>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:20px;">
+                    <a href="${waUrl}" target="_blank" rel="noopener"
+                       style="display:flex;flex-direction:column;align-items:center;gap:8px;padding:16px 10px;border-radius:12px;background:#25D366;color:#fff;text-decoration:none;font-weight:600;font-size:0.85rem;">
+                        <i class="fab fa-whatsapp" style="font-size:1.6rem;"></i> WhatsApp
+                    </a>
+                    <a href="${emailUrl}"
+                       style="display:flex;flex-direction:column;align-items:center;gap:8px;padding:16px 10px;border-radius:12px;background:#4285F4;color:#fff;text-decoration:none;font-weight:600;font-size:0.85rem;">
+                        <i class="fas fa-envelope" style="font-size:1.6rem;"></i> Email
+                    </a>
+                    <a href="${smsUrl}"
+                       style="display:flex;flex-direction:column;align-items:center;gap:8px;padding:16px 10px;border-radius:12px;background:#6366f1;color:#fff;text-decoration:none;font-weight:600;font-size:0.85rem;">
+                        <i class="fas fa-sms" style="font-size:1.6rem;"></i> SMS
+                    </a>
+                    <button onclick="
+                        navigator.clipboard.writeText(decodeURIComponent('${encoded.replace(/'/g,"\\'")}'))
+                        .then(()=>{ this.innerHTML='<i class=\\'fas fa-check\\'></i> Copied!'; setTimeout(()=>this.innerHTML='<i class=\\'fas fa-copy\\'></i> Copy Text',1500); })
+                        .catch(()=>alert('Copy failed. Please copy manually.'));"
+                       style="display:flex;flex-direction:column;align-items:center;gap:8px;padding:16px 10px;border-radius:12px;background:#64748b;color:#fff;border:none;cursor:pointer;font-weight:600;font-size:0.85rem;">
+                        <i class="fas fa-copy" style="font-size:1.6rem;"></i> Copy Text
+                    </button>
+                </div>
+                <button onclick="document.getElementById('share-picker-overlay').remove();"
+                    style="width:100%;padding:10px;border-radius:8px;border:1px solid var(--border-color,#334155);background:transparent;color:var(--text-muted,#94a3b8);cursor:pointer;font-size:0.9rem;">
+                    <i class="fas fa-times"></i> Cancel
+                </button>
+            </div>
+        `;
+        overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+        document.body.appendChild(overlay);
+    }
 
     // ── 11. UTILITIES ────────────────────────────────────────────────────────
 
@@ -1401,7 +1531,7 @@ document.addEventListener('DOMContentLoaded', () => {
 }); // End DOMContentLoaded
 
 /**
- * ===========================================================================
+ * ============================================================================
  * END OF SCRIPT — EDULOW PRO SIS ENGINE
  * ============================================================================
  */
