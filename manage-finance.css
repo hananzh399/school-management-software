@@ -404,23 +404,24 @@
 
 /* Back Button Styling */
 .action-back-btn {
-    background: white;
-    border: 1px solid #e2e8f0;
-    padding: 12px 24px;
-    border-radius: 12px;
+    background: var(--bg-card, #ffffff);
+    border: 1.5px solid var(--border-subtle, #e2e8f0);
+    padding: 10px 20px;
+    border-radius: 10px;
     cursor: pointer;
     font-weight: 600;
-    color: var(--primary);
+    color: var(--text-secondary, #64748b);
     display: inline-flex;
     align-items: center;
-    gap: 10px;
-    transition: 0.3s;
+    gap: 8px;
+    transition: all 0.2s ease;
+    font-size: 0.85rem;
 }
 
 .action-back-btn:hover {
-    background: #f8fafc;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.05);
-    transform: translateX(-5px);
+    background: var(--border-subtle, #e2e8f0);
+    color: var(--text-primary, #1e293b);
+    transform: translateX(-2px);
 }
 /* --- CLASS SELECTOR CARDS --- */
 .class-card-grid {
@@ -539,36 +540,107 @@
 }
 
 .voucher-modal-box {
-    background: #f1f5f9;
+    background: var(--bg-card, #f1f5f9);
     border-radius: 18px;
     width: min(900px, 100%);
     max-height: 92vh;
     display: flex;
     flex-direction: column;
     overflow: hidden;
-    box-shadow: 0 30px 60px -15px rgba(0,0,0,0.35);
+    box-shadow: 0 30px 60px -15px rgba(0,0,0,0.45);
+    border: 1px solid var(--border-subtle, #e2e8f0);
 }
 
 .voucher-modal-header {
-    background: white;
-    padding: 18px 24px;
+    background: var(--bg-card, #ffffff);
+    padding: 16px 20px;
     display: flex;
     align-items: center;
     justify-content: space-between;
-    border-bottom: 1px solid #e2e8f0;
+    border-bottom: 1px solid var(--border-subtle, #e2e8f0);
+    gap: 12px;
+    flex-wrap: wrap;
 }
 
 .voucher-modal-header h3 {
-    color: var(--text-dark);
-    font-size: 1.1rem;
+    color: var(--text-primary, #1e293b);
+    font-size: 1.05rem;
     display: flex;
     align-items: center;
     gap: 10px;
+    font-weight: 700;
 }
 
 .voucher-modal-actions {
     display: flex;
-    gap: 10px;
+    gap: 8px;
+    flex-wrap: wrap;
+    align-items: center;
+}
+
+/* Voucher modal — Print button */
+.voucher-modal-actions .btn-primary {
+    background: linear-gradient(135deg, #1a56db, #1e40af);
+    color: #fff;
+    border: none;
+    padding: 9px 18px;
+    border-radius: 10px;
+    font-size: 0.85rem;
+    font-weight: 700;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    box-shadow: 0 4px 14px -3px rgba(26,86,219,0.45);
+    transition: all 0.2s ease;
+}
+.voucher-modal-actions .btn-primary:hover {
+    background: linear-gradient(135deg, #1e40af, #1e3a8a);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px -4px rgba(26,86,219,0.55);
+}
+
+/* Voucher modal — Edit Voucher button */
+.voucher-modal-actions .action-edit-btn {
+    background: linear-gradient(135deg, #f59e0b, #d97706) !important;
+    color: #fff !important;
+    border: none !important;
+    padding: 9px 18px !important;
+    border-radius: 10px !important;
+    font-size: 0.85rem !important;
+    font-weight: 700 !important;
+    cursor: pointer !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 7px !important;
+    box-shadow: 0 4px 14px -3px rgba(245,158,11,0.45) !important;
+    transition: all 0.2s ease !important;
+}
+.voucher-modal-actions .action-edit-btn:hover {
+    background: linear-gradient(135deg, #d97706, #b45309) !important;
+    transform: translateY(-2px) !important;
+    box-shadow: 0 8px 20px -4px rgba(217,119,6,0.55) !important;
+}
+
+/* Voucher modal — Close button */
+.voucher-modal-actions .action-back-btn {
+    background: var(--bg-card, #f8fafc);
+    border: 1.5px solid var(--border-subtle, #e2e8f0);
+    color: var(--text-secondary, #64748b);
+    padding: 9px 18px;
+    border-radius: 10px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    transition: all 0.2s ease;
+}
+.voucher-modal-actions .action-back-btn:hover {
+    background: var(--border-subtle, #e2e8f0);
+    color: var(--text-primary, #1e293b);
+    transform: translateY(-1px);
 }
 
 .voucher-modal-scroll {
@@ -947,14 +1019,17 @@
 
 /* Action button in the fee table */
 .btn-add-fees {
-    background: linear-gradient(135deg, #27ae60, #2ecc71);
+    background: linear-gradient(135deg, #16a34a, #15803d);
     color: white !important;
     border: none !important;
-    box-shadow: 0 4px 10px -2px rgba(39,174,96,0.35);
+    box-shadow: 0 3px 10px -2px rgba(22,163,74,0.4);
+    font-weight: 700 !important;
+    transition: all 0.2s ease !important;
 }
 .btn-add-fees:hover {
-    background: linear-gradient(135deg, #219a52, #27ae60) !important;
-    transform: translateY(-1px);
+    background: linear-gradient(135deg, #15803d, #166534) !important;
+    transform: translateY(-2px) !important;
+    box-shadow: 0 6px 16px -3px rgba(22,163,74,0.5) !important;
 }
 
 /* Status badges in fee table */
@@ -1364,7 +1439,7 @@
 }
 .afm-close-btn:hover { background: rgba(255,255,255,0.25); }
 
-.afm-scroll { padding: 20px 24px !important; }
+.afm-scroll { padding: 20px 24px !important; background: #f4f6fb; }
 
 /* Arrears Alert */
 .afm-arrears-alert {
@@ -1421,10 +1496,11 @@
 
 /* Left panel */
 .afm-left-panel {
-    background: var(--bg-card);
-    border: 1px solid var(--border-subtle);
+    background: #ffffff;
+    border: 1.5px solid #e2e8f0;
     border-radius: 16px;
     padding: 20px;
+    box-shadow: 0 2px 8px -2px rgba(0,0,0,0.06);
 }
 
 .afm-meta-row {
@@ -1657,8 +1733,8 @@
 
 /* Right panel */
 .afm-right-panel {
-    background: var(--bg-card);
-    border: 1px solid var(--border-subtle);
+    background: #ffffff;
+    border: 1.5px solid #e2e8f0;
     border-radius: 16px;
     padding: 20px;
     position: sticky;
@@ -1666,6 +1742,7 @@
     display: flex;
     flex-direction: column;
     gap: 14px;
+    box-shadow: 0 2px 8px -2px rgba(0,0,0,0.06);
 }
 .afm-summary-title {
     font-size: 0.78rem;
@@ -1698,8 +1775,8 @@
 
 /* Totals box */
 .afm-totals-box {
-    background: var(--bg-card);
-    border: 1px solid var(--border-subtle);
+    background: #f8fafc;
+    border: 1.5px solid #e2e8f0;
     border-radius: 12px;
     padding: 12px;
     display: flex;
@@ -2068,19 +2145,77 @@
     background: rgba(99,102,241,0.05);
 }
 
-/* Action cell — neat row of buttons */
+/* ── Fee table action buttons ── */
 .fee-actions-cell {
     display: flex !important;
     gap: 8px;
     flex-wrap: wrap;
     align-items: center;
 }
+
+/* Base for all tiny fee-table buttons */
 .fee-students-table .btn-tiny {
     display: inline-flex;
     align-items: center;
     gap: 6px;
     white-space: nowrap;
+    padding: 7px 13px;
+    border-radius: 8px;
+    font-size: 0.78rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.18s ease;
+    line-height: 1;
+    /* default: View Voucher / View Paid Bill — indigo outline style */
+    background: transparent;
+    color: #4f46e5;
+    border: 1.5px solid #c7d2fe;
 }
+.fee-students-table .btn-tiny:hover {
+    background: #eef2ff;
+    border-color: #6366f1;
+    color: #3730a3;
+    transform: translateY(-1px);
+}
+
+/* Pay Fee button — solid green */
+.fee-students-table .btn-tiny.btn-add-fees {
+    background: linear-gradient(135deg, #16a34a, #15803d) !important;
+    color: #fff !important;
+    border: none !important;
+    box-shadow: 0 3px 8px -2px rgba(22,163,74,0.38);
+}
+.fee-students-table .btn-tiny.btn-add-fees:hover {
+    background: linear-gradient(135deg, #15803d, #166534) !important;
+    box-shadow: 0 5px 14px -3px rgba(22,163,74,0.5) !important;
+    transform: translateY(-2px) !important;
+}
+
+/* Dark theme — View Voucher */
+[data-theme="dark"] .fee-students-table .btn-tiny {
+    color: #818cf8;
+    border-color: rgba(129,140,248,0.3);
+    background: rgba(99,102,241,0.07);
+}
+[data-theme="dark"] .fee-students-table .btn-tiny:hover {
+    background: rgba(99,102,241,0.16);
+    border-color: rgba(129,140,248,0.6);
+    color: #a5b4fc;
+}
+
+/* Dark theme — Pay Fee (green stays the same, just brighten slightly) */
+[data-theme="dark"] .fee-students-table .btn-tiny.btn-add-fees {
+    background: linear-gradient(135deg, #16a34a, #15803d) !important;
+    color: #fff !important;
+    border: none !important;
+    box-shadow: 0 3px 10px -2px rgba(22,163,74,0.45);
+}
+[data-theme="dark"] .fee-students-table .btn-tiny.btn-add-fees:hover {
+    background: linear-gradient(135deg, #22c55e, #16a34a) !important;
+    box-shadow: 0 5px 16px -3px rgba(34,197,94,0.5) !important;
+    transform: translateY(-2px) !important;
+}
+
 
 /* Responsive: stack cleanly on narrow screens */
 @media (max-width: 720px) {
@@ -2661,9 +2796,9 @@
     gap: 12px;
     padding: 14px 18px;
     margin: 0 0 14px;
-    border: 1px solid var(--border-subtle);
-    border-radius: var(--radius-lg);
-    background: var(--bg-card);
+    border: 1.5px solid #dbeafe;
+    border-radius: var(--radius-lg, 12px);
+    background: linear-gradient(135deg, #eff6ff 0%, #f0fdf4 100%);
 }
 .afm-pay-header-name {
     font-size: 17px;
@@ -3022,4 +3157,152 @@
 .iev-note-input:focus {
     outline: none;
     border-color: var(--border-hover, #6366f1);
+}
+
+/* ============================================================================
+   DARK THEME — MODAL & ADD-BILL COMPLETE OVERRIDES
+   Fixes the "white/blank" appearance of all modals in dark mode.
+   ============================================================================ */
+
+/* ── Voucher view modal ── */
+[data-theme="dark"] .voucher-modal-box {
+    background: #1e2638;
+    border-color: rgba(255,255,255,0.09);
+}
+[data-theme="dark"] .voucher-modal-header {
+    background: #161f30;
+    border-bottom-color: rgba(255,255,255,0.09);
+}
+[data-theme="dark"] .voucher-modal-scroll {
+    background: #1a2236;
+}
+/* Keep the print voucher itself white (it's a paper document) */
+[data-theme="dark"] .voucher-sheet {
+    filter: none;
+}
+[data-theme="dark"] .voucher-copy {
+    background: #fff;
+    color: #1e293b;
+}
+
+/* ── Action Back / Close btn in dark ── */
+[data-theme="dark"] .voucher-modal-actions .action-back-btn {
+    background: rgba(255,255,255,0.07);
+    border-color: rgba(255,255,255,0.14);
+    color: #94a3b8;
+}
+[data-theme="dark"] .voucher-modal-actions .action-back-btn:hover {
+    background: rgba(255,255,255,0.14);
+    color: #e2e8f0;
+}
+
+/* ── Add Bill / Pay Fee modal ── */
+[data-theme="dark"] .afm-box {
+    background: #1e2638;
+    border: 1px solid rgba(255,255,255,0.09);
+}
+[data-theme="dark"] .afm-scroll {
+    background: #1a2236;
+}
+[data-theme="dark"] .afm-pay-header {
+    background: rgba(255,255,255,0.04);
+    border-color: rgba(255,255,255,0.09);
+}
+[data-theme="dark"] .afm-pay-header-name {
+    color: #e2e8f0;
+}
+[data-theme="dark"] .afm-left-panel {
+    background: rgba(255,255,255,0.04) !important;
+    border-color: rgba(255,255,255,0.09) !important;
+    box-shadow: none;
+}
+[data-theme="dark"] .afm-right-panel {
+    background: rgba(255,255,255,0.04);
+    border-color: rgba(255,255,255,0.09);
+    box-shadow: none;
+}
+[data-theme="dark"] .afm-discount-panel {
+    background: linear-gradient(180deg, rgba(168,85,247,0.08) 0%, rgba(255,255,255,0.02) 100%) !important;
+    border-color: rgba(168,85,247,0.2) !important;
+}
+[data-theme="dark"] .afm-paybill-panel {
+    background: linear-gradient(180deg, rgba(37,99,235,0.08) 0%, rgba(255,255,255,0.02) 100%) !important;
+    border-color: rgba(59,130,246,0.2) !important;
+}
+[data-theme="dark"] .afm-panel-title {
+    color: #94a3b8;
+}
+[data-theme="dark"] .afm-label {
+    color: #94a3b8;
+}
+[data-theme="dark"] .afm-input {
+    background: rgba(255,255,255,0.06) !important;
+    border-color: rgba(255,255,255,0.12) !important;
+    color: #e2e8f0 !important;
+}
+[data-theme="dark"] .afm-input:focus {
+    border-color: #6366f1 !important;
+    background: rgba(99,102,241,0.08) !important;
+}
+[data-theme="dark"] .afm-input option {
+    background: #1e2638;
+    color: #e2e8f0;
+}
+[data-theme="dark"] .afm-helper-text {
+    color: #64748b;
+}
+[data-theme="dark"] .afm-summary-title {
+    color: #64748b;
+}
+[data-theme="dark"] .afm-totals-box {
+    background: rgba(255,255,255,0.04);
+    border-color: rgba(255,255,255,0.09);
+}
+[data-theme="dark"] .afm-total-row span {
+    color: #94a3b8;
+}
+[data-theme="dark"] .afm-total-row strong {
+    color: #e2e8f0;
+}
+[data-theme="dark"] .afm-total-divider {
+    background: rgba(255,255,255,0.09);
+}
+[data-theme="dark"] .afm-grand-total {
+    background: linear-gradient(135deg, rgba(37,99,235,0.18), rgba(16,185,129,0.12));
+    border-color: rgba(99,102,241,0.3);
+}
+[data-theme="dark"] .afm-grand-total span {
+    color: #93c5fd !important;
+}
+[data-theme="dark"] .afm-grand-total strong {
+    color: #60a5fa !important;
+}
+/* Voucher shrink preview inside add-bill stays white (paper doc) */
+[data-theme="dark"] .afm-voucher-panel {
+    background: #2a3347 !important;
+}
+[data-theme="dark"] .afm-voucher-shrink .voucher-sheet,
+[data-theme="dark"] .afm-voucher-shrink .voucher-copy {
+    background: #fff;
+    color: #1e293b;
+}
+[data-theme="dark"] .afm-rs-label {
+    color: #a78bfa;
+}
+
+/* ── Fee table btn-tiny — handled in the main btn-tiny block above ── */
+
+/* ── IEV (inline edit voucher) modal dark ── */
+[data-theme="dark"] .iev-box {
+    background: #1e2638;
+    border-color: rgba(255,255,255,0.09);
+}
+
+/* ── ATV (add to voucher) modal dark ── */
+[data-theme="dark"] .atv-box {
+    background: #1e2638;
+    border-color: rgba(255,255,255,0.09);
+}
+[data-theme="dark"] .atv-box .voucher-modal-scroll {
+    background: #1a2236;
 }
