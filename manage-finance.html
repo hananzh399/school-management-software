@@ -1,49 +1,71 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Fees & Finance | EduFlow Pro</title>
+    <title>Dashboard | EduFlow Pro</title>
+    <meta name="description" content="EduFlow Pro Dashboard - Financial and Operational Overview.">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <link rel="stylesheet" href="manage-staff.css">
-    <link rel="stylesheet" href="manage-finance.css">
+    <link rel="stylesheet" href="index.css">
 </head>
 <body>
 
-    
+    <!-- SIDEBAR -->
     <aside id="sidebar" class="sidebar">
         <div class="sidebar-header">
             <div class="brand">
-                <div class="brand-icon"><i class="fas fa-graduation-cap"></i></div>
+                <div class="brand-icon">
+                    <i class="fas fa-graduation-cap"></i>
+                </div>
                 <span>EduFlow Pro</span>
             </div>
-            <button id="close-sidebar" class="close-btn" aria-label="Close sidebar"><i class="fas fa-times"></i></button>
+            <button id="close-sidebar" class="close-btn" aria-label="Close sidebar">
+                <i class="fas fa-times"></i>
+            </button>
         </div>
 
         <nav class="sidebar-nav">
             <div class="nav-label">Core Modules</div>
-            <a href="index.html" class="nav-link"><i class="fas fa-th-large"></i><span>Dashboard</span></a>
-            <a href="manage-students.html" class="nav-link"><i class="fas fa-user-graduate"></i><span>Student Management</span></a>
-            <a href="manage-staff.html" class="nav-link"><i class="fas fa-chalkboard-teacher"></i><span>Staff Management</span></a>
-            <a href="manage-finance.html" class="nav-link active"><i class="fas fa-file-invoice-dollar"></i><span>Fees & Finance</span></a>
+            <a href="index.html" class="nav-link active">
+                <i class="fas fa-th-large"></i>
+                <span>Dashboard</span>
+            </a>
+            <a href="manage-students.html" class="nav-link">
+                <i class="fas fa-user-graduate"></i>
+                <span>Student Management</span>
+            </a>
+            <a href="manage-staff.html" class="nav-link">
+                <i class="fas fa-chalkboard-teacher"></i>
+                <span>Staff Management</span>
+            </a>
+            <a href="manage-finance.html" class="nav-link">
+                <i class="fas fa-file-invoice-dollar"></i>
+                <span>Fees & Finance</span>
+            </a>
         </nav>
 
         <div class="sidebar-footer">
-            <a href="login.html" class="nav-link logout-btn"><i class="fas fa-sign-out-alt"></i><span>Logout</span></a>
+            <a href="login.html" class="nav-link logout-btn">
+                <i class="fas fa-sign-out-alt"></i>
+                <span>Logout</span>
+            </a>
         </div>
     </aside>
 
     <!-- MAIN CONTENT -->
     <main class="main-content">
 
+        <!-- TOP HEADER -->
         <header class="main-header">
             <div class="header-left">
-                <button id="open-sidebar" class="menu-toggle" aria-label="Open sidebar"><i class="fas fa-bars"></i></button>
+                <button id="open-sidebar" class="menu-toggle" aria-label="Open sidebar">
+                    <i class="fas fa-bars"></i>
+                </button>
                 <div class="school-branding">
                     <h1 class="school-name">ST. LAWRENCE INTERNATIONAL SCHOOL</h1>
-                    <p class="school-subtitle">Finance Control Panel</p>
+                    <p class="school-subtitle">Command Center & Analytics</p>
                 </div>
             </div>
             <div class="header-right">
@@ -56,970 +78,128 @@
             </div>
         </header>
 
+        <!-- DECORATIVE GLOW SPOTS -->
         <div class="glow-spot glow-1"></div>
         <div class="glow-spot glow-2"></div>
 
-        <!-- ===================== PAGE: MAIN ===================== -->
-        <div id="page-main">
-            <section class="page-title-section">
-                <h2 class="page-title">Fees & Finance</h2>
-                <p class="page-description">Manage collections, salaries, fines, and operational expenses.</p>
-                <div class="title-divider"></div>
-            </section>
+        <!-- PAGE TITLE SECTION -->
+        <section class="page-title-section">
+            <h2 class="page-title">Executive Overview</h2>
+            <p class="page-description">Real-time overview of school operations, finances, and staff.</p>
+            <div class="title-divider"></div>
+        </section>
 
-            <section class="finance-cards-container">
-                <!-- Kept (not worked on for now) -->
-                <div class="finance-card revenue-theme" onclick="showPage('page-student-fees')">
-                    <div class="card-glow"></div>
-                    <div class="icon-wrapper"><i class="fas fa-hand-holding-usd"></i></div>
-                    <h3 class="card-title">Manage Student Fees</h3>
-                    <p class="card-description">Record tuition and outstanding balance.</p>
+        <!-- DASHBOARD GRID -->
+        <section class="dashboard-grid">
+
+            <!-- Demographics Overview -->
+            <div class="dash-card demo-card">
+                <div class="card-glow demo-glow"></div>
+                <div class="dash-card-header">
+                    <h3><i class="fas fa-users"></i> School Headcount</h3>
                 </div>
-
-                <div class="finance-card revenue-theme" onclick="showPage('page-student-fine')">
-                    <div class="card-glow"></div>
-                    <div class="icon-wrapper"><i class="fas fa-exclamation-circle"></i></div>
-                    <h3 class="card-title">Student Fines</h3>
-                    <p class="card-description">Late, Disciplinary or Attendance fine</p>
-                </div>
-
-                <div class="finance-card expense-theme" onclick="showPage('page-staff-hub')">
-                    <div class="card-glow"></div>
-                    <div class="icon-wrapper"><i class="fas fa-file-invoice"></i></div>
-                    <h3 class="card-title">Staff Fine or Bonus</h3>
-                    <p class="card-description">Late, Disciplinary or Attendance fine</p>
-                </div>
-
-
-                <div class="finance-card salary-theme" onclick="showPage('page-salary-hub')">
-                    <div class="card-glow"></div>
-                    <div class="icon-wrapper"><i class="fas fa-money-check-alt"></i></div>
-                    <h3 class="card-title">Manage Salaries</h3>
-                    <p class="card-description">Process payroll and view payment history.</p>
-                </div>
-
-                <div class="finance-card expense-theme" onclick="showPage('page-expense-hub')">
-                    <div class="card-glow"></div>
-                    <div class="icon-wrapper"><i class="fas fa-tools"></i></div>
-                    <h3 class="card-title">Other Expenses</h3>
-                    <p class="card-description">Other institue expesne</p>
-                </div>
-            </section>
-        </div>
-
-
-        <!-- ===================== PAGE: STUDENT FEES ===================== -->
-        <div id="page-student-fees" class="sub-page d-none">
-            <section class="page-title-section sub-title-section">
-                <button class="back-btn" onclick="showPage('page-main')"><i class="fas fa-arrow-left"></i> Back</button>
-                <h2 class="page-title">Manage Student Fees</h2>
-                <p class="page-description">Select a class then a student to record payments or generate vouchers.</p>
-                <div class="title-divider"></div>
-            </section>
-
-            <!-- Part A: Class Card Selector (Visible first) -->
-            <div id="class-selection-view">
-                <div class="section-title">
-                    <h3><i class="fas fa-layer-group"></i> Select Class Grade</h3>
-                    <p>Select a grade level to generate or view fee vouchers</p>
-                </div>
-
-                <div class="class-card-grid">
-                    <div class="class-selector-card c1" onclick="selectClassForFees('Montessori')"><div class="c-icon"><i class="fas fa-child-reaching"></i></div><h4>Montessori</h4></div>
-                    <div class="class-selector-card c2" onclick="selectClassForFees('Nursery')"><div class="c-icon"><i class="fas fa-baby"></i></div><h4>Nursery</h4></div>
-                    <div class="class-selector-card c3" onclick="selectClassForFees('Prep')"><div class="c-icon"><i class="fas fa-shapes"></i></div><h4>Prep</h4></div>
-                    <div class="class-selector-card c4" onclick="selectClassForFees('Grade 1')"><div class="c-icon c-num">1</div><h4>1st Grade</h4></div>
-                    <div class="class-selector-card c5" onclick="selectClassForFees('Grade 2')"><div class="c-icon c-num">2</div><h4>2nd Grade</h4></div>
-                    <div class="class-selector-card c6" onclick="selectClassForFees('Grade 3')"><div class="c-icon c-num">3</div><h4>3rd Grade</h4></div>
-                    <div class="class-selector-card c7" onclick="selectClassForFees('Grade 4')"><div class="c-icon c-num">4</div><h4>4th Grade</h4></div>
-                    <div class="class-selector-card c8" onclick="selectClassForFees('Grade 5')"><div class="c-icon c-num">5</div><h4>5th Grade</h4></div>
-                    <div class="class-selector-card c9" onclick="selectClassForFees('Grade 6')"><div class="c-icon c-num">6</div><h4>6th Grade</h4></div>
-                    <div class="class-selector-card c10" onclick="selectClassForFees('Grade 7')"><div class="c-icon c-num">7</div><h4>7th Grade</h4></div>
-                    <div class="class-selector-card c11" onclick="selectClassForFees('Grade 8')"><div class="c-icon c-num">8</div><h4>8th Grade</h4></div>
-                    <div class="class-selector-card c12" onclick="selectClassForFees('Grade 9')"><div class="c-icon c-num">9</div><h4>9th Grade</h4></div>
-                    <div class="class-selector-card c13" onclick="selectClassForFees('Grade 10')"><div class="c-icon c-num">10</div><h4>10th Grade</h4></div>
-                </div>
-            </div>
-
-            <!-- Part B: Student List (Hidden until card clicked) -->
-            <div id="class-student-list-view" style="display: none;">
-                <button class="btn-ghost" onclick="backToClassSelection()" style="margin-bottom: 5px;">
-                    <i class="fas fa-chevron-left"></i> Change Class
-                </button>
-                <div class="section-title">
-                    <h3 id="selected-class-title">Class Name</h3>
-                </div>
-                <div class="fee-table-toolbar">
-                    <div class="fee-search-wrap">
-                        <i class="fas fa-search"></i>
-                        <input type="text" id="fee-search-input" placeholder="Search by name, ID or guardian..." oninput="filterFeeTable()">
+                <div class="dash-card-body">
+                    <div class="metric">
+                        <span class="metric-label">Total Students</span>
+                        <span class="metric-value" id="total-students">0</span>
                     </div>
-                    <div class="fee-search-count" id="fee-search-count"></div>
-                </div>
-                <div class="data-table-wrapper fee-table-wrapper">
-                    <table class="student-table fee-students-table">
-                        <thead>
-                            <tr>
-                                <th>Student ID</th>
-                                <th>Name</th>
-                                <th>Guardian</th>
-                                <th>Pending Fees</th>
-                                <th>Status</th>
-                                <th>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody id="fee-table-body"></tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
-
-
-        <!-- ===================== PAGE: STUDENT FINE HUB ===================== -->
-        <div id="page-student-fine" class="sub-page d-none">
-            <section class="page-title-section sub-title-section">
-                <button class="back-btn" onclick="showPage('page-main')"><i class="fas fa-arrow-left"></i> Back</button>
-                <h2 class="page-title">Student Fines</h2>
-                <p class="page-description">Add fines to students or view all students with fines.</p>
-                <div class="title-divider"></div>
-            </section>
-
-            <section class="finance-cards-container sub-cards">
-                <div class="finance-card revenue-theme" onclick="showPage('page-add-student-fine')">
-                    <div class="card-glow"></div>
-                    <div class="icon-wrapper"><i class="fas fa-plus-circle"></i></div>
-                    <h3 class="card-title">Add Fine</h3>
-                    <p class="card-description">Assign a fine with description to a student.</p>
-                </div>
-                <div class="finance-card expense-theme" onclick="showPage('page-view-student-fines')">
-                    <div class="card-glow"></div>
-                    <div class="icon-wrapper"><i class="fas fa-list-alt"></i></div>
-                    <h3 class="card-title">View Students with Fine</h3>
-                    <p class="card-description">See all students who have fines logged.</p>
-                </div>
-            </section>
-        </div>
-
-        <!-- ===================== PAGE: ADD STUDENT FINE ===================== -->
-        <div id="page-add-student-fine" class="sub-page d-none">
-            <section class="page-title-section sub-title-section">
-                <button class="back-btn" onclick="showPage('page-student-fine')"><i class="fas fa-arrow-left"></i> Back</button>
-                <h2 class="page-title">Add Student Fine</h2>
-                <p class="page-description">Select a student and enter fine details.</p>
-                <div class="title-divider"></div>
-            </section>
-
-            <div class="form-page-container centered-block">
-                <div class="form-group full-width">
-                    <label>Search Student</label>
-                    <input type="text" id="student-fine-search" class="fine-search-input" oninput="searchStudentsForFine()" placeholder="Search by name, or Name~Guardian (e.g. Hanan~Habib)">
-                    <p class="search-hint">Tip: type a name, or use <strong>Name~Guardian</strong> to match both (e.g. <em>Hanan~Habib</em>). Results show ID, Name, Class &amp; Father.</p>
-                    <div id="student-fine-results" class="staff-members-list fine-results-list"></div>
-                </div>
-                <div class="form-group full-width">
-                    <label>Fine Amount (RS)</label>
-                    <input type="number" id="student-fine-amount" min="1" placeholder="Enter amount">
-                </div>
-                <div class="form-group full-width">
-                    <label>Fine Description / Cause</label>
-                    <input type="text" id="student-fine-desc" placeholder="e.g. Disciplinary action, damage to property">
-                </div>
-                <div class="modal-actions mt-20">
-                    <button type="button" class="btn btn-cancel" onclick="showPage('page-student-fine')">Cancel</button>
-                    <button type="button" class="btn btn-primary" onclick="handleAddStudentFine()">Add Fine</button>
-                </div>
-            </div>
-        </div>
-
-        <!-- ===================== PAGE: VIEW STUDENT FINES ===================== -->
-        <div id="page-view-student-fines" class="sub-page d-none">
-            <section class="page-title-section sub-title-section">
-                <button class="back-btn" onclick="showPage('page-student-fine')"><i class="fas fa-arrow-left"></i> Back</button>
-                <h2 class="page-title">Student Fines</h2>
-                <p class="page-description">All students with recorded fines.</p>
-                <div class="title-divider"></div>
-            </section>
-
-            <div class="table-container centered-block">
-                <table class="finance-table">
-                    <thead>
-                        <tr>
-                            <th>Student ID</th>
-                            <th>Name</th>
-                            <th>Class</th>
-                            <th>Father Name</th>
-                            <th>Fine (Amount &amp; Cause)</th>
-                        </tr>
-                    </thead>
-                    <tbody id="student-fines-tbody">
-                        <tr><td colspan="5" class="empty-row">No fines recorded yet.</td></tr>
-                    </tbody>
-                </table>
-            </div>
-        </div>
-
-        <!-- ===================== PAGE: STAFF HUB (Bonus / Fine) ===================== -->
-        <div id="page-staff-hub" class="sub-page d-none">
-            <section class="page-title-section sub-title-section">
-                <button class="back-btn" onclick="showPage('page-main')"><i class="fas fa-arrow-left"></i> Back</button>
-                <h2 class="page-title">Staff Fine or Bonus</h2>
-                <p class="page-description">Choose to manage staff bonuses or staff fines.</p>
-                <div class="title-divider"></div>
-            </section>
-
-            <section class="finance-cards-container sub-cards">
-                <div class="finance-card revenue-theme" onclick="showPage('page-staff-bonus')">
-                    <div class="card-glow"></div>
-                    <div class="icon-wrapper"><i class="fas fa-gift"></i></div>
-                    <h3 class="card-title">Staff Bonus</h3>
-                    <p class="card-description">Reward teaching or non-teaching staff.</p>
-                </div>
-                <div class="finance-card expense-theme" onclick="showPage('page-staff-fine')">
-                    <div class="card-glow"></div>
-                    <div class="icon-wrapper"><i class="fas fa-file-invoice"></i></div>
-                    <h3 class="card-title">Staff Fine</h3>
-                    <p class="card-description">Deduct from teaching or non-teaching salaries.</p>
-                </div>
-            </section>
-        </div>
-
-        <!-- ===================== PAGE: STAFF BONUS HUB ===================== -->
-        <div id="page-staff-bonus" class="sub-page d-none">
-            <section class="page-title-section sub-title-section">
-                <button class="back-btn" onclick="showPage('page-staff-hub')"><i class="fas fa-arrow-left"></i> Back</button>
-                <h2 class="page-title">Staff Bonus</h2>
-                <p class="page-description">Add a bonus or view all staff with bonuses.</p>
-                <div class="title-divider"></div>
-            </section>
-
-            <section class="finance-cards-container sub-cards">
-                <div class="finance-card revenue-theme" onclick="showPage('page-add-staff-bonus')">
-                    <div class="card-glow"></div>
-                    <div class="icon-wrapper"><i class="fas fa-plus-circle"></i></div>
-                    <h3 class="card-title">Add Bonus</h3>
-                    <p class="card-description">Assign a bonus with description to a staff member.</p>
-                </div>
-                <div class="finance-card expense-theme" onclick="showPage('page-view-staff-bonus')">
-                    <div class="card-glow"></div>
-                    <div class="icon-wrapper"><i class="fas fa-list-alt"></i></div>
-                    <h3 class="card-title">View Staff with Bonus</h3>
-                    <p class="card-description">See all staff members who have bonuses logged.</p>
-                </div>
-            </section>
-        </div>
-
-        <!-- ===================== PAGE: ADD STAFF BONUS ===================== -->
-        <div id="page-add-staff-bonus" class="sub-page d-none">
-            <section class="page-title-section sub-title-section">
-                <button class="back-btn" onclick="showPage('page-staff-bonus')"><i class="fas fa-arrow-left"></i> Back</button>
-                <h2 class="page-title">Add Staff Bonus</h2>
-                <p class="page-description">Select staff category then member to assign bonus.</p>
-                <div class="title-divider"></div>
-            </section>
-
-            <div class="form-page-container centered-block">
-                <div class="form-group full-width">
-                    <label>Staff Category</label>
-                    <div class="staff-category-toggle">
-                        <button type="button" class="category-btn active" id="btn-bonus-teaching" onclick="selectBonusCategory('Teaching')">Teaching</button>
-                        <button type="button" class="category-btn" id="btn-bonus-non-teaching" onclick="selectBonusCategory('Non-Teaching')">Non-Teaching</button>
+                    <div class="metric">
+                        <span class="metric-label">Total Staff</span>
+                        <span class="metric-value" id="total-staff">0</span>
                     </div>
                 </div>
-
-                <div class="form-group full-width">
-                    <label>Search Staff</label>
-                    <input type="text" id="bonus-search" class="fine-search-input" oninput="filterBonusList()" placeholder="Search teacher / staff by name, ID, subject or class">
-                    <p class="search-hint">Results show ID, Name, Class &amp; Subject (or Job for non-teaching).</p>
-                    <div id="bonus-members-list" class="staff-members-list fine-results-list"></div>
-                </div>
-
-                <div class="form-group full-width">
-                    <label>Bonus Amount (RS)</label>
-                    <input type="number" id="staff-bonus-amount" min="1" placeholder="Enter amount">
-                </div>
-                <div class="form-group full-width">
-                    <label>Bonus Description</label>
-                    <input type="text" id="staff-bonus-desc" placeholder="e.g. Performance bonus, Eid bonus">
-                </div>
-                <div class="modal-actions mt-20">
-                    <button type="button" class="btn btn-cancel" onclick="showPage('page-staff-bonus')">Cancel</button>
-                    <button type="button" class="btn btn-primary" onclick="handleAddStaffBonus()">Add Bonus</button>
-                </div>
             </div>
-        </div>
 
-        <!-- ===================== PAGE: VIEW STAFF BONUS ===================== -->
-        <div id="page-view-staff-bonus" class="sub-page d-none">
-            <section class="page-title-section sub-title-section">
-                <button class="back-btn" onclick="showPage('page-staff-bonus')"><i class="fas fa-arrow-left"></i> Back</button>
-                <h2 class="page-title">Staff Bonuses</h2>
-                <p class="page-description">All staff members with recorded bonuses.</p>
-                <div class="title-divider"></div>
-            </section>
-
-            <div class="table-container centered-block">
-                <table class="finance-table">
-                    <thead>
-                        <tr>
-                            <th>Name</th>
-                            <th>Job</th>
-                            <th>Amount (RS)</th>
-                            <th>Description</th>
-                        </tr>
-                    </thead>
-                    <tbody id="staff-bonus-tbody">
-                        <tr><td colspan="4" class="empty-row">No bonuses recorded yet.</td></tr>
-                    </tbody>
-                </table>
-            </div>
-        </div>
-
-        <!-- ===================== PAGE: STAFF FINE HUB ===================== -->
-        <div id="page-staff-fine" class="sub-page d-none">
-            <section class="page-title-section sub-title-section">
-                <button class="back-btn" onclick="showPage('page-staff-hub')"><i class="fas fa-arrow-left"></i> Back</button>
-                <h2 class="page-title">Staff Fines</h2>
-                <p class="page-description">Add fines to staff members or view all staff with fines.</p>
-                <div class="title-divider"></div>
-            </section>
-
-            <section class="finance-cards-container sub-cards">
-                <div class="finance-card expense-theme" onclick="showPage('page-add-staff-fine')">
-                    <div class="card-glow"></div>
-                    <div class="icon-wrapper"><i class="fas fa-plus-circle"></i></div>
-                    <h3 class="card-title">Add Fine</h3>
-                    <p class="card-description">Assign a fine with description to a staff member.</p>
+            <!-- Revenue: Fees & Fines -->
+            <div class="dash-card revenue-card">
+                <div class="card-glow revenue-glow"></div>
+                <div class="dash-card-header">
+                    <h3><i class="fas fa-wallet"></i> Revenue Overview</h3>
                 </div>
-                <div class="finance-card revenue-theme" onclick="showPage('page-view-staff-fines')">
-                    <div class="card-glow"></div>
-                    <div class="icon-wrapper"><i class="fas fa-list-alt"></i></div>
-                    <h3 class="card-title">View Staff with Fine</h3>
-                    <p class="card-description">See all staff members who have fines logged.</p>
-                </div>
-            </section>
-        </div>
-
-        <!-- ===================== PAGE: ADD STAFF FINE ===================== -->
-        <div id="page-add-staff-fine" class="sub-page d-none">
-            <section class="page-title-section sub-title-section">
-                <button class="back-btn" onclick="showPage('page-staff-fine')"><i class="fas fa-arrow-left"></i> Back</button>
-                <h2 class="page-title">Add Staff Fine</h2>
-                <p class="page-description">Select staff category then member to assign fine.</p>
-                <div class="title-divider"></div>
-            </section>
-
-            <div class="form-page-container centered-block">
-                <div class="form-group full-width">
-                    <label>Staff Category</label>
-                    <div class="staff-category-toggle">
-                        <button type="button" class="category-btn active" id="btn-teaching" onclick="selectStaffCategory('Teaching')">Teaching</button>
-                        <button type="button" class="category-btn" id="btn-non-teaching" onclick="selectStaffCategory('Non-Teaching')">Non-Teaching</button>
-                    </div>
-                </div>
-
-                <div class="form-group full-width">
-                    <label>Search Staff</label>
-                    <input type="text" id="staff-fine-search" class="fine-search-input" oninput="filterStaffFineList()" placeholder="Search teacher / staff by name, ID, subject or class">
-                    <p class="search-hint">Results show ID, Name, Class &amp; Subject (or Job for non-teaching).</p>
-                    <div id="staff-members-list" class="staff-members-list fine-results-list"></div>
-                </div>
-
-                <div class="form-group full-width">
-                    <label>Fine Amount (RS)</label>
-                    <input type="number" id="staff-fine-amount" min="1" placeholder="Enter amount">
-                </div>
-                <div class="form-group full-width">
-                    <label>Fine Description / Cause</label>
-                    <input type="text" id="staff-fine-desc" placeholder="e.g. Late attendance, misconduct">
-                </div>
-                <div class="modal-actions mt-20">
-                    <button type="button" class="btn btn-cancel" onclick="showPage('page-staff-fine')">Cancel</button>
-                    <button type="button" class="btn btn-primary" onclick="handleAddStaffFine()">Add Fine</button>
-                </div>
-            </div>
-        </div>
-
-        <!-- ===================== PAGE: VIEW STAFF FINES ===================== -->
-        <div id="page-view-staff-fines" class="sub-page d-none">
-            <section class="page-title-section sub-title-section">
-                <button class="back-btn" onclick="showPage('page-staff-fine')"><i class="fas fa-arrow-left"></i> Back</button>
-                <h2 class="page-title">Staff Fines</h2>
-                <p class="page-description">All staff members with recorded fines.</p>
-                <div class="title-divider"></div>
-            </section>
-
-            <div class="table-container centered-block">
-                <table class="finance-table">
-                    <thead>
-                        <tr>
-                            <th>Name</th>
-                            <th>Job / Role</th>
-                            <th>Fine Amount (RS)</th>
-                            <th>Cause</th>
-                        </tr>
-                    </thead>
-                    <tbody id="staff-fines-tbody">
-                        <tr><td colspan="4" class="empty-row">No fines recorded yet.</td></tr>
-                    </tbody>
-                </table>
-            </div>
-        </div>
-
-        <!-- ===================== PAGE: EXPENSE HUB ===================== -->
-        <div id="page-expense-hub" class="sub-page d-none">
-            <section class="page-title-section sub-title-section">
-                <button class="back-btn" onclick="showPage('page-main')"><i class="fas fa-arrow-left"></i> Back</button>
-                <h2 class="page-title">Other Expenses</h2>
-                <p class="page-description">Add a new expense or view all logged expenses.</p>
-                <div class="title-divider"></div>
-            </section>
-
-            <section class="finance-cards-container sub-cards">
-                <div class="finance-card expense-theme" onclick="showPage('page-add-expense')">
-                    <div class="card-glow"></div>
-                    <div class="icon-wrapper"><i class="fas fa-plus-circle"></i></div>
-                    <h3 class="card-title">Add Expense</h3>
-                    <p class="card-description">Record utilities, maintenance or supplies.</p>
-                </div>
-                <div class="finance-card revenue-theme" onclick="showPage('page-view-expenses')">
-                    <div class="card-glow"></div>
-                    <div class="icon-wrapper"><i class="fas fa-list-alt"></i></div>
-                    <h3 class="card-title">View Expense</h3>
-                    <p class="card-description">See all recorded operational expenses.</p>
-                </div>
-            </section>
-        </div>
-
-        <!-- ===================== PAGE: ADD EXPENSE ===================== -->
-        <div id="page-add-expense" class="sub-page d-none">
-            <section class="page-title-section sub-title-section">
-                <button class="back-btn" onclick="showPage('page-expense-hub')"><i class="fas fa-arrow-left"></i> Back</button>
-                <h2 class="page-title">Add Expense</h2>
-                <p class="page-description">Record utilities, maintenance, supplies or any operational expense.</p>
-                <div class="title-divider"></div>
-            </section>
-
-            <div class="form-page-container centered-block">
-                <div class="form-group full-width">
-                    <label>Expense Amount (RS)</label>
-                    <input type="number" id="exp-amount" min="1" placeholder="Enter amount">
-                </div>
-                <div class="form-group full-width">
-                    <label>Description</label>
-                    <input type="text" id="exp-desc" placeholder="e.g. Electricity bill, maintenance supplies">
-                </div>
-                <div class="modal-actions mt-20">
-                    <button type="button" class="btn btn-cancel" onclick="showPage('page-expense-hub')">Cancel</button>
-                    <button type="button" class="btn btn-primary" onclick="handleExpenseSubmitNew()">Log Expense</button>
-                </div>
-            </div>
-        </div>
-
-        <!-- ===================== PAGE: VIEW EXPENSES ===================== -->
-        <div id="page-view-expenses" class="sub-page d-none">
-            <section class="page-title-section sub-title-section">
-                <button class="back-btn" onclick="showPage('page-expense-hub')"><i class="fas fa-arrow-left"></i> Back</button>
-                <h2 class="page-title">Expenses</h2>
-                <p class="page-description">All recorded operational expenses.</p>
-                <div class="title-divider"></div>
-            </section>
-
-            <div class="table-container centered-block">
-                <table class="finance-table">
-                    <thead>
-                        <tr>
-                            <th>Expense of</th>
-                            <th>Expense Amount (RS)</th>
-                        </tr>
-                    </thead>
-                    <tbody id="expenses-tbody">
-                        <tr><td colspan="2" class="empty-row">No expenses recorded yet.</td></tr>
-                    </tbody>
-                </table>
-            </div>
-        </div>
-
-
-
-
-                <!-- ===================== PAGE: SALARY HUB ===================== -->
-<div id="page-salary-hub" class="sub-page d-none">
-    <section class="page-title-section sub-title-section">
-        <button class="back-btn" onclick="showPage('page-main')"><i class="fas fa-arrow-left"></i> Back</button>
-        <h2 class="page-title">Manage Salaries</h2>
-        <p class="page-description">Select staff category to manage monthly payroll.</p>
-        <div class="title-divider"></div>
-    </section>
-
-    <section class="finance-cards-container sub-cards">
-        <div class="finance-card salary-theme" onclick="showPage('page-salary-teaching')">
-            <div class="card-glow"></div>
-            <div class="icon-wrapper"><i class="fas fa-chalkboard-teacher"></i></div>
-            <h3 class="card-title">Teaching Staff</h3>
-            <p class="card-description">Manage salaries for teachers and instructors.</p>
-        </div>
-        <div class="finance-card salary-theme" onclick="showPage('page-salary-non-teaching')">
-            <div class="card-glow"></div>
-            <div class="icon-wrapper"><i class="fas fa-user-tie"></i></div>
-            <h3 class="card-title">Non-Teaching Staff</h3>
-            <p class="card-description">Manage salaries for admin and support staff.</p>
-        </div>
-    </section>
-</div>
-
-<!-- ===================== PAGE: TEACHING SALARY ===================== -->
-<div id="page-salary-teaching" class="sub-page d-none">
-    <section class="page-title-section sub-title-section">
-        <button class="back-btn" onclick="showPage('page-salary-hub')"><i class="fas fa-arrow-left"></i> Back</button>
-        <h2 class="page-title">Teaching Staff Payroll</h2>
-        <p class="page-description">Monitor and process monthly salaries for teachers.</p>
-        <div class="title-divider"></div>
-    </section>
-
-    <!-- Search & Filter Bar -->
-    <div class="centered-block" style="max-width: 960px; margin-bottom: 20px;">
-        <div class="search-filter-box">
-            <div class="search-grid">
-                <div class="search-group" style="grid-column: span 2;">
-                    <label>Search Teacher</label>
-                    <div style="position: relative;">
-                        <i class="fas fa-search" style="position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--text-light);"></i>
-                        <input type="text" id="teacher-salary-search" placeholder="Enter Name or Teacher ID..." style="padding-left: 35px; width: 100%;" oninput="filterTeachingSalaries()">
-                    </div>
-                </div>
-                <div class="search-group">
-                    <label>Current Month</label>
-                    <input type="text" id="current-salary-month" readonly style="background: var(--bg-input); font-weight: 700; text-align: center;">
-                </div>
-            </div>
-        </div>
-    </div>
-
-
-    <!-- Salary Table -->
-    <div class="table-container centered-block">
-        <table class="finance-table">
-            <thead>
-                <tr>
-                    <th>Teacher ID</th>
-                    <th>Teacher Name</th>
-                    <th>Designation/Subject</th>
-                    <th>Basic Salary</th>
-                    <th>Taken Advance</th>
-                    <th>Status</th>
-                </tr>
-            </thead>
-            <tbody id="teaching-salary-tbody">
-                <!-- Data populated via JS -->
-            </tbody>
-        </table>
-    </div>
-</div>
-
-<!-- ===================== PAGE: NON-TEACHING SALARY ===================== -->
-<div id="page-salary-non-teaching" class="sub-page d-none">
-    <section class="page-title-section sub-title-section">
-        <button class="back-btn" onclick="showPage('page-salary-hub')"><i class="fas fa-arrow-left"></i> Back</button>
-        <h2 class="page-title">Non-Teaching Staff Payroll</h2>
-        <p class="page-description">Monitor and process monthly salaries for workers.</p>
-        <div class="title-divider"></div>
-    </section>
-
-    <!-- Search & Filter Bar -->
-    <div class="centered-block" style="max-width: 960px; margin-bottom: 20px;">
-        <div class="search-filter-box">
-            <div class="search-grid">
-                <div class="search-group" style="grid-column: span 2;">
-                    <label>Search Worker</label>
-                    <div style="position: relative;">
-                        <i class="fas fa-search" style="position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--text-light);"></i>
-                        <input type="text" id="worker-salary-search" placeholder="Enter Name or Worker ID..." style="padding-left: 35px; width: 100%;" oninput="filterNonTeachingSalaries()">
-                    </div>
-                </div>
-                <div class="search-group">
-                    <label>Current Month</label>
-                    <input type="text" id="current-salary-month-nt" readonly style="background: var(--bg-input); font-weight: 700; text-align: center;">
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Salary Table -->
-    <div class="table-container centered-block">
-        <table class="finance-table">
-            <thead>
-                <tr>
-                    <th>Worker ID</th>
-                    <th>Worker Name</th>
-                    <th>Job</th>
-                    <th>Basic Salary</th>
-                    <th>Taken Advance</th>
-                    <th>Status</th>
-                </tr>
-            </thead>
-            <tbody id="non-teaching-salary-tbody">
-                <!-- Data populated via JS -->
-            </tbody>
-        </table>
-    </div>
-</div>
-
-        <!-- Shared Salary Breakdown Overlay (used by Teaching & Non-Teaching) -->
-    <!-- Salary Breakdown Overlay (appears over the table when a teacher row is clicked) -->
-    <div id="salary-breakdown-backdrop" class="sbp-backdrop d-none" onclick="closeSalaryBreakdown()"></div>
-    <div id="salary-breakdown-panel" class="salary-breakdown-panel salary-breakdown-overlay d-none centered-block" data-teacher-id="">
-        <div class="sbp-header">
-            <div class="sbp-teacher-info">
-                <div class="sbp-avatar"><i class="fas fa-user-tie"></i></div>
-                <div>
-                    <div class="sbp-teacher-name" id="sbp-teacher-name">—</div>
-                    <div class="sbp-teacher-id" id="sbp-teacher-id">—</div>
-                </div>
-            </div>
-            <button class="sbp-close-btn" onclick="closeSalaryBreakdown()" title="Close"><i class="fas fa-times"></i></button>
-        </div>
-
-        <!-- Formula Banner -->
-        <div class="sbp-formula-box">
-            <span class="sbp-formula-text">
-                <i class="fas fa-calculator"></i>
-                &nbsp; Net Payable = &nbsp;
-                <span class="f-total">Total Salary</span>
-                &nbsp;+&nbsp;
-                <span class="f-bonus">Bonus</span>
-                &nbsp;−&nbsp;
-                <span class="f-security">Security</span>
-                &nbsp;−&nbsp;
-                <span class="f-deduct">Salary Deducted</span>
-                &nbsp;−&nbsp;
-                <span class="f-fine">Fine</span>
-                &nbsp;−&nbsp;
-                <span class="f-advance">Advance Taken</span>
-            </span>
-        </div>
-
-        <!-- Breakdown Cards -->
-        <div class="sbp-cards-grid">
-            <div class="sbp-card sbp-c-blue">
-                <label><i class="fas fa-money-bill-wave"></i> Total Salary</label>
-                <input type="text" id="sbp-total-salary" readonly>
-            </div>
-            <div class="sbp-card sbp-c-green">
-                <label><i class="fas fa-gift"></i> Bonus</label>
-                <input type="text" id="sbp-bonus" readonly>
-            </div>
-            <div class="sbp-card sbp-c-orange">
-                <label><i class="fas fa-shield-alt"></i> Security</label>
-                <input type="text" id="sbp-security" readonly>
-            </div>
-            <div class="sbp-card sbp-c-red">
-                <label><i class="fas fa-cut"></i> Fee Deducted</label>
-                <input type="text" id="sbp-fee-deducted" readonly>
-            </div>
-            <div class="sbp-card sbp-c-purple">
-                <label><i class="fas fa-exclamation-triangle"></i> Fine</label>
-                <input type="text" id="sbp-fine" readonly>
-            </div>
-            <div class="sbp-card sbp-c-yellow">
-                <label><i class="fas fa-hand-holding"></i> Advance Taken</label>
-                <input type="text" id="sbp-advance-taken" readonly>
-            </div>
-            <div class="sbp-card sbp-c-grand">
-                <label><i class="fas fa-hand-holding-usd"></i> Net Payable</label>
-                <input type="text" id="sbp-net-payable" readonly>
-            </div>
-        </div>
-
-        <!-- Pay Advance Salary Section -->
-        <div class="sbp-advance-section" style="margin-top:18px; padding:0; border:none; background:transparent;">
-            <button type="button" class="sbp-btn" id="sbp-toggle-advance-btn" onclick="toggleAdvancePay()" style="background:transparent; color:#14306b; border:1px dashed #cbd5e1; width:100%; justify-content:center; padding:12px;">
-                <i class="fas fa-hand-holding-usd"></i> Pay Advance Salary
-            </button>
-            <div id="sbp-advance-input-wrap" class="d-none" style="display:flex; gap:8px; align-items:center; margin-top:12px;">
-                <input type="number" min="1" id="sbp-advance-amount" placeholder="Enter advance amount..." style="flex:1; padding:10px 12px; border-radius:var(--radius-sm); border:1px solid var(--border-subtle); background:var(--bg-input); color:var(--text-primary);">
-                <button type="button" class="sbp-btn sbp-btn-pay" onclick="payAdvanceSalary()" style="padding:10px 18px;">
-                    <i class="fas fa-check"></i> Pay
-                </button>
-            </div>
-        </div>
-
-        <!-- Action Buttons -->
-        <div class="sbp-actions">
-            <button type="button" class="sbp-btn sbp-btn-cancel" onclick="closeSalaryBreakdown()">
-                <i class="fas fa-times"></i> Cancel
-            </button>
-            <button type="button" class="sbp-btn sbp-btn-pay" onclick="payCurrentSalary()">
-                <i class="fas fa-check"></i> Pay
-            </button>
-        </div>
-    </div>
-
-        <!-- ===================== VOUCHER VIEW MODAL ===================== -->
-
-        <!-- ===================== VOUCHER VIEW MODAL ===================== -->
-        <div id="voucher-modal-overlay" class="voucher-modal-overlay" style="display:none;">
-            <div class="voucher-modal-box">
-                <div class="voucher-modal-header">
-                    <h3><i class="fas fa-file-invoice"></i> Fee Voucher Preview</h3>
-                    <div class="voucher-modal-actions">
-                        <button class="btn-primary" onclick="printVoucherFromModal()"><i class="fas fa-print"></i> Print Voucher</button>
-                        <button class="action-edit-btn" id="edit-voucher-btn" onclick="openVoucherEditModal()" style="background:#f59e0b; color:#fff; padding:6px 14px; border:none; border-radius:6px; cursor:pointer;"><i class="fas fa-edit"></i> Edit Voucher</button>
-                        <button class="action-back-btn" onclick="closeVoucherModal()"><i class="fas fa-times"></i> Close</button>
-                    </div>
-                </div>
-                <div class="voucher-modal-scroll">
-                    <div id="voucher-render-target"></div>
-                </div>
-            </div>
-        </div>
-
-        <!-- ===================== ADD FEES MODAL ===================== -->
-        <div id="add-fees-modal" class="voucher-modal-overlay" style="display:none;">
-            <div class="voucher-modal-box afm-box">
-                <div class="voucher-modal-header afm-header">
-                    <div class="afm-header-left">
-                        <div class="afm-header-icon"><i class="fas fa-file-invoice-dollar"></i></div>
-                        <div>
-                            <h3>Fee Payment Entry</h3>
-                            <p id="afm-header-subtitle">Recording payment for student</p>
+                <div class="dash-card-body">
+                    <div class="metric-group">
+                        <div class="metric">
+                            <span class="metric-label">Expected Fees</span>
+                            <span class="metric-value text-blue">RS <span id="expected-fees">0</span></span>
+                        </div>
+                        <div class="metric">
+                            <span class="metric-label">Collected Fees</span>
+                            <span class="metric-value text-green">RS <span id="collected-fees">0</span></span>
+                        </div>
+                        <div class="metric">
+                            <span class="metric-label">Pending Fees</span>
+                            <span class="metric-value text-yellow">RS <span id="pending-fees">0</span></span>
+                        </div>
+                        <div class="metric">
+                            <span class="metric-label">Student Late Fines</span>
+                            <span class="metric-value text-green">RS <span id="student-late-fines">0</span></span>
+                        </div>
+                        <div class="metric">
+                            <span class="metric-label">Other Fines</span>
+                            <span class="metric-value text-green">RS <span id="student-other-fines">0</span></span>
                         </div>
                     </div>
-                    <button class="afm-close-btn" onclick="closeAddFeesModal()"><i class="fas fa-times"></i></button>
                 </div>
+            </div>
 
-                <div class="voucher-modal-scroll afm-scroll">
-                    <input type="hidden" id="add-fees-student-id">
-                    <div id="add-fees-student-summary" class="af-student-summary"></div>
-
-                    <!-- Compact header strip: name + monthly total + paid + remaining -->
-                    <div id="afm-pay-header" class="afm-pay-header"></div>
-
-                    <div id="afm-arrears-alert" style="display:none;" class="afm-arrears-alert">
-                        <div class="afm-arrears-icon"><i class="fas fa-exclamation-circle"></i></div>
-                        <div class="afm-arrears-text">
-                            <strong>Previous Arrears Pending</strong>
-                            <span id="afm-arrears-amount-text"></span>
+            <!-- Expenses: Salaries & Operational -->
+            <div class="dash-card expense-card">
+                <div class="card-glow expense-glow"></div>
+                <div class="dash-card-header">
+                    <h3><i class="fas fa-file-invoice-dollar"></i> Expenses & Adjustments</h3>
+                </div>
+                <div class="dash-card-body">
+                    <div class="metric-group">
+                        <div class="metric">
+                            <span class="metric-label">Base Salary Expenses</span>
+                            <span class="metric-value text-red">RS <span id="base-salaries">0</span></span>
                         </div>
-                        <div id="afm-arrears-badge" class="afm-arrears-badge"></div>
-                    </div>
-
-                    <div class="afm-two-col">
-                        <!-- LEFT: small student-copy voucher + discount + pay-bill area -->
-                        <div class="afm-left-stack">
-                            <div class="afm-left-panel afm-voucher-panel">
-                                <div id="afm-voucher-preview-container" class="afm-voucher-shrink"></div>
-                            </div>
-
-                            <div class="afm-left-panel afm-discount-panel">
-                                <div class="afm-panel-title"><i class="fas fa-percent"></i> Discount</div>
-                                <div class="afm-inline-field">
-                                    <input type="number" id="afm-pay-discount" class="afm-input" placeholder="0" min="0" oninput="recalcSimpleAFTotal()">
-                                    <span class="afm-rs-label">Rs.</span>
-                                </div>
-                                <p class="afm-helper-text">One-time discount on this payment.</p>
-                            </div>
-
-                            <div class="afm-left-panel afm-paybill-panel">
-                                <div class="afm-panel-title"><i class="fas fa-money-bill-wave"></i> Pay Bill</div>
-                                <div class="afm-paybill-grid">
-                                    <div class="afm-field-group">
-                                        <label class="afm-label"><i class="fas fa-credit-card"></i> Method</label>
-                                        <select id="af-payment-method" class="afm-input">
-                                            <option value="cash">💵 Cash</option>
-                                            <option value="bank">🏦 Bank Transfer</option>
-                                            <option value="cheque">📄 Cheque</option>
-                                            <option value="online">📱 Online Payment</option>
-                                        </select>
-                                    </div>
-                                    <div class="afm-field-group">
-                                        <label class="afm-label"><i class="fas fa-coins"></i> Amount Paid (Rs.)</label>
-                                        <input type="number" id="afm-pay-amount" class="afm-input" placeholder="Enter amount" min="0" oninput="recalcSimpleAFTotal()">
-                                    </div>
-                                    <div class="afm-field-group afm-notes-group">
-                                        <label class="afm-label"><i class="fas fa-sticky-note"></i> Notes</label>
-                                        <input type="text" id="af-fee-notes" placeholder="Receipt ref…" class="afm-input">
-                                    </div>
-                                </div>
-                                <button class="afm-confirm-btn afm-pay-btn" onclick="saveSimpleStudentFeePayment()">
-                                    <i class="fas fa-check-circle"></i>
-                                    <span>Confirm &amp; Record Payment</span>
-                                </button>
-                            </div>
+                        <div class="metric">
+                            <span class="metric-label">Staff Fines (Deducted)</span>
+                            <span class="metric-value text-green">RS <span id="staff-fines">0</span></span>
                         </div>
-
-                        <!-- RIGHT: live-updating summary -->
-                        <div class="afm-right-panel">
-                            <div class="afm-summary-title"><i class="fas fa-calculator"></i> Payment Summary</div>
-                            <div class="afm-totals-box" id="afm-totals-box">
-                                <div class="afm-total-row"><span>Gross Payable</span><strong id="afm-t-gross-sum">Rs. 0</strong></div>
-                                <div class="afm-total-row"><span><i class="fas fa-tag"></i> Discount</span><strong id="afm-t-disc-sum" style="color:#16a34a;">- Rs. 0</strong></div>
-                                <div class="afm-total-divider"></div>
-                                <div class="afm-total-row afm-grand-total"><span>Net Payable</span><strong id="afm-t-payable">Rs. 0</strong></div>
-                                <div class="afm-total-row"><span><i class="fas fa-money-bill"></i> Amount Paid</span><strong id="afm-t-paid-sum" style="color:#16a34a;">Rs. 0</strong></div>
-                                <div class="afm-total-divider"></div>
-                                <div class="afm-total-row afm-grand-total"><span>Remaining</span><strong id="afm-t-remaining" style="color:#c2410c;">Rs. 0</strong></div>
-                            </div>
+                        <div class="metric">
+                            <span class="metric-label">Staff Bonuses (Added)</span>
+                            <span class="metric-value text-red">RS <span id="staff-bonus">0</span></span>
                         </div>
-                    </div>
-
-                    <div class="af-history-panel" style="display:none; margin-top:18px;">
-                        <div class="af-panel-title"><i class="fas fa-history"></i> Payment History</div>
-                        <div id="af-payment-history"></div>
+                        <div class="metric">
+                            <span class="metric-label">Other Expenses</span>
+                            <span class="metric-value text-red">RS <span id="other-expenses">0</span></span>
+                        </div>
+                        <div class="metric total-expense-metric">
+                            <span class="metric-label">Total Net Expenses</span>
+                            <span class="metric-value text-red">RS <span id="net-expenses">0</span></span>
+                        </div>
                     </div>
                 </div>
             </div>
-        </div>
 
-        
-        <!-- ===================== INLINE EDITABLE VOUCHER MODAL ===================== -->
-        <div id="iev-modal-overlay" class="voucher-modal-overlay" style="display:none;">
-            <div class="voucher-modal-box iev-box">
-                <div class="voucher-modal-header iev-header">
-                    <div class="iev-header-left">
-                        <div class="iev-header-icon"><i class="fas fa-pen-to-square"></i></div>
-                        <div>
-                            <h3>Edit Full Voucher</h3>
-                            <p class="iev-header-sub">Click any field to edit. Use <strong>Add Row</strong> for new items.</p>
+            <!-- Profit & Loss (Bottom Line) -->
+            <div class="dash-card profit-card">
+                <div class="card-glow profit-glow"></div>
+                <div class="dash-card-header">
+                    <h3><i class="fas fa-chart-line"></i> Net Profit</h3>
+                    <span class="trend up" id="profit-trend"><i class="fas fa-arrow-up"></i> 0% vs last month</span>
+                </div>
+                <div class="dash-card-body">
+                    <div class="metric-group">
+                        <div class="metric main-metric">
+                            <span class="metric-label">Current Month</span>
+                            <span class="metric-value highlight-profit">RS <span id="net-profit">0</span></span>
+                        </div>
+                        <div class="metric main-metric past-metric">
+                            <span class="metric-label">Past Month</span>
+                            <span class="metric-value" style="color:var(--text-secondary);">RS <span id="past-month-profit">0</span></span>
                         </div>
                     </div>
-                    <button class="afm-close-btn" onclick="closeInlineVoucherEditor()" aria-label="Close"><i class="fas fa-times"></i></button>
-                </div>
-
-                <div class="voucher-modal-scroll iev-scroll">
-                    <div class="iev-meta-grid">
-                        <div><span>Student</span><strong id="iev-student-name">-</strong></div>
-                        <div><span>Reg. No</span><strong id="iev-student-reg">-</strong></div>
-                        <div><span>Class</span><strong id="iev-student-class">-</strong></div>
-                        <div><span>Month</span><strong id="iev-month-label">-</strong></div>
-                    </div>
-
-                    <table class="iev-table">
-                        <thead>
-                            <tr>
-                                <th style="width:34%;">Description</th>
-                                <th style="width:22%;">Period</th>
-                                <th style="width:18%;">Amount</th>
-                                <th style="width:18%;">Discount</th>
-                                <th style="width:8%;"></th>
-                            </tr>
-                        </thead>
-                        <tbody id="iev-rows-body"></tbody>
-                        <tfoot>
-                            <tr class="iev-subtotal-row">
-                                <td colspan="2">Subtotal (after discounts)</td>
-                                <td id="iev-subtotal" colspan="2">Rs. 0</td>
-                                <td></td>
-                            </tr>
-                            <tr class="iev-arrears-row">
-                                <td colspan="2"><i class="fas fa-clock"></i> Previous Arrears</td>
-                                <td colspan="2">
-                                    <div class="iev-amount-wrap">
-                                        <span class="iev-rs">Rs.</span>
-                                        <input type="number" min="0" id="iev-arrears-input"
-                                            class="iev-input iev-amount" value="0" placeholder="0"
-                                            oninput="ievUpdateArrears(this.value)">
-                                    </div>
-                                </td>
-                                <td></td>
-                            </tr>
-                            <tr class="iev-total-row">
-                                <td colspan="2"><i class="fas fa-wallet"></i> NET PAYABLE</td>
-                                <td id="iev-total" colspan="2">Rs. 0</td>
-                                <td></td>
-                            </tr>
-                        </tfoot>
-                    </table>
-
-                    <button type="button" class="iev-add-row-btn" onclick="ievAddRow()">
-                        <i class="fas fa-plus"></i> Add Row
-                    </button>
-
-                    <div class="iev-note-section">
-                        <label for="iev-note-input" class="iev-note-label">
-                            <i class="fas fa-sticky-note"></i> Note on Voucher
-                        </label>
-                        <textarea id="iev-note-input" class="iev-note-input" rows="3"
-                            placeholder="Optional note shown at the bottom of the printed voucher (e.g. payment instructions, remarks)."></textarea>
-                    </div>
-                </div>
-
-                <div class="iev-footer">
-                    <button class="action-back-btn" onclick="closeInlineVoucherEditor()"><i class="fas fa-times"></i> Cancel</button>
-                    <button class="btn-primary iev-save-btn" onclick="ievSave()"><i class="fas fa-check"></i> Save Voucher</button>
                 </div>
             </div>
-        </div>
 
-        <!-- ===================== ADD FEES TO VOUCHER MODAL ===================== -->
-        <div id="add-to-voucher-modal" class="voucher-modal-overlay" style="display:none;">
-            <div class="voucher-modal-box atv-box">
-                <div class="voucher-modal-header atv-header">
-                    <div class="atv-header-left">
-                        <div class="atv-header-icon"><i class="fas fa-file-invoice-dollar"></i></div>
-                        <div>
-                            <h3 id="atv-modal-title">Edit Voucher</h3>
-                            <p id="atv-header-subtitle">Generating voucher for student</p>
-                        </div>
-                    </div>
-                    <button class="afm-close-btn" onclick="closeAddToVoucherModal()"><i class="fas fa-times"></i></button>
-                </div>
-                <div class="voucher-modal-scroll atv-scroll">
-                    <input type="hidden" id="atv-student-id">
-                    <div id="atv-student-summary" class="af-student-summary"></div>
-
-                    <div class="atv-due-info-bar">
-                        <div class="atv-due-item"><i class="fas fa-calendar-check"></i><span>Due Date</span><strong id="atv-due-date-display">—</strong></div>
-                        <div class="atv-due-item"><i class="fas fa-calendar-times"></i><span>Expiry Date</span><strong id="atv-expiry-date-display">—</strong></div>
-                        <div class="atv-due-item atv-fine-item"><i class="fas fa-exclamation-triangle"></i><span>Late Fine</span><strong id="atv-late-fine-display">—</strong></div>
-                    </div>
-
-                    <div class="atv-section-label">
-                        <i class="fas fa-list-ul"></i> Fee Items for Voucher
-                        <span id="atv-fee-row-count" class="atv-fee-row-count"></span>
-                        <button type="button" id="atv-add-fee-btn" class="afm-add-fee-row-btn"><i class="fas fa-plus"></i> Add Fee</button>
-                    </div>
-
-                    <div class="afm-fee-items-wrap">
-                        <div class="afm-fee-items-header">
-                            <span>Fee Name</span><span>Amount (Rs.)</span><span>Discount (Rs.)</span><span>Net</span><span></span>
-                        </div>
-                        <div id="atv-fee-rows-container"></div>
-                    </div>
-
-                    <div class="afm-bulk-discount-row">
-                        <div class="afm-bulk-left"><i class="fas fa-percent" style="color:#7c3aed;"></i><span>Apply one-time discount on all fees</span></div>
-                        <div class="afm-bulk-right">
-                            <input type="number" id="atv-bulk-discount" placeholder="0" min="0" class="afm-mini-input" oninput="atvRecalc()">
-                            <span class="afm-rs-label">Rs.</span>
-                        </div>
-                    </div>
-
-                    <div class="atv-voucher-note-wrap">
-                        <label class="atv-note-label" for="atv-voucher-note"><i class="fas fa-sticky-note"></i> Voucher Note <span class="atv-note-hint">(shown at bottom of voucher &amp; Pay Fee preview)</span></label>
-                        <textarea id="atv-voucher-note" class="afm-input atv-voucher-note" rows="3" placeholder="e.g. Pay before due date to avoid late fine. Sibling discount applied this month."></textarea>
-                    </div>
-
-                    <div class="atv-totals-summary">
-                        <div class="atv-total-row"><span>Gross Total</span><strong id="atv-t-gross">Rs. 0</strong></div>
-                        <div class="atv-total-row atv-disc-row"><span><i class="fas fa-tag"></i> Discounts</span><strong id="atv-t-disc" style="color:#16a34a;">- Rs. 0</strong></div>
-                        <div class="atv-total-divider"></div>
-                        <div class="atv-total-row atv-grand"><span>Voucher Total</span><strong id="atv-t-grand">Rs. 0</strong></div>
-                        <div class="atv-total-row atv-late-row"><span><i class="fas fa-exclamation-triangle"></i> After Due Date (incl. fine)</span><strong id="atv-t-late">Rs. 0</strong></div>
-                    </div>
-
-                    <button class="afm-confirm-btn atv-save-btn" onclick="saveFeesToVoucher()">
-                        <i class="fas fa-file-invoice"></i>
-                        <span>Save & Generate Voucher</span>
-                    </button>
-                </div>
-            </div>
-        </div>
-
-        <div id="voucher-print-area" class="print-only"></div>
+        </section>
 
     </main>
 
     <script src="shared-data.js"></script>
-    <script src="manage-finance.js"></script>
+    <script src="index.js"></script>
 </body>
 </html>
