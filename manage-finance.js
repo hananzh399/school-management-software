@@ -253,17 +253,34 @@ function handleAddStudentFine() {
     const cls = student.studentClass || student.className || '-';
     const father = student.guardianName || '-';
 
-    // 1) Log the fine record (shown in View Records of student fines)
+    // Determine whether the current month's fee voucher has already been paid.
+    // If yes, the fine must be deferred to NEXT month's voucher instead of
+    // appearing on the already-paid one.
+    const currentMonthKey = getCurrentMonthKey();
+    const hasPaidThisMonth = Array.isArray(student.feePayments) &&
+        student.feePayments.some(p => p.monthKey === currentMonthKey);
+
+    const now = new Date();
+    const targetDate = hasPaidThisMonth
+        ? new Date(now.getFullYear(), now.getMonth() + 1, 1)
+        : now;
+    const targetMonthKey = `${targetDate.getFullYear()}-${String(targetDate.getMonth() + 1).padStart(2, '0')}`;
+    const targetPeriodShort = targetDate.toLocaleDateString('en-GB', { month: 'short', year: 'numeric' });
+    const targetPeriodLong  = targetDate.toLocaleDateString('en-GB', { month: 'long',  year: 'numeric' });
+
+    // 1) Log the fine record (shown in View Records of student fines for that month)
     const fines = getStudentFinesData();
     fines.push({
         id: student.id || student.regNo, name: name, className: cls, father: father,
         amount: amount, cause: desc, date: new Date().toLocaleDateString('en-US'),
-        monthKey: getCurrentMonthKey()
+        monthKey: targetMonthKey
     });
     saveStudentFinesData(fines);
 
     // 2) Add the fine as a line item in the student's fee voucher (otherFeesData)
-    // so it shows up explicitly on their voucher. We do NOT touch arrears here.
+    // so it shows up explicitly on the correct month's voucher. We tag it with
+    // monthKey so computeFeeBreakdown can hide future-month items from the
+    // current voucher. We do NOT touch arrears here.
     let existingFees = [];
     try { existingFees = JSON.parse(student.otherFeesData || '[]'); } catch(e) { existingFees = []; }
     // If voucherCustomFees is not already set, seed the base charges first so they aren't lost
@@ -278,9 +295,10 @@ function handleAddStudentFine() {
     }
     existingFees.push({
         description: 'Fine: ' + desc,
-        period: new Date().toLocaleDateString('en-GB', { month: 'short', year: 'numeric' }),
+        period: targetPeriodShort,
         amount: amount,
-        discount: 0
+        discount: 0,
+        monthKey: targetMonthKey
     });
     student.otherFeesData = JSON.stringify(existingFees);
     student.voucherCustomFees = true;
@@ -293,6 +311,15 @@ function handleAddStudentFine() {
     if (!db.students.fines) db.students.fines = { lateFees: 0, other: 0 };
     db.students.fines.other = (Number(db.students.fines.other) || 0) + amount;
     saveGlobalData(db);
+
+    if (hasPaidThisMonth) {
+        alert(`Current month already paid. Fine of RS ${amount.toLocaleString()} added to ${name}'s ${targetPeriodLong} voucher.`);
+        document.getElementById('student-fine-amount').value = '';
+        document.getElementById('student-fine-desc').value = '';
+        selectedStudentFineId = null;
+        showPage('page-student-fine');
+        return;
+    }
 
     alert(`Fine of RS ${amount.toLocaleString()} added to ${name} and posted to their fee bill.`);
     document.getElementById('student-fine-amount').value = '';
@@ -790,6 +817,10 @@ function computeFeeBreakdown(s) {
     // --- 3. Voucher-Only: Additional (Other) Fees ---
     let additionalFees = [];
     try { additionalFees = JSON.parse(s.otherFeesData || '[]'); } catch(e) { additionalFees = []; }
+    // Hide line items tagged for a FUTURE month (e.g. a fine added after the
+    // current month's voucher was already paid is deferred to next month).
+    const __curMonthKey = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
+    additionalFees = additionalFees.filter(f => !f.monthKey || f.monthKey <= __curMonthKey);
 
     // --- 4. Voucher-Only: Annual Fund (only in the configured month) ---
     const annualFundEnabled = s.annualFundEnabled === 'on' || s.annualFundEnabled === true;
