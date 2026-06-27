@@ -8,6 +8,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <link rel="stylesheet" href="attendance.css">
+    <script>(function(){const t=localStorage.getItem('eduflow-theme')||'dark';document.documentElement.setAttribute('data-theme',t);})()</script>
 </head>
 <body>
     <aside id="sidebar" class="sidebar">
@@ -22,11 +23,11 @@
         </div>
         <nav class="sidebar-nav">
             <div class="nav-label">Core Modules</div>
-            <a href="index.html" class="nav-link"><i class="fas fa-th-large"></i><span>Dashboard</span></a>
+                        <a href="index.html" class="nav-link"><i class="fas fa-th-large"></i><span>Dashboard</span></a>
             <a href="manage-students.html" class="nav-link"><i class="fas fa-user-graduate"></i><span>Student Management</span></a>
             <a href="manage-staff.html" class="nav-link"><i class="fas fa-chalkboard-teacher"></i><span>Staff Management</span></a>
-            <a href="attendance.html" class="nav-link active"><i class="fas fa-clipboard-check"></i><span>Attendance</span></a>
             <a href="manage-finance.html" class="nav-link"><i class="fas fa-file-invoice-dollar"></i><span>Fees &amp; Finance</span></a>
+            <a href="attendance.html" class="nav-link active"><i class="fas fa-clipboard-check"></i><span>Attendance</span></a>
             <a href="settings.html" class="nav-link"><i class="fas fa-cog"></i><span>Admin Settings</span></a>
         </nav>
         <div class="sidebar-footer">
@@ -221,6 +222,14 @@
                     <button class="filter-btn" data-range="30">Last 1 Month</button>
                     <button class="filter-btn" data-range="365">Last 1 Year</button>
                 </div>
+                <div class="view-actions" style="display:flex;gap:8px;margin-left:auto;">
+                    <button id="view-print-btn" class="bulk-btn" style="background:var(--indigo);color:#fff;border:none;padding:8px 14px;border-radius:8px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;font-weight:600;">
+                        <i class="fas fa-print"></i> Print
+                    </button>
+                    <button id="view-share-btn" class="bulk-btn" style="background:var(--emerald);color:#fff;border:none;padding:8px 14px;border-radius:8px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;font-weight:600;">
+                        <i class="fas fa-share-alt"></i> Share
+                    </button>
+                </div>
             </div>
 
             <div class="kpi-grid" id="view-kpis"></div>
@@ -252,6 +261,7 @@
         <div id="toast" class="toast hidden"></div>
     </main>
 
+    <script src="shared-data.js"></script>
     <script src="attendance.js"></script>
 </body>
 </html>

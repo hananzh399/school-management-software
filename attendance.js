@@ -3,84 +3,151 @@
    Flow: mode (Staff/Student) -> submode (Add/View) -> form or analytics
 */
  
-// ---------- MOCK DATA ----------
-const CLASSES = [
-    { name: "Class 1",  sections: ["A", "B", "C"] },
-    { name: "Class 2",  sections: ["A", "B", "C"] },
-    { name: "Class 3",  sections: ["A", "B"] },
-    { name: "Class 4",  sections: ["A", "B"] },
-    { name: "Class 5",  sections: ["A", "B"] },
-    { name: "Class 6",  sections: ["A", "B"] },
-    { name: "Class 7",  sections: ["A"] },
-    { name: "Class 8",  sections: ["A"] },
-    { name: "Class 9",  sections: ["A", "B"] },
-    { name: "Class 10", sections: ["A", "B"] },
-];
- 
-const FIRST_NAMES = ["Ali","Ahmad","Hassan","Hussain","Tahir","Timur","Aman","Bilal","Fatima","Ayesha","Zara","Hira","Sara","Maryam","Ibrahim","Yusuf","Omar","Saad","Hamza","Zainab"];
-const GUARDIANS  = ["Ahmad Khan","Ibrahim Ali","Yusuf Raza","Tariq Mehmood","Imran Sheikh","Kashif Iqbal","Adnan Malik","Faisal Aziz","Naseer Ahmed","Salman Tariq"];
+// ---------- REAL DATA FROM DATABASE ----------
+
 const LEAVE_REASONS = ["Sick Leave","Personal","Family Event","Medical Appointment","Travel","Other"];
- 
-let seed = 1;
-function rand() { seed = (seed * 9301 + 49297) % 233280; return seed / 233280; }
-function pick(arr) { return arr[Math.floor(rand() * arr.length)]; }
- 
-let _nextId = 771;
-function buildStudents() {
-    const all = [];
-    for (const cls of CLASSES) {
-        for (const section of cls.sections) {
-            const count = 8 + Math.floor(rand() * 8);
-            for (let i = 0; i < count; i++) {
-                all.push({
-                    regNo: `HRK_${_nextId++}`,
-                    name: `${pick(FIRST_NAMES)} ${pick(FIRST_NAMES)}`,
-                    class: cls.name,
-                    section,
-                    guardian: pick(GUARDIANS),
-                });
-            }
-        }
-    }
-    return all;
+
+/**
+ * Load real students from edu_students (managed by manage-students.js).
+ * Falls back to empty array if none saved yet.
+ * Normalises to the shape attendance needs: { regNo, name, class, section, guardian }
+ */
+function loadRealStudents() {
+    const raw = JSON.parse(localStorage.getItem('edu_students') || '[]');
+    return raw.map(s => {
+        const fullName = s.fullName
+            || ((s.firstName ? s.firstName + ' ' + (s.lastName || '') : '').trim())
+            || s.name
+            || 'Unknown';
+        return {
+            regNo:    s.regNo || s.studentId || s.id || ('STD-' + Math.random().toString(36).slice(2,7).toUpperCase()),
+            name:     fullName.trim(),
+            class:    s.studentClass || s.class || s.grade || s.className || 'Unassigned',
+            section:  s.section || 'A',
+            guardian: s.guardianName || s.fatherName || s.guardian || '—',
+        };
+    });
 }
-const STUDENTS = buildStudents();
- 
-const STAFF = [
-    { id: "STF_001", name: "Mr. Imran Sheikh",  role: "Teacher",       department: "Mathematics" },
-    { id: "STF_002", name: "Ms. Ayesha Khan",    role: "Teacher",       department: "English" },
-    { id: "STF_003", name: "Mr. Tariq Mehmood",  role: "Teacher",       department: "Science" },
-    { id: "STF_004", name: "Ms. Fatima Raza",    role: "Teacher",       department: "Urdu" },
-    { id: "STF_005", name: "Mr. Adnan Malik",    role: "Coordinator",   department: "Primary" },
-    { id: "STF_006", name: "Ms. Maryam Iqbal",   role: "Teacher",       department: "Islamiat" },
-    { id: "STF_007", name: "Mr. Saad Hussain",   role: "Lab Assistant", department: "Computer" },
-    { id: "STF_008", name: "Mr. Kashif Aziz",    role: "Admin",         department: "Office" },
-    { id: "STF_009", name: "Mrs. Zara Naseer",   role: "Teacher",       department: "Arts" },
-    { id: "STF_010", name: "Mr. Hamza Faisal",   role: "PE Teacher",    department: "Sports" },
-];
- 
-// ---------- HISTORICAL MOCK (for View) ----------
-// generate ~365 days of records per person
-function buildHistory(people, idKey) {
-    const today = new Date(); today.setHours(0,0,0,0);
-    const hist = {};
-    for (const p of people) {
-        const records = [];
-        for (let d = 0; d < 365; d++) {
-            const day = new Date(today); day.setDate(today.getDate() - d);
-            const r = rand();
-            let status, reason = null;
-            if (r < 0.82) status = "present";
-            else if (r < 0.93) status = "absent";
-            else { status = "leave"; reason = pick(LEAVE_REASONS); }
-            records.push({ date: day.toISOString().slice(0,10), status, reason });
+
+/* Ensure every record has a unique key; suffix duplicates so toggling
+   attendance on one row never affects another. */
+function _uniquifyKey(arr, keyName) {
+    const seen = {};
+    arr.forEach(item => {
+        let k = item[keyName] || ('AUTO-' + Math.random().toString(36).slice(2,7).toUpperCase());
+        if (seen[k] != null) {
+            seen[k] += 1;
+            k = k + '#' + seen[k];
+        } else {
+            seen[k] = 0;
         }
-        hist[p[idKey]] = records;
+        item[keyName] = k;
+    });
+    return arr;
+}
+
+/**
+ * Load real staff from the shared DB (eduflow-db → staff Teaching + Non-Teaching).
+ * Falls back to empty array.
+ * Normalises to: { id, name, role, department }
+ */
+function loadRealStaff() {
+    try {
+        const db = JSON.parse(localStorage.getItem('eduflow-db') || '{}');
+        const teaching    = (db.staff && db.staff['Teaching'])    || [];
+        const nonTeaching = (db.staff && db.staff['Non-Teaching']) || [];
+        const all = [];
+        teaching.forEach(s => all.push({
+            id:         s.id   || ('TCH-' + s.name.replace(/\s+/g,'').slice(0,4).toUpperCase()),
+            name:       s.name || 'Unknown',
+            role:       s.role || 'Teacher',
+            department: s.subjects || s.department || 'General',
+        }));
+        nonTeaching.forEach(s => all.push({
+            id:         s.id   || ('NTS-' + s.name.replace(/\s+/g,'').slice(0,4).toUpperCase()),
+            name:       s.name || 'Unknown',
+            role:       s.job  || s.role || 'Staff',
+            department: s.department || 'Support',
+        }));
+        return all;
+    } catch(e) { return []; }
+}
+
+/**
+ * Derive the list of classes+sections from the real student DB
+ * (or from edu_class_configs set in Settings if students not yet added).
+ */
+function loadRealClasses() {
+    // Prefer class configs from settings (always present)
+    const configs = JSON.parse(localStorage.getItem('edu_class_configs') || '[]');
+    if (configs.length > 0) {
+        return configs.map(c => ({
+            name:     c.name,
+            sections: Array.isArray(c.sections) && c.sections.length ? c.sections : ['A'],
+        }));
+    }
+    // Derive from real students
+    const students = loadRealStudents();
+    const map = {};
+    students.forEach(s => {
+        if (!map[s.class]) map[s.class] = new Set();
+        map[s.class].add(s.section);
+    });
+    return Object.keys(map).map(name => ({ name, sections: [...map[name]] }));
+}
+
+// Lazy-loaded so data is always fresh when a stage is entered
+let STUDENTS = [];
+let STAFF    = [];
+let CLASSES  = [];
+
+function refreshLiveData() {
+    STUDENTS = _uniquifyKey(loadRealStudents(), "regNo");
+    STAFF    = _uniquifyKey(loadRealStaff(), "id");
+    CLASSES  = loadRealClasses();
+}
+
+// Build history from saved localStorage attendance keys (real data)
+function buildRealStudentHistory(students) {
+    const hist = {};
+    students.forEach(s => { hist[s.regNo] = []; });
+    for (let key in localStorage) {
+        if (!key.startsWith('eduflow_att_')) continue;
+        try {
+            const payload = JSON.parse(localStorage.getItem(key));
+            if (!payload || !payload.records) continue;
+            Object.entries(payload.records).forEach(([regNo, entry]) => {
+                if (hist[regNo] !== undefined) {
+                    hist[regNo].push({ date: payload.date, status: entry.status, reason: entry.reason || null });
+                }
+            });
+        } catch(e) { /* skip */ }
     }
     return hist;
 }
-const STUDENT_HISTORY = buildHistory(STUDENTS, "regNo");
-const STAFF_HISTORY   = buildHistory(STAFF, "id");
+
+function buildRealStaffHistory(staff) {
+    const hist = {};
+    staff.forEach(s => { hist[s.id] = []; });
+    for (let key in localStorage) {
+        if (!key.startsWith('eduflow_staff_att_')) continue;
+        try {
+            const payload = JSON.parse(localStorage.getItem(key));
+            if (!payload || !payload.records) continue;
+            Object.entries(payload.records).forEach(([id, entry]) => {
+                if (hist[id] !== undefined) {
+                    hist[id].push({ date: payload.date, status: entry.status, reason: entry.reason || null });
+                }
+            });
+        } catch(e) { /* skip */ }
+    }
+    return hist;
+}
+
+// These are populated lazily when View stage is entered
+let STUDENT_HISTORY = {};
+let STAFF_HISTORY   = {};
+
  
 // ---------- STATE ----------
 const state = {
@@ -171,14 +238,13 @@ function initDate() {
 }
  
 function initTheme() {
-    const saved = localStorage.getItem("eduflow_theme") || "dark";
-    if (saved === "light") document.documentElement.setAttribute("data-theme", "light");
+    const saved = localStorage.getItem("eduflow-theme") || "dark";
+    document.documentElement.setAttribute("data-theme", saved);
     $("#theme-toggle").addEventListener("click", () => {
-        const cur = document.documentElement.getAttribute("data-theme") === "light" ? "light" : "dark";
-        const next = cur === "light" ? "dark" : "light";
-        if (next === "light") document.documentElement.setAttribute("data-theme", "light");
-        else document.documentElement.removeAttribute("data-theme");
-        localStorage.setItem("eduflow_theme", next);
+        const cur  = document.documentElement.getAttribute("data-theme") || "dark";
+        const next = cur === "dark" ? "light" : "dark";
+        document.documentElement.setAttribute("data-theme", next);
+        localStorage.setItem("eduflow-theme", next);
     });
 }
  
@@ -204,11 +270,15 @@ function initSubmodeCards() {
     $$("#stage-submode .choice-card").forEach(card => {
         card.addEventListener("click", () => {
             state.action = card.getAttribute("data-action");
+            refreshLiveData(); // always pull fresh DB data
             hideAllStages();
             if (state.action === "add") {
                 if (state.mode === "student") { renderClasses(); show("#stage-classes"); }
                 else { initStaffAttendance(); renderStaff(); show("#stage-staff"); }
             } else {
+                // Rebuild history from real saved records
+                STUDENT_HISTORY = buildRealStudentHistory(STUDENTS);
+                STAFF_HISTORY   = buildRealStaffHistory(STAFF);
                 renderView();
                 show("#stage-view");
             }
@@ -232,6 +302,14 @@ function initBackButtons() {
 function renderClasses() {
     const grid = $("#classes-grid");
     grid.innerHTML = "";
+    if (CLASSES.length === 0) {
+        grid.innerHTML = `<div style="grid-column:1/-1;text-align:center;padding:48px 24px;color:var(--text-muted);">
+            <i class="fas fa-school" style="font-size:2.5rem;margin-bottom:12px;display:block;opacity:0.4;"></i>
+            <strong>No classes found.</strong><br>
+            <span style="font-size:0.875rem;">Add classes in <a href="settings.html" style="color:var(--accent);">Admin Settings</a> or add students in <a href="manage-students.html" style="color:var(--accent);">Student Management</a>.</span>
+        </div>`;
+        return;
+    }
     CLASSES.forEach(cls => {
         const count = STUDENTS.filter(s => s.class === cls.name).length;
         const card = document.createElement("div");
@@ -490,8 +568,9 @@ function initSave() {
             records: state.staffAttendance,
         };
         localStorage.setItem(`eduflow_staff_att_${payload.date}`, JSON.stringify(payload));
+        applyAbsenceFines(); // auto-update fines in shared DB
         renderStaff();
-        toast("Staff attendance saved successfully");
+        toast("Staff attendance saved & fines updated");
     });
 }
  
@@ -509,15 +588,30 @@ function initStaff() {
     $("#staff-search").addEventListener("input", () => renderStaff());
 }
 function initStaffAttendance() {
-    if (Object.keys(state.staffAttendance).length === 0) {
-        STAFF.forEach(s => { state.staffAttendance[s.id] = { status: "present", reason: "" }; });
-    }
+    // Ensure every real staff member has an entry (add new, keep existing)
+    STAFF.forEach(s => {
+        if (!state.staffAttendance[s.id]) {
+            state.staffAttendance[s.id] = { status: "present", reason: "" };
+        }
+    });
+    // Remove entries for staff that no longer exist
+    const validIds = new Set(STAFF.map(s => s.id));
+    Object.keys(state.staffAttendance).forEach(id => {
+        if (!validIds.has(id)) delete state.staffAttendance[id];
+    });
 }
  
 function renderStaff() {
     const tbody = $("#staff-tbody");
     const q = ($("#staff-search").value || "").trim().toLowerCase();
     tbody.innerHTML = "";
+    if (STAFF.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:48px;color:var(--text-muted);">
+            <i class="fas fa-user-slash" style="font-size:2rem;margin-bottom:10px;display:block;opacity:0.4;"></i>
+            No staff found. Add staff in <a href="manage-staff.html" style="color:var(--accent);">Staff Management</a>.
+        </td></tr>`;
+        return;
+    }
     const rows = STAFF.filter(s => !q || s.name.toLowerCase().includes(q) || s.id.toLowerCase().includes(q));
     rows.forEach((s, idx) => {
         const entry = state.staffAttendance[s.id] || { status: "present", reason: "" };
@@ -609,6 +703,80 @@ function initView() {
             renderView();
         });
     });
+
+    // ---------- PRINT ----------
+    const printBtn = document.getElementById("view-print-btn");
+    if (printBtn) {
+        printBtn.addEventListener("click", () => {
+            const title  = document.getElementById("view-title").textContent || "Attendance Report";
+            const kpis   = document.getElementById("view-kpis").outerHTML;
+            const table  = document.querySelector("#stage-view .table-card").outerHTML;
+            const dateStr = new Date().toLocaleDateString(undefined,{weekday:'long',year:'numeric',month:'long',day:'numeric'});
+            const w = window.open("", "_blank", "width=1000,height=800");
+            if (!w) { toast("Pop-up blocked — please allow pop-ups to print."); return; }
+            w.document.write(`<!doctype html><html><head><title>${title}</title>
+                <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+                <style>
+                    body{font-family:Inter,Arial,sans-serif;padding:24px;color:#0f172a;}
+                    h1{font-size:22px;margin:0 0 4px;} .sub{color:#64748b;font-size:13px;margin-bottom:18px;}
+                    table{width:100%;border-collapse:collapse;font-size:13px;}
+                    th,td{border:1px solid #e2e8f0;padding:8px 10px;text-align:left;}
+                    th{background:#f1f5f9;}
+                    .kpi-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:18px;}
+                    .kpi-card{border:1px solid #e2e8f0;border-radius:10px;padding:12px;}
+                    .kpi-label{font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:.5px;}
+                    .kpi-value{font-size:20px;font-weight:700;margin-top:4px;}
+                    .kpi-value.small{font-size:14px;}
+                    .kpi-icon{display:none;}
+                    .badge{display:inline-block;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600;background:#f1f5f9;}
+                    .badge-present{background:#dcfce7;color:#15803d;}
+                    .badge-absent{background:#fee2e2;color:#b91c1c;}
+                    .badge-leave{background:#fef3c7;color:#a16207;}
+                    .id-badge{font-family:monospace;background:#f1f5f9;padding:2px 6px;border-radius:4px;font-size:11px;}
+                    @media print { button{display:none;} }
+                </style></head><body>
+                <h1>${title}</h1>
+                <div class="sub">St. Lawrence International School &middot; ${dateStr}</div>
+                ${kpis}${table}
+                <script>window.onload=()=>{setTimeout(()=>window.print(),250);};<\/script>
+                </body></html>`);
+            w.document.close();
+        });
+    }
+
+    // ---------- SHARE ----------
+    const shareBtn = document.getElementById("view-share-btn");
+    if (shareBtn) {
+        shareBtn.addEventListener("click", async () => {
+            const title  = document.getElementById("view-title").textContent || "Attendance Report";
+            const tbody  = document.getElementById("view-tbody");
+            const rows   = [...tbody.querySelectorAll("tr")];
+            const dateStr = new Date().toLocaleDateString();
+            let text = `${title}\n${dateStr}\n\n`;
+            rows.forEach(tr => {
+                const cells = [...tr.querySelectorAll("td")].map(td => td.innerText.trim());
+                if (cells.length) text += cells.join(" | ") + "\n";
+            });
+            const shareData = { title, text };
+            try {
+                if (navigator.share) {
+                    await navigator.share(shareData);
+                    toast("Shared successfully");
+                } else if (navigator.clipboard) {
+                    await navigator.clipboard.writeText(text);
+                    toast("Report copied to clipboard");
+                } else {
+                    const w = window.open("", "_blank");
+                    w.document.write("<pre>"+text.replace(/</g,"&lt;")+"</pre>");
+                    w.document.close();
+                }
+            } catch (err) {
+                if (err && err.name === "AbortError") return; // user cancelled
+                try { await navigator.clipboard.writeText(text); toast("Report copied to clipboard"); }
+                catch(e){ toast("Unable to share: " + (err.message || err)); }
+            }
+        });
+    }
 }
  
 function renderView() {
@@ -693,3 +861,84 @@ function kpiCard(iconClass, fa, label, value) {
 
 
 
+
+// ---------- AUTO FINE APPLICATION ----------
+/**
+ * Reads all saved staff attendance records for the current month,
+ * counts absent days per staff member, computes fines using their
+ * penalty settings from Settings (or global pay variables),
+ * and writes the total fine back into the shared DB so finance pages
+ * and settings cards show the correct deductions automatically.
+ */
+function applyAbsenceFines() {
+    try {
+        const db = JSON.parse(localStorage.getItem('eduflow-db') || '{}');
+        if (!db.staff) return;
+
+        const vars = JSON.parse(localStorage.getItem('edu_pay_variables') || '{}');
+        const globalPenaltyType  = vars.penaltyType  || 'percent';
+        const globalPenaltyValue = parseFloat(vars.penaltyValue) || 3;
+
+        const now = new Date();
+        const month = now.getMonth();
+        const year  = now.getFullYear();
+
+        // Gather all this-month attendance records
+        const monthRecords = {}; // staffId -> [status, ...]
+        for (let key in localStorage) {
+            if (!key.startsWith('eduflow_staff_att_')) continue;
+            const dateStr = key.replace('eduflow_staff_att_', '');
+            const d = new Date(dateStr);
+            if (isNaN(d.getTime()) || d.getMonth() !== month || d.getFullYear() !== year) continue;
+            try {
+                const payload = JSON.parse(localStorage.getItem(key));
+                if (!payload || !payload.records) continue;
+                Object.entries(payload.records).forEach(([id, entry]) => {
+                    if (!monthRecords[id]) monthRecords[id] = [];
+                    monthRecords[id].push(entry.status);
+                });
+            } catch(e) { /* skip */ }
+        }
+
+        // Helper: count absents (absent + leave both count as non-present for fine)
+        function countAbsents(records) {
+            return records.filter(s => s === 'absent').length; // only 'absent' triggers fine; 'leave' usually doesn't
+        }
+
+        // Apply fine to Teaching staff
+        db.staff['Teaching'] = (db.staff['Teaching'] || []).map(s => {
+            const records = monthRecords[s.id] || [];
+            const absentDays = countAbsents(records);
+            const salary = parseFloat(s.salary) || 0;
+            const pType  = s.penaltyType  || globalPenaltyType;
+            const pValue = parseFloat(s.penaltyValue != null ? s.penaltyValue : globalPenaltyValue);
+            let fine = 0;
+            if (absentDays > 0) {
+                fine = pType === 'percent'
+                    ? Math.round((salary * pValue / 100) * absentDays)
+                    : Math.round(pValue * absentDays);
+            }
+            return { ...s, fines: fine, absentDaysThisMonth: absentDays };
+        });
+
+        // Apply fine to Non-Teaching staff
+        db.staff['Non-Teaching'] = (db.staff['Non-Teaching'] || []).map(s => {
+            const records = monthRecords[s.id] || [];
+            const absentDays = countAbsents(records);
+            const salary = parseFloat(s.salary) || 0;
+            const pType  = s.penaltyType  || globalPenaltyType;
+            const pValue = parseFloat(s.penaltyValue != null ? s.penaltyValue : globalPenaltyValue);
+            let fine = 0;
+            if (absentDays > 0) {
+                fine = pType === 'percent'
+                    ? Math.round((salary * pValue / 100) * absentDays)
+                    : Math.round(pValue * absentDays);
+            }
+            return { ...s, fines: fine, absentDaysThisMonth: absentDays };
+        });
+
+        localStorage.setItem('eduflow-db', JSON.stringify(db));
+    } catch(e) {
+        console.warn('applyAbsenceFines error:', e);
+    }
+}

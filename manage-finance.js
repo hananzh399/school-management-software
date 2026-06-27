@@ -1924,6 +1924,11 @@ function renderTeachingSalaries(filterText = '') {
     tbody.innerHTML = filtered.map(t => {
         const isPaid = (t.salaryHistory || []).some(h => h.monthKey === currentMonthKey);
         const advance = getTotalAdvance(t.id);
+        const absenceFine = Number(t.fines) || 0;
+        const absentDays  = Number(t.absentDaysThisMonth) || 0;
+        const fineLabel   = absenceFine > 0
+            ? `<span style="color:#ef4444;font-weight:600;">− RS ${absenceFine.toLocaleString()}</span><span style="font-size:10px;color:var(--text-secondary);display:block;">${absentDays}d absent</span>`
+            : `<span style="color:var(--text-secondary);font-size:12px;">None</span>`;
         return `
             <tr class="salary-row-clickable" onclick="showSalaryBreakdown('${t.id}', 'Teaching')" title="Click to view salary breakdown">
                 <td class="teacher-id-cell">${t.id}</td>
@@ -1933,6 +1938,7 @@ function renderTeachingSalaries(filterText = '') {
                 </td>
                 <td>${t.subjects || 'General Teacher'}</td>
                 <td><strong>RS ${(Number(t.salary) || 0).toLocaleString()}</strong></td>
+                <td>${fineLabel}</td>
                 <td><strong style="color:#eab308;">RS ${advance.toLocaleString()}</strong></td>
                 <td>
                     <span class="status-badge ${isPaid ? 'status-paid' : 'status-pending'}">
@@ -1979,6 +1985,11 @@ function renderNonTeachingSalaries(filterText = '') {
     tbody.innerHTML = filtered.map(w => {
         const isPaid = (w.salaryHistory || []).some(h => h.monthKey === currentMonthKey);
         const advance = getTotalAdvance(w.id);
+        const absenceFine = Number(w.fines) || 0;
+        const absentDays  = Number(w.absentDaysThisMonth) || 0;
+        const fineLabel   = absenceFine > 0
+            ? `<span style="color:#ef4444;font-weight:600;">− RS ${absenceFine.toLocaleString()}</span><span style="font-size:10px;color:var(--text-secondary);display:block;">${absentDays}d absent</span>`
+            : `<span style="color:var(--text-secondary);font-size:12px;">None</span>`;
         return `
             <tr class="salary-row-clickable" onclick="showSalaryBreakdown('${w.id}', 'Non-Teaching')" title="Click to view salary breakdown">
                 <td class="teacher-id-cell">${w.id}</td>
@@ -1988,6 +1999,7 @@ function renderNonTeachingSalaries(filterText = '') {
                 </td>
                 <td>${w.job || 'Worker'}</td>
                 <td><strong>RS ${(Number(w.salary) || 0).toLocaleString()}</strong></td>
+                <td>${fineLabel}</td>
                 <td><strong style="color:#eab308;">RS ${advance.toLocaleString()}</strong></td>
                 <td>
                     <span class="status-badge ${isPaid ? 'status-paid' : 'status-pending'}">
@@ -2045,7 +2057,11 @@ function showSalaryBreakdown(staffId, category = 'Teaching') {
     const manualSecurity = Number(staff.security) || 0;
     const security      = secInfo.monthlyDue + manualSecurity;
 
-    const netPayable    = baseSalary + totalBonus - security - feeDeducted - totalFine - advanceTaken;
+    // Auto absence fine (written by attendance.js applyAbsenceFines)
+    const absenceFine   = Number(staff.fines) || 0;
+    const absentDays    = Number(staff.absentDaysThisMonth) || 0;
+
+    const netPayable    = baseSalary + totalBonus - security - feeDeducted - totalFine - absenceFine - advanceTaken;
     const fmt = n => 'RS ' + Math.max(0, n).toLocaleString();
 
     document.getElementById('sbp-teacher-name').textContent = staff.name;
@@ -2060,6 +2076,11 @@ function showSalaryBreakdown(staffId, category = 'Teaching') {
     document.getElementById('sbp-advance-taken').value  = fmt(advanceTaken);
     document.getElementById('sbp-net-payable').value    = 'RS ' + netPayable.toLocaleString();
 
+    // Absence fine — auto from attendance
+    const absEl = document.getElementById('sbp-absence-fine');
+    const absLabel = document.getElementById('sbp-absent-days-label');
+    if (absEl) absEl.value = absenceFine > 0 ? fmt(absenceFine) : 'RS 0';
+    if (absLabel) absLabel.textContent = absentDays > 0 ? `(${absentDays}d)` : '';
 
     // reset advance input UI
     const wrap = document.getElementById('sbp-advance-input-wrap');
@@ -2118,10 +2139,12 @@ function processSalaryPayment(staffId, category = 'Teaching') {
     const staff = list.find(s => s.id === staffId);
     if (!staff) return;
 
-    if (confirm(`Confirm salary payment of RS ${Number(staff.salary).toLocaleString()} to ${staff.name}?`)) {
+    const absenceFine = Number(staff.fines) || 0;
+    const netSalary   = Math.max(0, Number(staff.salary) - absenceFine);
+    const fineNote    = absenceFine > 0 ? ` (after RS ${absenceFine.toLocaleString()} absence fine)` : '';
+
+    if (confirm(`Confirm salary payment of RS ${netSalary.toLocaleString()} to ${staff.name}?${fineNote}`)) {
         if (!staff.salaryHistory) staff.salaryHistory = [];
-
-
 
         // Apply this month's security deduction (if any pending)
         const secInfo = computeMonthlySecurity(staff);
@@ -2130,17 +2153,24 @@ function processSalaryPayment(staffId, category = 'Teaching') {
             staff.securityCollected = (Number(staff.securityCollected) || 0) + secDeducted;
         }
 
+        // Reset absence fine after payment (marks it as settled)
+        staff.finesPaidThisMonth = absenceFine;
+        staff.fines = 0;
+        staff.absentDaysThisMonth = 0;
+
         staff.salaryHistory.push({
             date: new Date().toISOString(),
             monthKey: getCurrentMonthKey(),
             amount: staff.salary,
+            absenceFineDeducted: absenceFine,
             securityDeducted: secDeducted,
             status: 'Paid'
         });
 
         saveGlobalData(db);
         const note = secDeducted > 0 ? `\nSecurity deducted: RS ${secDeducted.toLocaleString()}` : '';
-        alert(`Salary processed successfully for ${staff.name}${note}`);
+        const fineMsg = absenceFine > 0 ? `\nAbsence fine deducted: RS ${absenceFine.toLocaleString()}` : '';
+        alert(`Salary processed successfully for ${staff.name}${fineMsg}${note}`);
         if (category === 'Teaching') {
             renderTeachingSalaries(document.getElementById('teacher-salary-search').value);
         } else {

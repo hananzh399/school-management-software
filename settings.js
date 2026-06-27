@@ -1,6 +1,6 @@
 // ═══════════════════════════════════════════════
 //  EduFlow Pro — Admin Settings
-//  settings.js
+//  settings.js  (updated: dark mode + attendance link)
 // ═══════════════════════════════════════════════
 
 const CLASSES_KEY     = 'edu_class_configs';
@@ -37,9 +37,9 @@ const DEFAULT_TEACHERS = [
 ];
 
 const DEFAULT_NONTEACHING = [
-  { name: 'Imran Khan',   subject: 'Accountant',    salary: 22000, penaltyType: 'percent', penaltyValue: 3, bonus: 800 },
-  { name: 'Rabia Aslam',  subject: 'Receptionist',  salary: 18000, penaltyType: 'fixed',   penaltyValue: 400, bonus: 700 },
-  { name: 'Abdul Rehman', subject: 'Security Guard',salary: 16000, penaltyType: 'fixed',   penaltyValue: 350, bonus: 500 },
+  { name: 'Imran Khan',   subject: 'Accountant',     salary: 22000, penaltyType: 'percent', penaltyValue: 3, bonus: 800 },
+  { name: 'Rabia Aslam',  subject: 'Receptionist',   salary: 18000, penaltyType: 'fixed',   penaltyValue: 400, bonus: 700 },
+  { name: 'Abdul Rehman', subject: 'Security Guard',  salary: 16000, penaltyType: 'fixed',   penaltyValue: 350, bonus: 500 },
 ];
 
 const DEFAULT_VARIABLES = {
@@ -52,9 +52,118 @@ const CLASS_ICONS  = ['fa-chalkboard','fa-book','fa-pencil-alt','fa-star','fa-me
 const CLASS_COLORS = ['#1a9e6e','#3b82f6','#8b5cf6','#f59e0b','#ef4444','#06b6d4'];
 
 // ═══════════════════════════════════════════════
+//  DARK MODE
+// ═══════════════════════════════════════════════
+function toggleDarkMode() {
+  const html = document.documentElement;
+  const isDark = html.getAttribute('data-theme') === 'dark';
+  if (isDark) {
+    html.removeAttribute('data-theme');
+    localStorage.setItem('eduflow-theme', 'light');
+  } else {
+    html.setAttribute('data-theme', 'dark');
+    localStorage.setItem('eduflow-theme', 'dark');
+  }
+  updateThemeIcon();
+}
+
+function updateThemeIcon() {
+  const icon = document.getElementById('theme-icon');
+  if (!icon) return;
+  const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+  icon.className = isDark ? 'fas fa-sun' : 'fas fa-moon';
+}
+
+function initDarkMode() {
+  const saved = localStorage.getItem('eduflow-theme');
+  if (saved === 'dark') {
+    document.documentElement.setAttribute('data-theme', 'dark');
+  } else {
+    document.documentElement.removeAttribute('data-theme');
+  }
+  updateThemeIcon();
+}
+
+// ═══════════════════════════════════════════════
+//  ATTENDANCE → ABSENCE FINE HELPERS
+// ═══════════════════════════════════════════════
+
+/**
+ * Reads saved staff attendance records from localStorage (written by attendance.js)
+ * and counts absent days for a given staff member in the current month.
+ * Key format: eduflow_staff_att_YYYY-MM-DD
+ */
+function getAbsentDaysThisMonth(staffId) {
+  const now = new Date();
+  const month = now.getMonth();
+  const year  = now.getFullYear();
+  let count = 0;
+
+  for (let key in localStorage) {
+    if (!key.startsWith('eduflow_staff_att_')) continue;
+    const dateStr = key.replace('eduflow_staff_att_', '');
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) continue;
+    if (d.getMonth() !== month || d.getFullYear() !== year) continue;
+
+    try {
+      const payload = JSON.parse(localStorage.getItem(key));
+      if (payload && payload.records && payload.records[staffId]) {
+        if (payload.records[staffId].status === 'absent') count++;
+      }
+    } catch (e) { /* skip */ }
+  }
+  return count;
+}
+
+/**
+ * Calculates the fine amount for a staff card based on their penalty settings
+ * and attendance records for the current month.
+ */
+function computeAbsenceFine(salary, penaltyType, penaltyValue, staffId) {
+  const absentDays = getAbsentDaysThisMonth(staffId);
+  if (!absentDays) return { fine: 0, absentDays: 0 };
+  let fine = 0;
+  if (penaltyType === 'percent') {
+    // Per-day % of monthly salary
+    fine = (salary * (penaltyValue / 100)) * absentDays;
+  } else {
+    fine = penaltyValue * absentDays;
+  }
+  return { fine: Math.round(fine), absentDays };
+}
+
+/**
+ * Injects an absence-deduction badge into a teacher card if there are
+ * absent records this month.
+ */
+function injectAbsenceBadge(card, salary, penaltyType, penaltyValue, staffId) {
+  // Remove any existing badge first
+  const old = card.querySelector('.absence-deduction-badge');
+  if (old) old.remove();
+  if (!staffId) return;
+
+  const { fine, absentDays } = computeAbsenceFine(salary, penaltyType, penaltyValue, staffId);
+  if (absentDays === 0) return;
+
+  const badge = document.createElement('div');
+  badge.className = 'absence-deduction-badge';
+  badge.innerHTML = `
+    <i class="fas fa-calendar-times"></i>
+    <span>
+      <strong>${absentDays} absent day${absentDays !== 1 ? 's' : ''}</strong> this month —
+      deduction: <strong>Rs ${fine.toLocaleString()}</strong>
+      <span style="color:var(--text-muted);font-size:11px;">(auto from attendance)</span>
+    </span>
+  `;
+  card.querySelector('.penalty-section').after(badge);
+}
+
+// ═══════════════════════════════════════════════
 //  INIT
 // ═══════════════════════════════════════════════
 document.addEventListener('DOMContentLoaded', () => {
+  initDarkMode();
   loadClasses();
   loadLateFee();
   loadTeachers();
@@ -116,8 +225,8 @@ function openDeleteModal(el, type) {
     nonteaching: 'Remove this staff member?',
   };
   const bodyMap  = {
-    class:   'This will permanently remove the class and its fee configuration. Students already admitted won\'t be affected.',
-    teacher: 'This will remove the teacher record and their pay configuration from this system.',
+    class:       'This will permanently remove the class and its fee configuration. Students already admitted won\'t be affected.',
+    teacher:     'This will remove the teacher record and their pay configuration from this system.',
     nonteaching: 'This will remove the non-teaching staff record and their pay configuration from this system.',
   };
 
@@ -135,8 +244,6 @@ function closeModal() {
 document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('modal-confirm-btn').addEventListener('click', () => {
     if (_pendingDeleteEl) {
-      // If a linked teacher card is being deleted, also remove the
-      // matching staff record from the shared Staff Management store.
       if (_pendingDeleteType === 'teacher') {
         const staffId = _pendingDeleteEl.dataset && _pendingDeleteEl.dataset.staffId;
         if (staffId) {
@@ -158,8 +265,6 @@ document.addEventListener('DOMContentLoaded', () => {
     closeModal();
   });
 
-
-  // Close modal on overlay click
   document.getElementById('confirm-modal').addEventListener('click', function (e) {
     if (e.target === this) closeModal();
   });
@@ -196,14 +301,14 @@ function appendClassCard(name, fee, fund, isNew = false, sections = []) {
         <div class="fee-label">Monthly Tuition</div>
         <div class="input-prefix-wrap">
           <span class="input-prefix">Rs</span>
-          <input type="number" class="fee-input-field" value="${fee}" placeholder="0" min="0">
+          <input type="number" class="fee-input-field" value="${fee}" placeholder="0" min="0" style="padding-left:28px;">
         </div>
       </div>
       <div>
         <div class="fee-label">Annual Fund</div>
         <div class="input-prefix-wrap">
           <span class="input-prefix">Rs</span>
-          <input type="number" class="fund-input-field" value="${fund}" placeholder="0" min="0">
+          <input type="number" class="fund-input-field" value="${fund}" placeholder="0" min="0" style="padding-left:28px;">
         </div>
       </div>
     </div>
@@ -222,16 +327,13 @@ function appendClassCard(name, fee, fund, isNew = false, sections = []) {
     </div>
   `;
 
-  // Wire delete button to confirmation modal
   div.querySelector('.delete-card-btn').addEventListener('click', () => {
     openDeleteModal(div, 'class');
   });
 
-  // Render existing sections
   const listEl = div.querySelector('.sections-list');
   sections.forEach(s => listEl.appendChild(buildSectionChip(s, div)));
 
-  // Add section button
   div.querySelector('.btn-add-section').addEventListener('click', () => {
     const chip = buildSectionChip('', div, true);
     listEl.appendChild(chip);
@@ -277,7 +379,7 @@ function addClassCard() {
 function loadLateFee() {
   const saved = JSON.parse(localStorage.getItem(LATEFEE_KEY)) || DEFAULT_LATEFEE;
 
-  document.getElementById('latefee-enabled').checked  = saved.enabled !== false;
+  document.getElementById('latefee-enabled').checked    = saved.enabled !== false;
   document.getElementById('latefee-deadline-day').value = saved.deadlineDay;
   document.getElementById('latefee-type').value         = saved.type;
   document.getElementById('latefee-amount').value       = saved.amount;
@@ -304,10 +406,10 @@ function syncLateFeePrefix() {
 }
 
 function updateLateFeePreview() {
-  const day    = parseInt(document.getElementById('latefee-deadline-day').value, 10)  || 0;
-  const grace  = parseInt(document.getElementById('latefee-grace').value, 10)          || 0;
+  const day    = parseInt(document.getElementById('latefee-deadline-day').value, 10) || 0;
+  const grace  = parseInt(document.getElementById('latefee-grace').value, 10)         || 0;
   const type   = document.getElementById('latefee-type').value;
-  const amount = parseFloat(document.getElementById('latefee-amount').value)           || 0;
+  const amount = parseFloat(document.getElementById('latefee-amount').value)          || 0;
   const cutoff = day + grace;
 
   const amountText = type === 'percent'
@@ -319,10 +421,8 @@ function updateLateFeePreview() {
 }
 
 // ═══════════════════════════════════════════════
-//  TEACHERS  (linked to Staff Management — Teaching staff)
+//  TEACHERS  (linked to Staff Management)
 // ═══════════════════════════════════════════════
-
-// --- Shared store helpers (uses shared-data.js when present) ---
 function _hasSharedStore() {
   return typeof getGlobalData === 'function' && typeof saveGlobalData === 'function';
 }
@@ -344,10 +444,6 @@ function setSharedTeachers(list) {
   return true;
 }
 
-/**
- * Map a Teaching-staff record (from manage-staff.js) into the
- * shape used by the Teachers cards in settings.
- */
 function _staffToTeacher(s) {
   return {
     id:           s.id || null,
@@ -357,7 +453,7 @@ function _staffToTeacher(s) {
     penaltyType:  s.penaltyType  ?? undefined,
     penaltyValue: s.penaltyValue ?? undefined,
     bonus:        s.bonus        ?? undefined,
-    _linked:      !!s.id, // came from the shared staff directory
+    _linked:      !!s.id,
   };
 }
 
@@ -366,19 +462,16 @@ function loadTeachers() {
   const grid = document.getElementById('teacher-grid');
   grid.innerHTML = '';
 
-  // 1. Prefer the live Teaching-staff list from Staff Management.
   const sharedTeaching = getSharedTeachers();
   if (sharedTeaching && sharedTeaching.length) {
     sharedTeaching.forEach(s => appendTeacherCard(_staffToTeacher(s), false));
     return;
   }
 
-  // 2. Fallback: legacy localStorage list (or seed defaults).
   const saved = JSON.parse(localStorage.getItem(TEACHERS_KEY)) || DEFAULT_TEACHERS;
   saved.forEach(t => appendTeacherCard(t, false));
 }
 
-// Re-sync teachers if the staff list is updated in another tab.
 window.addEventListener('storage', (e) => {
   if (e.key && e.key.toLowerCase().includes('staff')) {
     if (document.getElementById('teacher-grid')) loadTeachers();
@@ -391,7 +484,6 @@ function appendTeacherCard(t = {}, isNew = true) {
   const div  = document.createElement('div');
   div.className = 'teacher-card' + (isNew ? ' is-new' : '');
 
-  // Remember whether this card is linked to a Staff-Management record.
   if (t.id) div.dataset.staffId = t.id;
 
   const salary       = t.salary       ?? 25000;
@@ -403,7 +495,7 @@ function appendTeacherCard(t = {}, isNew = true) {
   const bonus        = customBonus ? t.bonus        : vars.bonus;
 
   const linkedBadge = t.id
-    ? `<span class="teacher-badge" style="background:#eff6ff;color:#1d4ed8;margin-left:6px;" title="Synced from Staff Management"><i class="fas fa-link"></i> ${t.id}</span>`
+    ? `<span class="teacher-badge" style="background:var(--blue-light);color:#1d4ed8;margin-left:6px;" title="Synced from Staff Management"><i class="fas fa-link"></i> ${t.id}</span>`
     : '';
 
   div.innerHTML = `
@@ -418,13 +510,12 @@ function appendTeacherCard(t = {}, isNew = true) {
     <input type="text" class="teacher-name-input" value="${t.name || ''}" placeholder="Teacher full name">
     <input type="text" class="teacher-subject-input" value="${t.subject || ''}" placeholder="Subject / Role">
 
-
     <div class="pay-grid">
       <div>
         <div class="pay-label">Monthly Salary</div>
         <div class="input-prefix-wrap">
           <span class="input-prefix">Rs</span>
-          <input type="number" class="pay-input teacher-salary" value="${salary}" min="0">
+          <input type="number" class="pay-input teacher-salary" value="${salary}" min="0" style="padding-left:28px;">
         </div>
       </div>
       <div>
@@ -443,7 +534,7 @@ function appendTeacherCard(t = {}, isNew = true) {
           <div class="pay-label">Deduction Value <span class="var-src-tag var-src-penaltyValue">(src: pay variable)</span></div>
           <div class="input-prefix-wrap">
             <span class="input-prefix teacher-penalty-prefix">${penaltyType === 'percent' ? '%' : 'Rs'}</span>
-            <input type="number" class="pay-input teacher-penalty-value" value="${penaltyValue}" min="0" step="0.5">
+            <input type="number" class="pay-input teacher-penalty-value" value="${penaltyValue}" min="0" step="0.5" style="padding-left:28px;">
           </div>
           <div class="var-hint" style="font-size:11px;color:var(--text-light);margin-top:4px;">Per day of leave taken</div>
         </div>
@@ -451,7 +542,7 @@ function appendTeacherCard(t = {}, isNew = true) {
           <div class="bonus-label-row"><i class="fas fa-star"></i> Full-Attendance Bonus <span class="var-src-tag var-src-bonus">(src: pay variable)</span></div>
           <div class="input-prefix-wrap">
             <span class="input-prefix">Rs</span>
-            <input type="number" class="pay-input teacher-bonus" value="${bonus}" min="0">
+            <input type="number" class="pay-input teacher-bonus" value="${bonus}" min="0" style="padding-left:28px;">
           </div>
           <div class="var-hint" style="font-size:11px;color:var(--text-light);margin-top:4px;">Paid if zero absences</div>
         </div>
@@ -459,14 +550,19 @@ function appendTeacherCard(t = {}, isNew = true) {
     </div>
   `;
 
-  // Delete with confirmation
   div.querySelector('.delete-card-btn').addEventListener('click', () => {
     openDeleteModal(div, 'teacher');
   });
 
-  // Sync penalty prefix label when type changes
   div.querySelector('.teacher-penalty-type').addEventListener('change', function () {
     div.querySelector('.teacher-penalty-prefix').textContent = this.value === 'percent' ? '%' : 'Rs';
+    refreshAbsenceBadge(div);
+  });
+
+  // Refresh absence badge when salary/penalty changes
+  ['teacher-salary', 'teacher-penalty-value'].forEach(cls => {
+    const el = div.querySelector('.' + cls);
+    if (el) el.addEventListener('input', () => refreshAbsenceBadge(div));
   });
 
   _attachVarSync(div, 'penaltyType',  customPType);
@@ -474,14 +570,27 @@ function appendTeacherCard(t = {}, isNew = true) {
   _attachVarSync(div, 'bonus',        customBonus);
 
   grid.appendChild(div);
+
+  // Show absence fine from real attendance data
+  if (t.id) {
+    injectAbsenceBadge(div, salary, penaltyType, penaltyValue, t.id);
+  }
+
   return div;
 }
 
-function addTeacherCard() {
-  // Disabled: add teachers from Staff Management page.
-  showToast('Add teachers from the Staff Management page.', 'success');
+function refreshAbsenceBadge(card) {
+  const staffId = card.dataset.staffId;
+  if (!staffId) return;
+  const salary    = parseFloat(card.querySelector('.teacher-salary')?.value) || 0;
+  const ptype     = card.querySelector('.teacher-penalty-type')?.value || 'percent';
+  const pval      = parseFloat(card.querySelector('.teacher-penalty-value')?.value) || 0;
+  injectAbsenceBadge(card, salary, ptype, pval, staffId);
 }
 
+function addTeacherCard() {
+  showToast('Add teachers from the Staff Management page.', 'success');
+}
 
 // ═══════════════════════════════════════════════
 //  VARIABLES
@@ -498,10 +607,8 @@ function loadVariables() {
   document.getElementById('var-bonus').value           = v.bonus;
 }
 
-
-
 // ═══════════════════════════════════════════════
-//  PAY-VARIABLE LIVE SYNC HELPERS
+//  PAY-VARIABLE LIVE SYNC
 // ═══════════════════════════════════════════════
 function _attachVarSync(card, fieldKey, isCustom) {
   const labelSel = {
@@ -534,7 +641,7 @@ function syncCardsFromVariables() {
     bonus:        parseFloat(document.getElementById('var-bonus').value) || 0,
   };
   document.querySelectorAll('#teacher-grid .teacher-card, #nonteaching-grid .teacher-card').forEach(card => {
-    const sel = card.querySelector('.teacher-penalty-type');
+    const sel  = card.querySelector('.teacher-penalty-type');
     const pref = card.querySelector('.teacher-penalty-prefix');
     if (card.dataset.penaltyTypeCustom !== '1') {
       if (sel) sel.value = v.penaltyType;
@@ -550,6 +657,7 @@ function syncCardsFromVariables() {
       const inp = card.querySelector('.teacher-bonus');
       if (inp) inp.value = v.bonus;
     }
+    refreshAbsenceBadge(card);
   });
 }
 
@@ -580,7 +688,7 @@ function wirePayVariableLiveSync() {
 }
 
 // ═══════════════════════════════════════════════
-//  STAFF BUCKET SANITIZER (settings)
+//  STAFF BUCKET SANITIZER
 // ═══════════════════════════════════════════════
 function _looksNonTeaching(s) {
   if (!s) return false;
@@ -594,7 +702,7 @@ function _sanitizeStaffBuckets() {
   if (!_hasSharedStore()) return;
   const db = getGlobalData();
   if (!db || !db.staff) return;
-  const teaching = Array.isArray(db.staff['Teaching']) ? db.staff['Teaching'] : [];
+  const teaching    = Array.isArray(db.staff['Teaching'])    ? db.staff['Teaching']    : [];
   const nonTeaching = Array.isArray(db.staff['Non-Teaching']) ? db.staff['Non-Teaching'] : [];
   const cleanT = [];
   const cleanNT = [...nonTeaching];
@@ -613,7 +721,7 @@ function _sanitizeStaffBuckets() {
     return s;
   });
   if (changed) {
-    db.staff['Teaching'] = cleanT;
+    db.staff['Teaching']    = cleanT;
     db.staff['Non-Teaching'] = stampedNT;
     saveGlobalData(db);
   }
@@ -633,7 +741,6 @@ function saveAll() {
     const sections = Array.from(card.querySelectorAll('.section-chip-input'))
       .map(i => i.value.trim())
       .filter(Boolean);
-    // De-duplicate (case-insensitive) preserving first occurrence
     const seen = new Set();
     const uniqueSections = sections.filter(s => {
       const k = s.toLowerCase();
@@ -655,12 +762,10 @@ function saveAll() {
   localStorage.setItem(LATEFEE_KEY, JSON.stringify(lateFee));
 
   // — Teachers —
-  // Edits flow back into the shared Staff Management store so the
-  // Staff page and the Settings page stay in sync.
-  const teacherCards = document.querySelectorAll('.teacher-card');
-  const teachers     = [];
-  const sharedList   = getSharedTeachers();           // may be null
-  const sharedById   = {};
+  const teacherCards  = document.querySelectorAll('#teacher-grid .teacher-card');
+  const teachers      = [];
+  const sharedList    = getSharedTeachers();
+  const sharedById    = {};
   if (sharedList) sharedList.forEach(s => { sharedById[s.id] = s; });
   const updatedShared = [];
 
@@ -695,7 +800,7 @@ function saveAll() {
       updatedShared.push({
         ...base,
         name,
-        subjects: subj,         // staff page uses "subjects"
+        subjects: subj,
         type: 'Teaching',
         salary: sal,
         penaltyType:  ptCust ? ptype : null,
@@ -710,12 +815,11 @@ function saveAll() {
   // — Non-Teaching Staff —
   saveNonTeaching();
 
-
   // — Variables —
   const vars = {
-    penaltyType:   document.getElementById('var-penalty-type').value,
-    penaltyValue:  parseFloat(document.getElementById('var-penalty-value').value)  || 0,
-    bonus:         parseFloat(document.getElementById('var-bonus').value)           || 0,
+    penaltyType:  document.getElementById('var-penalty-type').value,
+    penaltyValue: parseFloat(document.getElementById('var-penalty-value').value) || 0,
+    bonus:        parseFloat(document.getElementById('var-bonus').value)          || 0,
   };
   localStorage.setItem(VARIABLES_KEY, JSON.stringify(vars));
 
@@ -760,7 +864,6 @@ function showToast(msg, type = 'success') {
   setTimeout(() => t.classList.remove('show'), 3000);
 }
 
-
 // ═══════════════════════════════════════════════
 //  STAFF SUB-TABS / SEARCH / COUNTS
 // ═══════════════════════════════════════════════
@@ -772,7 +875,7 @@ function switchStaffSub(name, btn) {
 }
 
 function filterStaff(which, query) {
-  const gridId = which === 'teaching' ? 'teacher-grid' : 'nonteaching-grid';
+  const gridId  = which === 'teaching' ? 'teacher-grid' : 'nonteaching-grid';
   const emptyId = which === 'teaching' ? 'teaching-empty' : 'nonteaching-empty';
   const q = (query || '').trim().toLowerCase();
   const cards = document.querySelectorAll('#' + gridId + ' .teacher-card');
@@ -789,8 +892,8 @@ function filterStaff(which, query) {
 }
 
 function updateStaffCounts() {
-  const t = document.querySelectorAll('#teacher-grid .teacher-card').length;
-  const n = document.querySelectorAll('#nonteaching-grid .teacher-card').length;
+  const t  = document.querySelectorAll('#teacher-grid .teacher-card').length;
+  const n  = document.querySelectorAll('#nonteaching-grid .teacher-card').length;
   const tc = document.getElementById('teaching-count');
   const nc = document.getElementById('nonteaching-count');
   if (tc) tc.textContent = t;
@@ -798,7 +901,7 @@ function updateStaffCounts() {
 }
 
 // ═══════════════════════════════════════════════
-//  NON-TEACHING STAFF (mirrors the teacher card UI)
+//  NON-TEACHING STAFF
 // ═══════════════════════════════════════════════
 function getSharedNonTeaching() {
   if (_hasSharedStore()) {
@@ -842,6 +945,7 @@ function loadNonTeaching() {
     shared.forEach(s => appendNonTeachingCard(_staffToNonTeacher(s), false));
     return;
   }
+
   const saved = JSON.parse(localStorage.getItem(NONTEACHING_KEY)) || DEFAULT_NONTEACHING;
   saved.forEach(t => appendNonTeachingCard(t, false));
 }
@@ -862,7 +966,7 @@ function appendNonTeachingCard(t = {}, isNew = true) {
   const bonus        = customBonus ? t.bonus        : vars.bonus;
 
   const linkedBadge = t.id
-    ? `<span class="teacher-badge" style="background:#eff6ff;color:#1d4ed8;margin-left:6px;" title="Synced from Staff Management"><i class="fas fa-link"></i> ${t.id}</span>`
+    ? `<span class="teacher-badge" style="background:var(--blue-light);color:#1d4ed8;margin-left:6px;" title="Synced from Staff Management"><i class="fas fa-link"></i> ${t.id}</span>`
     : '';
 
   div.innerHTML = `
@@ -882,7 +986,7 @@ function appendNonTeachingCard(t = {}, isNew = true) {
         <div class="pay-label">Monthly Salary</div>
         <div class="input-prefix-wrap">
           <span class="input-prefix">Rs</span>
-          <input type="number" class="pay-input teacher-salary" value="${salary}" min="0">
+          <input type="number" class="pay-input teacher-salary" value="${salary}" min="0" style="padding-left:28px;">
         </div>
       </div>
       <div>
@@ -901,7 +1005,7 @@ function appendNonTeachingCard(t = {}, isNew = true) {
           <div class="pay-label">Deduction Value <span class="var-src-tag var-src-penaltyValue">(src: pay variable)</span></div>
           <div class="input-prefix-wrap">
             <span class="input-prefix teacher-penalty-prefix">${penaltyType === 'percent' ? '%' : 'Rs'}</span>
-            <input type="number" class="pay-input teacher-penalty-value" value="${penaltyValue}" min="0" step="0.5">
+            <input type="number" class="pay-input teacher-penalty-value" value="${penaltyValue}" min="0" step="0.5" style="padding-left:28px;">
           </div>
           <div class="var-hint" style="font-size:11px;color:var(--text-light);margin-top:4px;">Per day of leave taken</div>
         </div>
@@ -909,7 +1013,7 @@ function appendNonTeachingCard(t = {}, isNew = true) {
           <div class="bonus-label-row"><i class="fas fa-star"></i> Full-Attendance Bonus <span class="var-src-tag var-src-bonus">(src: pay variable)</span></div>
           <div class="input-prefix-wrap">
             <span class="input-prefix">Rs</span>
-            <input type="number" class="pay-input teacher-bonus" value="${bonus}" min="0">
+            <input type="number" class="pay-input teacher-bonus" value="${bonus}" min="0" style="padding-left:28px;">
           </div>
           <div class="var-hint" style="font-size:11px;color:var(--text-light);margin-top:4px;">Paid if zero absences</div>
         </div>
@@ -922,8 +1026,12 @@ function appendNonTeachingCard(t = {}, isNew = true) {
   });
   div.querySelector('.teacher-penalty-type').addEventListener('change', function () {
     div.querySelector('.teacher-penalty-prefix').textContent = this.value === 'percent' ? '%' : 'Rs';
+    refreshAbsenceBadge(div);
   });
-  // Re-run active search filter when a name/role is edited
+  ['teacher-salary', 'teacher-penalty-value'].forEach(cls => {
+    const el = div.querySelector('.' + cls);
+    if (el) el.addEventListener('input', () => refreshAbsenceBadge(div));
+  });
   ['teacher-name-input', 'teacher-subject-input'].forEach(cls => {
     const el = div.querySelector('.' + cls);
     if (el) el.addEventListener('input', () => {
@@ -938,20 +1046,21 @@ function appendNonTeachingCard(t = {}, isNew = true) {
 
   grid.appendChild(div);
   updateStaffCounts();
+
+  if (t.id) {
+    injectAbsenceBadge(div, salary, penaltyType, penaltyValue, t.id);
+  }
+
   return div;
 }
 
 function addNonTeachingCard() {
   if (_hasSharedStore()) {
-    const shared = getSharedNonTeaching() || [];
-    const newId = 'NTS-' + Math.floor(1000 + Math.random() * 9000);
+    const shared  = getSharedNonTeaching() || [];
+    const newId   = 'NTS-' + Math.floor(1000 + Math.random() * 9000);
     const newStaff = {
-      id: newId,
-      name: '',
-      role: '',
-      gender: 'Other',
-      salary: 20000,
-      joined: new Date().toISOString().slice(0, 10),
+      id: newId, name: '', role: '', gender: 'Other',
+      salary: 20000, joined: new Date().toISOString().slice(0, 10),
       cnic: '', phone: '', address: '',
       fines: 0, securityTotal: 0, securityMonthly: 0, securityCollected: 0,
     };
@@ -1001,11 +1110,7 @@ function saveNonTeaching() {
         securityTotal: 0, securityMonthly: 0, securityCollected: 0,
       };
       updatedShared.push({
-        ...base,
-        name,
-        role,
-        type: 'Non-Teaching',
-        salary: sal,
+        ...base, name, role, type: 'Non-Teaching', salary: sal,
         penaltyType:  ptCust ? ptype : null,
         penaltyValue: pvCust ? pval  : null,
         bonus:        bnCust ? bon   : null,
@@ -1016,7 +1121,7 @@ function saveNonTeaching() {
   if (sharedList) setSharedNonTeaching(updatedShared);
 }
 
-// Keep teaching counts/search live as cards are added/edited
+// Keep teaching counts/search live as cards are added
 const _origAppendTeacherCard = appendTeacherCard;
 appendTeacherCard = function (t, isNew) {
   const card = _origAppendTeacherCard(t, isNew);

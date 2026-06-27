@@ -26,11 +26,12 @@
   </div>
   <nav class="nav-section">
     <div class="nav-label">Core Modules</div>
-    <a href="index.html" class="nav-link"><i class="fas fa-th-large"></i> Dashboard Home</a>
+        <a href="index.html" class="nav-link"><i class="fas fa-th-large"></i> Dashboard Home</a>
     <a href="manage-students.html" class="nav-link"><i class="fas fa-user-graduate"></i> Student Management</a>
     <a href="manage-staff.html" class="nav-link"><i class="fas fa-chalkboard-teacher"></i><span>Staff Management</span></a>
-            <a href="manage-finance.html" class="nav-link active"><i class="fas fa-file-invoice-dollar"></i><span>Fees & Finance</span></a>
-    <!-- <a href="settings.html" class="nav-link active"><i class="fas fa-cog"></i> Admin Settings</a> -->
+    <a href="manage-finance.html" class="nav-link"><i class="fas fa-file-invoice-dollar"></i><span>Fees &amp; Finance</span></a>
+    <a href="attendance.html" class="nav-link"><i class="fas fa-clipboard-check"></i><span>Attendance</span></a>
+    <a href="settings.html" class="nav-link active"><i class="fas fa-cog"></i><span>Admin Settings</span></a>
   </nav>
   <div class="sidebar-footer">
     <a href="#" class="nav-link logout-btn"><i class="fas fa-sign-out-alt"></i> Logout</a>
@@ -53,6 +54,10 @@
     </div>
     <div class="header-actions">
       <span class="badge-saved" id="saved-badge"><i class="fas fa-check-circle"></i> Saved</span>
+      <!-- Dark mode toggle -->
+      <button id="theme-toggle-btn" class="theme-toggle-btn" title="Toggle dark mode" onclick="toggleDarkMode()">
+        <i class="fas fa-moon" id="theme-icon"></i>
+      </button>
       <div class="admin-avatar">AD</div>
     </div>
   </header>
@@ -92,8 +97,6 @@
         </div>
       </div>
     </div>
-
-
 
     <!-- ═══════════════════ TAB: LATE FEE ═══════════════════ -->
     <div class="tab-panel" id="tab-latefee">
@@ -180,6 +183,13 @@
           </div>
         </div>
 
+        <!-- Absence fine info banner -->
+        <div class="absence-link-banner">
+          <i class="fas fa-link"></i>
+          <span>Absence deductions are automatically calculated from <strong>daily attendance records</strong>. When staff is marked absent, the fine is computed using the penalty settings below and reflected in payroll.</span>
+          <a href="attendance.html" class="absence-link-btn"><i class="fas fa-clipboard-check"></i> Go to Attendance</a>
+        </div>
+
         <!-- Staff sub-tabs -->
         <div class="staff-subtabs">
           <button class="staff-subtab-btn active" onclick="switchStaffSub('teaching', this)">
@@ -201,9 +211,6 @@
                      placeholder="Search teaching staff by name or subject..."
                      oninput="filterStaff('teaching', this.value)">
             </div>
-            <!-- <button class="btn-primary" onclick="addTeacherCard()">
-              <i class="fas fa-plus"></i> Add Teacher
-            </button> -->
           </div>
           <div class="teacher-grid" id="teacher-grid">
             <!-- injected by JS -->
@@ -314,6 +321,12 @@
 
 <script src="shared-data.js"></script>
 <script src="settings.js"></script>
-
+<script>
+  // Dark mode init (runs before settings.js fully loads to avoid flash)
+  (function() {
+    const saved = localStorage.getItem('eduflow-theme');
+    if (saved === 'dark') document.documentElement.setAttribute('data-theme', 'dark');
+  })();
+</script>
 </body>
 </html>
