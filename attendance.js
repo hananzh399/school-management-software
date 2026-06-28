@@ -312,10 +312,11 @@ function renderClasses() {
     }
     CLASSES.forEach(cls => {
         const count = STUDENTS.filter(s => s.class === cls.name).length;
+        const alreadySaved = !!localStorage.getItem(`eduflow_att_${todayKey()}_${cls.name}`);
         const card = document.createElement("div");
-        card.className = "class-card";
+        card.className = "class-card" + (alreadySaved ? " class-card--saved" : "");
         card.innerHTML = `
-            <div class="class-name">${cls.name}</div>
+            <div class="class-name">${cls.name}${alreadySaved ? ' <span class="class-saved-badge"><i class="fas fa-check-circle"></i> Saved Today</span>' : ''}</div>
             <div class="class-meta">Sections: ${cls.sections.join(", ")}</div>
             <div class="class-count"><i class="fas fa-users"></i> ${count} students</div>
         `;
@@ -328,8 +329,36 @@ function openClass(cls) {
     state.selectedClass = cls;
     state.selectedSection = "ALL";
     state.search = "";
-    state.attendance = {};
-    STUDENTS.filter(s => s.class === cls.name).forEach(s => { state.attendance[s.regNo] = { status: "present", reason: "" }; });
+    state.studentEditMode.clear();
+
+    // Check if attendance has already been saved today for this class
+    const todayStorageKey = `eduflow_att_${todayKey()}_${cls.name}`;
+    const existing = localStorage.getItem(todayStorageKey);
+
+    if (existing) {
+        try {
+            const payload = JSON.parse(existing);
+            // Pre-load the saved records so rows show the correct status
+            state.attendance = payload.records || {};
+            // Mark every student in the class as already saved (locked "Done" state)
+            state.savedStudentKeys = new Set(
+                STUDENTS.filter(s => s.class === cls.name).map(s => s.regNo)
+            );
+        } catch(e) {
+            // Corrupted data — fall back to fresh sheet
+            state.attendance = {};
+            state.savedStudentKeys.clear();
+            STUDENTS.filter(s => s.class === cls.name)
+                .forEach(s => { state.attendance[s.regNo] = { status: "present", reason: "" }; });
+        }
+    } else {
+        // No record yet for today — start fresh
+        state.attendance = {};
+        state.savedStudentKeys.clear();
+        STUDENTS.filter(s => s.class === cls.name)
+            .forEach(s => { state.attendance[s.regNo] = { status: "present", reason: "" }; });
+    }
+
     $("#table-title").textContent = `${cls.name} — Attendance`;
     $("#search-input").value = "";
     $("#section-label").textContent = "All Sections";
@@ -537,6 +566,7 @@ function initSave() {
     $("#save-btn").addEventListener("click", () => {
         const cls = state.selectedClass;
         if (!cls) return;
+
         // Mark all currently visible students as saved, clear edit mode
         STUDENTS.filter(s => s.class === cls.name)
             .filter(s => state.selectedSection === "ALL" || s.section === state.selectedSection)
@@ -545,16 +575,25 @@ function initSave() {
                 state.savedStudentKeys.add(s.regNo);
                 state.studentEditMode.delete(s.regNo);
             });
+
+        // Merge with any existing record for today (other sections may already be saved)
+        const storageKey = `eduflow_att_${todayKey()}_${cls.name}`;
+        let existingRecords = {};
+        try {
+            const prev = localStorage.getItem(storageKey);
+            if (prev) existingRecords = JSON.parse(prev).records || {};
+        } catch(e) { /* ignore */ }
+
         const payload = {
             date: todayKey(),
             class: cls.name,
-            section: state.selectedSection,
-            records: state.attendance,
+            records: { ...existingRecords, ...state.attendance },
         };
-        localStorage.setItem(`eduflow_att_${payload.date}_${payload.class}`, JSON.stringify(payload));
+        localStorage.setItem(storageKey, JSON.stringify(payload));
         renderTable();
         toast("Attendance saved successfully");
     });
+
     $("#staff-save-btn").addEventListener("click", () => {
         // Mark all visible staff as saved
         const q = ($("#staff-search").value || "").trim().toLowerCase();
@@ -563,11 +602,20 @@ function initSave() {
                 state.savedStaffKeys.add(s.id);
                 state.staffEditMode.delete(s.id);
             });
+
+        // Merge with existing record for today
+        const storageKey = `eduflow_staff_att_${todayKey()}`;
+        let existingRecords = {};
+        try {
+            const prev = localStorage.getItem(storageKey);
+            if (prev) existingRecords = JSON.parse(prev).records || {};
+        } catch(e) { /* ignore */ }
+
         const payload = {
             date: todayKey(),
-            records: state.staffAttendance,
+            records: { ...existingRecords, ...state.staffAttendance },
         };
-        localStorage.setItem(`eduflow_staff_att_${payload.date}`, JSON.stringify(payload));
+        localStorage.setItem(storageKey, JSON.stringify(payload));
         applyAbsenceFines(); // auto-update fines in shared DB
         renderStaff();
         toast("Staff attendance saved & fines updated");
@@ -588,12 +636,43 @@ function initStaff() {
     $("#staff-search").addEventListener("input", () => renderStaff());
 }
 function initStaffAttendance() {
-    // Ensure every real staff member has an entry (add new, keep existing)
-    STAFF.forEach(s => {
-        if (!state.staffAttendance[s.id]) {
-            state.staffAttendance[s.id] = { status: "present", reason: "" };
+    const todayStorageKey = `eduflow_staff_att_${todayKey()}`;
+    const existing = localStorage.getItem(todayStorageKey);
+
+    if (existing) {
+        try {
+            const payload = JSON.parse(existing);
+            // Pre-load saved records so rows reflect the correct status
+            const savedRecords = payload.records || {};
+            // Merge: keep saved data, add defaults only for new staff not yet in the record
+            STAFF.forEach(s => {
+                if (savedRecords[s.id] !== undefined) {
+                    state.staffAttendance[s.id] = savedRecords[s.id];
+                } else if (!state.staffAttendance[s.id]) {
+                    state.staffAttendance[s.id] = { status: "present", reason: "" };
+                }
+            });
+            // Lock every staff member that appears in the saved record
+            state.savedStaffKeys = new Set(Object.keys(savedRecords).filter(id => STAFF.some(s => s.id === id)));
+        } catch(e) {
+            // Corrupted — fresh sheet
+            state.savedStaffKeys.clear();
+            STAFF.forEach(s => {
+                if (!state.staffAttendance[s.id]) {
+                    state.staffAttendance[s.id] = { status: "present", reason: "" };
+                }
+            });
         }
-    });
+    } else {
+        // No record saved today — fresh sheet
+        state.savedStaffKeys.clear();
+        STAFF.forEach(s => {
+            if (!state.staffAttendance[s.id]) {
+                state.staffAttendance[s.id] = { status: "present", reason: "" };
+            }
+        });
+    }
+
     // Remove entries for staff that no longer exist
     const validIds = new Set(STAFF.map(s => s.id));
     Object.keys(state.staffAttendance).forEach(id => {

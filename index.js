@@ -10,7 +10,8 @@ document.addEventListener('DOMContentLoaded', () => {
     // Add this inside DOMContentLoaded in index.js
 window.addEventListener('storage', (e) => {
     if (['edu_students', 'eduflow-db', 'eduflow-student-fines',
-         'eduflow-staff-fines', 'eduflow-staff-bonus', 'eduflow-other-expenses'].includes(e.key)) {
+         'eduflow-staff-fines', 'eduflow-staff-bonus', 'eduflow-other-expenses',
+         'edu_staff', 'eduflow-staff-advances'].includes(e.key)) {
         calculateAndLoadDashboardData();
     }
 });
@@ -80,10 +81,10 @@ function calculateAndLoadDashboardData() {
     const data = calculateFinancials();
     
     // 1. CALCULATE TOTALS FIRST
-    // Net Expenses = (Salaries + Bonuses + Other Expenses) - Staff Fines
-    const netExp = (data.salaries.total + data.staffBonusTotal + data.db.finances.expenses.other) - data.fines.staffTotal;
+    // Net Expenses = Salaries + Bonuses + Other Expenses
+    const netExp = data.salaries.total + data.staffBonusTotal + data.otherExpensesTotal;
     
-    // Total Revenue = Collected Fees + Student Late Fines + Student Other Fines
+    // Total Revenue = Collected Fees + Student Late Fines + Student Other Fines + Teacher Absence Fines (revenue from deductions)
     const totalRev = data.fees.collected + data.fines.studentLate + data.fines.studentOther;
     
     // Net Profit = Revenue - Expenses
@@ -100,12 +101,12 @@ function calculateAndLoadDashboardData() {
     animateCounter('pending-fees', data.fees.pending);
     animateCounter('student-late-fines', data.fines.studentLate); 
     animateCounter('student-other-fines', data.fines.studentOther); 
+    animateCounter('teacher-absence-fines', data.fines.teacherAbsence);
 
     // 4. UPDATE THE UI (Expenses)
     animateCounter('base-salaries', data.salaries.total);
-    animateCounter('staff-fines', data.fines.staffTotal);
     animateCounter('staff-bonus', data.staffBonusTotal);
-    animateCounter('other-expenses', data.db.finances.expenses.other);
+    animateCounter('other-expenses', data.otherExpensesTotal);
     
     // 5. UPDATE THE UI (Net Totals)
     animateCounter('net-expenses', netExp);
@@ -127,46 +128,6 @@ function calculateAndLoadDashboardData() {
             trendEl.innerHTML = `<i class="fas fa-arrow-down"></i> ${Math.abs(percentChange)}% vs last month`;
         }
     }
-}
-
-function calculateFinancials() {
-    const db = getGlobalData();
-    const students = JSON.parse(localStorage.getItem('edu_students') || '[]');
-    const bonusRecords = JSON.parse(localStorage.getItem('eduflow-staff-bonus') || '[]');
-    const fineRecords = JSON.parse(localStorage.getItem('eduflow-staff-fines') || '[]');
-
-    const totalStaffBonuses = bonusRecords.reduce((sum, record) => sum + (Number(record.amount) || 0), 0);
-    const totalStaffFines = fineRecords.reduce((sum, record) => sum + (Number(record.amount) || 0), 0);
-
-    let expected = 0;
-    let collected = 0;
-    students.forEach(s => {
-        expected += (Number(s.standardFee) || 0);
-        (s.feePayments || []).forEach(p => {
-            collected += (Number(p.amount) || 0);
-        });
-    });
-
-    return {
-        db: db,
-        realStudentCount: students.length,
-        fees: {
-            expected: expected,
-            collected: collected,
-            pending: Math.max(0, expected - collected)
-        },
-        fines: {
-            studentLate: db.students?.fines?.lateFees || 0,
-            studentOther: db.students?.fines?.other || 0,
-            staffTotal: totalStaffFines
-        },
-        salaries: {
-            total: [...(db.staff.Teaching || []), ...(db.staff['Non-Teaching'] || [])]
-                   .reduce((s, t) => s + (Number(t.salary) || 0), 0)
-        },
-        staffBonusTotal: totalStaffBonuses,
-        lastMonthProfit: 50000 // Placeholder for comparison
-    };
 }
 
 /* ============================================
@@ -203,15 +164,26 @@ function calculateFinancials() {
     const students = JSON.parse(localStorage.getItem('edu_students') || '[]');
     
     // 3. GET STAFF BONUS TOTAL
-    // This is the part that specifically answers your request:
     const bonusRecords = JSON.parse(localStorage.getItem('eduflow-staff-bonus') || '[]');
     const totalStaffBonuses = bonusRecords.reduce((sum, record) => sum + (Number(record.amount) || 0), 0);
 
-    // 4. GET STAFF FINES TOTAL (Optional, but good for "Expenses & Adjustments" section)
+    // 4. GET STAFF FINES TOTAL
     const fineRecords = JSON.parse(localStorage.getItem('eduflow-staff-fines') || '[]');
     const totalStaffFines = fineRecords.reduce((sum, record) => sum + (Number(record.amount) || 0), 0);
 
-    // 5. Calculate Student Fees
+    // 5. GET OTHER EXPENSES TOTAL — read directly from eduflow-other-expenses for real-time accuracy
+    const expenseRecords = JSON.parse(localStorage.getItem('eduflow-other-expenses') || '[]');
+    const totalOtherExpenses = expenseRecords.reduce((sum, record) => sum + (Number(record.amount) || 0), 0);
+
+    // 6. GET TEACHER ABSENCE FINES — sum t.fines from all Teaching + Non-Teaching staff
+    const allStaff = [...(db.staff.Teaching || []), ...(db.staff['Non-Teaching'] || [])];
+    const totalTeacherAbsenceFines = allStaff.reduce((sum, t) => sum + (Number(t.fines) || 0), 0);
+
+    // 7. GET STUDENT FINES — read from eduflow-student-fines for real-time accuracy
+    const studentFineRecords = JSON.parse(localStorage.getItem('eduflow-student-fines') || '[]');
+    const totalStudentFines = studentFineRecords.reduce((sum, record) => sum + (Number(record.amount) || 0), 0);
+
+    // 8. Calculate Student Fees
     let expected = 0;
     let collected = 0;
     students.forEach(s => {
@@ -221,7 +193,7 @@ function calculateFinancials() {
         });
     });
 
-    // 6. Return the data object
+    // 9. Return the data object
     return {
         db: db,
         realStudentCount: students.length,
@@ -232,15 +204,16 @@ function calculateFinancials() {
         },
         fines: {
             studentLate: db.students?.fines?.lateFees || 0,
-            studentOther: db.students?.fines?.other || 0,
-            staffTotal: totalStaffFines
+            studentOther: totalStudentFines,
+            staffTotal: totalStaffFines,
+            teacherAbsence: totalTeacherAbsenceFines
         },
         salaries: {
-            // Sum basic salaries of all staff
-            total: [...db.staff.Teaching, ...db.staff['Non-Teaching']].reduce((s, t) => s + (Number(t.salary) || 0), 0)
+            total: allStaff.reduce((s, t) => s + (Number(t.salary) || 0), 0)
         },
-        staffBonusTotal: totalStaffBonuses, // <--- New property
-        netExpenses: 0, // Calculated below
+        staffBonusTotal: totalStaffBonuses,
+        otherExpensesTotal: totalOtherExpenses,
+        netExpenses: 0,
         netProfit: 0,
         lastMonthProfit: 50000 // Placeholder
     };

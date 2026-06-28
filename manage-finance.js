@@ -7,6 +7,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initSidebar();
     initDate();
     initAtvVoucherModal();
+    renderClassCardGrid();
 });
 
 /* ============================================
@@ -100,7 +101,7 @@ function showPage(pageId) {
     const target = document.getElementById(pageId);
     if (target) target.classList.remove('d-none');
 
-    if (pageId === 'page-student-fees') { if (typeof backToClassSelection === 'function') backToClassSelection(); }
+    if (pageId === 'page-student-fees') { renderClassCardGrid(); if (typeof backToClassSelection === 'function') backToClassSelection(); }
     if (pageId === 'page-add-student-fine') populateStudentDropdown();
     if (pageId === 'page-add-staff-fine') {
         selectedStaffCategory = 'Teaching';
@@ -600,7 +601,8 @@ function handleExpenseSubmitNew() {
     if (!desc) { alert('Please enter an expense description.'); return; }
 
     const list = getExpensesData();
-    list.push({ description: desc, amount: amount, date: new Date().toLocaleDateString('en-US'), monthKey: getCurrentMonthKey() });
+    const now = new Date();
+    list.push({ description: desc, amount: amount, date: now.toLocaleDateString('en-US'), time: now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }), monthKey: getCurrentMonthKey() });
     saveExpensesData(list);
 
     const db = getGlobalData();
@@ -619,11 +621,13 @@ function renderExpensesTable() {
     const currentMonthKey = getCurrentMonthKey();
     const list = allList.filter(e => !e.monthKey || e.monthKey === currentMonthKey);
     if (list.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="2" class="empty-row">No expenses recorded this month.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="4" class="empty-row">No expenses recorded this month.</td></tr>';
         return;
     }
     tbody.innerHTML = list.map(e => `
         <tr>
+            <td>${e.date || '—'}</td>
+            <td><span style="font-size:0.85rem;color:var(--text-secondary);">${e.time || '—'}</span></td>
             <td>${e.description}</td>
             <td>RS ${Number(e.amount).toLocaleString()}</td>
         </tr>
@@ -717,6 +721,93 @@ function escapeHtml(str) {
 }
 
 
+/* ============================================================================
+   CLASS CARD GRID — Dynamic (reads from Admin Settings → edu_class_configs)
+   The class-card-grid div in manage-finance.html is left empty and populated
+   here at runtime so it always reflects whatever the admin has configured.
+   ============================================================================ */
+
+/**
+ * A palette of colour-index classes (c1…c13+) and icon helpers that mirror
+ * the static cards that were previously hardcoded in the HTML.
+ * We cycle through both arrays so every class gets a distinct look even when
+ * more classes are added than the palette has entries.
+ */
+const _CLASS_CARD_COLORS = ['c1','c2','c3','c4','c5','c6','c7','c8','c9','c10','c11','c12','c13'];
+
+/**
+ * Returns a FontAwesome icon class appropriate for a given class name.
+ * Keeps the original icon choices for known early-childhood grades and falls
+ * back to a numbered badge or a generic book icon for everything else.
+ */
+function _classCardIcon(name, index) {
+    const lc = (name || '').toLowerCase();
+    if (lc.includes('montessori'))         return '<i class="fas fa-child-reaching"></i>';
+    if (lc.includes('nursery'))            return '<i class="fas fa-baby"></i>';
+    if (lc.includes('prep') || lc.includes('pre')) return '<i class="fas fa-shapes"></i>';
+    // Try to extract a number for numeric grades
+    const m = name.match(/\d+/);
+    if (m) return `<span class="c-num">${m[0]}</span>`;
+    // Generic fallback based on position in list
+    const fallbackIcons = ['fa-book','fa-star','fa-medal','fa-award','fa-graduation-cap','fa-bookmark','fa-pencil-alt','fa-chalkboard'];
+    return `<i class="fas ${fallbackIcons[index % fallbackIcons.length]}"></i>`;
+}
+
+/**
+ * Builds a human-friendly display label.
+ * "Grade 1" → "1st Grade", "Grade 2" → "2nd Grade", etc.
+ * Custom names (e.g. "Montessori") are returned as-is.
+ */
+function _classDisplayLabel(name) {
+    const m = name.match(/^Grade\s+(\d+)$/i);
+    if (!m) return name;
+    const n = parseInt(m[1], 10);
+    const suffix = n === 1 ? 'st' : n === 2 ? 'nd' : n === 3 ? 'rd' : 'th';
+    return `${n}${suffix} Grade`;
+}
+
+/**
+ * Renders the class-card-grid from whatever classes are stored in
+ * localStorage under 'edu_class_configs' (written by settings.js).
+ * Falls back to the original set of 5 default classes if nothing is saved.
+ * Called once on DOMContentLoaded AND again when showPage('page-student-fees')
+ * is triggered, so the grid always stays in sync with settings changes.
+ */
+function renderClassCardGrid() {
+    const grid = document.getElementById('class-card-grid');
+    if (!grid) return;
+
+    let classes = [];
+    try {
+        const raw = localStorage.getItem('edu_class_configs');
+        if (raw) classes = JSON.parse(raw);
+    } catch (e) { classes = []; }
+
+    // Fall back to the same defaults that settings.js uses
+    if (!Array.isArray(classes) || classes.length === 0) {
+        classes = [
+            { name: 'Montessori' },
+            { name: 'Nursery' },
+            { name: 'Prep' },
+            { name: 'Grade 1' },
+            { name: 'Grade 2' },
+        ];
+    }
+
+    grid.innerHTML = classes.map((cls, i) => {
+        const name        = (cls.name || 'Class ' + (i + 1)).trim();
+        const colorClass  = _CLASS_CARD_COLORS[i % _CLASS_CARD_COLORS.length];
+        const iconHTML    = _classCardIcon(name, i);
+        const label       = _classDisplayLabel(name);
+        // Escape name for inline onclick attribute
+        const safeName    = name.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+        return `<div class="class-selector-card ${colorClass}" onclick="selectClassForFees('${safeName}')">
+                    <div class="c-icon">${iconHTML}</div>
+                    <h4>${label}</h4>
+                </div>`;
+    }).join('');
+}
+
 /**
  * Switcher function for Finance Modules
  */
@@ -756,13 +847,12 @@ function viewVoucher(studentId, fullName, isPaidBill = false) {
     currentVoucherStudentName = fullName;
 
     let html = buildVoucherHTML(student);
+    const editBtn = document.getElementById('edit-voucher-btn');
     if (isPaidBill) {
         html = '<div style="position:relative;">' + html + '<div class="paid-stamp-overlay">PAID</div></div>';
-        const editBtn = document.getElementById('edit-voucher-btn');
-        if(editBtn) editBtn.style.display = 'none';
+        if (editBtn) editBtn.style.display = 'none';
     } else {
-        const editBtn = document.getElementById('edit-voucher-btn');
-        if(editBtn) editBtn.style.display = 'inline-block';
+        if (editBtn) editBtn.style.display = 'inline-block';
     }
 
     document.getElementById('voucher-render-target').innerHTML = html;
@@ -777,6 +867,193 @@ function openVoucherEditModal() {
 
 function closeVoucherModal() {
     document.getElementById('voucher-modal-overlay').style.display = 'none';
+    // Close share popup if open
+    const popup = document.getElementById('voucher-share-popup');
+    if (popup) popup.classList.remove('open');
+}
+
+/* ============================================
+   SHARE VOUCHER — Online Share Options
+   ============================================ */
+function shareVoucherOnline() {
+    // Toggle the share popup near the share button
+    let popup = document.getElementById('voucher-share-popup');
+    if (!popup) {
+        popup = document.createElement('div');
+        popup.id = 'voucher-share-popup';
+        popup.className = 'voucher-share-popup';
+        popup.innerHTML = `
+            <div class="share-popup-title"><i class="fas fa-share-nodes"></i> &nbsp;Share Voucher</div>
+            <button class="share-popup-item spi-whatsapp" onclick="shareViaWhatsApp()">
+                <span class="spi-icon"><i class="fab fa-whatsapp"></i></span>
+                <span>Share via WhatsApp</span>
+            </button>
+            <button class="share-popup-item spi-copy" onclick="shareViaCopyLink()">
+                <span class="spi-icon"><i class="fas fa-link"></i></span>
+                <span>Copy as Text</span>
+            </button>
+            <button class="share-popup-item spi-email" onclick="shareViaEmail()">
+                <span class="spi-icon"><i class="fas fa-envelope"></i></span>
+                <span>Send via Email</span>
+            </button>
+            <button class="share-popup-item spi-download" onclick="shareViaDownloadImage()">
+                <span class="spi-icon"><i class="fas fa-image"></i></span>
+                <span>Save as Image</span>
+            </button>
+        `;
+        document.body.appendChild(popup);
+
+        // Close popup when clicking outside
+        document.addEventListener('click', function closeSharePopup(e) {
+            const btn = document.getElementById('share-voucher-btn');
+            if (!popup.contains(e.target) && e.target !== btn && !btn?.contains(e.target)) {
+                popup.classList.remove('open');
+            }
+        });
+    }
+
+    // Position popup near button
+    const btn = document.getElementById('share-voucher-btn');
+    if (btn) {
+        const rect = btn.getBoundingClientRect();
+        popup.style.top  = (rect.bottom + 8) + 'px';
+        popup.style.left = Math.max(8, rect.left - 40) + 'px';
+    }
+
+    popup.classList.toggle('open');
+}
+
+function _buildVoucherShareText() {
+    const students = JSON.parse(localStorage.getItem('edu_students') || '[]');
+    const student  = findStudentExact(students, currentVoucherStudentId, currentVoucherStudentName);
+    if (!student) return 'Fee Voucher – ST. LAWRENCE INTERNATIONAL SCHOOL';
+
+    const f         = computeFeeBreakdown(student);
+    const today     = new Date();
+    const challanNo = `CH-${student.id}-${today.getFullYear()}${String(today.getMonth()+1).padStart(2,'0')}`;
+
+    let text = `🏫 *ST. LAWRENCE INTERNATIONAL SCHOOL*\n`;
+    text    += `📄 Fee Voucher — ${f.monthLabel}\n`;
+    text    += `──────────────────────\n`;
+    text    += `👤 *Student:* ${student.fullName}\n`;
+    text    += `🆔 *Reg. No:* ${f.regNo}\n`;
+    text    += `📚 *Class:* ${student.studentClass || '—'}\n`;
+    text    += `👨‍👩‍👦 *Guardian:* ${student.guardianName || '—'}\n`;
+    text    += `──────────────────────\n`;
+    text    += `🔢 *Challan No:* ${challanNo}\n`;
+    text    += `📅 *Due Date:* ${f.dueDateStr}\n`;
+    if (f.lateFineEnabled) {
+        text += `⚠️ *Late Fine:* Rs. ${f.lateFeeSurcharge.toLocaleString()} (after ${f.dueDateStr})\n`;
+    }
+    text    += `──────────────────────\n`;
+    text    += `💰 *Net Payable:* Rs. ${f.voucherTotal.toLocaleString()}\n`;
+    if (f.lateFineEnabled) {
+        text += `💳 *After Due Date:* Rs. ${f.totalAfterDueDate.toLocaleString()}\n`;
+    }
+    text    += `──────────────────────\n`;
+    text    += `_Please pay before the due date to avoid late charges._`;
+    return text;
+}
+
+function shareViaWhatsApp() {
+    const text = _buildVoucherShareText();
+    const url  = `https://wa.me/?text=${encodeURIComponent(text)}`;
+    window.open(url, '_blank');
+    document.getElementById('voucher-share-popup')?.classList.remove('open');
+    _showShareToast('Opening WhatsApp…');
+}
+
+function shareViaCopyLink() {
+    const text = _buildVoucherShareText();
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(() => {
+            _showShareToast('<i class="fas fa-check"></i> Voucher text copied!');
+        }).catch(() => _fallbackCopy(text));
+    } else {
+        _fallbackCopy(text);
+    }
+    document.getElementById('voucher-share-popup')?.classList.remove('open');
+}
+
+function _fallbackCopy(text) {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.cssText = 'position:fixed;left:-9999px;top:-9999px;opacity:0;';
+    document.body.appendChild(ta);
+    ta.select();
+    try { document.execCommand('copy'); _showShareToast('<i class="fas fa-check"></i> Voucher text copied!'); }
+    catch(e) { _showShareToast('Could not copy — please copy manually.'); }
+    document.body.removeChild(ta);
+}
+
+function shareViaEmail() {
+    const students = JSON.parse(localStorage.getItem('edu_students') || '[]');
+    const student  = findStudentExact(students, currentVoucherStudentId, currentVoucherStudentName);
+    const f        = student ? computeFeeBreakdown(student) : {};
+    const subject  = encodeURIComponent(`Fee Voucher – ${student?.fullName || ''} (${f.monthLabel || ''})`);
+    const body     = encodeURIComponent(_buildVoucherShareText().replace(/\*/g,'').replace(/_/g,''));
+    window.open(`mailto:?subject=${subject}&body=${body}`, '_blank');
+    document.getElementById('voucher-share-popup')?.classList.remove('open');
+    _showShareToast('Opening email client…');
+}
+
+function shareViaDownloadImage() {
+    document.getElementById('voucher-share-popup')?.classList.remove('open');
+
+    // Check if html2canvas is available; if not, load it dynamically
+    function doCapture() {
+        const target = document.getElementById('voucher-render-target');
+        if (!target) { _showShareToast('Voucher not found.'); return; }
+
+        // Temporarily hide the School Copy so we only capture the Student Copy
+        const copies = target.querySelectorAll('.voucher-copy');
+        if (copies[0]) copies[0].style.display = 'none';
+
+        _showShareToast('<i class="fas fa-spinner fa-spin"></i> Generating image…');
+
+        html2canvas(target, {
+            scale: 2,
+            useCORS: true,
+            backgroundColor: '#ffffff',
+            logging: false
+        }).then(canvas => {
+            if (copies[0]) copies[0].style.display = '';
+            const link = document.createElement('a');
+            const students = JSON.parse(localStorage.getItem('edu_students') || '[]');
+            const student  = findStudentExact(students, currentVoucherStudentId, currentVoucherStudentName);
+            link.download = `voucher-${student?.fullName?.replace(/\s+/g,'-') || 'student'}.png`;
+            link.href = canvas.toDataURL('image/png');
+            link.click();
+            _showShareToast('<i class="fas fa-check"></i> Image downloaded!');
+        }).catch(() => {
+            if (copies[0]) copies[0].style.display = '';
+            _showShareToast('Image capture failed. Try Print instead.');
+        });
+    }
+
+    if (typeof html2canvas !== 'undefined') {
+        doCapture();
+    } else {
+        const script = document.createElement('script');
+        script.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';
+        script.onload  = doCapture;
+        script.onerror = () => _showShareToast('Could not load image library. Use Print instead.');
+        document.head.appendChild(script);
+    }
+}
+
+function _showShareToast(message) {
+    let toast = document.getElementById('voucher-share-toast');
+    if (!toast) {
+        toast = document.createElement('div');
+        toast.id = 'voucher-share-toast';
+        toast.className = 'share-toast';
+        document.body.appendChild(toast);
+    }
+    toast.innerHTML = message;
+    toast.classList.add('visible');
+    clearTimeout(toast._timer);
+    toast._timer = setTimeout(() => toast.classList.remove('visible'), 2800);
 }
 
 function printVoucherFromModal() {

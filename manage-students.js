@@ -891,7 +891,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     <td><span class="hrk-id-badge">${displayId}</span></td>
                     <td><strong>${s.fullName}</strong>${siblingTag}</td>
                     <td>${s.guardianName}</td>
-                    <td><span style="background:#f1f5f9;padding:4px 8px;border-radius:4px;font-size:0.85rem;font-weight:600;">${s.studentClass}</span></td>
+                    <td><span class="class-chip">${s.studentClass}</span></td>
                     <td>${s.gender}</td>
                     ${statusCell}
                     <td>
@@ -944,7 +944,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     <td><span class="hrk-id-badge">${displayId}</span></td>
                     <td><strong>${s.fullName}</strong>${siblingTag}</td>
                     <td>${s.guardianName}</td>
-                    <td><span style="background:#f1f5f9;padding:4px 8px;border-radius:4px;font-size:0.85rem;font-weight:600;">${s.studentClass}</span></td>
+                    <td><span class="class-chip">${s.studentClass}</span></td>
                     <td>${s.gender}</td>
                     <td style="text-align:center;">
                         <button class="btn-icon view" onclick="viewFullProfile('${s.regNo}')" title="View Profile">
@@ -1260,14 +1260,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const profileContent = `
             <div class="profile-card-header">
-                <img src="${s.photo}" class="profile-main-img"
-                     onerror="this.src='https://ui-avatars.com/api/?name=${encodeURIComponent(s.fullName)}&background=random'">
+                <div class="profile-header-decor"></div>
+                <div class="profile-avatar-ring">
+                    <img src="${s.photo}" class="profile-main-img"
+                         onerror="this.src='https://ui-avatars.com/api/?name=${encodeURIComponent(s.fullName)}&background=3b82f6&color=fff&bold=true'">
+                </div>
                 <h2 class="profile-name-title">${s.fullName}</h2>
-                <span class="hrk-id-badge">${s.regNo || s.id}</span>
-                <div style="margin-top:12px; display:flex; justify-content:center;">
-                    <button type="button" class="btn-primary" onclick="shareStudentProfile('${s.regNo || s.id}')" style="display:inline-flex; align-items:center; gap:8px;">
-                        <i class="fas fa-share-alt"></i> Share Profile
-                    </button>
+                <div class="profile-header-badges">
+                    <span class="hrk-id-badge">${s.regNo || s.id}</span>
+                    ${s.studentClass ? `<span class="profile-class-badge"><i class="fas fa-graduation-cap"></i> ${s.studentClass}${s.section ? ' – ' + s.section : ''}</span>` : ''}
                 </div>
             </div>
 
@@ -1316,20 +1317,29 @@ document.addEventListener('DOMContentLoaded', () => {
                 ${parseFloat(s.transportDiscount||0) > 0 ? `<div class="detail-item discount-item"><label><i class="fas fa-tag" style="color:#d97706;margin-right:4px;"></i>Transport Discount</label><span style="color:#d97706;">− Rs. ${parseFloat(s.transportDiscount).toFixed(0)}</span></div>` : ''}
                 ${parseFloat(s.siblingDiscount||0) > 0 ? `<div class="detail-item discount-item"><label><i class="fas fa-tag" style="color:#d97706;margin-right:4px;"></i>Sibling Discount</label><span style="color:#d97706;">− Rs. ${parseFloat(s.siblingDiscount).toFixed(0)}</span></div>` : ''}
                 ${booksDiscRow}
-                <div class="detail-item" style="background:#fef9c3;padding:10px;border-radius:8px;border-left:3px solid #d97706;">
-                    <label style="color:#92400e;font-weight:700;">Total Discount</label>
-                    <span style="color:#92400e;font-weight:800;">− Rs. ${(parseFloat(s.tuitionDiscount||0) + parseFloat(s.transportDiscount||0) + parseFloat(s.siblingDiscount||0) + parseFloat(s.booksDiscount||0) + otherFeesArr.reduce((sum,f)=>sum+(parseFloat(f.discount||0)),0)).toFixed(0)}</span>
+                <div class="detail-item total-discount-item">
+                    <label>Total Discount</label>
+                    <span class="total-discount-value">− Rs. ${(parseFloat(s.tuitionDiscount||0) + parseFloat(s.transportDiscount||0) + parseFloat(s.siblingDiscount||0) + parseFloat(s.booksDiscount||0) + otherFeesArr.reduce((sum,f)=>sum+(parseFloat(f.discount||0)),0)).toFixed(0)}</span>
                 </div>
-                <div class="detail-item" style="background:#f0fdf4;padding:10px;border-radius:8px;border-left:3px solid #10b981;">
-                    <label style="color:#166534;font-weight:700;">Net Payable</label>
-                    <span style="color:#166534;font-weight:800;font-size:1.2rem;">Rs. ${s.netPayable}</span>
+                <div class="detail-item net-payable-item">
+                    <label>Net Payable</label>
+                    <span class="net-payable-value">Rs. ${s.netPayable}</span>
                 </div>
             </div>
             ${certViewer}
         `;
 
         document.getElementById('profile-content').innerHTML = profileContent;
-        document.getElementById('profile-modal').style.display = 'block';
+        const profileModal = document.getElementById('profile-modal');
+        profileModal.dataset.currentRegNo = s.regNo || s.id;
+        profileModal.style.display = 'block';
+    };
+
+    // ── FOOTER SHARE BUTTON HANDLER ──────────────────────────────────────────
+    window.shareCurrentProfile = function() {
+        const modal = document.getElementById('profile-modal');
+        const regNo = modal ? modal.dataset.currentRegNo : null;
+        if (regNo) window.shareStudentProfile(regNo);
     };
 
     // ── SHARE STUDENT PROFILE (Web Share API + clipboard fallback) ──────────

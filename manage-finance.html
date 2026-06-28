@@ -127,20 +127,8 @@
                     <p>Select a grade level to generate or view fee vouchers</p>
                 </div>
 
-                <div class="class-card-grid">
-                    <div class="class-selector-card c1" onclick="selectClassForFees('Montessori')"><div class="c-icon"><i class="fas fa-child-reaching"></i></div><h4>Montessori</h4></div>
-                    <div class="class-selector-card c2" onclick="selectClassForFees('Nursery')"><div class="c-icon"><i class="fas fa-baby"></i></div><h4>Nursery</h4></div>
-                    <div class="class-selector-card c3" onclick="selectClassForFees('Prep')"><div class="c-icon"><i class="fas fa-shapes"></i></div><h4>Prep</h4></div>
-                    <div class="class-selector-card c4" onclick="selectClassForFees('Grade 1')"><div class="c-icon c-num">1</div><h4>1st Grade</h4></div>
-                    <div class="class-selector-card c5" onclick="selectClassForFees('Grade 2')"><div class="c-icon c-num">2</div><h4>2nd Grade</h4></div>
-                    <div class="class-selector-card c6" onclick="selectClassForFees('Grade 3')"><div class="c-icon c-num">3</div><h4>3rd Grade</h4></div>
-                    <div class="class-selector-card c7" onclick="selectClassForFees('Grade 4')"><div class="c-icon c-num">4</div><h4>4th Grade</h4></div>
-                    <div class="class-selector-card c8" onclick="selectClassForFees('Grade 5')"><div class="c-icon c-num">5</div><h4>5th Grade</h4></div>
-                    <div class="class-selector-card c9" onclick="selectClassForFees('Grade 6')"><div class="c-icon c-num">6</div><h4>6th Grade</h4></div>
-                    <div class="class-selector-card c10" onclick="selectClassForFees('Grade 7')"><div class="c-icon c-num">7</div><h4>7th Grade</h4></div>
-                    <div class="class-selector-card c11" onclick="selectClassForFees('Grade 8')"><div class="c-icon c-num">8</div><h4>8th Grade</h4></div>
-                    <div class="class-selector-card c12" onclick="selectClassForFees('Grade 9')"><div class="c-icon c-num">9</div><h4>9th Grade</h4></div>
-                    <div class="class-selector-card c13" onclick="selectClassForFees('Grade 10')"><div class="c-icon c-num">10</div><h4>10th Grade</h4></div>
+                <div class="class-card-grid" id="class-card-grid">
+                    <!-- Dynamically populated from Admin Settings (edu_class_configs) -->
                 </div>
             </div>
 
@@ -531,12 +519,14 @@
                 <table class="finance-table">
                     <thead>
                         <tr>
+                            <th>Date</th>
+                            <th>Time</th>
                             <th>Expense of</th>
                             <th>Expense Amount (RS)</th>
                         </tr>
                     </thead>
                     <tbody id="expenses-tbody">
-                        <tr><td colspan="2" class="empty-row">No expenses recorded yet.</td></tr>
+                        <tr><td colspan="4" class="empty-row">No expenses recorded yet.</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -670,91 +660,92 @@
 </div>
 
         <!-- Shared Salary Breakdown Overlay (used by Teaching & Non-Teaching) -->
-    <!-- Salary Breakdown Overlay (appears over the table when a teacher row is clicked) -->
     <div id="salary-breakdown-backdrop" class="sbp-backdrop d-none" onclick="closeSalaryBreakdown()"></div>
-    <div id="salary-breakdown-panel" class="salary-breakdown-panel salary-breakdown-overlay d-none centered-block" data-teacher-id="" style="max-width:520px;padding:18px 20px;">
-        <div class="sbp-header" style="margin-bottom:12px;">
+    <div id="salary-breakdown-panel" class="salary-breakdown-panel salary-breakdown-overlay d-none" data-teacher-id="">
+
+        <!-- Header -->
+        <div class="sbp-header">
             <div class="sbp-teacher-info">
-                <div class="sbp-avatar" style="width:36px;height:36px;font-size:15px;"><i class="fas fa-user-tie"></i></div>
+                <div class="sbp-avatar"><i class="fas fa-user-tie"></i></div>
                 <div>
-                    <div class="sbp-teacher-name" id="sbp-teacher-name" style="font-size:15px;">—</div>
-                    <div class="sbp-teacher-id" id="sbp-teacher-id" style="font-size:12px;">—</div>
+                    <div class="sbp-teacher-name" id="sbp-teacher-name">—</div>
+                    <div class="sbp-teacher-id" id="sbp-teacher-id">—</div>
                 </div>
             </div>
             <button class="sbp-close-btn" onclick="closeSalaryBreakdown()" title="Close"><i class="fas fa-times"></i></button>
         </div>
 
         <!-- Formula Banner -->
-        <div class="sbp-formula-box" style="padding:8px 12px;font-size:11px;margin-bottom:12px;">
+        <div class="sbp-formula-box">
             <span class="sbp-formula-text">
                 <i class="fas fa-calculator"></i>
-                &nbsp; Net = &nbsp;
+                &nbsp;Net =&nbsp;
                 <span class="f-total">Salary</span>
                 &nbsp;+&nbsp;<span class="f-bonus">Bonus</span>
                 &nbsp;−&nbsp;<span class="f-security">Security</span>
                 &nbsp;−&nbsp;<span class="f-deduct">Deducted</span>
                 &nbsp;−&nbsp;<span class="f-fine">Fine</span>
-                &nbsp;−&nbsp;<span class="f-fine" style="color:#a855f7;">Absence Fine</span>
+                &nbsp;−&nbsp;<span class="f-fine" style="color:#c4b5fd;">Absence</span>
                 &nbsp;−&nbsp;<span class="f-advance">Advance</span>
             </span>
         </div>
 
-        <!-- Breakdown Cards — compact 3-col grid -->
-        <div class="sbp-cards-grid" style="grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:10px;">
-            <div class="sbp-card sbp-c-blue" style="padding:10px 12px;">
-                <label style="font-size:10px;"><i class="fas fa-money-bill-wave"></i> Total Salary</label>
-                <input type="text" id="sbp-total-salary" readonly style="font-size:13px;padding:4px 6px;">
+        <!-- Breakdown Cards -->
+        <div class="sbp-cards-grid">
+            <div class="sbp-card sbp-c-blue">
+                <label><i class="fas fa-money-bill-wave"></i> Total Salary</label>
+                <input type="text" id="sbp-total-salary" readonly>
             </div>
-            <div class="sbp-card sbp-c-green" style="padding:10px 12px;">
-                <label style="font-size:10px;"><i class="fas fa-gift"></i> Bonus</label>
-                <input type="text" id="sbp-bonus" readonly style="font-size:13px;padding:4px 6px;">
+            <div class="sbp-card sbp-c-green">
+                <label><i class="fas fa-gift"></i> Bonus</label>
+                <input type="text" id="sbp-bonus" readonly>
             </div>
-            <div class="sbp-card sbp-c-orange" style="padding:10px 12px;">
-                <label style="font-size:10px;"><i class="fas fa-shield-alt"></i> Security</label>
-                <input type="text" id="sbp-security" readonly style="font-size:13px;padding:4px 6px;">
+            <div class="sbp-card sbp-c-orange">
+                <label><i class="fas fa-shield-alt"></i> Security</label>
+                <input type="text" id="sbp-security" readonly>
             </div>
-            <div class="sbp-card sbp-c-red" style="padding:10px 12px;">
-                <label style="font-size:10px;"><i class="fas fa-cut"></i> Fee Deducted</label>
-                <input type="text" id="sbp-fee-deducted" readonly style="font-size:13px;padding:4px 6px;">
+            <div class="sbp-card sbp-c-red">
+                <label><i class="fas fa-cut"></i> Fee Deducted</label>
+                <input type="text" id="sbp-fee-deducted" readonly>
             </div>
-            <div class="sbp-card sbp-c-purple" style="padding:10px 12px;">
-                <label style="font-size:10px;"><i class="fas fa-exclamation-triangle"></i> Manual Fine</label>
-                <input type="text" id="sbp-fine" readonly style="font-size:13px;padding:4px 6px;">
+            <div class="sbp-card sbp-c-purple">
+                <label><i class="fas fa-exclamation-triangle"></i> Manual Fine</label>
+                <input type="text" id="sbp-fine" readonly>
             </div>
-            <div class="sbp-card" style="padding:10px 12px;background:linear-gradient(135deg,#f3e8ff,#ede9fe);border:1px solid #d8b4fe;">
-                <label style="font-size:10px;color:#7c3aed;"><i class="fas fa-calendar-times"></i> Absence Fine <span id="sbp-absent-days-label" style="font-weight:400;opacity:0.75;"></span></label>
-                <input type="text" id="sbp-absence-fine" readonly style="font-size:13px;padding:4px 6px;background:transparent;border-color:#c4b5fd;color:#6d28d9;">
+            <div class="sbp-card sbp-c-violet">
+                <label><i class="fas fa-calendar-times"></i> Absence Fine <span id="sbp-absent-days-label" style="font-weight:400;opacity:0.7;font-size:9px;margin-left:2px;"></span></label>
+                <input type="text" id="sbp-absence-fine" readonly>
             </div>
-            <div class="sbp-card sbp-c-yellow" style="padding:10px 12px;">
-                <label style="font-size:10px;"><i class="fas fa-hand-holding"></i> Advance Taken</label>
-                <input type="text" id="sbp-advance-taken" readonly style="font-size:13px;padding:4px 6px;">
+            <div class="sbp-card sbp-c-yellow">
+                <label><i class="fas fa-hand-holding"></i> Advance Taken</label>
+                <input type="text" id="sbp-advance-taken" readonly>
             </div>
-            <div class="sbp-card sbp-c-grand" style="padding:10px 12px;grid-column:span 2;">
-                <label style="font-size:10px;"><i class="fas fa-hand-holding-usd"></i> Net Payable</label>
-                <input type="text" id="sbp-net-payable" readonly style="font-size:14px;font-weight:700;padding:4px 6px;">
+            <div class="sbp-card sbp-c-grand">
+                <label><i class="fas fa-hand-holding-usd"></i> Net Payable</label>
+                <input type="text" id="sbp-net-payable" readonly>
             </div>
         </div>
 
-        <!-- Pay Advance Salary Section -->
-        <div class="sbp-advance-section" style="margin-top:10px; padding:0; border:none; background:transparent;">
-            <button type="button" class="sbp-btn" id="sbp-toggle-advance-btn" onclick="toggleAdvancePay()" style="background:transparent; color:#14306b; border:1px dashed #cbd5e1; width:100%; justify-content:center; padding:10px;">
+        <!-- Advance Pay Section -->
+        <div class="sbp-advance-section">
+            <button type="button" class="sbp-advance-toggle-btn" id="sbp-toggle-advance-btn" onclick="toggleAdvancePay()">
                 <i class="fas fa-hand-holding-usd"></i> Pay Advance Salary
             </button>
-            <div id="sbp-advance-input-wrap" class="d-none" style="display:flex; gap:8px; align-items:center; margin-top:10px;">
-                <input type="number" min="1" id="sbp-advance-amount" placeholder="Enter advance amount..." style="flex:1; padding:8px 12px; border-radius:var(--radius-sm); border:1px solid var(--border-subtle); background:var(--bg-input); color:var(--text-primary);">
-                <button type="button" class="sbp-btn sbp-btn-pay" onclick="payAdvanceSalary()" style="padding:8px 16px;">
+            <div id="sbp-advance-input-wrap" class="d-none sbp-advance-input-row">
+                <input type="number" min="1" id="sbp-advance-amount" placeholder="Enter advance amount…">
+                <button type="button" class="sbp-btn sbp-btn-pay" onclick="payAdvanceSalary()">
                     <i class="fas fa-check"></i> Pay
                 </button>
             </div>
         </div>
 
         <!-- Action Buttons -->
-        <div class="sbp-actions" style="margin-top:12px;">
+        <div class="sbp-actions">
             <button type="button" class="sbp-btn sbp-btn-cancel" onclick="closeSalaryBreakdown()">
                 <i class="fas fa-times"></i> Cancel
             </button>
             <button type="button" class="sbp-btn sbp-btn-pay" onclick="payCurrentSalary()">
-                <i class="fas fa-check"></i> Pay
+                <i class="fas fa-check-circle"></i> Pay Salary
             </button>
         </div>
     </div>
@@ -768,7 +759,8 @@
                     <h3><i class="fas fa-file-invoice"></i> Fee Voucher Preview</h3>
                     <div class="voucher-modal-actions">
                         <button class="btn-primary" onclick="printVoucherFromModal()"><i class="fas fa-print"></i> Print Voucher</button>
-                        <button class="action-edit-btn" id="edit-voucher-btn" onclick="openVoucherEditModal()" style="background:#f59e0b; color:#fff; padding:6px 14px; border:none; border-radius:6px; cursor:pointer;"><i class="fas fa-edit"></i> Edit Voucher</button>
+                        <button class="voucher-share-btn" id="share-voucher-btn" onclick="shareVoucherOnline()" title="Share voucher online"><i class="fas fa-share-alt"></i> <span>Share</span></button>
+                        <button class="action-edit-btn" id="edit-voucher-btn" onclick="openVoucherEditModal()" style="background:#f59e0b; color:#fff; padding:6px 14px; border:none; border-radius:6px; cursor:pointer; display:none;"><i class="fas fa-edit"></i> Edit Voucher</button>
                         <button class="action-back-btn" onclick="closeVoucherModal()"><i class="fas fa-times"></i> Close</button>
                     </div>
                 </div>

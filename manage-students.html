@@ -575,16 +575,19 @@
     <!-- 3. PROFILE DETAILS MODAL -->
     <div id="profile-modal" class="modal-overlay" style="z-index: 5000;">
         <div class="modal-container profile-modal-wide">
-            <div class="modal-header accent-bg">
+            <div class="modal-header profile-modal-header">
                 <h3><i class="fas fa-id-card"></i> Complete Student Record</h3>
-                <button class="close-modal-btn" onclick="closeModal('profile-modal')">&times;</button>
+                <button class="close-modal-btn profile-close-btn" onclick="closeModal('profile-modal')">&times;</button>
             </div>
             <div id="profile-content" class="modal-body-scroll text-center">
                 <!-- Dynamic Profile -->
             </div>
-            <div class="modal-sticky-footer">
-                <button class="btn-ghost" onclick="closeModal('profile-modal')"><i class="fas fa-times"></i> Close</button>
-                <button class="btn-primary-submit" onclick="window.print()"><i class="fas fa-print"></i> Print Record</button>
+            <div class="modal-sticky-footer profile-modal-footer">
+                <button class="btn-ghost profile-close-action" onclick="closeModal('profile-modal')"><i class="fas fa-times"></i> Close</button>
+                <div class="profile-action-btns">
+                    <button class="btn-share-profile" id="profile-share-btn" onclick="shareCurrentProfile()"><i class="fas fa-share-nodes"></i> Share</button>
+                    <button class="btn-print-profile" onclick="window.print()"><i class="fas fa-print"></i> Print Record</button>
+                </div>
             </div>
         </div>
     </div>
