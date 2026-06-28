@@ -1213,9 +1213,24 @@ document.addEventListener('DOMContentLoaded', () => {
               ).join('')
             : '';
 
-        // ── Certificate viewer ──
+        // ── Certificate viewer (B-Form / School Certificate uploaded in admission form) ──
         let certViewer = '';
+        let bformActionBtn = '';
         if (s.certData) {
+            // A clear, always-visible action at the end of the profile to open the uploaded B-Form
+            const isPdf = s.certData.startsWith('data:application/pdf');
+            bformActionBtn = `
+                <div class="profile-section-title"><i class="fas fa-id-card"></i> B-Form / School Certificate (from Admission Form)</div>
+                <div style="padding:18px 25px;display:flex;flex-wrap:wrap;gap:10px;align-items:center;">
+                    <button type="button" class="btn-primary" onclick="window.open('${s.certData}','_blank')"
+                        style="display:inline-flex;align-items:center;gap:8px;padding:10px 18px;border-radius:8px;border:none;cursor:pointer;">
+                        <i class="fas fa-eye"></i> View B-Form
+                    </button>
+                    <a href="${s.certData}" download="bform_${s.regNo || s.id}${isPdf ? '.pdf' : '.png'}"
+                        class="btn-secondary" style="display:inline-flex;align-items:center;gap:8px;padding:10px 18px;border-radius:8px;text-decoration:none;">
+                        <i class="fas fa-download"></i> Download B-Form
+                    </a>
+                </div>`;
             if (s.certData.startsWith('data:image')) {
                 certViewer = `
                     <div class="profile-section-title"><i class="fas fa-certificate"></i> School Certificate / B-Form</div>
@@ -1251,7 +1266,10 @@ document.addEventListener('DOMContentLoaded', () => {
         let otherFeesArr = [];
         try { otherFeesArr = JSON.parse(s.otherFeesData || '[]'); } catch (e) { otherFeesArr = []; }
         otherFeesArr.forEach(f => {
-            if (!f.description && !f.amount) return;
+            // Skip placeholder / empty rows: must have at least a real amount or a discount > 0
+            const amt  = parseFloat(f.amount   || 0);
+            const disc = parseFloat(f.discount || 0);
+            if (amt <= 0 && disc <= 0) return;
             otherFeesRows += `<div class="detail-item"><label>${f.description || 'Other Fee'}</label><span>Rs. ${parseFloat(f.amount||0).toFixed(0)}</span></div>`;
             if (parseFloat(f.discount||0) > 0) {
                 otherFeesRows += `<div class="detail-item discount-item"><label><i class="fas fa-tag" style="color:#d97706;margin-right:4px;"></i>${f.description || 'Other Fee'} Discount</label><span style="color:#d97706;">− Rs. ${parseFloat(f.discount).toFixed(0)}</span></div>`;
@@ -1327,6 +1345,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 </div>
             </div>
             ${certViewer}
+            ${bformActionBtn}
         `;
 
         document.getElementById('profile-content').innerHTML = profileContent;
@@ -1476,3 +1495,1334 @@ document.addEventListener('DOMContentLoaded', () => {
  * END OF SCRIPT — EDULOW PRO SIS ENGINE
  * ============================================================================
  */
+/* ============================================================================
+   CERTIFICATES — PAGE VIEW, MANUAL INPUT & PRINT
+============================================================================ */
+
+/* Open the certificate page view (hides main sections, shows cert page) */
+function openCertPage() {
+    _hideMainSections();
+    document.getElementById('data-io-page-view').style.display = 'none';
+    document.getElementById('cert-page-view').style.display = 'block';
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+/* Close the certificate page view and restore main sections */
+function closeCertPage() {
+    document.getElementById('cert-page-view').style.display = 'none';
+    document.getElementById('data-io-page-view').style.display = 'none';
+    _showMainSections();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+/* Helpers: toggle only the real "home" sections, never the inline page-views */
+function _hideMainSections() {
+    document.querySelectorAll('main > section').forEach(s => {
+        if (s.id === 'cert-page-view' || s.id === 'data-io-page-view') return;
+        s.style.display = 'none';
+    });
+}
+function _showMainSections() {
+    document.querySelectorAll('main > section').forEach(s => {
+        if (s.id === 'cert-page-view' || s.id === 'data-io-page-view') return;
+        s.style.display = '';
+    });
+}
+
+/* ============================================================
+   ENHANCED SLC — Search, fill, conduct, print
+   ============================================================ */
+
+/* Search bar for SLC modal */
+function slcSearchStudents() {
+    const input    = document.getElementById('slc-search-input');
+    const dropdown = document.getElementById('slc-search-results');
+    if (!input || !dropdown) return;
+    const query = input.value.trim().toLowerCase();
+
+    dropdown.innerHTML = '';
+    if (!query) { dropdown.classList.remove('open'); return; }
+
+    const students = JSON.parse(localStorage.getItem(DB_KEY) || '[]');
+    let matches;
+
+    if (query.includes('~')) {
+        // Combined search: "Student Name~Guardian Name"
+        const [namePartRaw, guardianPartRaw] = query.split('~');
+        const namePart     = (namePartRaw || '').trim();
+        const guardianPart = (guardianPartRaw || '').trim();
+        matches = students.filter(s => {
+            const name     = (s.name || s.fullName || '').toLowerCase();
+            const guardian = (s.fatherName || s.guardianName || '').toLowerCase();
+            const nameOk     = !namePart || name.includes(namePart);
+            const guardianOk = !guardianPart || guardian.includes(guardianPart);
+            return nameOk && guardianOk;
+        }).slice(0, 8);
+    } else {
+        matches = students.filter(s => {
+            const name     = (s.name || s.fullName || '').toLowerCase();
+            const guardian = (s.fatherName || s.guardianName || '').toLowerCase();
+            const regNo    = (s.regNo || '').toLowerCase();
+            const id       = (s.id || '').toLowerCase();
+            return name.includes(query) || guardian.includes(query) || regNo.includes(query) || id.includes(query);
+        }).slice(0, 8);
+    }
+
+    if (!matches.length) {
+        dropdown.innerHTML = '<div class="slc-dropdown-item"><span class="slc-di-name" style="color:var(--text-secondary)">No students found</span></div>';
+        dropdown.classList.add('open');
+        return;
+    }
+
+    matches.forEach(s => {
+        const sName     = s.name || s.fullName || 'Unknown';
+        const sGuardian = s.fatherName || s.guardianName || '—';
+        const sId       = s.regNo || s.id || '—';
+        const sClass    = s.class || s.studentClass || '—';
+        const item = document.createElement('div');
+        item.className = 'slc-dropdown-item';
+        item.innerHTML = `
+            <div class="slc-di-name"><i class="fas fa-user-graduate"></i> ${sName}</div>
+            <div class="slc-di-meta">ID: ${sId} &nbsp;|&nbsp; Class: ${sClass} &nbsp;|&nbsp; Guardian: ${sGuardian}</div>`;
+        item.addEventListener('click', () => {
+            input.value = sName;
+            dropdown.classList.remove('open');
+            slcFillFromStudent(s);
+        });
+        dropdown.appendChild(item);
+    });
+    dropdown.classList.add('open');
+}
+
+/* Close SLC dropdown when clicking outside */
+document.addEventListener('click', e => {
+    const input    = document.getElementById('slc-search-input');
+    const dropdown = document.getElementById('slc-search-results');
+    if (input && dropdown && !input.contains(e.target) && !dropdown.contains(e.target)) {
+        dropdown.classList.remove('open');
+    }
+});
+
+/* Generate certificate manually when student isn't in the database */
+function slcManualGenerate() {
+    const idVal    = (document.getElementById('slc-manual-id')?.value || '').trim();
+    const namesVal = (document.getElementById('slc-manual-names')?.value || '').trim();
+
+    let studentName = namesVal;
+    let guardianName = '';
+    if (namesVal.includes('~')) {
+        const [n, g] = namesVal.split('~');
+        studentName  = (n || '').trim();
+        guardianName = (g || '').trim();
+    }
+
+    if (!studentName) {
+        alert('Please enter at least the student name (use Student~Guardian format if you want to add the guardian too).');
+        return;
+    }
+
+    const leavingInput = document.getElementById('slc-leaving-date-input');
+    const manualStudent = {
+        name: studentName,
+        fatherName: guardianName || '—',
+        regNo: idVal || '—',
+        id: idVal || '—',
+        admissionDate: '—',
+        dob: '—',
+        class: '—',
+        leavingDate: leavingInput && leavingInput.value ? leavingInput.value : ''
+    };
+
+    slcFillFromStudent(manualStudent);
+}
+
+/* Fill certificate from a student object */
+function slcFillFromStudent(s) {
+    const today     = new Date().toLocaleDateString('en-PK', { day: '2-digit', month: 'long', year: 'numeric' });
+    const certNo    = 'SLC-' + String(Math.floor(1000 + Math.random() * 9000));
+    const studentName  = s.name || s.fullName || '—';
+    const regNo        = s.regNo || s.id || '—';
+    const fatherName   = s.fatherName || s.guardianName || '—';
+    const admissionDate= s.admissionDate || s.dateOfAdmission || '—';
+    const dob          = s.dob || s.dateOfBirth || '—';
+    const studentClass = s.class || s.studentClass || '—';
+
+    // Date the student actually left the school (from record if available, else today; editable via input)
+    const rawLeavingDate = s.leavingDate || s.dateOfLeaving || s.leftDate || '';
+    const leavingDateInput = document.getElementById('slc-leaving-date-input');
+    let leavingDateDisplay;
+    if (rawLeavingDate) {
+        leavingDateDisplay = new Date(rawLeavingDate).toLocaleDateString('en-PK', { day: '2-digit', month: 'long', year: 'numeric' });
+        if (leavingDateInput) leavingDateInput.value = rawLeavingDate;
+    } else {
+        leavingDateDisplay = today;
+        if (leavingDateInput) leavingDateInput.value = new Date().toISOString().slice(0, 10);
+    }
+
+    const setText = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+
+    setText('slc-name-display', studentName);
+    setText('slc-leaving-date', leavingDateDisplay);   // date student left the school
+    setText('slc-issue-date', today);                  // date this certificate/voucher was generated
+    setText('slc-cert-no', certNo);
+
+    // Remember for share filename
+    window.__slcCurrentName = studentName;
+    window.__slcCurrentStudent = s;
+
+    // School name from header if present
+    const schoolEl = document.querySelector('.school-name');
+    if (schoolEl) setText('slc-school-name', schoolEl.textContent);
+
+    // Compose the beautiful bottom paragraph from real student details
+    const recordEl = document.getElementById('slc-record-para');
+    if (recordEl) {
+        recordEl.innerHTML =
+            `For official record, <strong>${studentName}</strong> (Student ID <strong>${regNo}</strong>), ` +
+            `son/daughter of <strong>${fatherName}</strong>, was born on <strong>${dob}</strong> and ` +
+            `was admitted to this institution on <strong>${admissionDate}</strong>. ` +
+            `At the time of leaving, the student was enrolled in <strong>Class ${studentClass}</strong>. ` +
+            `The school administration wishes him/her continued success in all future academic and personal endeavours.`;
+    }
+
+    document.getElementById('slc-empty-state').style.display = 'none';
+    document.getElementById('slc-preview').style.display     = 'block';
+    const printBtn = document.getElementById('slc-print-btn'); if (printBtn) printBtn.style.display = '';
+    const shareBtn = document.getElementById('slc-share-btn'); if (shareBtn) shareBtn.style.display = '';
+}
+
+/* Let the user manually override the "Date of Leaving" shown on the certificate */
+function slcUpdateLeavingDate() {
+    const input = document.getElementById('slc-leaving-date-input');
+    if (!input || !input.value) return;
+    const display = new Date(input.value).toLocaleDateString('en-PK', { day: '2-digit', month: 'long', year: 'numeric' });
+    const el = document.getElementById('slc-leaving-date');
+    if (el) el.textContent = display;
+}
+
+/* Capture SLC certificate as an image blob using html2canvas */
+async function slcCaptureBlob() {
+    const doc = document.getElementById('slc-document');
+    if (!doc || typeof html2canvas === 'undefined') return null;
+    const canvas = await html2canvas(doc, { scale: 2, backgroundColor: '#ffffff', useCORS: true });
+    return new Promise(res => canvas.toBlob(res, 'image/png'));
+}
+
+/* Share SLC certificate as image (Web Share API → fallback to WhatsApp / download) */
+async function shareSLC() {
+    const name = (window.__slcCurrentName || 'student').replace(/[^a-z0-9]+/gi, '_');
+    const filename = `School_Leaving_Certificate_${name}.png`;
+    const shareBtn = document.getElementById('slc-share-btn');
+    const oldHtml = shareBtn ? shareBtn.innerHTML : '';
+    if (shareBtn) { shareBtn.disabled = true; shareBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Preparing...'; }
+    try {
+        const blob = await slcCaptureBlob();
+        if (!blob) throw new Error('Capture failed');
+        const file = new File([blob], filename, { type: 'image/png' });
+
+        // 1) Native share with file (mobile WhatsApp, etc.)
+        if (navigator.canShare && navigator.canShare({ files: [file] })) {
+            await navigator.share({
+                files: [file],
+                title: 'School Leaving Certificate',
+                text: `School Leaving Certificate for ${window.__slcCurrentName || ''}`
+            });
+            return;
+        }
+
+        // 2) Fallback: download image + open WhatsApp Web with a prefilled message
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url; a.download = filename; document.body.appendChild(a); a.click(); a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 4000);
+
+        const msg = encodeURIComponent(
+            `School Leaving Certificate for ${window.__slcCurrentName || 'student'}.\n` +
+            `(The certificate image has been downloaded — please attach "${filename}" in WhatsApp.)`
+        );
+        window.open(`https://wa.me/?text=${msg}`, '_blank');
+    } catch (err) {
+        console.error('Share failed', err);
+        alert('Sharing failed. The certificate image could not be generated.');
+    } finally {
+        if (shareBtn) { shareBtn.disabled = false; shareBtn.innerHTML = oldHtml; }
+    }
+}
+
+/* No-op kept for backward compatibility (conduct dropdown removed) */
+function slcUpdateConduct() { /* removed: conduct & performance no longer shown */ }
+
+
+/* Print the SLC */
+function printSLC() {
+    const doc = document.getElementById('slc-document');
+    if (!doc) return;
+
+    const printWin = window.open('', '_blank', 'width=1180,height=820');
+    printWin.document.write(`<!DOCTYPE html>
+<html>
+<head>
+<title>School Leaving Certificate</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Great+Vibes&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Cormorant Garamond',Georgia,serif;background:#eef2f7;padding:24px;display:flex;justify-content:center;align-items:center;min-height:100vh}
+.slc-cert-outer.slc-landscape{position:relative;background:#fff;width:1050px;height:740px;overflow:hidden;box-shadow:0 12px 40px rgba(15,23,42,.18);border-radius:6px;color:#0f172a}
+
+/* Decorative blue geometric corner shapes (like reference) */
+.slc-geo{position:absolute;background:#3b6fb8;z-index:0}
+.slc-geo-tl{top:-60px;left:-60px;width:260px;height:260px;transform:rotate(45deg);background:linear-gradient(135deg,#5a8acd,#3b6fb8)}
+.slc-geo-tl2{top:-30px;left:80px;width:140px;height:140px;transform:rotate(45deg);background:#7ba6dd;opacity:.7}
+.slc-geo-bl{bottom:-80px;left:-40px;width:280px;height:280px;transform:rotate(45deg);background:linear-gradient(135deg,#3b6fb8,#2c5797)}
+.slc-geo-bl2{bottom:40px;left:-40px;width:120px;height:120px;transform:rotate(45deg);background:#7ba6dd;opacity:.6}
+.slc-geo-tr{top:-70px;right:-60px;width:260px;height:260px;transform:rotate(45deg);background:linear-gradient(135deg,#3b6fb8,#5a8acd)}
+.slc-geo-tr2{top:80px;right:-50px;width:140px;height:140px;transform:rotate(45deg);background:#7ba6dd;opacity:.7}
+.slc-geo-br{bottom:-70px;right:-60px;width:240px;height:240px;transform:rotate(45deg);background:linear-gradient(135deg,#2c5797,#3b6fb8)}
+.slc-geo-br2{bottom:60px;right:80px;width:120px;height:120px;transform:rotate(45deg);background:#7ba6dd;opacity:.6}
+
+.slc-inner{position:relative;z-index:2;background:#fff;margin:46px;height:calc(100% - 92px);padding:32px 56px 72px;display:flex;flex-direction:column}
+
+.slc-l-header{display:flex;align-items:center;gap:18px;padding-bottom:14px;border-bottom:1px solid #e2e8f0}
+.slc-l-logo{width:54px;height:54px;border-radius:50%;background:linear-gradient(135deg,#2c5797,#3b6fb8);color:#fff;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;box-shadow:0 4px 14px rgba(59,111,184,.4)}
+.slc-l-school-block{flex:1;text-align:center}
+.slc-l-school-name{font-family:'Cormorant Garamond',serif;font-size:22px;font-weight:700;letter-spacing:.18em;color:#0f172a;text-transform:uppercase}
+.slc-l-school-meta{margin-top:4px;font-family:'Inter',sans-serif;font-size:11px;color:#64748b;letter-spacing:.04em}
+.slc-l-dot{margin:0 8px;color:#cbd5e1}
+.slc-l-serial{text-align:right;flex-shrink:0;font-family:'Inter',sans-serif}
+.slc-l-serial-label{font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:#94a3b8}
+.slc-l-serial-value{font-size:13px;font-weight:700;color:#2c5797;margin-top:2px}
+
+.slc-l-title{text-align:center;margin-top:26px;font-family:'Cormorant Garamond',serif;font-size:42px;font-weight:700;color:#1e293b;letter-spacing:.04em}
+.slc-l-certify{text-align:center;margin-top:14px;font-size:18px;color:#475569;font-style:italic}
+.slc-l-name{text-align:center;margin-top:6px;font-family:'Great Vibes',cursive;font-size:72px;color:#3b6fb8;line-height:1.05}
+
+.slc-l-main-para{text-align:center;margin:14px auto 0;max-width:780px;font-size:18px;line-height:1.55;color:#334155;font-family:'Cormorant Garamond',serif}
+
+.slc-l-dates-row{display:flex;align-items:center;justify-content:center;gap:36px;margin:18px auto 0;max-width:780px}
+.slc-l-date-item{text-align:center}
+.slc-l-date-label{font-family:'Inter',sans-serif;font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:#94a3b8}
+.slc-l-date-label i{margin-right:4px;color:#3b6fb8}
+.slc-l-date-value{font-family:'Inter',sans-serif;font-size:14px;font-weight:700;color:#1e293b;margin-top:3px}
+.slc-l-date-sep{width:1px;height:30px;background:#cbd5e1}
+
+.slc-l-record-para{margin-top:18px;padding:14px 22px;font-size:14px;line-height:1.7;color:#475569;font-family:'Inter',sans-serif;text-align:justify;border-top:1px dashed #cbd5e1;border-bottom:1px dashed #cbd5e1;background:#f8fafc;border-radius:6px}
+.slc-l-record-para strong{color:#1e293b}
+
+.slc-l-footer{margin-top:auto;padding-top:22px;padding-bottom:24px;display:flex;align-items:flex-end;justify-content:space-around;gap:40px}
+.slc-l-footer-principal-only{justify-content:flex-end;padding-right:40px}
+.slc-l-sig-principal{min-width:220px}
+.slc-l-stamp-spacer{min-width:120px}
+.slc-l-sig{text-align:center;min-width:200px}
+.slc-l-sig-line{width:180px;height:1px;background:#334155;margin:0 auto 8px}
+.slc-l-sig-title{font-family:'Inter',sans-serif;font-size:13px;font-weight:700;color:#0f172a;text-transform:uppercase;letter-spacing:.06em}
+.slc-l-sig-sub{font-family:'Inter',sans-serif;font-size:10px;color:#94a3b8;margin-top:2px}
+.slc-l-stamp{display:flex;justify-content:center}
+.slc-l-stamp-ring{width:96px;height:96px;border:2px dashed #94a3b8;border-radius:50%;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#94a3b8;text-align:center;font-family:'Inter',sans-serif}
+.slc-l-stamp-ring i{font-size:22px;margin-bottom:4px}
+.slc-l-stamp-ring span{font-size:8px;font-weight:700;letter-spacing:.12em;line-height:1.2}
+
+@media print{
+  html,body{padding:0;margin:0;background:#fff;width:100%;height:100%}
+  @page{size:A4 landscape;margin:6mm}
+  .slc-cert-outer.slc-landscape{box-shadow:none;border-radius:0;margin:0 auto;page-break-after:avoid;page-break-inside:avoid}
+}
+</style>
+</head>
+<body>${doc.outerHTML}</body>
+</html>`);
+    printWin.document.close();
+    printWin.focus();
+    setTimeout(() => { printWin.print(); printWin.close(); }, 700);
+}
+
+
+/* ============================================================
+   ENHANCED CHARACTER CERTIFICATE — Search, fill, conduct, print
+   ============================================================ */
+
+/* Search bar for Character Certificate modal */
+function charSearchStudents() {
+    const input    = document.getElementById('char-search-input');
+    const dropdown = document.getElementById('char-search-results');
+    if (!input || !dropdown) return;
+    const query = input.value.trim().toLowerCase();
+
+    dropdown.innerHTML = '';
+    if (!query) { dropdown.classList.remove('open'); return; }
+
+    const students = JSON.parse(localStorage.getItem(DB_KEY) || '[]');
+    let matches;
+
+    if (query.includes('~')) {
+        const [namePartRaw, guardianPartRaw] = query.split('~');
+        const namePart     = (namePartRaw || '').trim();
+        const guardianPart = (guardianPartRaw || '').trim();
+        matches = students.filter(s => {
+            const name     = (s.name || s.fullName || '').toLowerCase();
+            const guardian = (s.fatherName || s.guardianName || '').toLowerCase();
+            const nameOk     = !namePart || name.includes(namePart);
+            const guardianOk = !guardianPart || guardian.includes(guardianPart);
+            return nameOk && guardianOk;
+        }).slice(0, 8);
+    } else {
+        matches = students.filter(s => {
+            const name     = (s.name || s.fullName || '').toLowerCase();
+            const guardian = (s.fatherName || s.guardianName || '').toLowerCase();
+            const regNo    = (s.regNo || '').toLowerCase();
+            const id       = (s.id || '').toLowerCase();
+            return name.includes(query) || guardian.includes(query) || regNo.includes(query) || id.includes(query);
+        }).slice(0, 8);
+    }
+
+    if (!matches.length) {
+        dropdown.innerHTML = '<div class="slc-dropdown-item"><span class="slc-di-name" style="color:var(--text-secondary)">No students found</span></div>';
+        dropdown.classList.add('open');
+        return;
+    }
+
+    matches.forEach(s => {
+        const sName     = s.name || s.fullName || 'Unknown';
+        const sGuardian = s.fatherName || s.guardianName || '—';
+        const sId       = s.regNo || s.id || '—';
+        const sClass    = s.class || s.studentClass || '—';
+        const item = document.createElement('div');
+        item.className = 'slc-dropdown-item';
+        item.innerHTML = `
+            <div class="slc-di-name"><i class="fas fa-user-graduate"></i> ${sName}</div>
+            <div class="slc-di-meta">ID: ${sId} &nbsp;|&nbsp; Class: ${sClass} &nbsp;|&nbsp; Guardian: ${sGuardian}</div>`;
+        item.addEventListener('click', () => {
+            input.value = sName;
+            dropdown.classList.remove('open');
+            charFillFromStudent(s);
+        });
+        dropdown.appendChild(item);
+    });
+    dropdown.classList.add('open');
+}
+
+/* Close char dropdown when clicking outside */
+document.addEventListener('click', e => {
+    const input    = document.getElementById('char-search-input');
+    const dropdown = document.getElementById('char-search-results');
+    if (input && dropdown && !input.contains(e.target) && !dropdown.contains(e.target)) {
+        dropdown.classList.remove('open');
+    }
+});
+
+/* Generate certificate manually when student isn't in the database */
+function charManualGenerate() {
+    const idVal     = (document.getElementById('char-manual-id')?.value || '').trim();
+    const namesVal  = (document.getElementById('char-manual-names')?.value || '').trim();
+    const genderVal = document.getElementById('char-manual-gender')?.value || 'Female';
+
+    let studentName  = namesVal;
+    let guardianName = '';
+    if (namesVal.includes('~')) {
+        const [n, g] = namesVal.split('~');
+        studentName  = (n || '').trim();
+        guardianName = (g || '').trim();
+    }
+
+    if (!studentName) {
+        alert('Please enter at least the student name (use Student~Guardian format if you want to add the guardian too).');
+        return;
+    }
+
+    const fromInput = document.getElementById('char-from-date-input');
+    const toInput   = document.getElementById('char-to-date-input');
+
+    const manualStudent = {
+        name: studentName,
+        fatherName: guardianName || '—',
+        regNo: idVal || '—',
+        id: idVal || '—',
+        gender: genderVal,
+        admissionDate: fromInput && fromInput.value ? fromInput.value : '',
+        leavingDate: toInput && toInput.value ? toInput.value : ''
+    };
+
+    charFillFromStudent(manualStudent);
+}
+
+/* Build the moral-character paragraph based on the conduct level selected */
+function charBuildParagraph(studentName, guardianLabel, fatherName, fromDisplay, toDisplay, pronouns, conduct) {
+    const { sub, poss, obj } = pronouns; // sub: He/She, poss: His/Her, obj: him/her
+
+    const opening = `It is to certify that <strong>${studentName}</strong> ${guardianLabel} <strong>${fatherName}</strong> ` +
+        `who has studied in this institution from <strong>${fromDisplay}</strong> to <strong>${toDisplay}</strong>, `;
+
+    const templates = {
+        excellent: opening +
+            `bears an <strong>excellent moral character</strong>. ${poss} behaviour was outstanding with teachers and students alike. ` +
+            `${sub} consistently displayed honesty, discipline, and respect, and never showed any sign of violent or aggressive behaviour, ` +
+            `nor any desire to harm others. ${sub} is held in the highest regard by the institution.`,
+        good: opening +
+            `bears a <strong>good moral character</strong>. ${poss} behaviour was good with teachers and students. ` +
+            `${sub} neither displayed persistent violent or aggressive behaviour nor any desire to harm others.`,
+        moderate: opening +
+            `bears a <strong>moderate moral character</strong>. ${poss} behaviour with teachers and students was generally acceptable, ` +
+            `though there were occasional instances requiring guidance and correction. ${sub} showed no serious signs of violent or ` +
+            `aggressive behaviour, nor any desire to harm others.`,
+        bad: opening +
+            `was found to bear a <strong>poor moral character</strong> during ${poss.toLowerCase()} time at this institution. ` +
+            `${poss} behaviour with teachers and students raised repeated concerns, including instances of disruptive, ` +
+            `aggressive, or disrespectful conduct that required disciplinary action.`
+    };
+
+    return templates[conduct] || templates.good;
+}
+
+/* Fill certificate from a student object */
+function charFillFromStudent(s) {
+    const today = new Date().toLocaleDateString('en-PK', { day: '2-digit', month: 'long', year: 'numeric' });
+    const studentName = s.name || s.fullName || '—';
+    const regNo       = s.regNo || s.id || '—';
+    const fatherName  = s.fatherName || s.guardianName || '—';
+    const gender      = s.gender || 'Female';
+
+    const guardianLabel = gender === 'Male' ? 'Son of' : 'Daughter of';
+    const pronouns = gender === 'Male'
+        ? { sub: 'He', poss: 'His', obj: 'him' }
+        : { sub: 'She', poss: 'Her', obj: 'her' };
+
+    const fromInput = document.getElementById('char-from-date-input');
+    const toInput   = document.getElementById('char-to-date-input');
+
+    const rawFrom = s.admissionDate || s.dateOfAdmission || '';
+    const rawTo   = s.leavingDate || s.dateOfLeaving || '';
+
+    if (rawFrom && fromInput) fromInput.value = rawFrom;
+    if (rawTo && toInput)     toInput.value   = rawTo;
+
+    const fromDisplay = (fromInput && fromInput.value) ? new Date(fromInput.value).toLocaleDateString('en-PK', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
+    const toDisplay   = (toInput && toInput.value)     ? new Date(toInput.value).toLocaleDateString('en-PK', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
+
+    const setText = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+
+    setText('char-name-display', studentName);
+    setText('char-id-display', regNo);
+    setText('char-issue-date', today);
+
+    const schoolEl = document.querySelector('.school-name');
+    const schoolName = schoolEl ? schoolEl.textContent : 'ST. LAWRENCE INTERNATIONAL SCHOOL';
+    setText('char-school-name', schoolName);
+    setText('char-taught-at', schoolName);
+
+    // Remember for conduct re-render & print
+    window.__charCurrentName     = studentName;
+    window.__charCurrentStudent  = s;
+    window.__charGuardianLabel   = guardianLabel;
+    window.__charFatherName      = fatherName;
+    window.__charPronouns        = pronouns;
+    window.__charFromDisplay     = fromDisplay;
+    window.__charToDisplay       = toDisplay;
+
+    charRenderParagraph();
+
+    document.getElementById('char-empty-state').style.display = 'none';
+    document.getElementById('char-preview').style.display     = 'block';
+    const printBtn = document.getElementById('char-print-btn'); if (printBtn) printBtn.style.display = '';
+    const shareBtn = document.getElementById('char-share-btn'); if (shareBtn) shareBtn.style.display = '';
+}
+
+/* Re-render the paragraph using the currently selected conduct option */
+function charRenderParagraph() {
+    if (!window.__charCurrentName) return;
+    const conduct = document.getElementById('char-conduct-select')?.value || 'good';
+    const para = charBuildParagraph(
+        window.__charCurrentName,
+        window.__charGuardianLabel,
+        window.__charFatherName,
+        window.__charFromDisplay,
+        window.__charToDisplay,
+        window.__charPronouns,
+        conduct
+    );
+    const el = document.getElementById('char-main-para');
+    if (el) el.innerHTML = para;
+}
+
+/* Conduct dropdown changed -> update paragraph live */
+function charUpdateConduct() {
+    charRenderParagraph();
+}
+
+/* "Studied From"/"Studied To" date inputs changed -> update dates + paragraph */
+function charUpdateDates() {
+    const fromInput = document.getElementById('char-from-date-input');
+    const toInput   = document.getElementById('char-to-date-input');
+    window.__charFromDisplay = (fromInput && fromInput.value) ? new Date(fromInput.value).toLocaleDateString('en-PK', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
+    window.__charToDisplay   = (toInput && toInput.value)     ? new Date(toInput.value).toLocaleDateString('en-PK', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
+    charRenderParagraph();
+}
+
+/* Capture Character Certificate as an image blob using html2canvas */
+async function charCaptureBlob() {
+    const doc = document.getElementById('char-document');
+    if (!doc || typeof html2canvas === 'undefined') return null;
+    const canvas = await html2canvas(doc, { scale: 2, backgroundColor: '#ffffff', useCORS: true });
+    return new Promise(res => canvas.toBlob(res, 'image/png'));
+}
+
+/* Share Character Certificate as image (Web Share API → fallback to WhatsApp / download) */
+async function shareCharCert() {
+    const name = (window.__charCurrentName || 'student').replace(/[^a-z0-9]+/gi, '_');
+    const filename = `Character_Certificate_${name}.png`;
+    const shareBtn = document.getElementById('char-share-btn');
+    const oldHtml = shareBtn ? shareBtn.innerHTML : '';
+    if (shareBtn) { shareBtn.disabled = true; shareBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Preparing...'; }
+    try {
+        const blob = await charCaptureBlob();
+        if (!blob) throw new Error('Capture failed');
+        const file = new File([blob], filename, { type: 'image/png' });
+
+        // 1) Native share with file (mobile WhatsApp, etc.)
+        if (navigator.canShare && navigator.canShare({ files: [file] })) {
+            await navigator.share({
+                files: [file],
+                title: 'Character Certificate',
+                text: `Character Certificate for ${window.__charCurrentName || ''}`
+            });
+            return;
+        }
+
+        // 2) Fallback: download image + open WhatsApp Web with a prefilled message
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url; a.download = filename; document.body.appendChild(a); a.click(); a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 4000);
+
+        const msg = encodeURIComponent(
+            `Character Certificate for ${window.__charCurrentName || 'student'}.\n` +
+            `(The certificate image has been downloaded — please attach "${filename}" in WhatsApp.)`
+        );
+        window.open(`https://wa.me/?text=${msg}`, '_blank');
+    } catch (err) {
+        console.error('Share failed', err);
+        alert('Sharing failed. The certificate image could not be generated.');
+    } finally {
+        if (shareBtn) { shareBtn.disabled = false; shareBtn.innerHTML = oldHtml; }
+    }
+}
+
+/* Print the Character Certificate */
+function printCharCert() {
+    const doc = document.getElementById('char-document');
+    if (!doc) return;
+
+    const printWin = window.open('', '_blank', 'width=900,height=1100');
+    printWin.document.write(`<!DOCTYPE html>
+<html>
+<head>
+<title>Character Certificate</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Great+Vibes&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Cormorant Garamond',Georgia,serif;background:#eef2f7;padding:24px;display:flex;justify-content:center;align-items:center;min-height:100vh}
+.char-cert-outer{position:relative;background:#fff;width:760px;min-height:980px;overflow:hidden;box-shadow:0 12px 40px rgba(15,23,42,.18);border-radius:4px;color:#0f172a;margin:0 auto}
+.char-geo{position:absolute;width:0;height:0;z-index:1}
+.char-geo-tl{top:0;left:0;border-top:170px solid #c8a753;border-right:170px solid transparent}
+.char-geo-bl{bottom:0;left:0;border-bottom:170px solid #1a2744;border-right:170px solid transparent}
+.char-geo-tr{top:0;right:0;border-top:130px solid #1a2744;border-left:130px solid transparent}
+.char-geo-br{bottom:0;right:0;border-bottom:130px solid #c8a753;border-left:130px solid transparent}
+.char-border-frame{position:absolute;inset:26px;border:2px solid #c8a753;z-index:2;pointer-events:none}
+.char-inner{position:relative;z-index:3;padding:64px 64px 50px;display:flex;flex-direction:column;align-items:center;text-align:center;height:100%}
+.char-l-header{display:flex;align-items:center;gap:14px;width:100%;margin-bottom:18px}
+.char-l-logo{width:46px;height:46px;border-radius:50%;background:linear-gradient(135deg,#1a2744,#3b6fb8);color:#fff;display:flex;align-items:center;justify-content:center;font-size:19px;flex-shrink:0;box-shadow:0 4px 14px rgba(26,39,68,.35)}
+.char-l-school-block{flex:1;text-align:center}
+.char-l-school-meta{margin-top:3px;font-family:'Inter',sans-serif;font-size:10.5px;color:#64748b;letter-spacing:.04em}
+.char-l-dot{margin:0 8px;color:#cbd5e1}
+.char-school-name{font-family:'Inter',sans-serif;font-size:11px;letter-spacing:.18em;color:#64748b;text-transform:uppercase;margin-bottom:0}
+.char-certify-line{font-family:'Cormorant Garamond',serif;font-size:15px;font-style:italic;color:#475569;margin-bottom:18px}
+.char-title{font-family:'Great Vibes',cursive;font-size:54px;color:#1a2744;line-height:1;margin-bottom:4px}
+.char-subtitle{font-family:'Inter',sans-serif;font-size:20px;font-weight:700;letter-spacing:.1em;color:#c8a753;text-transform:uppercase;margin-bottom:18px}
+.char-medal-icons{display:flex;align-items:center;justify-content:center;gap:14px;margin-bottom:22px;color:#1a2744}
+.char-medal-icons i{font-size:26px}
+.char-medal-main{font-size:40px;color:#c8a753}
+.char-name{font-family:'Cormorant Garamond',serif;font-size:30px;font-weight:700;color:#0f172a;letter-spacing:.03em;margin-top:6px}
+.char-name-underline{width:260px;height:1px;background:#c8a753;margin:8px auto 22px}
+.char-main-para{font-family:'Inter',sans-serif;font-size:14.5px;line-height:1.85;color:#334155;max-width:560px;text-align:justify;margin-bottom:30px}
+.char-main-para strong{color:#0f172a}
+.char-meta-row{display:flex;align-items:center;justify-content:center;gap:30px;margin-bottom:auto;padding-bottom:30px;width:100%;flex-wrap:wrap}
+.char-meta-item{text-align:center}
+.char-meta-label{font-family:'Inter',sans-serif;font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:#94a3b8}
+.char-meta-value{font-family:'Inter',sans-serif;font-size:13px;font-weight:700;color:#1a2744;margin-top:3px}
+.char-footer{margin-top:auto;padding-top:30px;display:flex;justify-content:center;width:100%}
+.char-sig{text-align:center;min-width:220px}
+.char-sig-line{width:200px;height:1px;background:#334155;margin:0 auto 8px}
+.char-sig-title{font-family:'Inter',sans-serif;font-size:12px;font-weight:700;color:#0f172a;text-transform:uppercase;letter-spacing:.06em}
+@media print{
+  html,body{padding:0;margin:0;background:#fff;width:100%;height:100%}
+  @page{size:A4 portrait;margin:6mm}
+  .char-cert-outer{box-shadow:none;border-radius:0;margin:0 auto;page-break-after:avoid;page-break-inside:avoid}
+}
+</style>
+</head>
+<body>${doc.outerHTML}</body>
+</html>`);
+    printWin.document.close();
+    printWin.focus();
+    setTimeout(() => { printWin.print(); printWin.close(); }, 700);
+}
+
+function getCurrentAcademicSession() {
+    const now   = new Date();
+    const month = now.getMonth() + 1;
+    const year  = now.getFullYear();
+    if (month >= 4) {
+        return `${year} – ${year + 1}`;
+    } else {
+        return `${year - 1} – ${year}`;
+    }
+}
+
+function printCertificate(docId) {
+    const doc = document.getElementById(docId);
+    if (!doc) return;
+
+    const printWin = window.open('', '_blank', 'width=800,height=700');
+    printWin.document.write(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Certificate</title>
+            <style>
+                * { box-sizing: border-box; margin: 0; padding: 0; }
+                body { font-family: Georgia, serif; background: #fff; padding: 20px; }
+                .cert-header-band { height: 8px; background: linear-gradient(90deg,#1e40af,#6d28d9,#be185d); }
+                .cert-footer-band { margin-top: 0; }
+                .cert-school-header { display: flex; align-items: center; gap: 16px; padding: 20px 28px 12px; border-bottom: 1px solid #e5e7eb; }
+                .cert-school-logo { width:52px; height:52px; border-radius:50%; background:linear-gradient(135deg,#1e40af,#6d28d9); display:flex; align-items:center; justify-content:center; color:#fff; font-size:22px; flex-shrink:0; }
+                .cert-school-name { font-size:20px; font-weight:700; color:#111827; }
+                .cert-school-tagline { font-size:11px; color:#6b7280; text-transform:uppercase; letter-spacing:.04em; font-family:sans-serif; }
+                .cert-title-banner { background:#f8fafc; text-align:center; padding:16px 28px; border-bottom:1px solid #e5e7eb; }
+                .cert-main-title { font-size:18px; font-weight:700; color:#1e3a5f; text-transform:uppercase; letter-spacing:.08em; }
+                .cert-body-text { padding:20px 28px; font-size:13.5px; line-height:1.75; color:#374151; }
+                .cert-body-text p { margin-bottom:12px; }
+                .cert-meta-grid { display:grid; grid-template-columns:repeat(2,1fr); margin:0 28px 20px; border:1px solid #e5e7eb; border-radius:8px; overflow:hidden; }
+                .cert-meta-item { padding:10px 14px; border-right:1px solid #e5e7eb; border-bottom:1px solid #e5e7eb; }
+                .cert-meta-item:nth-child(even){ border-right:none; }
+                .cert-meta-item:nth-last-child(-n+2){ border-bottom:none; }
+                .cert-meta-label { font-size:10px; font-weight:600; text-transform:uppercase; color:#9ca3af; font-family:sans-serif; }
+                .cert-meta-value { font-size:13px; font-weight:600; color:#111827; }
+                .cert-footer-row { display:flex; align-items:flex-end; justify-content:space-between; padding:20px 40px 24px; }
+                .cert-sig-block { text-align:center; font-size:11px; color:#6b7280; font-family:sans-serif; }
+                .cert-sig-block p { margin:6px 0 0; }
+                .cert-sig-line { width:120px; height:1px; background:#374151; }
+                .cert-stamp-circle { width:64px; height:64px; border-radius:50%; border:2px dashed #d1d5db; display:flex; align-items:center; justify-content:center; color:#d1d5db; font-size:22px; }
+            </style>
+            <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+        </head>
+        <body>${doc.outerHTML}</body>
+        </html>`);
+    printWin.document.close();
+    printWin.focus();
+    setTimeout(() => { printWin.print(); printWin.close(); }, 600);
+}
+/* ============================================================
+   DATA EXPORT & IMPORT — openDataIOPage / closeDataIOPage
+   ============================================================ */
+
+function openDataIOPage() {
+    _hideMainSections();
+    document.getElementById('cert-page-view').style.display = 'none';
+    document.getElementById('data-io-page-view').style.display = 'block';
+    const statusEl = document.getElementById('data-io-status');
+    if (statusEl) statusEl.style.display = 'none';
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function closeDataIOPage() {
+    document.getElementById('data-io-page-view').style.display = 'none';
+    document.getElementById('cert-page-view').style.display = 'none';
+    _showMainSections();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function showDataIOStatus(message, type) {
+    const el = document.getElementById('data-io-status');
+    if (!el) return;
+    const icons = { success: 'fa-check-circle', error: 'fa-times-circle', info: 'fa-info-circle' };
+    el.className = 'data-io-status ' + (type || 'info');
+    el.innerHTML = `<i class="fas ${icons[type] || icons.info}"></i> ${message}`;
+    el.style.display = 'flex';
+}
+
+/* ============================================================
+   EXPORT — Build a formatted xlsx workbook from localStorage
+   Includes: Student Photos, B-Form Images, Full Discount Breakdown
+   ============================================================ */
+
+/**
+ * Convert a base64 data URL to a plain base64 string (strips the prefix).
+ * Returns null if the input is not a valid image data URL.
+ */
+function _b64ImageOnly(dataUrl) {
+    if (!dataUrl || typeof dataUrl !== 'string') return null;
+    const match = dataUrl.match(/^data:image\/(png|jpeg|jpg|gif|webp);base64,(.+)$/i);
+    return match ? match[2] : null;
+}
+
+/**
+ * Embed a base64 image into a worksheet at a given cell (top-left anchor).
+ * Uses XLSX's addImage API (requires xlsx-js-style or the full xlsx build).
+ * Falls back silently if addImage is unavailable.
+ *
+ * @param {object} wb          XLSX workbook
+ * @param {object} ws          Target worksheet
+ * @param {string} wsName      Worksheet name (needed for addImage)
+ * @param {string} b64         Pure base64 image data (no prefix)
+ * @param {string} ext         Extension: 'png' | 'jpeg' | 'gif'
+ * @param {number} col         0-indexed column
+ * @param {number} row         0-indexed row
+ * @param {number} colW        Width in EMU (pixels × 9525)
+ * @param {number} rowH        Height in EMU (pixels × 9525)
+ */
+function _addImageToSheet(wb, ws, wsName, b64, ext, col, row, colW, rowH) {
+    try {
+        if (!wb.addImage || !ws['!images']) {
+            // Fallback: attach images array directly on the worksheet
+            if (!ws['!images']) ws['!images'] = [];
+        }
+        const imgId = wb.addImage ? wb.addImage({ base64: b64, extension: ext }) : null;
+
+        const imgObj = {
+            '!pos': { r: row, c: col, x: 0, y: 0, w: colW, h: rowH },
+        };
+        if (imgId !== null) imgObj['!id'] = imgId;
+        else imgObj['!data'] = { base64: b64, extension: ext };
+
+        if (!ws['!images']) ws['!images'] = [];
+        ws['!images'].push(imgObj);
+    } catch (e) {
+        // Image embedding is a best-effort feature; silently skip on failure
+    }
+}
+
+/**
+ * Build a small single-image worksheet showing a student's photo or B-Form scan.
+ * The image is embedded using an <img> tag written into an HTML worksheet
+ * so it always renders regardless of XLSX engine support.
+ *
+ * Since SheetJS CE (the CDN version) does not support image embedding natively
+ * we use a workaround: we build a dedicated "Photos" sheet that lists
+ * each student's name, ID, and the base64 data URL as a hyperlink/note,
+ * AND we generate a separate standalone HTML file with all photos embedded.
+ *
+ * The HTML photo gallery is packaged as a Blob and downloaded alongside the xlsx.
+ */
+function _buildPhotoGalleryHTML(students) {
+    const MONTHS = ['','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    const now = new Date();
+    const dateStr = `${now.getDate()} ${MONTHS[now.getMonth()+1]} ${now.getFullYear()}`;
+
+    const cards = students.map(s => {
+        const name  = s.fullName || s.name || 'Unknown';
+        const regNo = s.regNo || s.id || '—';
+        const cls   = s.studentClass || s.class || '—';
+        const photoSrc  = (s.photo && s.photo.startsWith('data:image')) ? s.photo : '';
+        const bformSrc  = (s.certData && s.certData.startsWith('data:')) ? s.certData : '';
+
+        const photoBlock = photoSrc
+            ? `<img src="${photoSrc}" alt="Photo of ${name}" style="width:110px;height:120px;object-fit:cover;border-radius:6px;border:2px solid #3b82f6;">`
+            : `<div style="width:110px;height:120px;background:#e2e8f0;border-radius:6px;display:flex;align-items:center;justify-content:center;color:#94a3b8;font-size:12px;border:2px dashed #cbd5e1;">No Photo</div>`;
+
+        const bformBlock = bformSrc
+            ? (bformSrc.startsWith('data:image')
+                ? `<img src="${bformSrc}" alt="B-Form" style="max-width:180px;max-height:130px;object-fit:contain;border-radius:4px;border:1px solid #e2e8f0;">`
+                : `<a href="${bformSrc}" style="display:inline-block;padding:6px 12px;background:#3b82f6;color:#fff;border-radius:4px;text-decoration:none;font-size:11px;" download="${regNo}_bform.pdf">📄 Download B-Form PDF</a>`)
+            : `<span style="color:#94a3b8;font-size:11px;font-style:italic;">Not uploaded</span>`;
+
+        return `
+        <div style="display:flex;gap:16px;align-items:flex-start;padding:16px;background:#fff;border-radius:10px;box-shadow:0 1px 4px rgba(0,0,0,0.1);margin-bottom:12px;border-left:4px solid #3b82f6;">
+            <div style="flex-shrink:0;">${photoBlock}</div>
+            <div style="flex:1;min-width:0;">
+                <div style="font-size:15px;font-weight:700;color:#1e293b;margin-bottom:4px;">${name}</div>
+                <div style="font-size:12px;color:#64748b;margin-bottom:8px;">ID: <b>${regNo}</b> &nbsp;|&nbsp; Class: <b>${cls}</b></div>
+                <div style="font-size:11px;font-weight:600;color:#374151;margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px;">B-Form / Certificate</div>
+                ${bformBlock}
+            </div>
+        </div>`;
+    }).join('');
+
+    return `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>EduFlow Pro — Student Photo Gallery</title>
+<style>
+  body { font-family: Arial, sans-serif; background: #f1f5f9; margin: 0; padding: 20px; color: #1e293b; }
+  h1 { font-size: 20px; margin-bottom: 4px; color: #1e293b; }
+  .meta { font-size: 12px; color: #64748b; margin-bottom: 20px; }
+  .grid { max-width: 820px; margin: 0 auto; }
+  @media print { body { background:#fff; } }
+</style>
+</head>
+<body>
+<div class="grid">
+  <h1>📸 Student Photo & Document Gallery</h1>
+  <div class="meta">ST. LAWRENCE INTERNATIONAL SCHOOL &nbsp;|&nbsp; Generated: ${dateStr} &nbsp;|&nbsp; ${students.length} student(s)</div>
+  ${cards}
+</div>
+</body>
+</html>`;
+}
+
+function exportStudentsToExcel() {
+    if (typeof XLSX === 'undefined') {
+        showDataIOStatus('Excel library not loaded yet. Please wait a moment and try again.', 'error');
+        return;
+    }
+
+    const students = JSON.parse(localStorage.getItem(DB_KEY) || '[]');
+    if (!students.length) {
+        showDataIOStatus('No student records found to export.', 'error');
+        return;
+    }
+
+    // ── Confirmation before exporting ──
+    const ok = window.confirm(
+        `Export ${students.length} student record(s) to Excel?\n\n` +
+        `This will download:\n` +
+        `  • EduSoft (Student Data).xlsx — full directory & discount breakdown\n` +
+        `  • EduSoft (Student Photos).html — photos & B-Form images (if any)\n\n` +
+        `Click OK to continue, or Cancel to abort.`
+    );
+    if (!ok) {
+        showDataIOStatus('Export cancelled.', 'info');
+        return;
+    }
+
+    showDataIOStatus('Preparing Excel file… please wait.', 'info');
+
+    try {
+        const wb = XLSX.utils.book_new();
+
+        /* ── Sheet 1: Full Student Directory (all fields) ── */
+        const dirHeaders = [
+            'Reg No', 'Sibling Group ID', 'Full Name', 'Father / Guardian', 'Guardian Role',
+            'Guardian CNIC', 'Gender', 'Date of Birth', 'Age', 'Class', 'Section', 'Roll No',
+            'Admission Date', 'Phone 1', 'Phone 2', 'Permanent Address', 'Mailing Address',
+            'Student B-Form No.', 'Medical Issues',
+            'Transport Mode', 'Transport Type', 'Transport Fee (PKR)',
+            'Monthly Tuition Fee (PKR)', 'Annual Fund (PKR)', 'Annual Fund Month',
+            'Tuition Discount (PKR)', 'Transport Discount (PKR)', 'Sibling Discount (PKR)',
+            'Total Discount (PKR)', 'Discount Type', 'Discount Valid Until',
+            'Net Payable (PKR)', 'Has Sibling', 'Sibling Of',
+            'Student Photo (Link)', 'B-Form / Cert (Link)'
+        ];
+
+        const dirRows = students.map(s => {
+            const tuitionDisc   = Number(s.tuitionDiscount)   || 0;
+            const transportDisc = Number(s.transportDiscount) || 0;
+            const siblingDisc   = Number(s.siblingDiscount)   || 0;
+            const totalDiscount = tuitionDisc + transportDisc + siblingDisc;
+
+            const annualFundEnabled = s.annualFundEnabled === 'on' || s.annualFundEnabled === true;
+            const annualFund = annualFundEnabled
+                ? (s.annualFundAmount != null && s.annualFundAmount !== '' ? Number(s.annualFundAmount) : '')
+                : 0;
+
+            const MONTH_NAMES = ['','January','February','March','April','May','June',
+                                  'July','August','September','October','November','December'];
+            const annualFundMonth = annualFundEnabled && s.annualFundMonth
+                ? (MONTH_NAMES[Number(s.annualFundMonth)] || s.annualFundMonth)
+                : '';
+
+            const discountType = (s.isLifetime === 'on' || s.isLifetime === true)
+                ? 'Lifetime'
+                : (s.discountExpiry ? 'Temporary' : 'None');
+
+            // Student photo — embed note if it exists
+            const hasPhoto = s.photo && s.photo.startsWith('data:image');
+            const hasBform = s.certData && s.certData.startsWith('data:');
+
+            return [
+                s.regNo                         || '',
+                s.isSibling && s.siblingGroupId ? s.siblingGroupId : '',
+                s.fullName  || s.name           || '',
+                s.guardianName || s.fatherName  || '',
+                s.guardianRole                  || '',
+                s.guardianCnic                  || '',
+                s.gender                        || '',
+                s.dob                           || '',
+                s.age                           || '',
+                s.studentClass || s.class       || '',
+                s.section                       || '',
+                s.rollNo                        || '',
+                s.admissionDate                 || '',
+                s.phone1                        || '',
+                s.phone2                        || '',
+                s.permanentAddress || s.address || '',
+                s.mailingAddress                || '',
+                s.studentBform                  || '',
+                s.medicalIssues                 || '',
+                s.transportMode                 || '',
+                s.transportType                 || '',
+                s.transportFee != null && s.transportFee !== '' ? Number(s.transportFee) : 0,
+                s.standardFee  != null && s.standardFee  !== '' ? Number(s.standardFee)  : '',
+                annualFund,
+                annualFundMonth,
+                tuitionDisc,
+                transportDisc,
+                siblingDisc,
+                totalDiscount,
+                discountType,
+                s.discountExpiry || (discountType === 'Lifetime' ? 'Lifetime' : ''),
+                s.netPayable != null && s.netPayable !== '' ? Number(s.netPayable) : '',
+                s.isSibling ? 'Yes' : 'No',
+                s.siblingOf || '',
+                hasPhoto ? '✔ Saved (see Photo Gallery HTML)' : '✘ Not uploaded',
+                hasBform ? '✔ Saved (see Photo Gallery HTML)' : '✘ Not uploaded'
+            ];
+        });
+
+        const dirData = [dirHeaders, ...dirRows];
+        const wsDir   = XLSX.utils.aoa_to_sheet(dirData);
+        wsDir['!cols'] = [
+            { wch: 12 }, { wch: 14 }, { wch: 26 }, { wch: 26 }, { wch: 16 },
+            { wch: 18 }, { wch: 10 }, { wch: 14 }, { wch: 7  }, { wch: 14 },
+            { wch: 10 }, { wch: 10 }, { wch: 16 }, { wch: 16 }, { wch: 16 },
+            { wch: 30 }, { wch: 30 }, { wch: 20 }, { wch: 22 },
+            { wch: 16 }, { wch: 14 }, { wch: 18 },
+            { wch: 22 }, { wch: 18 }, { wch: 20 },
+            { wch: 22 }, { wch: 24 }, { wch: 22 },
+            { wch: 20 }, { wch: 16 }, { wch: 22 },
+            { wch: 18 }, { wch: 12 }, { wch: 30 },
+            { wch: 28 }, { wch: 28 }
+        ];
+        XLSX.utils.book_append_sheet(wb, wsDir, 'Student Directory');
+
+        /* ── Sheet 2: Discount Breakdown ── */
+        const discHeaders = [
+            'Reg No', 'Student Name', 'Class',
+            'Standard Fee (PKR)', 'Transport Fee (PKR)',
+            'Tuition Discount (PKR)', 'Transport Discount (PKR)', 'Sibling Discount (PKR)',
+            'Total Discount (PKR)', 'Total Discount (%)',
+            'Net Monthly Payable (PKR)', 'Discount Type', 'Valid Until'
+        ];
+
+        const discRows = students.map(s => {
+            const stdFee        = Number(s.standardFee)     || 0;
+            const transFee      = Number(s.transportFee)    || 0;
+            const tuitionDisc   = Number(s.tuitionDiscount)   || 0;
+            const transportDisc = Number(s.transportDiscount) || 0;
+            const siblingDisc   = Number(s.siblingDiscount)   || 0;
+            const totalDiscount = tuitionDisc + transportDisc + siblingDisc;
+            const grossTotal    = stdFee + transFee;
+            const discPct       = grossTotal > 0 ? parseFloat(((totalDiscount / grossTotal) * 100).toFixed(2)) : 0;
+            const netPayable    = s.netPayable != null && s.netPayable !== '' ? Number(s.netPayable) : (grossTotal - totalDiscount);
+
+            const discountType  = (s.isLifetime === 'on' || s.isLifetime === true)
+                ? 'Lifetime'
+                : (s.discountExpiry ? 'Temporary' : (totalDiscount > 0 ? 'Unspecified' : 'None'));
+
+            return [
+                s.regNo || '',
+                s.fullName || s.name || '',
+                s.studentClass || s.class || '',
+                stdFee,
+                transFee,
+                tuitionDisc,
+                transportDisc,
+                siblingDisc,
+                totalDiscount,
+                discPct,
+                netPayable,
+                discountType,
+                s.discountExpiry || (discountType === 'Lifetime' ? 'Lifetime' : '—')
+            ];
+        });
+
+        /* Totals row */
+        const totTuition    = discRows.reduce((a, r) => a + (r[5] || 0), 0);
+        const totTransport  = discRows.reduce((a, r) => a + (r[6] || 0), 0);
+        const totSibling    = discRows.reduce((a, r) => a + (r[7] || 0), 0);
+        const totDiscount   = discRows.reduce((a, r) => a + (r[8] || 0), 0);
+        const totNet        = discRows.reduce((a, r) => a + (r[10] || 0), 0);
+
+        const discData = [
+            discHeaders,
+            ...discRows,
+            [],
+            ['TOTALS', '', '', '', '', totTuition, totTransport, totSibling, totDiscount, '', totNet, '', '']
+        ];
+
+        const wsDisc = XLSX.utils.aoa_to_sheet(discData);
+        wsDisc['!cols'] = [
+            { wch: 12 }, { wch: 26 }, { wch: 14 },
+            { wch: 20 }, { wch: 20 },
+            { wch: 24 }, { wch: 26 }, { wch: 24 },
+            { wch: 22 }, { wch: 20 },
+            { wch: 24 }, { wch: 16 }, { wch: 18 }
+        ];
+        XLSX.utils.book_append_sheet(wb, wsDisc, 'Discount Breakdown');
+
+        /* ── Sheet 3: Class Summary ── */
+        const classCounts = {};
+        students.forEach(s => {
+            const cls = s.studentClass || s.class || 'Unknown';
+            classCounts[cls] = (classCounts[cls] || 0) + 1;
+        });
+
+        const summaryData = [
+            ['Class', 'Total Students', 'Male', 'Female'],
+            ...Object.entries(classCounts).map(([cls, total]) => {
+                const inClass = students.filter(s => (s.studentClass || s.class || 'Unknown') === cls);
+                const male    = inClass.filter(s => (s.gender || '').toLowerCase() === 'male').length;
+                const female  = inClass.filter(s => (s.gender || '').toLowerCase() === 'female').length;
+                return [cls, total, male, female];
+            }),
+            [],
+            ['TOTAL', students.length,
+             students.filter(s => (s.gender || '').toLowerCase() === 'male').length,
+             students.filter(s => (s.gender || '').toLowerCase() === 'female').length]
+        ];
+
+        const wsSum = XLSX.utils.aoa_to_sheet(summaryData);
+        wsSum['!cols'] = [{ wch: 18 }, { wch: 16 }, { wch: 10 }, { wch: 10 }];
+        XLSX.utils.book_append_sheet(wb, wsSum, 'Class Summary');
+
+        /* ── Sheet 4: Fee Overview ── */
+        const feeHeaders = [
+            'Reg No', 'Student Name', 'Class',
+            'Monthly Tuition (PKR)', 'Annual Fund (PKR)',
+            'Tuition Disc.', 'Transport Disc.', 'Sibling Disc.',
+            'Net Monthly (PKR)', 'Total Annual (PKR)'
+        ];
+        const feeRows = students.map(s => {
+            const monthly       = Number(s.standardFee) || 0;
+            const tuitionDisc   = Number(s.tuitionDiscount)   || 0;
+            const transportDisc = Number(s.transportDiscount) || 0;
+            const siblingDisc   = Number(s.siblingDiscount)   || 0;
+            const fund = (s.annualFundEnabled === 'on' || s.annualFundEnabled === true)
+                ? (Number(s.annualFundAmount) || 0) : 0;
+            const net = s.netPayable != null && s.netPayable !== '' ? Number(s.netPayable) : (monthly - tuitionDisc - siblingDisc);
+            return [
+                s.regNo || '',
+                s.fullName || s.name || '',
+                s.studentClass || s.class || '',
+                monthly,
+                fund,
+                tuitionDisc,
+                transportDisc,
+                siblingDisc,
+                net,
+                net * 12 + fund
+            ];
+        });
+        const feeData = [feeHeaders, ...feeRows];
+        const wsFee   = XLSX.utils.aoa_to_sheet(feeData);
+        wsFee['!cols'] = [
+            { wch: 12 }, { wch: 26 }, { wch: 14 },
+            { wch: 20 }, { wch: 18 },
+            { wch: 16 }, { wch: 18 }, { wch: 16 },
+            { wch: 18 }, { wch: 18 }
+        ];
+        XLSX.utils.book_append_sheet(wb, wsFee, 'Fee Overview');
+
+        /* ── Sheet 5: Photo Index (text reference since SheetJS CE can't embed images) ── */
+        const photoHeaders = [
+            '#', 'Reg No', 'Student Name', 'Class',
+            'Has Student Photo', 'Has B-Form / Certificate', 'Document Type'
+        ];
+        const photoRows = students.map((s, i) => {
+            const hasPhoto = !!(s.photo    && s.photo.startsWith('data:image'));
+            const hasBform = !!(s.certData && s.certData.startsWith('data:'));
+            const docType  = hasBform
+                ? (s.certData.startsWith('data:image') ? 'Image' : 'PDF')
+                : '—';
+            return [
+                i + 1,
+                s.regNo || '',
+                s.fullName || s.name || '',
+                s.studentClass || s.class || '',
+                hasPhoto ? 'YES ✔' : 'NO ✘',
+                hasBform ? 'YES ✔' : 'NO ✘',
+                docType
+            ];
+        });
+
+        const photoData = [photoHeaders, ...photoRows];
+        const wsPhoto   = XLSX.utils.aoa_to_sheet(photoData);
+        wsPhoto['!cols'] = [
+            { wch: 5 }, { wch: 12 }, { wch: 26 }, { wch: 14 },
+            { wch: 20 }, { wch: 26 }, { wch: 14 }
+        ];
+        XLSX.utils.book_append_sheet(wb, wsPhoto, 'Photo Index');
+
+        /* ── Metadata ── */
+        const now = new Date();
+        const exportedOn = now.toLocaleDateString('en-PK', { day: '2-digit', month: 'long', year: 'numeric' })
+                         + '  ' + now.toLocaleTimeString('en-PK', { hour: '2-digit', minute: '2-digit' });
+
+        const studentsWithPhotos = students.filter(s => s.photo && s.photo.startsWith('data:image')).length;
+        const studentsWithBforms = students.filter(s => s.certData && s.certData.startsWith('data:')).length;
+        const studentsWithDiscount = students.filter(s =>
+            (Number(s.tuitionDiscount) || 0) + (Number(s.transportDiscount) || 0) + (Number(s.siblingDiscount) || 0) > 0
+        ).length;
+
+        const metaData = [
+            ['EduSoft — Student Data Export'],
+            [],
+            ['School', 'ST. LAWRENCE INTERNATIONAL SCHOOL'],
+            ['Exported On', exportedOn],
+            ['Total Students', students.length],
+            ['Students with Photos', studentsWithPhotos],
+            ['Students with B-Form / Certificate', studentsWithBforms],
+            ['Students with Active Discounts', studentsWithDiscount],
+            ['Exported By', 'EduFlow Pro v2.0'],
+            [],
+            ['NOTES'],
+            ['• Student photos and B-Form images are embedded in the companion HTML gallery file.'],
+            ['• Open "EduSoft (Student Photos).html" alongside this Excel file to view all images.'],
+            ['• The "Discount Breakdown" sheet shows itemised discounts per student.'],
+            ['• Photo Index sheet lists which students have uploaded photos/documents.']
+        ];
+        const wsMeta = XLSX.utils.aoa_to_sheet(metaData);
+        wsMeta['!cols'] = [{ wch: 38 }, { wch: 46 }];
+        XLSX.utils.book_append_sheet(wb, wsMeta, 'Export Info');
+
+        /* ── Trigger Excel download ── */
+        XLSX.writeFile(wb, 'EduSoft (Student Data).xlsx');
+
+        /* ── Generate & download the Photo Gallery HTML ── */
+        const studentsWithAnyMedia = students.filter(s =>
+            (s.photo && s.photo.startsWith('data:image')) ||
+            (s.certData && s.certData.startsWith('data:'))
+        );
+
+        if (studentsWithAnyMedia.length > 0) {
+            const galleryHtml = _buildPhotoGalleryHTML(students);
+            const blob = new Blob([galleryHtml], { type: 'text/html;charset=utf-8' });
+            const url  = URL.createObjectURL(blob);
+            const a    = document.createElement('a');
+            a.href     = url;
+            a.download = 'EduSoft (Student Photos).html';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            setTimeout(() => URL.revokeObjectURL(url), 2000);
+
+            showDataIOStatus(
+                `✓ Export successful! <strong>${students.length} student record(s)</strong> saved to <em>EduSoft (Student Data).xlsx</em> with full discount breakdown. ` +
+                `A companion <em>EduSoft (Student Photos).html</em> file was also downloaded containing photos and B-Form images for <strong>${studentsWithAnyMedia.length}</strong> student(s). Check your Downloads folder.`,
+                'success'
+            );
+        } else {
+            showDataIOStatus(
+                `✓ Export successful! <strong>${students.length} student record(s)</strong> saved to <em>EduSoft (Student Data).xlsx</em> with full discount breakdown. No student photos or B-Form images found (none uploaded yet). Check your Downloads folder.`,
+                'success'
+            );
+        }
+
+    } catch (err) {
+        console.error('Export failed', err);
+        showDataIOStatus('Export failed: ' + err.message, 'error');
+    }
+}
+
+/* ============================================================
+   IMPORT — Read xlsx and merge into localStorage
+   ============================================================ */
+function importStudentsFromExcel(event) {
+    if (typeof XLSX === 'undefined') {
+        showDataIOStatus('Excel library not loaded yet. Please wait a moment and try again.', 'error');
+        return;
+    }
+
+    const file = event.target.files && event.target.files[0];
+    if (!file) return;
+
+    showDataIOStatus('Reading file… please wait.', 'info');
+
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        try {
+            const data    = new Uint8Array(e.target.result);
+            const wb      = XLSX.read(data, { type: 'array' });
+
+            /* Expect the first sheet "Student Directory" */
+            const sheetName = wb.SheetNames[0];
+            const ws        = wb.Sheets[sheetName];
+            const rows      = XLSX.utils.sheet_to_json(ws, { defval: '' });
+
+            if (!rows.length) {
+                showDataIOStatus('The file appears to be empty or has no recognisable student rows.', 'error');
+                return;
+            }
+
+            /* Map header names back to our student object keys.
+               IMPORTANT: keys here must match what the form saves to localStorage,
+               i.e. the HTML input[name] attributes — not display aliases. */
+            const colMap = {
+                'Reg No'              : 'regNo',
+                'Student ID'          : 'id',
+                'Full Name'           : 'fullName',        // form saves as fullName, not name
+                'Father / Guardian'   : 'guardianName',    // form saves as guardianName, not fatherName
+                'Gender'              : 'gender',
+                'Date of Birth'       : 'dob',
+                'Age'                 : 'age',
+                'Class'               : 'studentClass',    // form saves as studentClass, not class
+                'Section'             : 'section',
+                'Roll No'             : 'rollNo',
+                'Admission Date'      : 'admissionDate',
+                'Monthly Fee (PKR)'   : 'monthlyFee',
+                'Annual Fund (PKR)'   : 'annualFund',
+                'Phone'               : 'phone',
+                'Address'             : 'permanentAddress', // form saves as permanentAddress, not address
+                'Sibling Of'          : 'siblingOf'
+            };
+
+            const existing  = JSON.parse(localStorage.getItem(DB_KEY) || '[]');
+            const existingRegNos = new Set(existing.map(s => s.regNo || s.id).filter(Boolean));
+
+            let added = 0, skipped = 0;
+            rows.forEach(row => {
+                const student = {};
+                Object.entries(colMap).forEach(([header, key]) => {
+                    if (row[header] !== undefined && row[header] !== '') {
+                        student[key] = row[header];
+                    }
+                });
+
+                /* Skip rows without a registration number */
+                if (!student.regNo && !student.id) { skipped++; return; }
+
+                const regNo = student.regNo || student.id;
+                if (existingRegNos.has(regNo)) { skipped++; return; }
+
+                /* Ensure both id and regNo are populated */
+                if (!student.id)    student.id    = regNo;
+                if (!student.regNo) student.regNo = regNo;
+                if (!student.fullName && !student.name) { skipped++; return; }
+                /* Normalise: ensure fullName is always set (used throughout the app) */
+                if (!student.fullName && student.name) student.fullName = student.name;
+
+                existing.push(student);
+                existingRegNos.add(regNo);
+                added++;
+            });
+
+            localStorage.setItem(DB_KEY, JSON.stringify(existing));
+
+            /* Reset file input so same file can be re-imported if needed */
+            event.target.value = '';
+
+            showDataIOStatus(
+                `Import complete! <strong>${added} new record(s)</strong> added. ${skipped > 0 ? `${skipped} row(s) skipped (already exist or missing required fields).` : ''}`,
+                'success'
+            );
+
+            /* Refresh counters if visible */
+            if (typeof updateCounters === 'function') updateCounters();
+
+        } catch (err) {
+            console.error('Import failed', err);
+            showDataIOStatus('Import failed: ' + err.message + '. Make sure the file was exported by EduFlow Pro.', 'error');
+        }
+    };
+    reader.readAsArrayBuffer(file);
+}

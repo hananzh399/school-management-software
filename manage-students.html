@@ -8,6 +8,8 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <link rel="stylesheet" href="manage-students.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script src="shared-data.js"></script>
 </head>
 <body>
@@ -175,6 +177,99 @@
                     </div>
                     <h3 class="card-title">Archive Center</h3>
                     <p class="card-description">Manage graduated or withdrawn student archives.</p>
+                </div>
+
+                <!-- Card: Certificates -->
+                <div class="manage-card cert-card" id="card-certificates" onclick="openCertPage()">
+                    <div class="card-glow"></div>
+                    <div class="m-icon-wrapper cert-icon">
+                        <i class="fas fa-certificate"></i>
+                    </div>
+                    <h3 class="card-title">Certificates</h3>
+                    <p class="card-description">Generate and print official school certificates for students.</p>
+                </div>
+
+                <!-- Card: Data Export & Import -->
+                <div class="manage-card data-io-card" id="card-data-io" onclick="openDataIOPage()">
+                    <div class="card-glow"></div>
+                    <div class="m-icon-wrapper data-io-icon">
+                        <i class="fas fa-file-export"></i>
+                    </div>
+                    <h3 class="card-title">Data Export &amp; Import</h3>
+                    <p class="card-description">Export all student records to Excel or import data from a backup file.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- =============================================
+             DATA EXPORT & IMPORT PAGE VIEW (inline page)
+        ============================================== -->
+        <section id="data-io-page-view" class="cert-page-view" style="display:none;">
+            <div class="cert-page-header">
+                <button class="cert-back-btn" onclick="closeDataIOPage()">
+                    <i class="fas fa-arrow-left"></i> Back
+                </button>
+                <div class="cert-page-title-wrap">
+                    <i class="fas fa-file-export"></i>
+                    <h2 class="cert-page-title">Data Export &amp; Import</h2>
+                </div>
+                <p class="cert-page-subtitle">Export all student records to a formatted Excel sheet or restore from a backup.</p>
+            </div>
+            <div class="cert-page-grid">
+                <!-- Export Card -->
+                <div class="manage-card data-export-card cert-page-card" onclick="exportStudentsToExcel()">
+                    <div class="card-glow"></div>
+                    <div class="m-icon-wrapper data-export-icon">
+                        <i class="fas fa-file-excel"></i>
+                    </div>
+                    <h3 class="card-title">Export Data</h3>
+                    <p class="card-description">Download all student records as a well-formatted Excel file named <strong>EduSoft (Student Data).xlsx</strong>, plus a companion <strong>EduSoft (Student Photos).html</strong> gallery with student photos, B-Form images, and full discount breakdowns.</p>
+                </div>
+                <!-- Import Card -->
+                <div class="manage-card data-import-card cert-page-card" onclick="document.getElementById('import-file-input').click()">
+                    <div class="card-glow"></div>
+                    <div class="m-icon-wrapper data-import-icon">
+                        <i class="fas fa-file-import"></i>
+                    </div>
+                    <h3 class="card-title">Import Data</h3>
+                    <p class="card-description">Restore student records from a previously exported Excel backup file. Existing records will be merged with imported ones.</p>
+                    <input type="file" id="import-file-input" accept=".xlsx,.xls" style="display:none" onchange="importStudentsFromExcel(event)">
+                </div>
+            </div>
+            <!-- Status / feedback area -->
+            <div id="data-io-status" class="data-io-status" style="display:none;"></div>
+        </section>
+
+        <!-- =============================================
+             CERTIFICATE PAGE VIEW (inline page)
+        ============================================== -->
+        <section id="cert-page-view" class="cert-page-view" style="display:none;">
+            <div class="cert-page-header">
+                <button class="cert-back-btn" onclick="closeCertPage()">
+                    <i class="fas fa-arrow-left"></i> Back
+                </button>
+                <div class="cert-page-title-wrap">
+                    <i class="fas fa-certificate"></i>
+                    <h2 class="cert-page-title">Certificates</h2>
+                </div>
+                <p class="cert-page-subtitle">Select the certificate type you want to generate and print.</p>
+            </div>
+            <div class="cert-page-grid">
+                <div class="manage-card slc-card cert-page-card" onclick="openModal('slc-modal')">
+                    <div class="card-glow"></div>
+                    <div class="m-icon-wrapper slc-icon">
+                        <i class="fas fa-graduation-cap"></i>
+                    </div>
+                    <h3 class="card-title">School Leaving Certificate</h3>
+                    <p class="card-description">Issue an official School Leaving Certificate for a departing or graduated student.</p>
+                </div>
+                <div class="manage-card char-card cert-page-card" onclick="openModal('character-modal')">
+                    <div class="card-glow"></div>
+                    <div class="m-icon-wrapper char-icon">
+                        <i class="fas fa-award"></i>
+                    </div>
+                    <h3 class="card-title">Character Certificate</h3>
+                    <p class="card-description">Generate a Character Certificate attesting to a student's conduct and behaviour.</p>
                 </div>
             </div>
         </section>
@@ -598,6 +693,324 @@
         <div class="toast-content">
             <h4 id="toast-title">Success</h4>
             <p id="toast-body">Operation performed successfully.</p>
+        </div>
+    </div>
+
+    <!-- =============================================
+         SCHOOL LEAVING CERTIFICATE MODAL (ENHANCED)
+    ============================================== -->
+    <div id="slc-modal" class="modal-overlay" style="z-index: 5000;">
+        <div class="modal-container slc-modal-container">
+            <div class="modal-sticky-header slc-modal-header">
+                <div class="slc-modal-header-inner">
+                    <div class="slc-modal-title-group">
+                        <div class="slc-modal-icon"><i class="fas fa-graduation-cap"></i></div>
+                        <div>
+                            <h2 class="slc-modal-title">School Leaving Certificate</h2>
+                            <p class="slc-modal-subtitle">Generate an official certificate for a departing student</p>
+                        </div>
+                    </div>
+                    <button class="close-modal-btn slc-close-btn" onclick="closeModal('slc-modal')">&times;</button>
+                </div>
+            </div>
+
+            <div class="modal-body slc-modal-body">
+
+                <!-- TOP CONTROLS PANEL -->
+                <div class="slc-controls-panel">
+                    <div class="slc-controls-row">
+                        <div class="slc-control-group slc-search-group">
+                            <label class="slc-control-label"><i class="fas fa-search"></i> Search Student</label>
+                            <div class="slc-search-wrap">
+                                <input type="text" id="slc-search-input" class="slc-search-input" placeholder="Search by name, ID, or Student~Guardian (e.g. Hanan~Habib)&hellip;" oninput="slcSearchStudents()">
+                                <i class="fas fa-search slc-search-icon"></i>
+                                <div id="slc-search-results" class="slc-dropdown"></div>
+                            </div>
+                        </div>
+                        <div class="slc-control-group slc-tel-group">
+                            <label class="slc-control-label"><i class="fas fa-phone"></i> School Telephone</label>
+                            <input type="text" id="slc-school-tel-input" class="slc-search-input" placeholder="e.g. +92 51 1234567" value="+92 51 1234567" oninput="document.getElementById('slc-school-tel').textContent=this.value">
+                        </div>
+                    </div>
+                    <div class="slc-manual-row">
+                        <div class="slc-manual-note"><i class="fas fa-info-circle"></i> Or enter details manually if student not in database</div>
+                        <div class="slc-manual-fields">
+                            <div class="slc-mini-field">
+                                <label>Student ID</label>
+                                <input type="text" id="slc-manual-id" class="slc-mini-input" placeholder="e.g. HRK_771">
+                            </div>
+                            <div class="slc-mini-field slc-mini-wide">
+                                <label>Names <span class="slc-hint">(Student~Guardian)</span></label>
+                                <input type="text" id="slc-manual-names" class="slc-mini-input" placeholder="Ali Hassan~Ahmed Hassan">
+                            </div>
+                            <div class="slc-mini-field">
+                                <label>Date of Leaving</label>
+                                <input type="date" id="slc-leaving-date-input" class="slc-mini-input" onchange="slcUpdateLeavingDate()">
+                            </div>
+                            <button class="slc-gen-btn" onclick="slcManualGenerate()">
+                                <i class="fas fa-magic"></i> Generate
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- EMPTY STATE -->
+                <div id="slc-empty-state" class="slc-empty-state">
+                    <div class="slc-empty-icon"><i class="fas fa-file-alt"></i></div>
+                    <h3>Certificate Preview</h3>
+                    <p>Search for a student or enter details manually above, then click <strong>Generate</strong> to preview the certificate.</p>
+                </div>
+
+                <!-- LANDSCAPE CERTIFICATE PREVIEW -->
+                <div id="slc-preview" class="slc-preview-wrap" style="display:none;">
+                    <div class="slc-cert-outer slc-landscape" id="slc-document">
+
+                        <!-- Blue geometric corner shapes -->
+                        <div class="slc-geo slc-geo-tl"></div>
+                        <div class="slc-geo slc-geo-tl2"></div>
+                        <div class="slc-geo slc-geo-bl"></div>
+                        <div class="slc-geo slc-geo-bl2"></div>
+                        <div class="slc-geo slc-geo-tr"></div>
+                        <div class="slc-geo slc-geo-tr2"></div>
+                        <div class="slc-geo slc-geo-br"></div>
+                        <div class="slc-geo slc-geo-br2"></div>
+
+                        <!-- INNER CONTENT -->
+                        <div class="slc-inner">
+
+                            <!-- HEADER: Logo + School + Tel -->
+                            <div class="slc-l-header">
+                                <div class="slc-l-logo"><i class="fas fa-graduation-cap"></i></div>
+                                <div class="slc-l-school-block">
+                                    <div class="slc-l-school-name" id="slc-school-name">ST. LAWRENCE INTERNATIONAL SCHOOL</div>
+                                    <div class="slc-l-school-meta">
+                                        <span><i class="fas fa-map-marker-alt"></i> Islamabad, Pakistan</span>
+                                        <span class="slc-l-dot">&bull;</span>
+                                        <span><i class="fas fa-phone"></i> <span id="slc-school-tel">+92 51 1234567</span></span>
+                                    </div>
+                                </div>
+                                <div class="slc-l-serial">
+                                    <div class="slc-l-serial-label">Cert. No.</div>
+                                    <div class="slc-l-serial-value" id="slc-cert-no">SLC-0001</div>
+                                </div>
+                            </div>
+
+                            <!-- TITLE -->
+                            <h1 class="slc-l-title">SCHOOL LEAVING CERTIFICATE</h1>
+                            <div class="slc-l-certify"><em>This is to certify that</em></div>
+
+                            <!-- STUDENT NAME (script style) -->
+                            <div class="slc-l-name" id="slc-name-display">&#x2014;</div>
+
+                            <!-- MAIN PARAGRAPH -->
+                            <p class="slc-l-main-para">
+                                has successfully completed the recommended course of study at this institution
+                                and has accordingly left the rolls of this school.
+                            </p>
+
+                            <!-- DATES ROW: Leaving Date | Voucher/Certificate Generation Date -->
+                            <div class="slc-l-dates-row">
+                                <div class="slc-l-date-item">
+                                    <div class="slc-l-date-label"><i class="fas fa-door-open"></i> Date of Leaving School</div>
+                                    <div class="slc-l-date-value" id="slc-leaving-date">&#x2014;</div>
+                                </div>
+                                <div class="slc-l-date-sep"></div>
+                                <div class="slc-l-date-item">
+                                    <div class="slc-l-date-label"><i class="fas fa-file-invoice"></i> Certificate / Voucher Generated On</div>
+                                    <div class="slc-l-date-value" id="slc-issue-date">&#x2014;</div>
+                                </div>
+                            </div>
+
+                            <!-- BOTTOM DETAIL PARAGRAPH -->
+                            <p class="slc-l-record-para" id="slc-record-para">
+                                Student record will appear here once a student is selected.
+                            </p>
+
+                            <!-- FOOTER: Principal Sign area only -->
+                            <div class="slc-l-footer slc-l-footer-principal-only">
+                                <div class="slc-l-sig slc-l-sig-principal">
+                                    <div class="slc-l-sig-line"></div>
+                                    <div class="slc-l-sig-title">Principal's Signature</div>
+                                    <div class="slc-l-sig-sub">School Principal</div>
+                                </div>
+                            </div>
+
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-sticky-footer slc-modal-footer">
+                <button class="btn-ghost" onclick="closeModal('slc-modal')"><i class="fas fa-times"></i> Close</button>
+                <button class="btn-primary-submit" id="slc-share-btn" onclick="shareSLC()" style="display:none;background:#10b981;"><i class="fab fa-whatsapp"></i> Share</button>
+                <button class="btn-primary-submit" id="slc-print-btn" onclick="printSLC()" style="display:none;"><i class="fas fa-print"></i> Print Certificate</button>
+            </div>
+        </div>
+    </div>
+
+        <!-- =============================================
+         CHARACTER CERTIFICATE MODAL (ENHANCED)
+    ============================================== -->
+    <div id="character-modal" class="modal-overlay" style="z-index: 5000;">
+        <div class="modal-container slc-modal-container">
+            <div class="modal-sticky-header slc-modal-header">
+                <div class="slc-modal-header-inner">
+                    <div class="slc-modal-title-group">
+                        <div class="slc-modal-icon char-modal-icon"><i class="fas fa-award"></i></div>
+                        <div>
+                            <h2 class="slc-modal-title">Character Certificate</h2>
+                            <p class="slc-modal-subtitle">Generate an official certificate attesting to a student's conduct</p>
+                        </div>
+                    </div>
+                    <button class="close-modal-btn slc-close-btn" onclick="closeModal('character-modal')">&times;</button>
+                </div>
+            </div>
+
+            <div class="modal-body slc-modal-body">
+
+                <!-- TOP CONTROLS PANEL -->
+                <div class="slc-controls-panel">
+                    <div class="slc-controls-row">
+                        <div class="slc-control-group slc-search-group">
+                            <label class="slc-control-label"><i class="fas fa-search"></i> Search Student</label>
+                            <div class="slc-search-wrap">
+                                <input type="text" id="char-search-input" class="slc-search-input" placeholder="Search by name, ID, or Student~Guardian (e.g. Hanan~Habib)&hellip;" oninput="charSearchStudents()">
+                                <i class="fas fa-search slc-search-icon"></i>
+                                <div id="char-search-results" class="slc-dropdown"></div>
+                            </div>
+                        </div>
+                        <div class="slc-control-group">
+                            <label class="slc-control-label"><i class="fas fa-balance-scale"></i> Moral Character</label>
+                            <select id="char-conduct-select" class="slc-mini-input" onchange="charUpdateConduct()">
+                                <option value="excellent">Excellent</option>
+                                <option value="good" selected>Good</option>
+                                <option value="moderate">Moderate</option>
+                                <option value="bad">Bad</option>
+                            </select>
+                        </div>
+                        <div class="slc-control-group slc-tel-group">
+                            <label class="slc-control-label"><i class="fas fa-phone"></i> School Telephone</label>
+                            <input type="text" id="char-school-tel-input" class="slc-search-input" placeholder="e.g. +92 51 1234567" value="+92 51 1234567" oninput="document.getElementById('char-school-tel').textContent=this.value">
+                        </div>
+                    </div>
+                    <div class="slc-manual-row">
+                        <div class="slc-manual-note"><i class="fas fa-info-circle"></i> Or enter details manually if student not in database</div>
+                        <div class="slc-manual-fields">
+                            <div class="slc-mini-field">
+                                <label>Student ID</label>
+                                <input type="text" id="char-manual-id" class="slc-mini-input" placeholder="e.g. HRK_771">
+                            </div>
+                            <div class="slc-mini-field slc-mini-wide">
+                                <label>Names <span class="slc-hint">(Student~Guardian)</span></label>
+                                <input type="text" id="char-manual-names" class="slc-mini-input" placeholder="Rohina Gul~Mukhtiar Ahmed">
+                            </div>
+                            <div class="slc-mini-field">
+                                <label>Gender</label>
+                                <select id="char-manual-gender" class="slc-mini-input">
+                                    <option value="Female">Female</option>
+                                    <option value="Male">Male</option>
+                                </select>
+                            </div>
+                            <div class="slc-mini-field">
+                                <label>Studied From</label>
+                                <input type="date" id="char-from-date-input" class="slc-mini-input" onchange="charUpdateDates()">
+                            </div>
+                            <div class="slc-mini-field">
+                                <label>Studied To</label>
+                                <input type="date" id="char-to-date-input" class="slc-mini-input" onchange="charUpdateDates()">
+                            </div>
+                            <button class="slc-gen-btn" onclick="charManualGenerate()">
+                                <i class="fas fa-magic"></i> Generate
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- EMPTY STATE -->
+                <div id="char-empty-state" class="slc-empty-state">
+                    <div class="slc-empty-icon"><i class="fas fa-award"></i></div>
+                    <h3>Certificate Preview</h3>
+                    <p>Search for a student or enter details manually above, then click <strong>Generate</strong> to preview the certificate.</p>
+                </div>
+
+                <!-- PORTRAIT CHARACTER CERTIFICATE PREVIEW -->
+                <div id="char-preview" class="slc-preview-wrap" style="display:none;">
+                    <div class="char-cert-outer" id="char-document">
+
+                        <!-- Gold corner ribbons (Medal of Honor style) -->
+                        <div class="char-geo char-geo-tl"></div>
+                        <div class="char-geo char-geo-bl"></div>
+                        <div class="char-geo char-geo-tr"></div>
+                        <div class="char-geo char-geo-br"></div>
+                        <div class="char-border-frame"></div>
+
+                        <!-- INNER CONTENT -->
+                        <div class="char-inner">
+
+                            <!-- HEADER: Logo + School Name + Tel -->
+                            <div class="char-l-header">
+                                <div class="char-l-logo"><i class="fas fa-graduation-cap"></i></div>
+                                <div class="char-l-school-block">
+                                    <div class="char-school-name" id="char-school-name">ST. LAWRENCE INTERNATIONAL SCHOOL</div>
+                                    <div class="char-l-school-meta">
+                                        <span><i class="fas fa-map-marker-alt"></i> Islamabad, Pakistan</span>
+                                        <span class="char-l-dot">&bull;</span>
+                                        <span><i class="fas fa-phone"></i> <span id="char-school-tel">+92 51 1234567</span></span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <p class="char-certify-line">Has demonstrated good character as set forth in the</p>
+
+                            <h1 class="char-title">Charater Certificate</h1>
+                            <h2 class="char-subtitle">CHARACTER DEVELOPMENT PROGRAM</h2>
+
+                            <div class="char-medal-icons">
+                                <i class="fas fa-shield-alt"></i>
+                                <i class="fas fa-award char-medal-main"></i>
+                                <i class="fas fa-shield-alt"></i>
+                            </div>
+
+                            <!-- STUDENT NAME -->
+                            <div class="char-name" id="char-name-display">&#x2014;</div>
+                            <div class="char-name-underline"></div>
+
+                            <!-- MAIN PARAGRAPH (changes with conduct dropdown) -->
+                            <p class="char-main-para" id="char-main-para">
+                                Search for a student or enter details manually, then click Generate.
+                            </p>
+
+                            <div class="char-meta-row">
+                                <div class="char-meta-item">
+                                    <div class="char-meta-label">Student ID</div>
+                                    <div class="char-meta-value" id="char-id-display">&#x2014;</div>
+                                </div>
+                                <div class="char-meta-item">
+                                    <div class="char-meta-label">Taught at</div>
+                                    <div class="char-meta-value" id="char-taught-at">&#x2014;</div>
+                                </div>
+                                <div class="char-meta-item">
+                                    <div class="char-meta-label">Date of Issue</div>
+                                    <div class="char-meta-value" id="char-issue-date">&#x2014;</div>
+                                </div>
+                            </div>
+
+                            <!-- FOOTER: Principal Sign area only -->
+                            <div class="char-footer">
+                                <div class="char-sig">
+                                    <div class="char-sig-line"></div>
+                                    <div class="char-sig-title">Principal's Signature</div>
+                                </div>
+                            </div>
+
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-sticky-footer slc-modal-footer">
+                <button class="btn-ghost" onclick="closeModal('character-modal')"><i class="fas fa-times"></i> Close</button>
+                <button class="btn-primary-submit" id="char-share-btn" onclick="shareCharCert()" style="display:none;background:#10b981;"><i class="fab fa-whatsapp"></i> Share</button>
+                <button class="btn-primary-submit" id="char-print-btn" onclick="printCharCert()" style="display:none;"><i class="fas fa-print"></i> Print Certificate</button>
+            </div>
         </div>
     </div>
 
