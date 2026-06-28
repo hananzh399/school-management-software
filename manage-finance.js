@@ -435,9 +435,9 @@ function handleAddStaffFine() {
     const idx = members.findIndex(s => s.id === selectedStaffId);
     if (idx === -1) { alert('Staff member not found.'); return; }
 
-    members[idx].fines = (Number(members[idx].fines) || 0) + amount;
-    saveGlobalData(db);
-
+    // NOTE: do NOT write to members[idx].fines — that field is owned by
+    // attendance.js applyAbsenceFines() (absence fine only). Manual fines
+    // live solely in the eduflow-staff-fines log below.
     const finesLog = getStaffFinesData();
     const role = selectedStaffCategory === 'Teaching'
         ? (members[idx].subjects || 'Teacher')
@@ -2325,7 +2325,6 @@ function showSalaryBreakdown(staffId, category = 'Teaching') {
         .reduce((s, r) => s + (Number(r.amount) || 0), 0);
 
     const baseSalary    = Number(staff.salary) || 0;
-    const feeDeducted   = Number(staff.feeDeducted) || 0;
     const advanceTaken  = getTotalAdvance(staffId);
 
     // Security deposit auto-deduction (monthly until fully collected)
@@ -2338,7 +2337,7 @@ function showSalaryBreakdown(staffId, category = 'Teaching') {
     const absenceFine   = Number(staff.fines) || 0;
     const absentDays    = Number(staff.absentDaysThisMonth) || 0;
 
-    const netPayable    = baseSalary + totalBonus - security - feeDeducted - totalFine - absenceFine - advanceTaken;
+    const netPayable    = baseSalary + totalBonus - security - totalFine - absenceFine - advanceTaken;
     const fmt = n => 'RS ' + Math.max(0, n).toLocaleString();
 
     document.getElementById('sbp-teacher-name').textContent = staff.name;
@@ -2348,7 +2347,6 @@ function showSalaryBreakdown(staffId, category = 'Teaching') {
     document.getElementById('sbp-security').value       = secInfo.total > 0
         ? `${fmt(security)}  (${secInfo.collected.toLocaleString()} / ${secInfo.total.toLocaleString()})`
         : fmt(security);
-    document.getElementById('sbp-fee-deducted').value   = fmt(feeDeducted);
     document.getElementById('sbp-fine').value           = fmt(totalFine);
     document.getElementById('sbp-advance-taken').value  = fmt(advanceTaken);
     document.getElementById('sbp-net-payable').value    = 'RS ' + netPayable.toLocaleString();
@@ -2417,8 +2415,16 @@ function processSalaryPayment(staffId, category = 'Teaching') {
     if (!staff) return;
 
     const absenceFine = Number(staff.fines) || 0;
-    const netSalary   = Math.max(0, Number(staff.salary) - absenceFine);
-    const fineNote    = absenceFine > 0 ? ` (after RS ${absenceFine.toLocaleString()} absence fine)` : '';
+    // Subtract manual fines logged for this month as well
+    const _fineRecs = JSON.parse(localStorage.getItem('eduflow-staff-fines') || '[]');
+    const _mk = getCurrentMonthKey();
+    const manualFine = _fineRecs
+        .filter(r => (String(r.staffId) === String(staffId) || String(r.id) === String(staffId))
+                  && (!r.monthKey || r.monthKey === _mk))
+        .reduce((sum, r) => sum + (Number(r.amount) || 0), 0);
+    const totalFines  = absenceFine + manualFine;
+    const netSalary   = Math.max(0, Number(staff.salary) - totalFines);
+    const fineNote    = totalFines > 0 ? ` (after RS ${totalFines.toLocaleString()} fines)` : '';
 
     if (confirm(`Confirm salary payment of RS ${netSalary.toLocaleString()} to ${staff.name}?${fineNote}`)) {
         if (!staff.salaryHistory) staff.salaryHistory = [];

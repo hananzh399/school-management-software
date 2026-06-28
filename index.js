@@ -84,8 +84,12 @@ function calculateAndLoadDashboardData() {
     // Net Expenses = Salaries + Bonuses + Other Expenses
     const netExp = data.salaries.total + data.staffBonusTotal + data.otherExpensesTotal;
     
-    // Total Revenue = Collected Fees + Student Late Fines + Student Other Fines + Teacher Absence Fines (revenue from deductions)
-    const totalRev = data.fees.collected + data.fines.studentLate + data.fines.studentOther;
+    // Total Revenue = Collected Fees + all fines (late, manual student+staff, staff absence)
+    const totalRev = data.fees.collected
+        + data.fines.studentLate
+        + data.fines.studentOther
+        + data.fines.staffTotal
+        + data.fines.teacherAbsence;
     
     // Net Profit = Revenue - Expenses
     const netProfit = totalRev - netExp;
@@ -100,7 +104,7 @@ function calculateAndLoadDashboardData() {
     animateCounter('collected-fees', data.fees.collected);
     animateCounter('pending-fees', data.fees.pending);
     animateCounter('student-late-fines', data.fines.studentLate); 
-    animateCounter('student-other-fines', data.fines.studentOther); 
+    animateCounter('student-other-fines', data.fines.studentOther + data.fines.staffTotal); 
     animateCounter('teacher-absence-fines', data.fines.teacherAbsence);
 
     // 4. UPDATE THE UI (Expenses)
