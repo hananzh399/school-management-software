@@ -271,11 +271,10 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         if (modalId === 'view-only-modal') {
-            ['vo-search-name','vo-search-father','vo-search-class'].forEach(id => {
-                const el = document.getElementById(id);
-                if (el) el.value = '';
-            });
-            renderViewOnlyTable();
+            const searchEl = document.getElementById('vo-search-name');
+            if (searchEl) searchEl.value = '';
+            // Build class tabs from settings, then render
+            buildVoClassTabs();
         }
 
         modal.style.display = 'block';
@@ -431,7 +430,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // ── CLASS / SECTION DROPDOWNS — POPULATED FROM SETTINGS ─────────────────
     const classSelect   = admissionForm ? admissionForm.querySelector('[name="studentClass"]') : null;
-    const sectionSelect = admissionForm ? admissionForm.querySelector('[name="section"]')      : null;
+    const sectionSelect = document.getElementById('section-select');
 
     /**
      * Rebuild the Class <select> using the configs saved on the Settings page.
@@ -451,20 +450,36 @@ document.addEventListener('DOMContentLoaded', () => {
 
     /**
      * Rebuild the Section <select> for the currently-selected class.
-     * If the class has no sections configured, falls back to a generic A/B/C.
+     * Only shows sections configured in Settings. If the class has NO sections
+     * configured, the field is hidden and required is removed so the form can submit.
      */
     function populateSectionDropdown(className) {
         if (!sectionSelect) return;
         const previous = sectionSelect.value;
         const cfg = getClassConfigMap()[className];
+        // Only use configured sections — no fallback so "None" in settings = no sections
         const sections = (cfg && Array.isArray(cfg.sections) && cfg.sections.length)
             ? cfg.sections
-            : (className ? ['A', 'B', 'C'] : []);
-        sectionSelect.innerHTML =
-            '<option value="">Select Section</option>' +
-            sections.map(s => `<option value="${s}">${s}</option>`).join('');
-        if (previous && sections.includes(previous)) {
-            sectionSelect.value = previous;
+            : [];
+
+        const fieldGroup = document.getElementById('section-field-group');
+
+        if (sections.length === 0) {
+            // No sections configured: hide field, clear value, remove required
+            sectionSelect.innerHTML = '<option value="">No sections configured</option>';
+            sectionSelect.value = '';
+            sectionSelect.removeAttribute('required');
+            if (fieldGroup) fieldGroup.style.display = 'none';
+        } else {
+            // Sections available: show field, make it required
+            sectionSelect.innerHTML =
+                '<option value="">Select Section</option>' +
+                sections.map(s => `<option value="${s}">${s}</option>`).join('');
+            sectionSelect.setAttribute('required', '');
+            if (fieldGroup) fieldGroup.style.display = '';
+            if (previous && sections.includes(previous)) {
+                sectionSelect.value = previous;
+            }
         }
     }
 
@@ -908,7 +923,115 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
 
-    // ── VIEW-ONLY TABLE (read-only directory, no edit/delete) ────────────────
+    // ── VIEW-ONLY TABLE (read-only directory with class/section tabs) ─────────
+
+    // State for view-only modal tabs
+    let voActiveClass   = null;  // currently selected class name
+    let voActiveSection = null;  // currently selected section, or 'ALL'
+
+    /**
+     * Build class tabs from settings — only classes that actually have students
+     * OR exist in settings are shown. We show all configured classes.
+     */
+    function buildVoClassTabs() {
+        const configs  = getClassConfigs();
+        const db       = getDatabase();
+        const tabsEl   = document.getElementById('vo-class-tabs');
+        if (!tabsEl) return;
+
+        // Only show classes that have at least one student registered
+        const classesWithStudents = new Set(db.map(s => s.studentClass).filter(Boolean));
+        const availableClasses = configs.filter(c => classesWithStudents.has(c.name));
+
+        if (availableClasses.length === 0) {
+            tabsEl.innerHTML = '<span style="color:var(--text-muted);font-size:0.9rem;padding:8px;">No students registered yet.</span>';
+            document.getElementById('vo-section-tabs').innerHTML = '';
+            const tbody = document.getElementById('vo-student-tbody');
+            if (tbody) tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:50px;color:#94a3b8;">No students found.</td></tr>';
+            return;
+        }
+
+        // Default to first class if none selected or current no longer exists
+        if (!voActiveClass || !availableClasses.find(c => c.name === voActiveClass)) {
+            voActiveClass = availableClasses[0].name;
+        }
+
+        tabsEl.innerHTML = availableClasses.map(c => `
+            <button class="vo-class-tab ${c.name === voActiveClass ? 'active' : ''}"
+                    onclick="voSelectClass('${c.name}')">
+                ${c.name}
+                <span class="vo-tab-count">${db.filter(s => s.studentClass === c.name).length}</span>
+            </button>
+        `).join('');
+
+        buildVoSectionTabs();
+    }
+
+    /** Build section tabs for the currently active class */
+    function buildVoSectionTabs() {
+        const sectionTabsEl = document.getElementById('vo-section-tabs');
+        if (!sectionTabsEl) return;
+
+        const cfg      = getClassConfigMap()[voActiveClass];
+        const sections = (cfg && Array.isArray(cfg.sections) && cfg.sections.length)
+            ? cfg.sections : [];
+
+        const db = getDatabase();
+        const classStudents = db.filter(s => s.studentClass === voActiveClass);
+
+        // If no sections configured, hide section tabs entirely
+        if (sections.length === 0) {
+            sectionTabsEl.innerHTML = '';
+            voActiveSection = 'ALL';
+            renderViewOnlyTable();
+            return;
+        }
+
+        // Default section
+        if (!voActiveSection || (voActiveSection !== 'ALL' && !sections.includes(voActiveSection))) {
+            voActiveSection = sections[0];
+        }
+
+        // Build: "All" tab + one tab per section
+        const allCount = classStudents.length;
+        let html = `<button class="vo-section-tab ${voActiveSection === 'ALL' ? 'active' : ''}"
+                            onclick="voSelectSection('ALL')">
+                        All <span class="vo-tab-count">${allCount}</span>
+                    </button>`;
+
+        sections.forEach(sec => {
+            const cnt = classStudents.filter(s => s.section === sec).length;
+            html += `<button class="vo-section-tab ${voActiveSection === sec ? 'active' : ''}"
+                             onclick="voSelectSection('${sec}')">
+                         Section ${sec} <span class="vo-tab-count">${cnt}</span>
+                     </button>`;
+        });
+
+        sectionTabsEl.innerHTML = html;
+        renderViewOnlyTable();
+    }
+
+    /** Called when user clicks a class tab */
+    window.voSelectClass = function(className) {
+        voActiveClass = className;
+        voActiveSection = null; // reset section so buildVoSectionTabs picks the first
+        // Clear search
+        const srch = document.getElementById('vo-search-name');
+        if (srch) srch.value = '';
+        buildVoClassTabs(); // rebuilds both class + section tabs + table
+    };
+
+    /** Called when user clicks a section tab */
+    window.voSelectSection = function(section) {
+        voActiveSection = section;
+        // Update section tab active state
+        document.querySelectorAll('.vo-section-tab').forEach(btn => {
+            btn.classList.toggle('active', btn.textContent.trim().startsWith(
+                section === 'ALL' ? 'All' : 'Section ' + section
+            ));
+        });
+        renderViewOnlyTable();
+    };
 
     window.renderViewOnlyTable = function() {
         const db    = getDatabase();
@@ -917,21 +1040,33 @@ document.addEventListener('DOMContentLoaded', () => {
 
         tbody.innerHTML = '';
 
-        const qName   = (document.getElementById('vo-search-name')   ? document.getElementById('vo-search-name').value   : '').toLowerCase().trim();
-        const qFather = (document.getElementById('vo-search-father') ? document.getElementById('vo-search-father').value : '').toLowerCase().trim();
-        const qClass  = (document.getElementById('vo-search-class')  ? document.getElementById('vo-search-class').value  : '').toLowerCase().trim();
+        const qName = (document.getElementById('vo-search-name') ? document.getElementById('vo-search-name').value : '').toLowerCase().trim();
 
-        const filtered = db.filter(s => {
-            const matchName   = !qName   || (s.fullName     || '').toLowerCase().includes(qName);
-            const matchFather = !qFather || (s.guardianName || '').toLowerCase().includes(qFather);
-            const matchClass  = !qClass  || (s.studentClass || '').toLowerCase().includes(qClass);
-            return matchName && matchFather && matchClass;
-        });
+        // Filter by active class first
+        let filtered = db.filter(s => s.studentClass === voActiveClass);
+
+        // Then by active section (unless ALL)
+        if (voActiveSection && voActiveSection !== 'ALL') {
+            filtered = filtered.filter(s => s.section === voActiveSection);
+        }
+
+        // Then by search query (name or reg no)
+        if (qName) {
+            filtered = filtered.filter(s =>
+                (s.fullName || '').toLowerCase().includes(qName) ||
+                (s.regNo   || '').toLowerCase().includes(qName) ||
+                (s.id      || '').toLowerCase().includes(qName) ||
+                (s.guardianName || '').toLowerCase().includes(qName)
+            );
+        }
 
         if (filtered.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:50px;color:#94a3b8;">No students found.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:50px;color:#94a3b8;">No students found in this class/section.</td></tr>';
             return;
         }
+
+        // Sort by roll number
+        filtered.sort((a, b) => (parseInt(a.rollNo) || 0) - (parseInt(b.rollNo) || 0));
 
         filtered.forEach(s => {
             const displayId  = s.regNo || s.id;
@@ -942,9 +1077,10 @@ document.addEventListener('DOMContentLoaded', () => {
             tbody.innerHTML += `
                 <tr>
                     <td><span class="hrk-id-badge">${displayId}</span></td>
+                    <td>${s.rollNo || '—'}</td>
                     <td><strong>${s.fullName}</strong>${siblingTag}</td>
                     <td>${s.guardianName}</td>
-                    <td><span class="class-chip">${s.studentClass}</span></td>
+                    <td><span class="class-chip">${s.section || '—'}</span></td>
                     <td>${s.gender}</td>
                     <td style="text-align:center;">
                         <button class="btn-icon view" onclick="viewFullProfile('${s.regNo}')" title="View Profile">
@@ -955,10 +1091,15 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     };
 
-    // Wire view-only search inputs to re-render on type
-    ['vo-search-name','vo-search-father','vo-search-class'].forEach(id => {
-        const el = document.getElementById(id);
-        if (el) el.addEventListener('input', renderViewOnlyTable);
+    // Wire view-only search to re-render
+    const voSearchEl = document.getElementById('vo-search-name');
+    if (voSearchEl) voSearchEl.addEventListener('input', renderViewOnlyTable);
+
+    // Re-sync tabs if settings change in another tab
+    window.addEventListener('storage', (e) => {
+        if (e.key === SETTINGS_CLASSES_KEY) {
+            buildVoClassTabs();
+        }
     });
 
     // ── PROMOTE ALL STUDENTS ─────────────────────────────────────────────────
