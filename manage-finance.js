@@ -850,9 +850,16 @@ function viewVoucher(studentId, fullName, isPaidBill = false) {
     const editBtn = document.getElementById('edit-voucher-btn');
     if (isPaidBill) {
         html = '<div style="position:relative;">' + html + '<div class="paid-stamp-overlay">PAID</div></div>';
-        if (editBtn) editBtn.style.display = 'none';
+        // Paid bills are read-only — hide Edit Voucher completely from the entire pay area
+        if (editBtn) {
+            editBtn.style.display = 'none';
+            editBtn.setAttribute('data-paid-locked', '1');
+        }
     } else {
-        if (editBtn) editBtn.style.display = 'inline-block';
+        if (editBtn) {
+            editBtn.removeAttribute('data-paid-locked');
+            editBtn.style.display = 'inline-block';
+        }
     }
 
     document.getElementById('voucher-render-target').innerHTML = html;
@@ -860,6 +867,8 @@ function viewVoucher(studentId, fullName, isPaidBill = false) {
 }
 
 function openVoucherEditModal() {
+    const editBtn = document.getElementById('edit-voucher-btn');
+    if (editBtn && editBtn.getAttribute('data-paid-locked') === '1') return; // Paid bills cannot be edited
     if (currentVoucherStudentId) {
         openInlineVoucherEditor(currentVoucherStudentId, currentVoucherStudentName);
     }
@@ -876,140 +885,17 @@ function closeVoucherModal() {
    SHARE VOUCHER — Online Share Options
    ============================================ */
 function shareVoucherOnline() {
-    // Toggle the share popup near the share button
-    let popup = document.getElementById('voucher-share-popup');
-    if (!popup) {
-        popup = document.createElement('div');
-        popup.id = 'voucher-share-popup';
-        popup.className = 'voucher-share-popup';
-        popup.innerHTML = `
-            <div class="share-popup-title"><i class="fas fa-share-nodes"></i> &nbsp;Share Voucher</div>
-            <button class="share-popup-item spi-whatsapp" onclick="shareViaWhatsApp()">
-                <span class="spi-icon"><i class="fab fa-whatsapp"></i></span>
-                <span>Share via WhatsApp</span>
-            </button>
-            <button class="share-popup-item spi-copy" onclick="shareViaCopyLink()">
-                <span class="spi-icon"><i class="fas fa-link"></i></span>
-                <span>Copy as Text</span>
-            </button>
-            <button class="share-popup-item spi-email" onclick="shareViaEmail()">
-                <span class="spi-icon"><i class="fas fa-envelope"></i></span>
-                <span>Send via Email</span>
-            </button>
-            <button class="share-popup-item spi-download" onclick="shareViaDownloadImage()">
-                <span class="spi-icon"><i class="fas fa-image"></i></span>
-                <span>Save as Image</span>
-            </button>
-        `;
-        document.body.appendChild(popup);
+    // Directly share the voucher as an image (Web Share API on mobile / supported browsers,
+    // automatic download fallback elsewhere). No popup, no extra options.
+    _showShareToast('<i class="fas fa-spinner fa-spin"></i> Preparing voucher image…');
 
-        // Close popup when clicking outside
-        document.addEventListener('click', function closeSharePopup(e) {
-            const btn = document.getElementById('share-voucher-btn');
-            if (!popup.contains(e.target) && e.target !== btn && !btn?.contains(e.target)) {
-                popup.classList.remove('open');
-            }
-        });
-    }
-
-    // Position popup near button
-    const btn = document.getElementById('share-voucher-btn');
-    if (btn) {
-        const rect = btn.getBoundingClientRect();
-        popup.style.top  = (rect.bottom + 8) + 'px';
-        popup.style.left = Math.max(8, rect.left - 40) + 'px';
-    }
-
-    popup.classList.toggle('open');
-}
-
-function _buildVoucherShareText() {
-    const students = JSON.parse(localStorage.getItem('edu_students') || '[]');
-    const student  = findStudentExact(students, currentVoucherStudentId, currentVoucherStudentName);
-    if (!student) return 'Fee Voucher – ST. LAWRENCE INTERNATIONAL SCHOOL';
-
-    const f         = computeFeeBreakdown(student);
-    const today     = new Date();
-    const challanNo = `CH-${student.id}-${today.getFullYear()}${String(today.getMonth()+1).padStart(2,'0')}`;
-
-    let text = `🏫 *ST. LAWRENCE INTERNATIONAL SCHOOL*\n`;
-    text    += `📄 Fee Voucher — ${f.monthLabel}\n`;
-    text    += `──────────────────────\n`;
-    text    += `👤 *Student:* ${student.fullName}\n`;
-    text    += `🆔 *Reg. No:* ${f.regNo}\n`;
-    text    += `📚 *Class:* ${student.studentClass || '—'}\n`;
-    text    += `👨‍👩‍👦 *Guardian:* ${student.guardianName || '—'}\n`;
-    text    += `──────────────────────\n`;
-    text    += `🔢 *Challan No:* ${challanNo}\n`;
-    text    += `📅 *Due Date:* ${f.dueDateStr}\n`;
-    if (f.lateFineEnabled) {
-        text += `⚠️ *Late Fine:* Rs. ${f.lateFeeSurcharge.toLocaleString()} (after ${f.dueDateStr})\n`;
-    }
-    text    += `──────────────────────\n`;
-    text    += `💰 *Net Payable:* Rs. ${f.voucherTotal.toLocaleString()}\n`;
-    if (f.lateFineEnabled) {
-        text += `💳 *After Due Date:* Rs. ${f.totalAfterDueDate.toLocaleString()}\n`;
-    }
-    text    += `──────────────────────\n`;
-    text    += `_Please pay before the due date to avoid late charges._`;
-    return text;
-}
-
-function shareViaWhatsApp() {
-    const text = _buildVoucherShareText();
-    const url  = `https://wa.me/?text=${encodeURIComponent(text)}`;
-    window.open(url, '_blank');
-    document.getElementById('voucher-share-popup')?.classList.remove('open');
-    _showShareToast('Opening WhatsApp…');
-}
-
-function shareViaCopyLink() {
-    const text = _buildVoucherShareText();
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(text).then(() => {
-            _showShareToast('<i class="fas fa-check"></i> Voucher text copied!');
-        }).catch(() => _fallbackCopy(text));
-    } else {
-        _fallbackCopy(text);
-    }
-    document.getElementById('voucher-share-popup')?.classList.remove('open');
-}
-
-function _fallbackCopy(text) {
-    const ta = document.createElement('textarea');
-    ta.value = text;
-    ta.style.cssText = 'position:fixed;left:-9999px;top:-9999px;opacity:0;';
-    document.body.appendChild(ta);
-    ta.select();
-    try { document.execCommand('copy'); _showShareToast('<i class="fas fa-check"></i> Voucher text copied!'); }
-    catch(e) { _showShareToast('Could not copy — please copy manually.'); }
-    document.body.removeChild(ta);
-}
-
-function shareViaEmail() {
-    const students = JSON.parse(localStorage.getItem('edu_students') || '[]');
-    const student  = findStudentExact(students, currentVoucherStudentId, currentVoucherStudentName);
-    const f        = student ? computeFeeBreakdown(student) : {};
-    const subject  = encodeURIComponent(`Fee Voucher – ${student?.fullName || ''} (${f.monthLabel || ''})`);
-    const body     = encodeURIComponent(_buildVoucherShareText().replace(/\*/g,'').replace(/_/g,''));
-    window.open(`mailto:?subject=${subject}&body=${body}`, '_blank');
-    document.getElementById('voucher-share-popup')?.classList.remove('open');
-    _showShareToast('Opening email client…');
-}
-
-function shareViaDownloadImage() {
-    document.getElementById('voucher-share-popup')?.classList.remove('open');
-
-    // Check if html2canvas is available; if not, load it dynamically
-    function doCapture() {
+    function doShare() {
         const target = document.getElementById('voucher-render-target');
         if (!target) { _showShareToast('Voucher not found.'); return; }
 
-        // Temporarily hide the School Copy so we only capture the Student Copy
+        // Capture only the Student Copy
         const copies = target.querySelectorAll('.voucher-copy');
         if (copies[0]) copies[0].style.display = 'none';
-
-        _showShareToast('<i class="fas fa-spinner fa-spin"></i> Generating image…');
 
         html2canvas(target, {
             scale: 2,
@@ -1018,13 +904,38 @@ function shareViaDownloadImage() {
             logging: false
         }).then(canvas => {
             if (copies[0]) copies[0].style.display = '';
-            const link = document.createElement('a');
+
             const students = JSON.parse(localStorage.getItem('edu_students') || '[]');
             const student  = findStudentExact(students, currentVoucherStudentId, currentVoucherStudentName);
-            link.download = `voucher-${student?.fullName?.replace(/\s+/g,'-') || 'student'}.png`;
-            link.href = canvas.toDataURL('image/png');
-            link.click();
-            _showShareToast('<i class="fas fa-check"></i> Image downloaded!');
+            const safeName = (student?.fullName || 'student').replace(/\s+/g,'-');
+            const fileName = `voucher-${safeName}.png`;
+
+            canvas.toBlob(async (blob) => {
+                if (!blob) { _showShareToast('Image capture failed.'); return; }
+                const file = new File([blob], fileName, { type: 'image/png' });
+
+                // Try native share-with-file
+                if (navigator.canShare && navigator.canShare({ files: [file] }) && navigator.share) {
+                    try {
+                        await navigator.share({
+                            files: [file],
+                            title: 'Fee Voucher',
+                            text: `Fee Voucher — ${student?.fullName || ''}`
+                        });
+                        _showShareToast('<i class="fas fa-check"></i> Voucher shared!');
+                        return;
+                    } catch (err) {
+                        // user cancelled or share failed — fall back to download
+                    }
+                }
+
+                // Fallback: download the image
+                const link = document.createElement('a');
+                link.download = fileName;
+                link.href = canvas.toDataURL('image/png');
+                link.click();
+                _showShareToast('<i class="fas fa-check"></i> Voucher image downloaded!');
+            }, 'image/png');
         }).catch(() => {
             if (copies[0]) copies[0].style.display = '';
             _showShareToast('Image capture failed. Try Print instead.');
@@ -1032,12 +943,12 @@ function shareViaDownloadImage() {
     }
 
     if (typeof html2canvas !== 'undefined') {
-        doCapture();
+        doShare();
     } else {
         const script = document.createElement('script');
         script.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';
-        script.onload  = doCapture;
-        script.onerror = () => _showShareToast('Could not load image library. Use Print instead.');
+        script.onload  = doShare;
+        script.onerror = () => _showShareToast('Could not load image library.');
         document.head.appendChild(script);
     }
 }

@@ -11,7 +11,7 @@ document.addEventListener('DOMContentLoaded', () => {
 window.addEventListener('storage', (e) => {
     if (['edu_students', 'eduflow-db', 'eduflow-student-fines',
          'eduflow-staff-fines', 'eduflow-staff-bonus', 'eduflow-other-expenses',
-         'edu_staff', 'eduflow-staff-advances'].includes(e.key)) {
+         'edu_staff', 'eduflow-staff-advances', 'edu_latefee_config'].includes(e.key)) {
         calculateAndLoadDashboardData();
     }
 });
@@ -207,7 +207,7 @@ function calculateFinancials() {
             pending: Math.max(0, expected - collected)
         },
         fines: {
-            studentLate: db.students?.fines?.lateFees || 0,
+            studentLate: computeStudentLateFinesTotal() + (db.students?.fines?.lateFees || 0),
             studentOther: totalStudentFines,
             staffTotal: totalStaffFines,
             teacherAbsence: totalTeacherAbsenceFines
@@ -221,4 +221,54 @@ function calculateFinancials() {
         netProfit: 0,
         lastMonthProfit: 50000 // Placeholder
     };
+}
+
+/* ============================================
+   STUDENT LATE-FEE COMPUTATION
+   ============================================
+   Reads late-fee config from 'edu_latefee_config' (saved by settings.js)
+   and sums lateFeeSurcharge for every student whose CURRENT-month voucher
+   is unpaid and past the (deadlineDay + grace) cut-off.
+   This mirrors the logic in manage-finance.js (getVoucherSettings /
+   computeFeeBreakdown) so the dashboard reflects real outstanding
+   late-fee charges. */
+function computeStudentLateFinesTotal() {
+    let cfg = {};
+    try { cfg = JSON.parse(localStorage.getItem('edu_latefee_config') || '{}'); } catch(e) {}
+    const enabled = cfg.enabled !== false;
+    if (!enabled) return 0;
+
+    const deadlineDay = parseInt(cfg.deadlineDay, 10) || 10;
+    const grace       = parseInt(cfg.grace, 10) || 0;
+    const lateType    = cfg.type || 'fixed';
+    const lateVal     = parseFloat(cfg.amount) || 200;
+    const cutoffDay   = deadlineDay + grace;
+
+    const today = new Date();
+    if (today.getDate() <= cutoffDay) return 0; // not yet late this month
+
+    const monthKey = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}`;
+    const students = JSON.parse(localStorage.getItem('edu_students') || '[]');
+
+    let total = 0;
+    students.forEach(s => {
+        const tuition   = Number(s.standardFee)   || 0;
+        const transport = Number(s.transportFee)  || 0;
+        const baseMonthly = Math.max(0, tuition + transport
+            - (Number(s.tuitionDiscount)   || 0)
+            - (Number(s.transportDiscount) || 0)
+            - (Number(s.siblingDiscount)   || 0));
+        if (baseMonthly <= 0) return;
+
+        const paidThisMonth = (s.feePayments || [])
+            .filter(p => p.monthKey === monthKey)
+            .reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
+        if (paidThisMonth >= baseMonthly) return; // already paid
+
+        const surcharge = lateType === 'percent'
+            ? Math.round(baseMonthly * (lateVal / 100))
+            : lateVal;
+        total += surcharge;
+    });
+    return total;
 }
