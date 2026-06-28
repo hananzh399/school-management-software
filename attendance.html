@@ -143,7 +143,7 @@
                         <thead>
                             <tr>
                                 <th>#</th>
-                                <th>Student ID</th>
+                                <th>Reg No</th>
                                 <th>Name</th>
                                 <th>Section</th>
                                 <th>Guardian</th>
@@ -242,6 +242,7 @@
                                 <th>#</th>
                                 <th>ID</th>
                                 <th>Name</th>
+                                <th>Guardian</th>
                                 <th class="th-status">Present</th>
                                 <th class="th-status">Absent</th>
                                 <th class="th-status">Leave</th>
@@ -258,10 +259,346 @@
             </div>
         </section>
 
+        <!-- STAGE 7: Monthly class attendance grid (View) -->
+        <section id="stage-monthly" class="stage hidden">
+            <div class="stage-header">
+                <button class="back-btn" data-back="view-classes"><i class="fas fa-arrow-left"></i> Back</button>
+                <h2 class="stage-title" id="monthly-title">Monthly Attendance</h2>
+            </div>
+
+            <div class="toolbar">
+                <div class="search-wrap">
+                    <i class="fas fa-search"></i>
+                    <input id="monthly-search" type="text" placeholder="Search by Reg No, name, or guardian" />
+                    <span class="tilde-hint">name~guardian</span>
+                </div>
+                <div class="section-select" id="monthly-section-select">
+                    <button class="section-trigger" id="monthly-section-trigger">
+                        <span id="monthly-section-label">All Sections</span>
+                        <i class="fas fa-chevron-down"></i>
+                    </button>
+                    <div class="section-dropdown hidden" id="monthly-section-dropdown">
+                        <div class="dropdown-list" id="monthly-section-list"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="toolbar">
+                <div class="month-nav" style="display:flex;align-items:center;gap:10px;">
+                    <button id="month-prev" class="bulk-btn" style="padding:8px 12px;cursor:pointer;"><i class="fas fa-chevron-left"></i></button>
+                    <span id="month-label" style="font-weight:600;min-width:170px;text-align:center;"></span>
+                    <button id="month-next" class="bulk-btn" style="padding:8px 12px;cursor:pointer;"><i class="fas fa-chevron-right"></i></button>
+                    <button id="open-report-btn" class="bulk-btn" style="padding:8px 14px;cursor:pointer;background:var(--indigo);color:#fff;border:none;border-radius:8px;font-weight:600;margin-left:8px;"><i class="fas fa-file-chart-column"></i> Generate Attendance Report</button>
+                </div>
+                <div style="margin-left:auto;font-size:0.8rem;color:var(--text-secondary);">
+                    Legend: <strong style="color:var(--emerald);">P</strong> Present &middot;
+                    <strong style="color:var(--rose);">A</strong> Absent &middot;
+                    <strong style="color:var(--amber);">L</strong> Leave &middot;
+                    <span style="color:var(--text-muted);">&ndash;</span> No record
+                </div>
+            </div>
+            <div class="table-card">
+                <div class="table-scroll">
+                    <table class="attendance-table monthly-table" id="monthly-table"></table>
+                    <div id="monthly-empty" class="empty-state hidden">
+                        <i class="fas fa-inbox"></i>
+                        <p>No students in this class.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- STAGE 8: Single Student Full Attendance Record -->
+        <section id="stage-student-record" class="stage hidden">
+            <div class="stage-header">
+                <button class="back-btn" data-back="monthly"><i class="fas fa-arrow-left"></i> Back</button>
+                <h2 class="stage-title" id="record-title">Student Attendance Record</h2>
+            </div>
+
+            <div class="record-profile" id="record-profile"></div>
+
+            <div class="toolbar">
+                <div class="search-wrap">
+                    <i class="fas fa-search"></i>
+                    <input id="record-search" type="text" placeholder="Search by date (e.g. 2026-06) or status" />
+                </div>
+                <div class="quick-filters" id="record-filters">
+                    <button class="filter-btn active" data-range="all">All Time</button>
+                    <button class="filter-btn" data-range="30">Last 1 Month</button>
+                    <button class="filter-btn" data-range="365">Last 1 Year</button>
+                </div>
+                <button id="open-student-report-btn" class="bulk-btn" style="padding:8px 14px;cursor:pointer;background:var(--indigo);color:#fff;border:none;border-radius:8px;font-weight:600;margin-left:auto;white-space:nowrap;">
+                    <i class="fas fa-file-chart-column"></i> Generate Attendance Report
+                </button>
+            </div>
+
+            <div class="kpi-grid" id="record-kpis"></div>
+
+            <div class="table-card">
+                <div class="table-scroll">
+                    <div class="history-row history-row--head">
+                        <span>Date</span><span>Reason / Notes</span><span style="text-align:center;">Status</span>
+                    </div>
+                    <div id="history-list"></div>
+                    <div id="history-empty" class="empty-state hidden">
+                        <i class="fas fa-inbox"></i>
+                        <p>No attendance records found for this period.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- STAGE 9: Monthly STAFF attendance grid (View) -->
+        <section id="stage-staff-monthly" class="stage hidden">
+            <div class="stage-header">
+                <button class="back-btn" data-back="submode"><i class="fas fa-arrow-left"></i> Back</button>
+                <h2 class="stage-title" id="staff-monthly-title">Staff Monthly Attendance</h2>
+            </div>
+
+            <div class="toolbar">
+                <div class="search-wrap">
+                    <i class="fas fa-search"></i>
+                    <input id="staff-monthly-search" type="text" placeholder="Search by Staff ID, name, or job" />
+                </div>
+            </div>
+
+            <div class="toolbar">
+                <div class="month-nav" style="display:flex;align-items:center;gap:10px;">
+                    <button id="staff-month-prev" class="bulk-btn" style="padding:8px 12px;cursor:pointer;"><i class="fas fa-chevron-left"></i></button>
+                    <span id="staff-month-label" style="font-weight:600;min-width:170px;text-align:center;"></span>
+                    <button id="staff-month-next" class="bulk-btn" style="padding:8px 12px;cursor:pointer;"><i class="fas fa-chevron-right"></i></button>
+                    <button id="open-staff-report-btn" class="bulk-btn" style="padding:8px 14px;cursor:pointer;background:var(--indigo);color:#fff;border:none;border-radius:8px;font-weight:600;margin-left:8px;"><i class="fas fa-file-chart-column"></i> Generate Attendance Report</button>
+                    <button id="staff-monthly-print-btn" class="bulk-btn" style="padding:8px 14px;cursor:pointer;background:var(--blue);color:#fff;border:none;border-radius:8px;font-weight:600;"><i class="fas fa-print"></i> Print</button>
+                    <button id="staff-monthly-share-btn" class="bulk-btn" style="padding:8px 14px;cursor:pointer;background:var(--emerald);color:#fff;border:none;border-radius:8px;font-weight:600;"><i class="fas fa-share-alt"></i> Share</button>
+                </div>
+                <div style="margin-left:auto;font-size:0.8rem;color:var(--text-secondary);">
+                    Legend: <strong style="color:var(--emerald);">P</strong> Present &middot;
+                    <strong style="color:var(--rose);">A</strong> Absent &middot;
+                    <strong style="color:var(--amber);">L</strong> Leave &middot;
+                    <span style="color:var(--text-muted);">&ndash;</span> No record
+                </div>
+            </div>
+            <div class="table-card">
+                <div class="table-scroll">
+                    <table class="attendance-table monthly-table" id="staff-monthly-table"></table>
+                    <div id="staff-monthly-empty" class="empty-state hidden">
+                        <i class="fas fa-inbox"></i>
+                        <p>No staff to display.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- STAGE 10: Single Staff Full Attendance Record -->
+        <section id="stage-staff-record" class="stage hidden">
+            <div class="stage-header">
+                <button class="back-btn" data-back="staff-monthly"><i class="fas fa-arrow-left"></i> Back</button>
+                <h2 class="stage-title" id="staff-record-title">Staff Attendance Record</h2>
+            </div>
+
+            <div class="record-profile" id="staff-record-profile"></div>
+
+            <div class="toolbar">
+                <div class="search-wrap">
+                    <i class="fas fa-search"></i>
+                    <input id="staff-record-search" type="text" placeholder="Search by date (e.g. 2026-06) or status" />
+                </div>
+                <div class="quick-filters" id="staff-record-filters">
+                    <button class="filter-btn" data-range="7">1 Week</button>
+                    <button class="filter-btn active" data-range="30">1 Month</button>
+                    <button class="filter-btn" data-range="365">1 Year</button>
+                </div>
+                <button id="open-staff-individual-report-btn" class="bulk-btn" style="padding:8px 14px;cursor:pointer;background:var(--indigo);color:#fff;border:none;border-radius:8px;font-weight:600;margin-left:auto;white-space:nowrap;">
+                    <i class="fas fa-file-chart-column"></i> Generate Attendance Report
+                </button>
+            </div>
+
+            <div class="kpi-grid" id="staff-record-kpis"></div>
+
+            <div class="table-card">
+                <div class="table-scroll">
+                    <div class="history-row history-row--head">
+                        <span>Date</span><span>Reason / Notes</span><span style="text-align:center;">Status</span>
+                    </div>
+                    <div id="staff-history-list"></div>
+                    <div id="staff-history-empty" class="empty-state hidden">
+                        <i class="fas fa-inbox"></i>
+                        <p>No attendance records found for this period.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+
+
+
+        
+        <!-- ATTENDANCE REPORT MODAL -->
+        <div id="report-modal" class="report-modal hidden" aria-hidden="true">
+            <div class="report-modal__backdrop" data-close-report></div>
+            <div class="report-modal__panel" role="dialog" aria-modal="true" aria-labelledby="report-modal-title">
+                <div class="report-modal__head">
+                    <h3 id="report-modal-title"><i class="fas fa-file-chart-column"></i> Attendance Report</h3>
+                    <button class="report-modal__close" data-close-report aria-label="Close"><i class="fas fa-times"></i></button>
+                </div>
+
+                <!-- Scope picker -->
+                <div id="report-scope" class="report-scope">
+                    <p class="report-scope__hint">Choose a reporting period</p>
+                    <div class="report-scope__btns">
+                        <button class="scope-btn" data-scope="month">
+                            <i class="fas fa-calendar-day"></i>
+                            <span class="scope-btn__title">This Month</span>
+                            <span class="scope-btn__sub">Summary of the currently shown month</span>
+                        </button>
+                        <button class="scope-btn" data-scope="year">
+                            <i class="fas fa-calendar"></i>
+                            <span class="scope-btn__title">This Year</span>
+                            <span class="scope-btn__sub">Summary of the current calendar year</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Generated report -->
+                <div id="report-result" class="report-result hidden">
+                    <div id="report-card" class="report-card">
+                        <!-- filled by JS -->
+                    </div>
+
+                    <div class="report-actions">
+                        <button class="report-action" data-back-scope><i class="fas fa-arrow-left"></i> Back</button>
+                        <button class="report-action report-action--primary" id="report-share-btn"><i class="fab fa-whatsapp"></i> Share on WhatsApp</button>
+                        <button class="report-action" id="report-print-btn"><i class="fas fa-print"></i> Print</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- STUDENT ATTENDANCE REPORT MODAL -->
+        <div id="student-report-modal" class="report-modal hidden" aria-hidden="true">
+            <div class="report-modal__backdrop" data-close-student-report></div>
+            <div class="report-modal__panel" role="dialog" aria-modal="true" aria-labelledby="student-report-modal-title">
+                <div class="report-modal__head">
+                    <h3 id="student-report-modal-title"><i class="fas fa-file-chart-column"></i> Student Attendance Report</h3>
+                    <button class="report-modal__close" data-close-student-report aria-label="Close"><i class="fas fa-times"></i></button>
+                </div>
+
+                <!-- Scope picker -->
+                <div id="student-report-scope" class="report-scope">
+                    <p class="report-scope__hint">Choose a reporting period</p>
+                    <div class="report-scope__btns">
+                        <button class="scope-btn" data-student-scope="week">
+                            <i class="fas fa-calendar-week"></i>
+                            <span class="scope-btn__title">1 Week</span>
+                            <span class="scope-btn__sub">Last 7 days</span>
+                        </button>
+                        <button class="scope-btn" data-student-scope="month">
+                            <i class="fas fa-calendar-day"></i>
+                            <span class="scope-btn__title">1 Month</span>
+                            <span class="scope-btn__sub">Last 30 days</span>
+                        </button>
+                        <button class="scope-btn" data-student-scope="year">
+                            <i class="fas fa-calendar"></i>
+                            <span class="scope-btn__title">1 Year</span>
+                            <span class="scope-btn__sub">Last 365 days</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Generated report -->
+                <div id="student-report-result" class="report-result hidden">
+                    <div id="student-report-card" class="report-card">
+                        <!-- filled by JS -->
+                    </div>
+
+                    <div class="report-actions">
+                        <button class="report-action" data-back-student-scope><i class="fas fa-arrow-left"></i> Back</button>
+                        <button class="report-action report-action--primary" id="student-report-share-btn"><i class="fab fa-whatsapp"></i> Share on WhatsApp</button>
+                        <button class="report-action" id="student-report-print-btn"><i class="fas fa-print"></i> Print</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- STAFF FULL (MONTHLY/YEARLY) ATTENDANCE REPORT MODAL -->
+        <div id="staff-report-modal" class="report-modal hidden" aria-hidden="true">
+            <div class="report-modal__backdrop" data-close-staff-report></div>
+            <div class="report-modal__panel" role="dialog" aria-modal="true" aria-labelledby="staff-report-modal-title">
+                <div class="report-modal__head">
+                    <h3 id="staff-report-modal-title"><i class="fas fa-file-chart-column"></i> Staff Attendance Report</h3>
+                    <button class="report-modal__close" data-close-staff-report aria-label="Close"><i class="fas fa-times"></i></button>
+                </div>
+                <div id="staff-report-scope" class="report-scope">
+                    <p class="report-scope__hint">Choose a reporting period</p>
+                    <div class="report-scope__btns">
+                        <button class="scope-btn" data-staff-scope="month">
+                            <i class="fas fa-calendar-day"></i>
+                            <span class="scope-btn__title">This Month</span>
+                            <span class="scope-btn__sub">Summary of the currently shown month</span>
+                        </button>
+                        <button class="scope-btn" data-staff-scope="year">
+                            <i class="fas fa-calendar"></i>
+                            <span class="scope-btn__title">This Year</span>
+                            <span class="scope-btn__sub">Summary of the current calendar year</span>
+                        </button>
+                    </div>
+                </div>
+                <div id="staff-report-result" class="report-result hidden">
+                    <div id="staff-report-card" class="report-card"></div>
+                    <div class="report-actions">
+                        <button class="report-action" data-back-staff-scope><i class="fas fa-arrow-left"></i> Back</button>
+                        <button class="report-action report-action--primary" id="staff-report-share-btn"><i class="fab fa-whatsapp"></i> Share on WhatsApp</button>
+                        <button class="report-action" id="staff-report-print-btn"><i class="fas fa-print"></i> Print</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- INDIVIDUAL STAFF ATTENDANCE REPORT MODAL -->
+        <div id="staff-individual-report-modal" class="report-modal hidden" aria-hidden="true">
+            <div class="report-modal__backdrop" data-close-staff-individual-report></div>
+            <div class="report-modal__panel" role="dialog" aria-modal="true" aria-labelledby="staff-individual-report-modal-title">
+                <div class="report-modal__head">
+                    <h3 id="staff-individual-report-modal-title"><i class="fas fa-file-chart-column"></i> Staff Member Attendance Report</h3>
+                    <button class="report-modal__close" data-close-staff-individual-report aria-label="Close"><i class="fas fa-times"></i></button>
+                </div>
+                <div id="staff-individual-report-scope" class="report-scope">
+                    <p class="report-scope__hint">Choose a reporting period</p>
+                    <div class="report-scope__btns">
+                        <button class="scope-btn" data-staff-individual-scope="week">
+                            <i class="fas fa-calendar-week"></i>
+                            <span class="scope-btn__title">1 Week</span>
+                            <span class="scope-btn__sub">Last 7 days</span>
+                        </button>
+                        <button class="scope-btn" data-staff-individual-scope="month">
+                            <i class="fas fa-calendar-day"></i>
+                            <span class="scope-btn__title">1 Month</span>
+                            <span class="scope-btn__sub">Last 30 days</span>
+                        </button>
+                        <button class="scope-btn" data-staff-individual-scope="year">
+                            <i class="fas fa-calendar"></i>
+                            <span class="scope-btn__title">1 Year</span>
+                            <span class="scope-btn__sub">Last 365 days</span>
+                        </button>
+                    </div>
+                </div>
+                <div id="staff-individual-report-result" class="report-result hidden">
+                    <div id="staff-individual-report-card" class="report-card"></div>
+                    <div class="report-actions">
+                        <button class="report-action" data-back-staff-individual-scope><i class="fas fa-arrow-left"></i> Back</button>
+                        <button class="report-action report-action--primary" id="staff-individual-report-share-btn"><i class="fab fa-whatsapp"></i> Share on WhatsApp</button>
+                        <button class="report-action" id="staff-individual-report-print-btn"><i class="fas fa-print"></i> Print</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <div id="toast" class="toast hidden"></div>
+
     </main>
 
     <script src="shared-data.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script src="attendance.js"></script>
 </body>
 </html>
