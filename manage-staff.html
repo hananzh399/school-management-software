@@ -238,12 +238,16 @@
         <!-- FORM MODAL (Hidden by default) -->
         <div id="form-modal" class="modal-overlay d-none">
             <div class="modal-content form-modal-content">
-                <h3 id="form-modal-title">Add Staff</h3>
+                <div class="form-modal-header">
+                    <h3 id="form-modal-title">Add Staff</h3>
+                </div>
                 <form id="staff-form" onsubmit="handleFormSubmit(event)">
-                    <div id="form-dynamic-fields" class="form-grid">
-                        <!-- Populated by JS -->
+                    <div class="form-modal-body">
+                        <div id="form-dynamic-fields" class="form-grid">
+                            <!-- Populated by JS -->
+                        </div>
                     </div>
-                    <div class="modal-actions mt-20">
+                    <div class="form-modal-footer modal-actions">
                         <button type="button" class="btn btn-cancel" onclick="closeFormModal()">Cancel</button>
                         <button type="submit" class="btn btn-primary">Save Details</button>
                     </div>

@@ -567,18 +567,35 @@
             <div class="modal-body modal-body-scroll">
 
                 <!-- CLASS TABS (populated by JS from settings) -->
-                <div class="vo-class-tabs-wrap">
+                <div class="vo-class-tabs-wrap upd-class-row">
                     <div id="vo-class-tabs" class="vo-class-tabs">
                         <!-- populated by JS -->
                     </div>
+                    <div id="vo-class-incharge-top" class="upd-class-incharge-top">
+                        <i class="fas fa-chalkboard-teacher"></i>
+                        <span class="upd-incharge-label">Class Incharge:</span>
+                        <span id="vo-class-incharge-name" class="upd-incharge-name">Not Assigned</span>
+                    </div>
                 </div>
 
-                <!-- SECTION TABS + SEARCH BAR ROW -->
-                <div class="vo-section-search-row">
+                <!-- SECTION TABS + CLASS TEACHER BADGE -->
+                <div class="upd-section-teacher-row">
                     <div id="vo-section-tabs" class="vo-section-tabs">
                         <!-- populated by JS based on active class -->
                     </div>
-                    <div class="search-box-wrapper vo-search-bar">
+                    <!-- Class Teacher Badge (read from Staff Management) -->
+                    <div id="vo-class-teacher-badge" class="upd-teacher-badge" style="display:none;">
+                        <i class="fas fa-chalkboard-teacher"></i>
+                        <span id="vo-teacher-name">—</span>
+                        <a href="manage-staff.html" class="upd-teacher-link" title="Go to Staff Management">
+                            <i class="fas fa-external-link-alt"></i>
+                        </a>
+                    </div>
+                </div>
+
+                <!-- SEARCH BAR — left aligned, above table, below sections -->
+                <div class="upd-search-row">
+                    <div class="search-box-wrapper upd-search-bar">
                         <i class="fas fa-search"></i>
                         <input type="text" id="vo-search-name" placeholder="Search by name or ID...">
                     </div>
@@ -607,42 +624,67 @@
         </div>
     </div>
 
-    <!-- 2. DATABASE TABLE MODAL -->
+    <!-- 2. UPDATE DATABASE MODAL (class/section tab layout matching view-only) -->
     <div id="view-modal" class="modal-overlay">
         <div class="modal-container wider">
             <div class="modal-header">
-                <h3><i class="fas fa-database"></i> Registered Student Database</h3>
+                <h3><i class="fas fa-pen-to-square"></i> Update Student Database</h3>
                 <button class="close-modal-btn" onclick="closeModal('view-modal')">&times;</button>
             </div>
             <div class="modal-body modal-body-scroll">
-                <div class="table-controls" style="flex-wrap:wrap;">
-                    <div class="search-box-wrapper">
+
+                <!-- CLASS TABS (populated by JS from settings) -->
+                <div class="vo-class-tabs-wrap upd-class-row">
+                    <div id="upd-class-tabs" class="vo-class-tabs">
+                        <!-- populated by JS -->
+                    </div>
+                    <div id="upd-class-incharge-top" class="upd-class-incharge-top">
+                        <i class="fas fa-chalkboard-teacher"></i>
+                        <span class="upd-incharge-label">Class Incharge:</span>
+                        <span id="upd-class-incharge-name" class="upd-incharge-name">Not Assigned</span>
+                    </div>
+                </div>
+
+                <!-- SECTION TABS + CLASS TEACHER + PROMOTE/EXPORT ACTIONS -->
+                <div class="upd-section-teacher-row">
+                    <div id="upd-section-tabs" class="vo-section-tabs">
+                        <!-- populated by JS based on active class -->
+                    </div>
+                    <!-- Class Teacher Badge (linked to Staff Management) -->
+                    <div id="upd-class-teacher-badge" class="upd-teacher-badge" style="display:none;">
+                        <i class="fas fa-chalkboard-teacher"></i>
+                        <span id="upd-teacher-name">—</span>
+                        <a href="manage-staff.html" class="upd-teacher-link" title="Go to Staff Management">
+                            <i class="fas fa-external-link-alt"></i>
+                        </a>
+                    </div>
+                    <div class="upd-action-btns">
+                        <button onclick="togglePromoteMode()" id="promote-all-btn" class="btn-secondary btn-sm-upd">
+                            <i class="fas fa-graduation-cap"></i> Promote
+                        </button>
+                        <button onclick="exportToCSV()" class="btn-secondary btn-sm-upd">
+                            <i class="fas fa-file-export"></i> Export
+                        </button>
+                    </div>
+                </div>
+
+                <!-- SEARCH BAR — left aligned, above table, below sections -->
+                <div class="upd-search-row">
+                    <div class="search-box-wrapper upd-search-bar">
                         <i class="fas fa-search"></i>
-                        <input type="text" id="search-name" placeholder="Search by name...">
+                        <input type="text" id="upd-search-input" placeholder="Search by name, ID or guardian…">
                     </div>
-                    <div class="search-box-wrapper">
-                        <i class="fas fa-user-shield"></i>
-                        <input type="text" id="search-father" placeholder="Search by father's name...">
+                    <div id="promote-actions-bar" style="display:none; align-items:center; gap:10px;">
+                        <button onclick="togglePromoteMode()" class="btn-ghost"><i class="fas fa-times"></i> Cancel</button>
+                        <button onclick="confirmPromotion()" class="btn-primary-submit"><i class="fas fa-check"></i> Confirm</button>
                     </div>
-                    <div class="search-box-wrapper">
-                        <i class="fas fa-chalkboard"></i>
-                        <input type="text" id="search-class" placeholder="Search by class...">
-                    </div>
-                    <div class="search-box-wrapper">
-                        <i class="fas fa-id-badge"></i>
-                        <input type="text" id="search-id" placeholder="Search by ID...">
-                    </div>
-                    <button onclick="togglePromoteMode()" id="promote-all-btn" class="btn-secondary">
-                        <i class="fas fa-graduation-cap"></i> Promote All Students
-                    </button>
-                    <button onclick="exportToCSV()" class="btn-secondary">
-                        <i class="fas fa-file-export"></i> Export CSV
-                    </button>
                 </div>
-                <div id="promote-actions-bar" style="display:none; justify-content:flex-end; gap:12px; margin-bottom:15px;">
-                    <button onclick="togglePromoteMode()" class="btn-ghost"><i class="fas fa-times"></i> Cancel</button>
-                    <button onclick="confirmPromotion()" class="btn-primary-submit"><i class="fas fa-check"></i> Confirm Promotion</button>
-                </div>
+
+                <!-- Hidden inputs retained for backward compat with renderStudentTable -->
+                <input type="hidden" id="search-name">
+                <input type="hidden" id="search-father">
+                <input type="hidden" id="search-class">
+                <input type="hidden" id="search-id">
 
                 <div class="data-table-wrapper">
                     <table class="student-table">
@@ -650,11 +692,12 @@
                             <tr>
                                 <th id="promote-checkbox-header" style="display:none;"><i class="fas fa-check-square"></i></th>
                                 <th>Student ID</th>
+                                <th>Roll No.</th>
                                 <th>Name</th>
-                                <th>Guardian</th>
-                                <th>Class</th>
+                                <th>Guardian / Father</th>
+                                <th>Section</th>
                                 <th>Gender</th>
-                                <th id="promote-status-header" style="display:none;">Promotion Status</th>
+                                <th id="promote-status-header" style="display:none;">Promotion</th>
                                 <th class="text-center">Actions</th>
                             </tr>
                         </thead>

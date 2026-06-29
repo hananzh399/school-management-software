@@ -3410,3 +3410,186 @@ select option {
     flex-shrink: 0;
     min-width: 220px;
 }
+
+/* ============================================================================
+   UPDATE DATABASE MODAL — class/section tabs + teacher badge + search row
+   ============================================================================ */
+
+/* Section tabs + Teacher badge + Action buttons row */
+.upd-section-teacher-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    padding: 8px 0 12px;
+    border-bottom: 1px solid var(--border-color);
+    margin-bottom: 0;
+}
+
+/* Teacher badge pill */
+.upd-teacher-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 5px 12px;
+    border-radius: 20px;
+    background: rgba(245,158,11,0.12);
+    border: 1px solid rgba(245,158,11,0.35);
+    color: #f59e0b;
+    font-size: 0.79rem;
+    font-weight: 600;
+    flex-shrink: 0;
+    white-space: nowrap;
+    margin-left: auto;
+}
+.upd-teacher-badge i {
+    font-size: 0.78rem;
+}
+.upd-teacher-link {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: rgba(245,158,11,0.2);
+    color: #f59e0b;
+    text-decoration: none;
+    font-size: 0.65rem;
+    transition: background 0.2s;
+}
+.upd-teacher-link:hover {
+    background: rgba(245,158,11,0.4);
+    color: #fff;
+}
+
+/* Small action buttons row (promote/export) */
+.upd-action-btns {
+    display: flex;
+    gap: 8px;
+    flex-shrink: 0;
+}
+.btn-sm-upd {
+    padding: 6px 12px !important;
+    font-size: 0.79rem !important;
+    gap: 5px !important;
+}
+
+/* Search row: left-aligned, above table */
+.upd-search-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    padding: 14px 0 12px;
+    margin-bottom: 4px;
+}
+.upd-search-bar {
+    flex: 1;
+    min-width: 240px;
+    max-width: 420px;
+}
+
+/* Dark mode adjustments */
+[data-theme="dark"] .upd-teacher-badge {
+    background: rgba(245,158,11,0.15);
+    border-color: rgba(245,158,11,0.4);
+}
+
+/* ============================================================================
+   FIX: Class Incharge badge "Not Assigned" state (muted look)
+   Used by both View Directory & Update Database modals.
+   ============================================================================ */
+.upd-teacher-badge.upd-teacher-badge--unassigned {
+    background: rgba(148,163,184,0.10);
+    border-color: rgba(148,163,184,0.30);
+    color: var(--text-muted, #94a3b8);
+}
+.upd-teacher-badge.upd-teacher-badge--unassigned .upd-teacher-link {
+    background: rgba(148,163,184,0.20);
+    color: var(--text-muted, #94a3b8);
+}
+
+/* ============================================================================
+   Inline Class Incharge label on section tabs (view + update modals)
+   ============================================================================ */
+.vo-section-tab .vo-tab-incharge {
+    display: inline-block;
+    margin-left: 6px;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    background: rgba(59, 130, 246, 0.12);
+    color: #1d4ed8;
+    border: 1px solid rgba(59, 130, 246, 0.25);
+    white-space: nowrap;
+    vertical-align: middle;
+}
+.vo-section-tab.active .vo-tab-incharge {
+    background: rgba(255, 255, 255, 0.22);
+    color: #fff;
+    border-color: rgba(255, 255, 255, 0.35);
+}
+.vo-section-tab .vo-tab-incharge--none {
+    background: rgba(148, 163, 184, 0.15);
+    color: #64748b;
+    border-color: rgba(148, 163, 184, 0.3);
+    font-weight: 500;
+    font-style: italic;
+}
+.vo-section-tab.active .vo-tab-incharge--none {
+    background: rgba(255, 255, 255, 0.15);
+    color: rgba(255, 255, 255, 0.85);
+    border-color: rgba(255, 255, 255, 0.25);
+}
+
+/* ============================================================================
+   Top-row "Class Incharge" badge (right side of class tabs row)
+   ============================================================================ */
+.upd-class-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+}
+.upd-class-row > #vo-class-tabs,
+.upd-class-row > #upd-class-tabs {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+.upd-class-incharge-top {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 14px;
+    border-radius: 10px;
+    background: linear-gradient(135deg, rgba(59,130,246,0.12), rgba(99,102,241,0.12));
+    border: 1px solid rgba(59,130,246,0.3);
+    color: #1e40af;
+    font-size: 0.85rem;
+    font-weight: 600;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+.upd-class-incharge-top i { color: #3b82f6; }
+.upd-class-incharge-top .upd-incharge-label {
+    color: #475569;
+    font-weight: 500;
+}
+.upd-class-incharge-top .upd-incharge-name {
+    color: #1e40af;
+    font-weight: 700;
+}
+.upd-class-incharge-top--none {
+    background: rgba(148,163,184,0.12);
+    border-color: rgba(148,163,184,0.3);
+    color: #64748b;
+}
+.upd-class-incharge-top--none i,
+.upd-class-incharge-top--none .upd-incharge-name {
+    color: #64748b;
+    font-weight: 500;
+    font-style: italic;
+}

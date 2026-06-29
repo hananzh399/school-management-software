@@ -264,10 +264,15 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         if (modalId === 'view-modal') {
+            // Clear hidden search inputs (kept for backward compat)
             [searchName, searchFather, searchClass, searchId].forEach(inp => {
                 if (inp) inp.value = '';
             });
-            renderStudentTable();
+            // Clear the new unified search bar
+            const updSearch = document.getElementById('upd-search-input');
+            if (updSearch) updSearch.value = '';
+            // Build class/section tabs, which also calls renderStudentTable()
+            buildUpdClassTabs();
         }
 
         if (modalId === 'view-only-modal') {
@@ -853,6 +858,193 @@ document.addEventListener('DOMContentLoaded', () => {
      * Render the Students Table.
      * Main table ALWAYS shows the HRK_77 reg number — never the 00X sibling id.
      */
+    // ── State for update database modal tabs ──────────────────────────────────
+    let updActiveClass   = null;
+    let updActiveSection = null;
+
+    /**
+     * Get the class teacher for a given class+section from staff management localStorage.
+     * Staff data expected in 'edu_staff' key as array of {fullName, assignedClass, assignedSection, role}.
+     */
+    function getClassTeacher(className, section) {
+        try {
+            // Read from shared global data (staff management uses 'edu_global_data' via shared-data.js)
+            let allTeachers = [];
+            try {
+                const gd = JSON.parse(localStorage.getItem('edu_global_data') || '{}');
+                allTeachers = (gd.staff && Array.isArray(gd.staff['Teaching'])) ? gd.staff['Teaching'] : [];
+            } catch(e) {}
+
+            // Also check legacy 'edu_staff' key
+            if (!allTeachers.length) {
+                try { allTeachers = JSON.parse(localStorage.getItem('edu_staff') || '[]'); } catch(e) {}
+            }
+
+            for (const s of allTeachers) {
+                // Check inchargeAssignments JSON (new format)
+                if (s.inchargeAssignments) {
+                    try {
+                        const arr = JSON.parse(s.inchargeAssignments);
+                        if (Array.isArray(arr)) {
+                            const match = arr.find(a =>
+                                a.cls === className &&
+                                (section === 'ALL' || !section || a.section === section || a.section === '')
+                            );
+                            if (match) return s.name || s.fullName || null;
+                        }
+                    } catch(e) {}
+                }
+                // Fallback: check assignedClass/assignedSection fields
+                if (s.assignedClass === className &&
+                    (section === 'ALL' || !section || s.assignedSection === section || !s.assignedSection)) {
+                    return s.name || s.fullName || null;
+                }
+            }
+            return null;
+        } catch(e) { return null; }
+    }
+
+    /** Update the class teacher badge in the update modal */
+    function updRefreshTeacherBadge() {
+        const badge     = document.getElementById('upd-class-teacher-badge');
+        const nameEl    = document.getElementById('upd-teacher-name');
+        const teacher   = getClassTeacher(updActiveClass, updActiveSection);
+        // Inline badge next to sections (only when assigned)
+        if (badge && nameEl) {
+            if (teacher) {
+                nameEl.textContent = teacher;
+                badge.style.display = 'inline-flex';
+            } else {
+                badge.style.display = 'none';
+            }
+        }
+        // Top-row badge — always visible, shows assigned name or "Not Assigned"
+        const topName = document.getElementById('upd-class-incharge-name');
+        const topWrap = document.getElementById('upd-class-incharge-top');
+        if (topName && topWrap) {
+            topName.textContent = teacher || 'Not Assigned';
+            topWrap.classList.toggle('upd-class-incharge-top--none', !teacher);
+        }
+    }
+
+    /** Update the class teacher badge in the view-only modal */
+    function voRefreshTeacherBadge() {
+        const badge   = document.getElementById('vo-class-teacher-badge');
+        const nameEl  = document.getElementById('vo-teacher-name');
+        const teacher = getClassTeacher(voActiveClass, voActiveSection);
+        if (badge && nameEl) {
+            if (teacher) {
+                nameEl.textContent = teacher;
+                badge.style.display = 'inline-flex';
+            } else {
+                badge.style.display = 'none';
+            }
+        }
+        const topName = document.getElementById('vo-class-incharge-name');
+        const topWrap = document.getElementById('vo-class-incharge-top');
+        if (topName && topWrap) {
+            topName.textContent = teacher || 'Not Assigned';
+            topWrap.classList.toggle('upd-class-incharge-top--none', !teacher);
+        }
+    }
+
+    /** Build class tabs for update database modal */
+    function buildUpdClassTabs() {
+        const configs = getClassConfigs();
+        const db      = getDatabase();
+        const tabsEl  = document.getElementById('upd-class-tabs');
+        if (!tabsEl) return;
+
+        const classesWithStudents = new Set(db.map(s => s.studentClass).filter(Boolean));
+        const available = configs.filter(c => classesWithStudents.has(c.name));
+
+        if (available.length === 0) {
+            tabsEl.innerHTML = '<span style="color:var(--text-muted);font-size:0.9rem;padding:8px;">No students registered yet.</span>';
+            document.getElementById('upd-section-tabs').innerHTML = '';
+            const tbody = document.getElementById('student-list-tbody');
+            if (tbody) tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;padding:50px;color:#94a3b8;">No students found.</td></tr>';
+            return;
+        }
+
+        if (!updActiveClass || !available.find(c => c.name === updActiveClass)) {
+            updActiveClass = available[0].name;
+        }
+
+        tabsEl.innerHTML = available.map(c => `
+            <button class="vo-class-tab ${c.name === updActiveClass ? 'active' : ''}"
+                    onclick="updSelectClass('${c.name}')">
+                ${c.name}
+                <span class="vo-tab-count">${db.filter(s => s.studentClass === c.name).length}</span>
+            </button>
+        `).join('');
+
+        buildUpdSectionTabs();
+    }
+
+    /** Build section tabs for the active class in update modal */
+    function buildUpdSectionTabs() {
+        const sectionTabsEl = document.getElementById('upd-section-tabs');
+        if (!sectionTabsEl) return;
+
+        const cfg      = getClassConfigMap()[updActiveClass];
+        const sections = (cfg && Array.isArray(cfg.sections) && cfg.sections.length) ? cfg.sections : [];
+        const db       = getDatabase();
+        const classStu = db.filter(s => s.studentClass === updActiveClass);
+
+        if (sections.length === 0) {
+            sectionTabsEl.innerHTML = '';
+            updActiveSection = 'ALL';
+            updRefreshTeacherBadge();
+            renderStudentTable();
+            return;
+        }
+
+        if (!updActiveSection || (updActiveSection !== 'ALL' && !sections.includes(updActiveSection))) {
+            updActiveSection = sections[0];
+        }
+
+        const allCount = classStu.length;
+        let html = `<button class="vo-section-tab ${updActiveSection === 'ALL' ? 'active' : ''}"
+                            onclick="updSelectSection('ALL')">
+                        All <span class="vo-tab-count">${allCount}</span>
+                    </button>`;
+        sections.forEach(sec => {
+            const cnt = classStu.filter(s => s.section === sec).length;
+            const t = getClassTeacher(updActiveClass, sec);
+            const tHtml = t
+                ? `<span class="vo-tab-incharge" title="Class Incharge">· ${t}</span>`
+                : `<span class="vo-tab-incharge vo-tab-incharge--none" title="No incharge assigned">· Unassigned</span>`;
+            html += `<button class="vo-section-tab ${updActiveSection === sec ? 'active' : ''}"
+                             onclick="updSelectSection('${sec}')">
+                         Section ${sec} <span class="vo-tab-count">${cnt}</span> ${tHtml}
+                     </button>`;
+        });
+
+        sectionTabsEl.innerHTML = html;
+        updRefreshTeacherBadge();
+        renderStudentTable();
+    }
+
+    window.updSelectClass = function(className) {
+        updActiveClass   = className;
+        updActiveSection = null;
+        const srch = document.getElementById('upd-search-input');
+        if (srch) srch.value = '';
+        buildUpdClassTabs();
+    };
+
+    window.updSelectSection = function(section) {
+        updActiveSection = section;
+        document.querySelectorAll('#upd-section-tabs .vo-section-tab').forEach(btn => {
+            const label = btn.textContent.trim();
+            btn.classList.toggle('active',
+                section === 'ALL' ? label.startsWith('All') : label.startsWith('Section ' + section)
+            );
+        });
+        updRefreshTeacherBadge();
+        renderStudentTable();
+    };
+
     window.renderStudentTable = function() {
         const db    = getDatabase();
         const tbody = document.getElementById('student-list-tbody');
@@ -860,24 +1052,60 @@ document.addEventListener('DOMContentLoaded', () => {
 
         tbody.innerHTML = "";
 
-        const qName   = (document.getElementById('search-name')   ? document.getElementById('search-name').value   : '').toLowerCase().trim();
-        const qFather = (document.getElementById('search-father') ? document.getElementById('search-father').value : '').toLowerCase().trim();
-        const qClass  = (document.getElementById('search-class')  ? document.getElementById('search-class').value  : '').toLowerCase().trim();
-        const qId     = (document.getElementById('search-id')     ? document.getElementById('search-id').value     : '').toLowerCase().trim();
+        // Use the new tab-based class/section filtering when upd tabs are active
+        const useTabFilter = (updActiveClass !== null);
 
-        const filtered = db.filter(s => {
-            const matchName   = !qName   || (s.fullName      || "").toLowerCase().includes(qName);
-            const matchFather = !qFather || (s.guardianName  || "").toLowerCase().includes(qFather);
-            const matchClass  = !qClass  || (s.studentClass  || "").toLowerCase().includes(qClass);
-            const matchId     = !qId     || (s.regNo || "").toLowerCase().includes(qId) || (s.id || "").toLowerCase().includes(qId);
-            return matchName && matchFather && matchClass && matchId;
-        });
+        // Unified search bar (new)
+        const qUnified = (document.getElementById('upd-search-input')
+            ? document.getElementById('upd-search-input').value : '').toLowerCase().trim();
+
+        // Legacy hidden inputs (kept for backward compat, now unused in normal flow)
+        const qName   = useTabFilter ? '' : (document.getElementById('search-name')   ? document.getElementById('search-name').value   : '').toLowerCase().trim();
+        const qFather = useTabFilter ? '' : (document.getElementById('search-father') ? document.getElementById('search-father').value : '').toLowerCase().trim();
+        const qClass  = useTabFilter ? '' : (document.getElementById('search-class')  ? document.getElementById('search-class').value  : '').toLowerCase().trim();
+        const qId     = useTabFilter ? '' : (document.getElementById('search-id')     ? document.getElementById('search-id').value     : '').toLowerCase().trim();
+
+        let filtered = db;
+
+        // Apply class filter from tabs
+        if (useTabFilter && updActiveClass) {
+            filtered = filtered.filter(s => s.studentClass === updActiveClass);
+        }
+
+        // Apply section filter from tabs
+        if (useTabFilter && updActiveSection && updActiveSection !== 'ALL') {
+            filtered = filtered.filter(s => s.section === updActiveSection);
+        }
+
+        // Apply legacy search filters
+        if (!useTabFilter) {
+            filtered = filtered.filter(s => {
+                const matchName   = !qName   || (s.fullName     || "").toLowerCase().includes(qName);
+                const matchFather = !qFather || (s.guardianName || "").toLowerCase().includes(qFather);
+                const matchClass  = !qClass  || (s.studentClass || "").toLowerCase().includes(qClass);
+                const matchId     = !qId     || (s.regNo || "").toLowerCase().includes(qId) || (s.id || "").toLowerCase().includes(qId);
+                return matchName && matchFather && matchClass && matchId;
+            });
+        }
+
+        // Apply unified search (name, ID, guardian)
+        if (qUnified) {
+            filtered = filtered.filter(s =>
+                (s.fullName     || "").toLowerCase().includes(qUnified) ||
+                (s.regNo        || "").toLowerCase().includes(qUnified) ||
+                (s.id           || "").toLowerCase().includes(qUnified) ||
+                (s.guardianName || "").toLowerCase().includes(qUnified)
+            );
+        }
+
+        // Sort by roll number
+        filtered.sort((a, b) => (parseInt(a.rollNo) || 0) - (parseInt(b.rollNo) || 0));
 
         const promoteMode = document.body.classList.contains('promote-mode-active');
 
         if (filtered.length === 0) {
-            const colCount = promoteMode ? 8 : 6;
-            tbody.innerHTML = `<tr><td colspan="${colCount}" style="text-align:center;padding:50px;color:#94a3b8;">No matching records found in database.</td></tr>`;
+            const colCount = promoteMode ? 10 : 9;
+            tbody.innerHTML = `<tr><td colspan="${colCount}" style="text-align:center;padding:50px;color:#94a3b8;">No matching records found in this class/section.</td></tr>`;
             return;
         }
 
@@ -904,16 +1132,17 @@ document.addEventListener('DOMContentLoaded', () => {
                 <tr>
                     ${checkboxCell}
                     <td><span class="hrk-id-badge">${displayId}</span></td>
+                    <td>${s.rollNo || '—'}</td>
                     <td><strong>${s.fullName}</strong>${siblingTag}</td>
                     <td>${s.guardianName}</td>
-                    <td><span class="class-chip">${s.studentClass}</span></td>
+                    <td><span class="class-chip">${s.section || '—'}</span></td>
                     <td>${s.gender}</td>
                     ${statusCell}
                     <td>
                         <div class="action-btn-group">
                             <button class="btn-icon view"   onclick="viewFullProfile('${s.regNo}')" title="View Profile"><i class="fas fa-eye"></i></button>
-<button class="btn-icon edit"   onclick="editStudentInfo('${s.regNo}')" title="Edit Record"><i class="fas fa-user-edit"></i></button>
-<button class="btn-icon delete" onclick="deleteRecord('${s.regNo}')" title="Delete"><i class="fas fa-trash-alt"></i></button>
+                            <button class="btn-icon edit"   onclick="editStudentInfo('${s.regNo}')" title="Edit Record"><i class="fas fa-user-edit"></i></button>
+                            <button class="btn-icon delete" onclick="deleteRecord('${s.regNo}')" title="Delete"><i class="fas fa-trash-alt"></i></button>
                         </div>
                     </td>
                 </tr>
@@ -1001,9 +1230,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
         sections.forEach(sec => {
             const cnt = classStudents.filter(s => s.section === sec).length;
+            const t = getClassTeacher(voActiveClass, sec);
+            const tHtml = t
+                ? `<span class="vo-tab-incharge" title="Class Incharge">· ${t}</span>`
+                : `<span class="vo-tab-incharge vo-tab-incharge--none" title="No incharge assigned">· Unassigned</span>`;
             html += `<button class="vo-section-tab ${voActiveSection === sec ? 'active' : ''}"
                              onclick="voSelectSection('${sec}')">
-                         Section ${sec} <span class="vo-tab-count">${cnt}</span>
+                         Section ${sec} <span class="vo-tab-count">${cnt}</span> ${tHtml}
                      </button>`;
         });
 
@@ -1034,6 +1267,7 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     window.renderViewOnlyTable = function() {
+        try { voRefreshTeacherBadge(); } catch(e) {}
         const db    = getDatabase();
         const tbody = document.getElementById('vo-student-tbody');
         if (!tbody) return;
@@ -1095,10 +1329,15 @@ document.addEventListener('DOMContentLoaded', () => {
     const voSearchEl = document.getElementById('vo-search-name');
     if (voSearchEl) voSearchEl.addEventListener('input', renderViewOnlyTable);
 
+    // Wire update-database search bar
+    const updSearchEl = document.getElementById('upd-search-input');
+    if (updSearchEl) updSearchEl.addEventListener('input', renderStudentTable);
+
     // Re-sync tabs if settings change in another tab
     window.addEventListener('storage', (e) => {
         if (e.key === SETTINGS_CLASSES_KEY) {
             buildVoClassTabs();
+            buildUpdClassTabs();
         }
     });
 
