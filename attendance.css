@@ -746,3 +746,159 @@ body {
     .report-stat, .report-meta__item, .report-rating, .report-paragraph,
     .report-reasons-list li { page-break-inside: avoid !important; }
 }
+
+/* ============================================================
+   CAMERA BUTTON (header)
+   ============================================================ */
+.camera-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 7px 14px;
+    background: linear-gradient(135deg, var(--indigo), var(--indigo-deep));
+    color: #fff;
+    border: none;
+    border-radius: 10px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: var(--transition);
+    box-shadow: 0 2px 8px var(--indigo-glow);
+    white-space: nowrap;
+}
+.camera-btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 14px var(--indigo-glow);
+}
+.camera-btn i { font-size: 0.95rem; }
+@media (max-width: 600px) { .camera-btn__label { display: none; } }
+
+/* ============================================================
+   PERIOD SWITCHER (Week / Month / Year)
+   ============================================================ */
+.view-period-toolbar {
+    flex-wrap: wrap;
+    gap: 10px;
+}
+.period-switcher {
+    display: flex;
+    gap: 6px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-subtle);
+    border-radius: 10px;
+    padding: 4px;
+}
+.period-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 6px 14px;
+    border: none;
+    border-radius: 7px;
+    background: transparent;
+    color: var(--text-secondary);
+    font-size: 0.82rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.2s, color 0.2s;
+    white-space: nowrap;
+}
+.period-btn:hover { background: var(--border-subtle); color: var(--text-primary); }
+.period-btn.active {
+    background: var(--indigo);
+    color: #fff;
+    box-shadow: 0 2px 8px var(--indigo-glow);
+}
+.period-btn i { font-size: 0.8rem; }
+
+/* ============================================================
+   CAMERA MODAL
+   ============================================================ */
+.camera-panel {
+    max-width: 620px !important;
+    width: 95vw !important;
+}
+.camera-body {
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+.camera-video-wrap {
+    position: relative;
+    width: 100%;
+    background: #000;
+    border-radius: 12px;
+    overflow: hidden;
+    aspect-ratio: 4/3;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+#camera-video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: none;
+    transform: scaleX(-1); /* mirror front cam */
+}
+.camera-placeholder {
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    color: #475569;
+    font-size: 0.9rem;
+}
+.camera-placeholder i { font-size: 3rem; opacity: 0.4; }
+.camera-controls {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    justify-content: center;
+}
+.cam-ctrl-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 9px 18px;
+    border: none;
+    border-radius: 9px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: var(--transition);
+}
+.cam-ctrl-btn:disabled { opacity: 0.4; cursor: not-allowed; pointer-events: none; }
+.cam-ctrl-start  { background: var(--emerald); color: #fff; }
+.cam-ctrl-capture { background: var(--indigo); color: #fff; }
+.cam-ctrl-switch  { background: var(--amber); color: #0f172a; }
+.cam-ctrl-stop    { background: var(--rose); color: #fff; }
+.cam-ctrl-btn:hover:not(:disabled) { filter: brightness(1.1); transform: translateY(-1px); }
+
+.camera-preview-wrap {
+    border-top: 1px solid var(--border-subtle);
+    padding-top: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    align-items: center;
+}
+.camera-preview-label {
+    font-weight: 600;
+    font-size: 0.88rem;
+    color: var(--text-secondary);
+}
+.camera-preview-wrap img {
+    width: 100%;
+    max-width: 480px;
+    border-radius: 10px;
+    border: 2px solid var(--border-hover);
+    object-fit: contain;
+}
+.camera-preview-actions {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    justify-content: center;
+}
