@@ -49,6 +49,10 @@
             </div>
             <div class="header-right">
                 <div class="header-date" id="header-date"></div>
+                <button id="open-camera-btn" class="camera-btn" aria-label="Open Camera" title="Open Camera">
+                    <i class="fas fa-camera"></i>
+                    <span class="camera-btn__label">Camera</span>
+                </button>
                 <button id="theme-toggle" class="theme-toggle" aria-label="Toggle theme">
                     <i id="theme-icon-moon" class="fas fa-moon"></i>
                     <i id="theme-icon-sun" class="fas fa-sun"></i>
@@ -283,10 +287,16 @@
                 </div>
             </div>
 
-            <div class="toolbar">
+            <div class="toolbar view-period-toolbar">
+                <!-- Period Switcher -->
+                <div class="period-switcher" id="student-period-switcher">
+                    <button class="period-btn active" data-student-period="week"><i class="fas fa-calendar-week"></i> Week</button>
+                    <button class="period-btn" data-student-period="month"><i class="fas fa-calendar-day"></i> Month</button>
+                    <button class="period-btn" data-student-period="year"><i class="fas fa-calendar"></i> Year</button>
+                </div>
                 <div class="month-nav" style="display:flex;align-items:center;gap:10px;">
                     <button id="month-prev" class="bulk-btn" style="padding:8px 12px;cursor:pointer;"><i class="fas fa-chevron-left"></i></button>
-                    <span id="month-label" style="font-weight:600;min-width:170px;text-align:center;"></span>
+                    <span id="month-label" style="font-weight:600;min-width:200px;text-align:center;"></span>
                     <button id="month-next" class="bulk-btn" style="padding:8px 12px;cursor:pointer;"><i class="fas fa-chevron-right"></i></button>
                     <button id="open-report-btn" class="bulk-btn" style="padding:8px 14px;cursor:pointer;background:var(--indigo);color:#fff;border:none;border-radius:8px;font-weight:600;margin-left:8px;"><i class="fas fa-file-chart-column"></i> Generate Attendance Report</button>
                 </div>
@@ -362,10 +372,16 @@
                 </div>
             </div>
 
-            <div class="toolbar">
+            <div class="toolbar view-period-toolbar">
+                <!-- Period Switcher -->
+                <div class="period-switcher" id="staff-period-switcher">
+                    <button class="period-btn active" data-staff-period="week"><i class="fas fa-calendar-week"></i> Week</button>
+                    <button class="period-btn" data-staff-period="month"><i class="fas fa-calendar-day"></i> Month</button>
+                    <button class="period-btn" data-staff-period="year"><i class="fas fa-calendar"></i> Year</button>
+                </div>
                 <div class="month-nav" style="display:flex;align-items:center;gap:10px;">
                     <button id="staff-month-prev" class="bulk-btn" style="padding:8px 12px;cursor:pointer;"><i class="fas fa-chevron-left"></i></button>
-                    <span id="staff-month-label" style="font-weight:600;min-width:170px;text-align:center;"></span>
+                    <span id="staff-month-label" style="font-weight:600;min-width:200px;text-align:center;"></span>
                     <button id="staff-month-next" class="bulk-btn" style="padding:8px 12px;cursor:pointer;"><i class="fas fa-chevron-right"></i></button>
                     <button id="open-staff-report-btn" class="bulk-btn" style="padding:8px 14px;cursor:pointer;background:var(--indigo);color:#fff;border:none;border-radius:8px;font-weight:600;margin-left:8px;"><i class="fas fa-file-chart-column"></i> Generate Attendance Report</button>
                     <button id="staff-monthly-print-btn" class="bulk-btn" style="padding:8px 14px;cursor:pointer;background:var(--blue);color:#fff;border:none;border-radius:8px;font-weight:600;"><i class="fas fa-print"></i> Print</button>
@@ -446,6 +462,11 @@
                 <div id="report-scope" class="report-scope">
                     <p class="report-scope__hint">Choose a reporting period</p>
                     <div class="report-scope__btns">
+                        <button class="scope-btn" data-scope="week">
+                            <i class="fas fa-calendar-week"></i>
+                            <span class="scope-btn__title">This Week</span>
+                            <span class="scope-btn__sub">Current week's summary</span>
+                        </button>
                         <button class="scope-btn" data-scope="month">
                             <i class="fas fa-calendar-day"></i>
                             <span class="scope-btn__title">This Month</span>
@@ -531,6 +552,11 @@
                 <div id="staff-report-scope" class="report-scope">
                     <p class="report-scope__hint">Choose a reporting period</p>
                     <div class="report-scope__btns">
+                        <button class="scope-btn" data-staff-scope="week">
+                            <i class="fas fa-calendar-week"></i>
+                            <span class="scope-btn__title">This Week</span>
+                            <span class="scope-btn__sub">Current week's staff summary</span>
+                        </button>
                         <button class="scope-btn" data-staff-scope="month">
                             <i class="fas fa-calendar-day"></i>
                             <span class="scope-btn__title">This Month</span>
@@ -588,6 +614,41 @@
                         <button class="report-action" data-back-staff-individual-scope><i class="fas fa-arrow-left"></i> Back</button>
                         <button class="report-action report-action--primary" id="staff-individual-report-share-btn"><i class="fab fa-whatsapp"></i> Share on WhatsApp</button>
                         <button class="report-action" id="staff-individual-report-print-btn"><i class="fas fa-print"></i> Print</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- CAMERA MODAL -->
+        <div id="camera-modal" class="report-modal hidden" aria-hidden="true">
+            <div class="report-modal__backdrop" id="camera-backdrop"></div>
+            <div class="report-modal__panel camera-panel" role="dialog" aria-modal="true" aria-labelledby="camera-modal-title">
+                <div class="report-modal__head">
+                    <h3 id="camera-modal-title"><i class="fas fa-camera"></i> Camera</h3>
+                    <button class="report-modal__close" id="camera-close-btn" aria-label="Close"><i class="fas fa-times"></i></button>
+                </div>
+                <div class="camera-body">
+                    <div class="camera-video-wrap">
+                        <video id="camera-video" autoplay playsinline muted></video>
+                        <canvas id="camera-canvas" style="display:none;"></canvas>
+                        <div id="camera-placeholder" class="camera-placeholder">
+                            <i class="fas fa-camera-slash"></i>
+                            <p>Camera not started</p>
+                        </div>
+                    </div>
+                    <div class="camera-controls">
+                        <button id="camera-start-btn" class="cam-ctrl-btn cam-ctrl-start"><i class="fas fa-play"></i> Start Camera</button>
+                        <button id="camera-capture-btn" class="cam-ctrl-btn cam-ctrl-capture" disabled><i class="fas fa-circle"></i> Capture</button>
+                        <button id="camera-switch-btn" class="cam-ctrl-btn cam-ctrl-switch" disabled><i class="fas fa-sync-alt"></i> Switch</button>
+                        <button id="camera-stop-btn" class="cam-ctrl-btn cam-ctrl-stop" disabled><i class="fas fa-stop"></i> Stop</button>
+                    </div>
+                    <div id="camera-preview-wrap" class="camera-preview-wrap hidden">
+                        <p class="camera-preview-label"><i class="fas fa-image"></i> Captured Photo</p>
+                        <img id="camera-preview-img" src="" alt="Captured photo" />
+                        <div class="camera-preview-actions">
+                            <a id="camera-download-btn" class="cam-ctrl-btn cam-ctrl-capture" download="attendance-photo.png"><i class="fas fa-download"></i> Download</a>
+                            <button id="camera-retake-btn" class="cam-ctrl-btn cam-ctrl-switch"><i class="fas fa-redo"></i> Retake</button>
+                        </div>
                     </div>
                 </div>
             </div>

@@ -170,6 +170,12 @@ state.monthlyClass = null;
 state.monthlyDate  = new Date();   // any day inside the chosen month
 state.monthlySearch = "";
 state.monthlySection = "ALL";
+state.monthlyViewPeriod = "week";  // 'week' | 'month' | 'year'
+state.monthlyWeekStart  = null;    // Date of the Monday of the current week
+
+// Staff monthly view state
+state.staffMonthlyViewPeriod = "week";
+state.staffMonthlyWeekStart  = null;
  
 // ---------- DATE HELPERS ----------
 function todayKey() { return new Date().toISOString().slice(0, 10); }
@@ -239,6 +245,8 @@ document.addEventListener("DOMContentLoaded", () => {
     initMonthly();
     initMonthlyToolbar();
     initStudentRecordFilters();
+    initPeriodSwitchers();
+    initCamera();
 });
  
 function initDate() {
@@ -1046,17 +1054,54 @@ function applyAbsenceFines() {
 const _WD = ["Su","M","Tu","W","Th","F","Sa"];
 const _MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
 
+// ---------- PERIOD HELPERS ----------
+function _getWeekStart(date) {
+    const d = new Date(date);
+    const day = d.getDay(); // 0=Sun, 1=Mon ...
+    const diff = (day === 0) ? -6 : 1 - day; // make Mon the start
+    d.setDate(d.getDate() + diff);
+    d.setHours(0,0,0,0);
+    return d;
+}
+
+function _formatWeekLabel(weekStart) {
+    const end = new Date(weekStart);
+    end.setDate(end.getDate() + 6);
+    const opts = { day: 'numeric', month: 'short' };
+    return `${weekStart.toLocaleDateString(undefined, opts)} – ${end.toLocaleDateString(undefined, {...opts, year: 'numeric'})}`;
+}
+
 function initMonthly() {
     document.getElementById("month-prev").addEventListener("click", () => {
-        const d = new Date(state.monthlyDate);
-        d.setDate(1); d.setMonth(d.getMonth() - 1);
-        state.monthlyDate = d;
+        const period = state.monthlyViewPeriod;
+        if (period === "week") {
+            state.monthlyWeekStart = new Date(state.monthlyWeekStart);
+            state.monthlyWeekStart.setDate(state.monthlyWeekStart.getDate() - 7);
+        } else if (period === "month") {
+            const d = new Date(state.monthlyDate);
+            d.setDate(1); d.setMonth(d.getMonth() - 1);
+            state.monthlyDate = d;
+        } else {
+            const d = new Date(state.monthlyDate);
+            d.setFullYear(d.getFullYear() - 1);
+            state.monthlyDate = d;
+        }
         renderMonthly();
     });
     document.getElementById("month-next").addEventListener("click", () => {
-        const d = new Date(state.monthlyDate);
-        d.setDate(1); d.setMonth(d.getMonth() + 1);
-        state.monthlyDate = d;
+        const period = state.monthlyViewPeriod;
+        if (period === "week") {
+            state.monthlyWeekStart = new Date(state.monthlyWeekStart);
+            state.monthlyWeekStart.setDate(state.monthlyWeekStart.getDate() + 7);
+        } else if (period === "month") {
+            const d = new Date(state.monthlyDate);
+            d.setDate(1); d.setMonth(d.getMonth() + 1);
+            state.monthlyDate = d;
+        } else {
+            const d = new Date(state.monthlyDate);
+            d.setFullYear(d.getFullYear() + 1);
+            state.monthlyDate = d;
+        }
         renderMonthly();
     });
 }
@@ -1110,11 +1155,17 @@ function openClassMonthly(cls) {
     state.monthlyDate = new Date(); // current month
     state.monthlySearch = "";
     state.monthlySection = "ALL";
-    document.getElementById("monthly-title").textContent = `${cls.name} — Monthly Attendance`;
+    state.monthlyViewPeriod = "week";
+    state.monthlyWeekStart = _getWeekStart(new Date());
+    document.getElementById("monthly-title").textContent = `${cls.name} — Attendance`;
     const searchInput = document.getElementById("monthly-search");
     if (searchInput) searchInput.value = "";
     const label = document.getElementById("monthly-section-label");
     if (label) label.textContent = "All Sections";
+    // Reset period switcher buttons
+    document.querySelectorAll("#student-period-switcher .period-btn").forEach(b => {
+        b.classList.toggle("active", b.getAttribute("data-student-period") === "week");
+    });
     renderMonthlySectionList();
     hideAllStages();
     show("#stage-monthly");
@@ -1124,14 +1175,63 @@ function openClassMonthly(cls) {
 function renderMonthly() {
     const cls = state.monthlyClass;
     if (!cls) return;
-    const d = state.monthlyDate;
-    const year = d.getFullYear();
-    const month = d.getMonth(); // 0-11
-    const daysInMonth = new Date(year, month + 1, 0).getDate();
 
-    document.getElementById("month-label").textContent = `${_MONTHS[month]} ${year}`;
+    const period = state.monthlyViewPeriod || "week";
 
-    // Collect students for this class, filtered by section + search (Reg No / name / name~guardian)
+    // Build list of { dateKey, dayNum, wd, isWeekend, label } for columns
+    let days = [];
+    let labelText = "";
+
+    if (period === "week") {
+        const ws = state.monthlyWeekStart || _getWeekStart(new Date());
+        state.monthlyWeekStart = ws;
+        labelText = "Week: " + _formatWeekLabel(ws);
+        for (let i = 0; i < 7; i++) {
+            const d = new Date(ws);
+            d.setDate(ws.getDate() + i);
+            const wd = d.getDay();
+            days.push({
+                dateKey: `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`,
+                dayNum: d.getDate(),
+                wd,
+                isWeekend: wd === 0 || wd === 6,
+                label: `${_WD[wd]}\n${d.getDate()}/${d.getMonth()+1}`
+            });
+        }
+    } else if (period === "month") {
+        const d = state.monthlyDate;
+        const year = d.getFullYear();
+        const month = d.getMonth();
+        const daysInMonth = new Date(year, month + 1, 0).getDate();
+        labelText = `${_MONTHS[month]} ${year}`;
+        for (let day = 1; day <= daysInMonth; day++) {
+            const wd = new Date(year, month, day).getDay();
+            days.push({
+                dateKey: `${year}-${String(month+1).padStart(2,"0")}-${String(day).padStart(2,"0")}`,
+                dayNum: day,
+                wd,
+                isWeekend: wd === 0 || wd === 6,
+                label: `${_WD[wd]}\n${day}`
+            });
+        }
+    } else { // year
+        const year = state.monthlyDate.getFullYear();
+        labelText = `Year ${year}`;
+        for (let m = 0; m < 12; m++) {
+            days.push({
+                dateKey: null,
+                monthIndex: m,
+                year,
+                label: _MONTHS[m].slice(0, 3),
+                isWeekend: false,
+                isMonthCol: true
+            });
+        }
+    }
+
+    document.getElementById("month-label").textContent = labelText;
+
+    // Collect students
     const students = STUDENTS
         .filter(s => s.class === cls.name)
         .filter(s => state.monthlySection === "ALL" || s.section === state.monthlySection)
@@ -1150,67 +1250,102 @@ function renderMonthly() {
     }
     emptyEl.classList.add("hidden");
 
-    // Pre-load daily records: { 'YYYY-MM-DD': records }
+    // Pre-load records for each day/month column
+    const prefix = `eduflow_att_`;
+    const suffix = `_${cls.name}`;
+
+    // For week/month: load per dateKey; for year: load per month
     const dayRecords = {};
-    for (let day = 1; day <= daysInMonth; day++) {
-        const dateKey = `${year}-${String(month+1).padStart(2,"0")}-${String(day).padStart(2,"0")}`;
-        const raw = localStorage.getItem(`eduflow_att_${dateKey}_${cls.name}`);
-        if (raw) {
-            try { dayRecords[dateKey] = (JSON.parse(raw).records) || {}; }
-            catch(e) { dayRecords[dateKey] = {}; }
-        } else {
-            dayRecords[dateKey] = null; // no record taken
+    if (period !== "year") {
+        days.forEach(col => {
+            const raw = localStorage.getItem(`${prefix}${col.dateKey}${suffix}`);
+            dayRecords[col.dateKey] = raw ? (JSON.parse(raw).records || {}) : null;
+        });
+    }
+
+    // For year: aggregate per month
+    const yearMonthData = {}; // monthIndex -> { regNo -> { p,a,l } }
+    if (period === "year") {
+        const year = state.monthlyDate.getFullYear();
+        for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            if (!key || !key.startsWith(prefix) || !key.endsWith(suffix)) continue;
+            const dateStr = key.slice(prefix.length, key.length - suffix.length);
+            const d = new Date(dateStr);
+            if (isNaN(d.getTime()) || d.getFullYear() !== year) continue;
+            const m = d.getMonth();
+            if (!yearMonthData[m]) yearMonthData[m] = {};
+            try {
+                const recs = (JSON.parse(localStorage.getItem(key)).records) || {};
+                Object.entries(recs).forEach(([regNo, entry]) => {
+                    if (!yearMonthData[m][regNo]) yearMonthData[m][regNo] = {p:0,a:0,l:0};
+                    const st = entry && entry.status;
+                    if (st==="present") yearMonthData[m][regNo].p++;
+                    else if (st==="absent")  yearMonthData[m][regNo].a++;
+                    else if (st==="leave")   yearMonthData[m][regNo].l++;
+                });
+            } catch(e) {}
         }
     }
 
     // Build header
-    let headHtml = `<thead>
-        <tr>
-            <th class="col-id" rowspan="2">Reg No</th>
-            <th class="col-name" rowspan="2">Student Name <span style="font-weight:400;font-size:0.65rem;color:var(--text-muted);">(double-click row for full record)</span></th>
-            <th class="col-guardian" rowspan="2">Guardian</th>
-            <th colspan="${daysInMonth}" style="background:var(--bg-secondary);">
-                Enter: <span class="mark-P">P</span>=Present,
-                <span class="mark-A">A</span>=Absent,
-                <span class="mark-L">L</span>=Leave
-            </th>
-            <th rowspan="2">P</th>
-            <th rowspan="2">A</th>
-            <th rowspan="2">L</th>
-        </tr>
-        <tr>`;
-    for (let day = 1; day <= daysInMonth; day++) {
-        const wd = new Date(year, month, day).getDay();
-        const isWeekend = wd === 0 || wd === 6;
-        headHtml += `<th class="${isWeekend ? "day-weekend" : ""}">
-            <div style="font-size:0.7rem;color:var(--text-muted);">${_WD[wd]}</div>
-            <div>${day}</div>
+    const colSpan = days.length;
+    let headHtml = `<thead><tr>
+        <th class="col-id" rowspan="2">Reg No</th>
+        <th class="col-name" rowspan="2">Student Name <span style="font-weight:400;font-size:0.65rem;color:var(--text-muted);">(double-click for full record)</span></th>
+        <th class="col-guardian" rowspan="2">Guardian</th>
+        <th colspan="${colSpan}" style="background:var(--bg-secondary);">
+            <span class="mark-P">P</span>=Present &nbsp;
+            <span class="mark-A">A</span>=Absent &nbsp;
+            <span class="mark-L">L</span>=Leave
+        </th>
+        <th rowspan="2">P</th>
+        <th rowspan="2">A</th>
+        <th rowspan="2">L</th>
+    </tr><tr>`;
+
+    days.forEach(col => {
+        const parts = col.label.split("\n");
+        headHtml += `<th class="${col.isWeekend ? "day-weekend" : ""}">
+            <div style="font-size:0.68rem;color:var(--text-muted);">${parts[0]}</div>
+            <div>${parts[1] || ""}</div>
         </th>`;
-    }
+    });
     headHtml += `</tr></thead>`;
 
     // Build body
     let bodyHtml = "<tbody>";
-    students.forEach((s, idx) => {
+    students.forEach(s => {
         let p = 0, a = 0, l = 0;
         let rowHtml = `<tr class="clickable-row" data-regno="${s.regNo}" title="Double-click to view full attendance record">
             <td class="col-id"><span class="id-badge">${s.regNo}</span></td>
             <td class="col-name">${s.name}</td>
             <td class="col-guardian">${escapeHtml(s.guardian || "—")}</td>`;
-        for (let day = 1; day <= daysInMonth; day++) {
-            const dateKey = `${year}-${String(month+1).padStart(2,"0")}-${String(day).padStart(2,"0")}`;
-            const recs = dayRecords[dateKey];
-            const wd = new Date(year, month, day).getDay();
-            const isWeekend = wd === 0 || wd === 6;
-            let mark = "–", cls2 = "mark-empty";
-            if (recs && recs[s.regNo]) {
-                const st = recs[s.regNo].status;
-                if (st === "present") { mark = "P"; cls2 = "mark-P"; p++; }
-                else if (st === "absent")  { mark = "A"; cls2 = "mark-A"; a++; }
-                else if (st === "leave")   { mark = "L"; cls2 = "mark-L"; l++; }
-            }
-            rowHtml += `<td class="${isWeekend ? "day-weekend" : ""}"><span class="mark ${cls2}">${mark}</span></td>`;
+
+        if (period === "year") {
+            days.forEach(col => {
+                const mData = (yearMonthData[col.monthIndex] || {})[s.regNo] || {p:0,a:0,l:0};
+                p += mData.p; a += mData.a; l += mData.l;
+                const total = mData.p + mData.a + mData.l;
+                const pct = total ? Math.round(mData.p/total*100) : null;
+                const display = pct !== null ? `${pct}%` : "–";
+                const cls2 = pct === null ? "mark-empty" : pct >= 85 ? "mark-P" : pct >= 60 ? "mark-L" : "mark-A";
+                rowHtml += `<td><span class="mark ${cls2}" style="font-size:0.72rem;">${display}</span></td>`;
+            });
+        } else {
+            days.forEach(col => {
+                const recs = dayRecords[col.dateKey];
+                let mark = "–", cls2 = "mark-empty";
+                if (recs && recs[s.regNo]) {
+                    const st = recs[s.regNo].status;
+                    if (st === "present") { mark = "P"; cls2 = "mark-P"; p++; }
+                    else if (st === "absent")  { mark = "A"; cls2 = "mark-A"; a++; }
+                    else if (st === "leave")   { mark = "L"; cls2 = "mark-L"; l++; }
+                }
+                rowHtml += `<td class="${col.isWeekend ? "day-weekend" : ""}"><span class="mark ${cls2}">${mark}</span></td>`;
+            });
         }
+
         rowHtml += `<td class="mark-P"><strong>${p}</strong></td>
                     <td class="mark-A"><strong>${a}</strong></td>
                     <td class="mark-L"><strong>${l}</strong></td></tr>`;
@@ -1828,9 +1963,15 @@ function _performanceParagraph(ratingCls, pct, scopeName) {
     function buildReport(scope) {
         const cls = state.monthlyClass;
         const now = new Date();
-        let year, month, periodLabel;
+        let year, month, periodLabel, weekStart = null;
 
-        if (scope === "month") {
+        if (scope === "week") {
+            weekStart = _getWeekStart(state.monthlyWeekStart || now);
+            const weekEnd = new Date(weekStart);
+            weekEnd.setDate(weekStart.getDate() + 6);
+            periodLabel = _formatWeekLabel(weekStart);
+            year = null; month = null;
+        } else if (scope === "month") {
             const d = state.monthlyDate || now;
             year  = d.getFullYear();
             month = d.getMonth();
@@ -1861,8 +2002,14 @@ function _performanceParagraph(ratingCls, pct, scopeName) {
             const dateStr = key.slice(prefix.length, key.length - suffix.length);
             const d = new Date(dateStr);
             if (isNaN(d.getTime())) continue;
-            if (d.getFullYear() !== year) continue;
-            if (month !== null && d.getMonth() !== month) continue;
+            if (scope === "week") {
+                const ws = weekStart;
+                const we = new Date(ws); we.setDate(ws.getDate() + 6);
+                if (d < ws || d > we) continue;
+            } else {
+                if (d.getFullYear() !== year) continue;
+                if (month !== null && d.getMonth() !== month) continue;
+            }
 
             let payload;
             try { payload = JSON.parse(localStorage.getItem(key)); }
@@ -1929,7 +2076,7 @@ function _performanceParagraph(ratingCls, pct, scopeName) {
                     </div>
                 </div>
                 <div class="report-card__period">
-                    <div class="report-card__period-label">${d.scope === "month" ? "Month" : "Year"}</div>
+                    <div class="report-card__period-label">${d.scope === "week" ? "Week" : d.scope === "month" ? "Month" : "Year"}</div>
                     <div class="report-card__period-value">${esc(d.periodLabel)}</div>
                 </div>
             </div>
@@ -2020,29 +2167,66 @@ function openStaffMonthly() {
     refreshLiveData();
     state.staffMonthlyDate = new Date();
     state.staffMonthlySearch = "";
+    state.staffMonthlyViewPeriod = "week";
+    state.staffMonthlyWeekStart = _getWeekStart(new Date());
     const si = document.getElementById("staff-monthly-search");
     if (si) si.value = "";
+    // Reset period switcher
+    document.querySelectorAll("#staff-period-switcher .period-btn").forEach(b => {
+        b.classList.toggle("active", b.getAttribute("data-staff-period") === "week");
+    });
     hideAllStages();
     show("#stage-staff-monthly");
     renderStaffMonthly();
 }
 
 function renderStaffMonthly() {
-    const d = state.staffMonthlyDate;
-    const year = d.getFullYear();
-    const month = d.getMonth();
-    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const period = state.staffMonthlyViewPeriod || "week";
+
+    // Build day columns
+    let days = [];
+    let labelText = "";
+
+    if (period === "week") {
+        const ws = state.staffMonthlyWeekStart || _getWeekStart(new Date());
+        state.staffMonthlyWeekStart = ws;
+        labelText = "Week: " + _formatWeekLabel(ws);
+        for (let i = 0; i < 7; i++) {
+            const d = new Date(ws);
+            d.setDate(ws.getDate() + i);
+            const wd = d.getDay();
+            days.push({
+                dateKey: `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`,
+                wd, isWeekend: wd === 0 || wd === 6,
+                label: `${_WD[wd]}\n${d.getDate()}/${d.getMonth()+1}`
+            });
+        }
+    } else if (period === "month") {
+        const d = state.staffMonthlyDate;
+        const year = d.getFullYear(), month = d.getMonth();
+        const daysInMonth = new Date(year, month + 1, 0).getDate();
+        labelText = `${_MONTHS[month]} ${year}`;
+        for (let day = 1; day <= daysInMonth; day++) {
+            const wd = new Date(year, month, day).getDay();
+            days.push({
+                dateKey: `${year}-${String(month+1).padStart(2,"0")}-${String(day).padStart(2,"0")}`,
+                wd, isWeekend: wd === 0 || wd === 6,
+                label: `${_WD[wd]}\n${day}`
+            });
+        }
+    } else { // year
+        const year = state.staffMonthlyDate.getFullYear();
+        labelText = `Year ${year}`;
+        for (let m = 0; m < 12; m++) {
+            days.push({ dateKey: null, monthIndex: m, year, label: _MONTHS[m].slice(0,3), isWeekend: false, isMonthCol: true });
+        }
+    }
 
     const label = document.getElementById("staff-month-label");
-    if (label) label.textContent = `${_MONTHS[month]} ${year}`;
+    if (label) label.textContent = labelText;
 
     const q = (state.staffMonthlySearch || "").trim().toLowerCase();
-    const staff = STAFF.filter(s =>
-        !q
-        || s.name.toLowerCase().includes(q)
-        || s.id.toLowerCase().includes(q)
-        || (s.role || "").toLowerCase().includes(q)
-    );
+    const staff = STAFF.filter(s => !q || s.name.toLowerCase().includes(q) || s.id.toLowerCase().includes(q) || (s.role||"").toLowerCase().includes(q));
 
     const table = document.getElementById("staff-monthly-table");
     const emptyEl = document.getElementById("staff-monthly-empty");
@@ -2056,42 +2240,61 @@ function renderStaffMonthly() {
     }
     emptyEl.classList.add("hidden");
 
-    // Pre-load daily staff records
+    // Pre-load records
     const dayRecords = {};
-    for (let day = 1; day <= daysInMonth; day++) {
-        const dateKey = `${year}-${String(month+1).padStart(2,"0")}-${String(day).padStart(2,"0")}`;
-        const raw = localStorage.getItem(`eduflow_staff_att_${dateKey}`);
-        if (raw) {
-            try { dayRecords[dateKey] = JSON.parse(raw).records || {}; }
-            catch(e) { dayRecords[dateKey] = {}; }
-        } else {
-            dayRecords[dateKey] = null;
+    if (period !== "year") {
+        days.forEach(col => {
+            const raw = localStorage.getItem(`eduflow_staff_att_${col.dateKey}`);
+            dayRecords[col.dateKey] = raw ? (JSON.parse(raw).records || {}) : null;
+        });
+    }
+
+    // Year: aggregate per month
+    const yearMonthData = {};
+    if (period === "year") {
+        const year = state.staffMonthlyDate.getFullYear();
+        for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            if (!key || !key.startsWith('eduflow_staff_att_')) continue;
+            const dateStr = key.replace('eduflow_staff_att_', '');
+            const d = new Date(dateStr);
+            if (isNaN(d.getTime()) || d.getFullYear() !== year) continue;
+            const m = d.getMonth();
+            if (!yearMonthData[m]) yearMonthData[m] = {};
+            try {
+                const recs = (JSON.parse(localStorage.getItem(key)).records) || {};
+                Object.entries(recs).forEach(([id, entry]) => {
+                    if (!yearMonthData[m][id]) yearMonthData[m][id] = {p:0,a:0,l:0};
+                    const st = entry && entry.status;
+                    if (st==="present") yearMonthData[m][id].p++;
+                    else if (st==="absent") yearMonthData[m][id].a++;
+                    else if (st==="leave")  yearMonthData[m][id].l++;
+                });
+            } catch(e) {}
         }
     }
 
-    let headHtml = `<thead>
-        <tr>
-            <th class="col-id" rowspan="2">Staff ID</th>
-            <th class="col-name" rowspan="2">Name <span style="font-weight:400;font-size:0.65rem;color:var(--text-muted);">(double-click row for full record)</span></th>
-            <th class="col-guardian" rowspan="2">Job</th>
-            <th colspan="${daysInMonth}" style="background:var(--bg-secondary);">
-                Enter: <span class="mark-P">P</span>=Present,
-                <span class="mark-A">A</span>=Absent,
-                <span class="mark-L">L</span>=Leave
-            </th>
-            <th rowspan="2">P</th>
-            <th rowspan="2">A</th>
-            <th rowspan="2">L</th>
-        </tr>
-        <tr>`;
-    for (let day = 1; day <= daysInMonth; day++) {
-        const wd = new Date(year, month, day).getDay();
-        const isWeekend = wd === 0 || wd === 6;
-        headHtml += `<th class="${isWeekend ? "day-weekend" : ""}">
-            <div style="font-size:0.7rem;color:var(--text-muted);">${_WD[wd]}</div>
-            <div>${day}</div>
+    let headHtml = `<thead><tr>
+        <th class="col-id" rowspan="2">Staff ID</th>
+        <th class="col-name" rowspan="2">Name <span style="font-weight:400;font-size:0.65rem;color:var(--text-muted);">(double-click for full record)</span></th>
+        <th class="col-guardian" rowspan="2">Job</th>
+        <th colspan="${days.length}" style="background:var(--bg-secondary);">
+            <span class="mark-P">P</span>=Present &nbsp;
+            <span class="mark-A">A</span>=Absent &nbsp;
+            <span class="mark-L">L</span>=Leave
+        </th>
+        <th rowspan="2">P</th>
+        <th rowspan="2">A</th>
+        <th rowspan="2">L</th>
+    </tr><tr>`;
+
+    days.forEach(col => {
+        const parts = col.label.split("\n");
+        headHtml += `<th class="${col.isWeekend ? "day-weekend" : ""}">
+            <div style="font-size:0.68rem;color:var(--text-muted);">${parts[0]}</div>
+            <div>${parts[1] || ""}</div>
         </th>`;
-    }
+    });
     headHtml += `</tr></thead>`;
 
     let bodyHtml = "<tbody>";
@@ -2101,20 +2304,31 @@ function renderStaffMonthly() {
             <td class="col-id"><span class="id-badge">${escapeHtml(s.id)}</span></td>
             <td class="col-name">${escapeHtml(s.name)}</td>
             <td class="col-guardian">${escapeHtml(s.role || "—")}</td>`;
-        for (let day = 1; day <= daysInMonth; day++) {
-            const dateKey = `${year}-${String(month+1).padStart(2,"0")}-${String(day).padStart(2,"0")}`;
-            const recs = dayRecords[dateKey];
-            const wd = new Date(year, month, day).getDay();
-            const isWeekend = wd === 0 || wd === 6;
-            let mark = "–", cls2 = "mark-empty";
-            if (recs && recs[s.id]) {
-                const st = recs[s.id].status;
-                if (st === "present")     { mark = "P"; cls2 = "mark-P"; p++; }
-                else if (st === "absent") { mark = "A"; cls2 = "mark-A"; a++; }
-                else if (st === "leave")  { mark = "L"; cls2 = "mark-L"; l++; }
-            }
-            rowHtml += `<td class="${isWeekend ? "day-weekend" : ""}"><span class="mark ${cls2}">${mark}</span></td>`;
+
+        if (period === "year") {
+            days.forEach(col => {
+                const mData = (yearMonthData[col.monthIndex] || {})[s.id] || {p:0,a:0,l:0};
+                p += mData.p; a += mData.a; l += mData.l;
+                const total = mData.p + mData.a + mData.l;
+                const pct = total ? Math.round(mData.p/total*100) : null;
+                const display = pct !== null ? `${pct}%` : "–";
+                const cls2 = pct === null ? "mark-empty" : pct >= 85 ? "mark-P" : pct >= 60 ? "mark-L" : "mark-A";
+                rowHtml += `<td><span class="mark ${cls2}" style="font-size:0.72rem;">${display}</span></td>`;
+            });
+        } else {
+            days.forEach(col => {
+                const recs = dayRecords[col.dateKey];
+                let mark = "–", cls2 = "mark-empty";
+                if (recs && recs[s.id]) {
+                    const st = recs[s.id].status;
+                    if (st === "present")     { mark = "P"; cls2 = "mark-P"; p++; }
+                    else if (st === "absent") { mark = "A"; cls2 = "mark-A"; a++; }
+                    else if (st === "leave")  { mark = "L"; cls2 = "mark-L"; l++; }
+                }
+                rowHtml += `<td class="${col.isWeekend ? "day-weekend" : ""}"><span class="mark ${cls2}">${mark}</span></td>`;
+            });
         }
+
         rowHtml += `<td class="mark-P"><strong>${p}</strong></td>
                     <td class="mark-A"><strong>${a}</strong></td>
                     <td class="mark-L"><strong>${l}</strong></td></tr>`;
@@ -2139,15 +2353,35 @@ document.addEventListener("DOMContentLoaded", () => {
     const next = document.getElementById("staff-month-next");
     const search = document.getElementById("staff-monthly-search");
     if (prev) prev.addEventListener("click", () => {
-        const d = new Date(state.staffMonthlyDate);
-        d.setDate(1); d.setMonth(d.getMonth() - 1);
-        state.staffMonthlyDate = d;
+        const period = state.staffMonthlyViewPeriod || "week";
+        if (period === "week") {
+            state.staffMonthlyWeekStart = new Date(state.staffMonthlyWeekStart);
+            state.staffMonthlyWeekStart.setDate(state.staffMonthlyWeekStart.getDate() - 7);
+        } else if (period === "month") {
+            const d = new Date(state.staffMonthlyDate);
+            d.setDate(1); d.setMonth(d.getMonth() - 1);
+            state.staffMonthlyDate = d;
+        } else {
+            const d = new Date(state.staffMonthlyDate);
+            d.setFullYear(d.getFullYear() - 1);
+            state.staffMonthlyDate = d;
+        }
         renderStaffMonthly();
     });
     if (next) next.addEventListener("click", () => {
-        const d = new Date(state.staffMonthlyDate);
-        d.setDate(1); d.setMonth(d.getMonth() + 1);
-        state.staffMonthlyDate = d;
+        const period = state.staffMonthlyViewPeriod || "week";
+        if (period === "week") {
+            state.staffMonthlyWeekStart = new Date(state.staffMonthlyWeekStart);
+            state.staffMonthlyWeekStart.setDate(state.staffMonthlyWeekStart.getDate() + 7);
+        } else if (period === "month") {
+            const d = new Date(state.staffMonthlyDate);
+            d.setDate(1); d.setMonth(d.getMonth() + 1);
+            state.staffMonthlyDate = d;
+        } else {
+            const d = new Date(state.staffMonthlyDate);
+            d.setFullYear(d.getFullYear() + 1);
+            state.staffMonthlyDate = d;
+        }
         renderStaffMonthly();
     });
     if (search) search.addEventListener("input", (e) => {
@@ -2364,8 +2598,12 @@ document.addEventListener("DOMContentLoaded", () => {
 
     function build(scope) {
         const now = new Date();
-        let year, month, periodLabel;
-        if (scope === "month") {
+        let year, month, periodLabel, weekStart = null;
+        if (scope === "week") {
+            weekStart = _getWeekStart(state.staffMonthlyWeekStart || now);
+            periodLabel = _formatWeekLabel(weekStart);
+            year = null; month = null;
+        } else if (scope === "month") {
             const d = state.staffMonthlyDate || now;
             year = d.getFullYear(); month = d.getMonth();
             periodLabel = `${MONTH_NAMES[month]} ${year}`;
@@ -2382,8 +2620,14 @@ document.addEventListener("DOMContentLoaded", () => {
             const dateStr = key.replace("eduflow_staff_att_", "");
             const d = new Date(dateStr);
             if (isNaN(d.getTime())) continue;
-            if (d.getFullYear() !== year) continue;
-            if (month !== null && d.getMonth() !== month) continue;
+            if (scope === "week") {
+                const ws = weekStart;
+                const we = new Date(ws); we.setDate(ws.getDate() + 6);
+                if (d < ws || d > we) continue;
+            } else {
+                if (d.getFullYear() !== year) continue;
+                if (month !== null && d.getMonth() !== month) continue;
+            }
             let payload; try { payload = JSON.parse(localStorage.getItem(key)); } catch(e) { continue; }
             const records = (payload && payload.records) || {};
             Object.entries(records).forEach(([sid, entry]) => {
@@ -2401,7 +2645,6 @@ document.addEventListener("DOMContentLoaded", () => {
         const totalMarks = present + absent + leave;
         const pct = totalMarks ? Math.round((present/totalMarks)*1000)/10 : 0;
         const topReasons = Object.entries(reasonCounts).sort((a,b)=>b[1]-a[1]).slice(0,5);
-        // department distribution
         const deptMap = {};
         STAFF.forEach(s => { deptMap[s.role || "Staff"] = (deptMap[s.role || "Staff"] || 0) + 1; });
         const rolesLine = Object.keys(deptMap).sort().map(r => `${r} (${deptMap[r]})`).join(", ") || "—";
@@ -2431,7 +2674,7 @@ document.addEventListener("DOMContentLoaded", () => {
                     </div>
                 </div>
                 <div class="report-card__period">
-                    <div class="report-card__period-label">${d.scope === "month" ? "Month" : "Year"}</div>
+                    <div class="report-card__period-label">${d.scope === "week" ? "Week" : d.scope === "month" ? "Month" : "Year"}</div>
                     <div class="report-card__period-value">${esc(d.periodLabel)}</div>
                 </div>
             </div>
@@ -2584,3 +2827,128 @@ document.addEventListener("DOMContentLoaded", () => {
         `;
     }
 })();
+
+/* ============================================================
+   PERIOD SWITCHER (Week / Month / Year) for Student + Staff Grid
+   ============================================================ */
+function initPeriodSwitchers() {
+    // Student period switcher
+    document.querySelectorAll("#student-period-switcher .period-btn").forEach(btn => {
+        btn.addEventListener("click", () => {
+            const period = btn.getAttribute("data-student-period");
+            state.monthlyViewPeriod = period;
+            if (period === "week" && !state.monthlyWeekStart) {
+                state.monthlyWeekStart = _getWeekStart(new Date());
+            }
+            document.querySelectorAll("#student-period-switcher .period-btn").forEach(b => b.classList.remove("active"));
+            btn.classList.add("active");
+            const cls = state.monthlyClass;
+            if (cls) document.getElementById("monthly-title").textContent =
+                cls.name + " — " + (period === "week" ? "Weekly" : period === "month" ? "Monthly" : "Yearly") + " Attendance";
+            renderMonthly();
+        });
+    });
+
+    // Staff period switcher
+    document.querySelectorAll("#staff-period-switcher .period-btn").forEach(btn => {
+        btn.addEventListener("click", () => {
+            const period = btn.getAttribute("data-staff-period");
+            state.staffMonthlyViewPeriod = period;
+            if (period === "week" && !state.staffMonthlyWeekStart) {
+                state.staffMonthlyWeekStart = _getWeekStart(new Date());
+            }
+            document.querySelectorAll("#staff-period-switcher .period-btn").forEach(b => b.classList.remove("active"));
+            btn.classList.add("active");
+            renderStaffMonthly();
+        });
+    });
+}
+
+/* ============================================================
+   CAMERA MODULE
+   ============================================================ */
+function initCamera() {
+    const openBtn     = document.getElementById("open-camera-btn");
+    const modal       = document.getElementById("camera-modal");
+    const backdrop    = document.getElementById("camera-backdrop");
+    const closeBtn    = document.getElementById("camera-close-btn");
+    const video       = document.getElementById("camera-video");
+    const canvas      = document.getElementById("camera-canvas");
+    const placeholder = document.getElementById("camera-placeholder");
+    const startBtn    = document.getElementById("camera-start-btn");
+    const captureBtn  = document.getElementById("camera-capture-btn");
+    const switchBtn   = document.getElementById("camera-switch-btn");
+    const stopBtn     = document.getElementById("camera-stop-btn");
+    const previewWrap = document.getElementById("camera-preview-wrap");
+    const previewImg  = document.getElementById("camera-preview-img");
+    const downloadBtn = document.getElementById("camera-download-btn");
+    const retakeBtn   = document.getElementById("camera-retake-btn");
+
+    if (!openBtn || !modal) return;
+
+    let stream = null;
+    let facingMode = "user";
+
+    function openModal() {
+        modal.classList.remove("hidden");
+        modal.setAttribute("aria-hidden", "false");
+    }
+    function closeModal() {
+        modal.classList.add("hidden");
+        modal.setAttribute("aria-hidden", "true");
+        stopCamera();
+    }
+    function stopCamera() {
+        if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
+        video.srcObject = null;
+        video.style.display = "none";
+        placeholder.style.display = "flex";
+        startBtn.disabled = false;
+        captureBtn.disabled = true;
+        switchBtn.disabled = true;
+        stopBtn.disabled = true;
+        previewWrap.classList.add("hidden");
+    }
+    async function startCamera() {
+        try {
+            stopCamera();
+            stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode }, audio: false });
+            video.srcObject = stream;
+            video.style.display = "block";
+            placeholder.style.display = "none";
+            startBtn.disabled = true;
+            captureBtn.disabled = false;
+            switchBtn.disabled = false;
+            stopBtn.disabled = false;
+            previewWrap.classList.add("hidden");
+        } catch(err) {
+            toast("Camera access denied or unavailable: " + err.message);
+        }
+    }
+    function capturePhoto() {
+        if (!stream) return;
+        canvas.width  = video.videoWidth  || 640;
+        canvas.height = video.videoHeight || 480;
+        const ctx = canvas.getContext("2d");
+        if (facingMode === "user") { ctx.translate(canvas.width, 0); ctx.scale(-1, 1); }
+        ctx.drawImage(video, 0, 0);
+        const dataUrl = canvas.toDataURL("image/png");
+        previewImg.src = dataUrl;
+        downloadBtn.href = dataUrl;
+        previewWrap.classList.remove("hidden");
+        toast("Photo captured!");
+    }
+    async function switchCamera() {
+        facingMode = facingMode === "user" ? "environment" : "user";
+        await startCamera();
+    }
+
+    openBtn.addEventListener("click", openModal);
+    closeBtn.addEventListener("click", closeModal);
+    backdrop.addEventListener("click", closeModal);
+    startBtn.addEventListener("click", startCamera);
+    captureBtn.addEventListener("click", capturePhoto);
+    switchBtn.addEventListener("click", switchCamera);
+    stopBtn.addEventListener("click", stopCamera);
+    retakeBtn.addEventListener("click", () => { previewWrap.classList.add("hidden"); });
+}
