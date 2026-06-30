@@ -126,36 +126,21 @@ body {
     gap: 12px;
 }
 
-.brand-icon {
-    width: 36px;
-    height: 36px;
-    border-radius: 10px;
-    background: linear-gradient(135deg, var(--accent-teaching), var(--accent-nonteaching));
+
+.close-btn {
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 16px;
-    color: white;
-}
-
-.brand span {
-    font-size: 17px;
-    font-weight: 700;
-    letter-spacing: -0.3px;
-    background: linear-gradient(135deg, var(--accent-teaching-light), var(--accent-nonteaching-light));
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
-}
-
-.close-btn {
-    display: block;
+    width: 32px;
+    height: 32px;
+    flex-shrink: 0;
     background: none;
     border: none;
+    border-radius: 8px;
     color: var(--text-secondary);
-    font-size: 18px;
+    font-size: 16px;
     cursor: pointer;
-    padding: 4px;
+    padding: 0;
     transition: color var(--transition);
 }
 
@@ -798,10 +783,6 @@ body {
 
     .sidebar.active {
         transform: translateX(0);
-    }
-
-    .close-btn {
-        display: block;
     }
 
     .menu-toggle {
@@ -2127,3 +2108,27 @@ body {
     #form-modal .form-modal-content { max-height: calc(100vh - 16px) !important; }
     #form-modal .form-modal-body    { max-height: calc(100vh - 160px) !important; }
 }
+
+/* ============================================
+   SOFTSCHOOL BRAND LOCKUP (logo + wordmark, no tagline)
+   ============================================ */
+.brand-logo {
+    width: 38px;
+    height: 38px;
+    object-fit: contain;
+    flex-shrink: 0;
+}
+
+.brand-name {
+    font-family: 'Space Grotesk', 'Inter', sans-serif;
+    font-size: 19px;
+    font-weight: 500;
+    letter-spacing: -0.3px;
+    white-space: nowrap;
+}
+
+.brand-name strong {
+    font-weight: 700;
+    color: #17716A;
+}
+

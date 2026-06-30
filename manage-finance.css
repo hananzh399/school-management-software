@@ -3589,3 +3589,26 @@
 [data-theme="dark"] .share-popup-item:hover {
     background: rgba(99,102,241,0.16);
 }
+
+/* ============================================
+   SOFTSCHOOL BRAND LOCKUP (logo + wordmark, no tagline)
+   ============================================ */
+.brand-logo {
+    width: 38px;
+    height: 38px;
+    object-fit: contain;
+    flex-shrink: 0;
+}
+
+.brand-name {
+    font-family: 'Space Grotesk', 'Inter', sans-serif;
+    font-size: 19px;
+    font-weight: 500;
+    letter-spacing: -0.3px;
+    white-space: nowrap;
+}
+
+.brand-name strong {
+    font-weight: 700;
+    color: #17716A;
+}
