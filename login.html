@@ -22,7 +22,10 @@
   <div class="nav-inner">
     <a href="#" class="logo-wrap">
       <img src="logo-icon.png" alt="Soft School Logo" class="logo-icon">
-      <span class="logo-wordmark">Soft<strong>School</strong></span>
+      <div class="logo-text">
+        <span class="logo-wordmark">Soft<strong>School</strong></span>
+        <span class="logo-tagline">Grow with us</span>
+      </div>
     </a>
     <nav id="mainNav">
       <a href="#" class="active" data-section="hero">Home</a>
@@ -31,8 +34,14 @@
       <a href="#about-us" data-section="about-us">About</a>
       <a href="#news" data-section="news">News</a>
       <a href="#contact" data-section="contact">Contact</a>
+      <button class="nav-demo-mobile btn-ripple" onclick="openVideo()" type="button">
+        <i class="fas fa-play"></i> Watch Demo
+      </button>
     </nav>
     <div class="nav-actions">
+      <button class="btn-demo-nav btn-ripple" onclick="openVideo()" type="button">
+        <i class="fas fa-play"></i> <span>Watch Demo</span>
+      </button>
       <button class="btn-login-top btn-ripple" onclick="openLogin()" aria-label="Login to dashboard">
         <i class="fas fa-lock"></i> <span>Login</span>
       </button>
@@ -75,7 +84,7 @@
     </div>
     <div class="hero-stats">
       <div class="stat-item">
-        <div class="stat-num" data-count="12000" data-suffix="+">0</div>
+        <div class="stat-num" data-count="8000" data-suffix="+">0</div>
         <div class="stat-label">Students</div>
       </div>
       <div class="stat-item">
@@ -83,7 +92,7 @@
         <div class="stat-label">Teachers</div>
       </div>
       <div class="stat-item">
-        <div class="stat-num" data-count="85" data-suffix="+">0</div>
+        <div class="stat-num" data-count="50" data-suffix="+">0</div>
         <div class="stat-label">Schools</div>
       </div>
       <div class="stat-item">
@@ -117,7 +126,7 @@
           <div class="dash-stats-row">
             <div class="dash-stat-card">
               <div class="dash-stat-icon teal"><i class="fas fa-user-graduate"></i></div>
-              <div class="dash-stat-num">12,482</div>
+              <div class="dash-stat-num">8540+</div>
               <div class="dash-stat-lbl">Students</div>
             </div>
             <div class="dash-stat-card">
@@ -163,7 +172,7 @@
 <div class="trust-strip" id="trust">
   <div class="trust-inner reveal">
     <span>Trusted by</span>
-    <div class="trust-pill"><i class="fas fa-school"></i> 85+ schools</div>
+    <div class="trust-pill"><i class="fas fa-school"></i> 50+ schools</div>
     <div class="trust-pill"><i class="fas fa-shield-halved"></i> Bank-grade data security</div>
     <div class="trust-pill"><i class="fas fa-headset"></i> 24/7 WhatsApp support</div>
     <div class="trust-pill"><i class="fas fa-mobile-screen"></i> Works on any device</div>
@@ -204,13 +213,13 @@
     </div>
     <div class="feature-card">
       <div class="feature-icon"><i class="fas fa-cog"></i></div>
-      <h3>Admin settings</h3>
+      <h3>Admin controls</h3>
       <p>Control school details, user permissions, and system preferences from a dedicated admin settings panel.</p>
     </div>
     <div class="feature-card">
       <div class="feature-icon"><i class="fas fa-book-open-reader"></i></div>
-      <h3>Student portal</h3>
-      <p>Students log in to see their own assignments and attendance record without needing to ask the office.</p>
+      <h3>Parent portal</h3>
+      <p>Parents log in to see their childerens assignments and attendance record without needing to ask the office.</p>
     </div>
     <div class="feature-card">
       <div class="feature-icon"><i class="fas fa-person-chalkboard"></i></div>
@@ -236,7 +245,7 @@
       <div class="step-card">
         <div class="step-num">2</div>
         <h3>Set up fees, classes &amp; users</h3>
-        <p>Configure fee structures, timetables, and login access for teachers, students, and parents.</p>
+        <p>Configure fee structures, timetables, and login access for teachers and parents.</p>
       </div>
       <div class="step-card">
         <div class="step-num">3</div>
@@ -251,11 +260,11 @@
 <div class="stats-band" id="stats">
   <div class="stats-inner reveal-stagger">
     <div class="stat-item">
-      <div class="stat-num" data-count="12000" data-suffix="+">0</div>
+      <div class="stat-num" data-count="8000" data-suffix="+">0</div>
       <p>Active students</p>
     </div>
     <div class="stat-item">
-      <div class="stat-num" data-count="85" data-suffix="+">0</div>
+      <div class="stat-num" data-count="50" data-suffix="+">0</div>
       <p>Partner schools</p>
     </div>
     <div class="stat-item">
@@ -300,7 +309,7 @@
     </div>
     <div class="testi-card">
       <div class="testi-stars"><i class="fas fa-star"></i><i class="fas fa-star"></i><i class="fas fa-star"></i><i class="fas fa-star"></i><i class="fas fa-star-half-stroke"></i></div>
-      <p class="quote">"Setup support over WhatsApp made the switch painless — someone replied within minutes every time we got stuck."</p>
+      <p class="quote">"Setup support over WhatsApp made the switch painless someone replied within minutes every time we got stuck."</p>
       <div class="testi-person">
         <div class="testi-avatar">SK</div>
         <div>
@@ -320,7 +329,7 @@
         <p class="section-label" style="text-align:left;">Our story</p>
         <h2 class="section-title" style="text-align:left;">Built by educators,<br>for educators</h2>
         <p class="about-desc">Soft School was founded with a single mission: to simplify the daily work of running a school. We've seen administrators buried in paperwork, teachers chasing attendance registers, and parents left in the dark, and we built a platform to solve all of it.</p>
-        <p class="about-desc">Today we serve 85+ schools across Pakistan, processing thousands of fee transactions and attendance records every day — all from one connected, easy-to-use platform.</p>
+        <p class="about-desc">Today we serve 50+ schools across Pakistan, processing thousands of fee transactions and attendance records every day all from one connected, easy-to-use platform.</p>
         <div class="about-values">
           <div class="about-value">
             <div class="about-value-icon"><i class="fas fa-heart"></i></div>
@@ -340,15 +349,15 @@
       <div class="about-right reveal-right" style="transition-delay:0.1s;">
         <div class="about-cards">
           <div class="about-card about-card-1">
-            <div class="about-card-num">2019</div>
+            <div class="about-card-num">2022</div>
             <div class="about-card-lbl">Year founded</div>
           </div>
           <div class="about-card about-card-2">
-            <div class="about-card-num">85+</div>
+            <div class="about-card-num">50+</div>
             <div class="about-card-lbl">Schools served</div>
           </div>
           <div class="about-card about-card-3">
-            <div class="about-card-num">12k+</div>
+            <div class="about-card-num">8k+</div>
             <div class="about-card-lbl">Active students</div>
           </div>
           <div class="about-card about-card-4">
@@ -413,7 +422,7 @@
 
     <div class="news-grid reveal-stagger">
       <div class="news-card">
-        <div class="news-img news-img-1">📚</div>
+        <div class="news-img news-img-1"><img src="news-announcement.png" alt="AI Learning"></div>
         <div class="news-body">
           <span class="news-tag tag-blue">Announcement</span>
           <h3 class="news-headline">Soft School launches AI-powered personalised learning paths for all students</h3>
@@ -425,11 +434,11 @@
         </div>
       </div>
       <div class="news-card">
-        <div class="news-img news-img-2">🏆</div>
+        <div class="news-img news-img-2"><img src="news-achievement.png" alt="Student Milestone"></div>
         <div class="news-body">
           <span class="news-tag tag-gold">Achievement</span>
-          <h3 class="news-headline">12,000 students milestone reached — and we're just getting started</h3>
-          <p class="news-excerpt">We're proud to celebrate our growing community of over 12,000 active learners who are transforming their futures.</p>
+          <h3 class="news-headline">8000 students milestone reached — and we're just getting started</h3>
+          <p class="news-excerpt">We're proud to celebrate our growing community of over 8000 active learners who are transforming their futures.</p>
           <div class="news-meta">
             <span class="news-date"><i class="fas fa-calendar-alt"></i> June 10, 2025</span>
             <span class="read-more">Read more <i class="fas fa-arrow-right"></i></span>
@@ -437,7 +446,7 @@
         </div>
       </div>
       <div class="news-card">
-        <div class="news-img news-img-3">🎓</div>
+        <div class="news-img news-img-3"><img src="news-graduation.png" alt="Graduation Ceremony"></div>
         <div class="news-body">
           <span class="news-tag tag-green">Event</span>
           <h3 class="news-headline">Annual Soft School Graduation Ceremony 2025 — save the date</h3>
@@ -460,8 +469,8 @@
   </div>
   <div class="family-inner">
     <div class="family-left reveal-left">
-      <h2>Become part of <em>our family</em> — we'd love to have you.</h2>
-      <p>Soft School isn't just a platform — it's a community. From students taking their first steps to teachers shaping futures, everyone has a place here. Reach out and let's build something great together.</p>
+      <h2>Become part of <em>our family</em> we'd love to have you.</h2>
+      <p>Soft School isn't just a platform it's a community. From students taking their first steps to teachers shaping futures, everyone has a place here. Reach out and let's build something great together.</p>
       <div class="family-features">
         <div class="feat-item"><div class="feat-dot"></div> Dedicated support for every member</div>
         <div class="feat-item"><div class="feat-dot"></div> Instant response via WhatsApp</div>
@@ -490,7 +499,7 @@
         </div>
       </button>
 
-      <p class="contact-note"><i class="fas fa-lock" style="margin-right:4px;opacity:0.6;"></i>We respect your privacy. No spam, ever.</p>
+      <p class="contact-note"><i class="fas fa-lock" style="margin-right:4px;opacity:0.6;"></i>We respect your privacy.</p>
     </div>
   </div>
 </section>
@@ -573,7 +582,7 @@
     <h2>11. Changes to these terms</h2>
     <p>We may update these Terms &amp; Conditions from time to time. Continued use of the platform after changes are posted constitutes acceptance of the updated terms.</p>
     <h2>12. Contact us</h2>
-    <p>Questions about these Terms can be sent to <a href="mailto:hello@softschool.com">hello@softschool.com</a> or via <a href="https://wa.me/923181909541" target="_blank">WhatsApp</a>.</p>
+    <p>Questions about these Terms can be sent to <a href="mailto:hello@softschool.com">softschool@gmail.com</a> or via <a href="https://wa.me/923181909541" target="_blank">WhatsApp</a>.</p>
   </div>
 </div>
 
@@ -586,7 +595,7 @@
         <img src="logo-icon.png" alt="Soft School" class="logo-icon-footer">
         <span class="logo-wordmark">Soft<strong>School</strong></span>
       </div>
-      <p>An all-in-one school management platform helping administrators, teachers, students, and parents stay connected.</p>
+      <p>An all-in-one school management platform helping administrators, teachers and parents stay connected.</p>
       <div class="footer-social">
         <a href="#" aria-label="Facebook"><i class="fab fa-facebook-f"></i></a>
         <a href="#" aria-label="Instagram"><i class="fab fa-instagram"></i></a>
@@ -609,7 +618,7 @@
     <div class="footer-col">
       <h4>Get in touch</h4>
       <a href="https://wa.me/923181909541"><i class="fab fa-whatsapp"></i>&nbsp; +92 318 1909541</a>
-      <a href="mailto:hello@softschool.com"><i class="fas fa-envelope"></i>&nbsp; hello@softschool.com</a>
+      <a href="mailto:hello@softschool.com"><i class="fas fa-envelope"></i>&nbsp; softschool@gmail.com</a>
     </div>
   </div>
   <div class="footer-bottom">
@@ -622,13 +631,65 @@
 </footer>
 
 <!-- ── VIDEO MODAL ── -->
-<div class="modal-overlay" id="videoModal" onclick="closeVideoOutside(event)">
-  <div class="modal-box">
-    <button class="modal-close" onclick="closeVideo()" aria-label="Close"><i class="fas fa-times"></i></button>
-    <div class="video-placeholder">
-      <div class="play-giant"><i class="fas fa-play"></i></div>
-      <p style="font-size:0.95rem;opacity:0.8;">Soft School demo video — coming soon</p>
+ <!-- ── GET STARTED MODAL ── -->
+<div class="modal-overlay" id="getStartedModal" onclick="closeGetStartedOutside(event)">
+  <div class="modal-box gs-modal-box">
+    <div class="gs-header">
+      <button class="modal-close" onclick="closeGetStarted()" aria-label="Close"><i class="fas fa-times"></i></button>
+      <div class="gs-header-icon">
+        <div class="play-giant" style="animation:none;"><i class="fas fa-rocket"></i></div>
+      </div>
+      <h2>Get started with Soft School</h2>
+      <p>Choose how you'd like to continue</p>
     </div>
+
+    <div class="gs-options">
+      <a href="https://wa.me/923181909541?text=Hello%20Soft%20School,%20I%20want%20to%20sign%20up!" target="_blank" class="gs-option gs-option-whatsapp">
+        <div class="gs-option-icon gs-icon-green"><i class="fab fa-whatsapp"></i></div>
+        <div class="gs-option-text">
+          <div class="gs-option-title">Sign up via WhatsApp</div>
+          <div class="gs-option-sub">Chat with our team and get onboarded within a week</div>
+        </div>
+        <i class="fas fa-arrow-right gs-arrow"></i>
+      </a>
+
+      <button class="gs-option gs-option-video" onclick="openVideoFromGs()">
+        <div class="gs-option-icon gs-icon-teal"><i class="fas fa-play"></i></div>
+        <div class="gs-option-text">
+          <div class="gs-option-title">Watch the demo</div>
+          <div class="gs-option-sub">See Soft School in action before you commit</div>
+        </div>
+        <i class="fas fa-arrow-right gs-arrow"></i>
+      </button>
+
+      <a href="https://wa.me/923181909541?text=Hello%20Soft%20School,%20I%20want%20to%20book%20a%20demo!" target="_blank" class="gs-option gs-option-demo">
+        <div class="gs-option-icon gs-icon-amber"><i class="fas fa-calendar-check"></i></div>
+        <div class="gs-option-text">
+          <div class="gs-option-title">Book a live demo</div>
+          <div class="gs-option-sub">Get a personalised walkthrough with our team</div>
+        </div>
+        <i class="fas fa-arrow-right gs-arrow"></i>
+      </a>
+
+      <button class="gs-option gs-option-login" onclick="openLoginFromGs()">
+        <div class="gs-option-icon gs-icon-subtle"><i class="fas fa-lock"></i></div>
+        <div class="gs-option-text">
+          <div class="gs-option-title">Login to dashboard</div>
+          <div class="gs-option-sub">Already a member? Sign in to your account</div>
+        </div>
+        <i class="fas fa-arrow-right gs-arrow"></i>
+      </button>
+    </div>
+
+    <div class="gs-note">
+      <i class="fas fa-shield-halved"></i> Your data is always private and secure
+    </div>
+  </div>
+</div>
+<div class="modal-overlay" id="videoModal" onclick="closeVideoOutside(event)">
+  <div class="modal-box video-modal-box">
+    <button class="modal-close" onclick="closeVideo()" aria-label="Close"><i class="fas fa-times"></i></button>
+    <div class="video-content" id="videoContent"></div>
   </div>
 </div>
 
@@ -642,7 +703,7 @@
         <span class="logo-wordmark">Soft<strong>School</strong></span>
       </div>
       <div class="login-card-top">
-        <h2>Welcome back</h2>
+        <h2>Welcome to SoftSchool</h2>
         <p>Sign in to your Soft School account</p>
       </div>
 
@@ -651,7 +712,7 @@
           <label for="phone">Phone number</label>
           <div class="field-wrap">
             <i class="fas fa-phone field-icon"></i>
-            <input type="tel" id="phone" placeholder="+92 318 1909541" required autocomplete="tel">
+            <input type="tel" id="phone" placeholder="+92 3123456789" required autocomplete="tel">
           </div>
         </div>
         <div class="field-group">
