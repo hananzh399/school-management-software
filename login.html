@@ -3,151 +3,444 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>EduFlow | Empowering the Next Generation</title>
+  <title>Soft School | School Management Software</title>
+  <meta name="description" content="Soft School is a school management platform for student records, staff management, fees and finance, and attendance — built for administrators, teachers, students, and parents.">
   <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="login.css">
 </head>
 <body>
-    <header>
+
+<!-- ── SCROLL PROGRESS ── -->
+<div id="scrollProgress"></div>
+
+<!-- ── TOAST CONTAINER ── -->
+<div class="toast-container" id="toastContainer"></div>
+
+<!-- ── HEADER ── -->
+<header id="siteHeader">
   <div class="nav-inner">
     <a href="#" class="logo-wrap">
-      <div class="logo-icon"><i class="fas fa-graduation-cap"></i></div>
-      <span class="logo-text">Edu<span>Flow</span></span>
+      <img src="logo-icon.png" alt="Soft School Logo" class="logo-icon">
+      <span class="logo-wordmark">Soft<strong>School</strong></span>
     </a>
-    <nav>
-      <a href="#" class="active">Home</a>
-      <a href="#news">News</a>
-      <a href="#about">About us</a>
-      <a href="#contact">Contact us</a>
-      <a href="https://wa.me/923001234567?text=Hello%20EduFlow,%20I%20want%20to%20learn%20more!" target="_blank" class="nav-cta">Get in touch</a>
+    <nav id="mainNav">
+      <a href="#" class="active" data-section="hero">Home</a>
+      <a href="#features" data-section="features">Features</a>
+      <a href="#how" data-section="how">How it works</a>
+      <a href="#about-us" data-section="about-us">About</a>
+      <a href="#news" data-section="news">News</a>
+      <a href="#contact" data-section="contact">Contact</a>
     </nav>
+    <div class="nav-actions">
+      <button class="btn-login-top btn-ripple" onclick="openLogin()" aria-label="Login to dashboard">
+        <i class="fas fa-lock"></i> <span>Login</span>
+      </button>
+      <a href="https://wa.me/923181909541?text=Hello%20Soft%20School,%20I%20want%20to%20sign%20up!" target="_blank" class="btn-signup-top btn-ripple"><span>Sign Up Now</span></a>
+      <button class="nav-toggle" id="navToggle" aria-label="Open menu" aria-expanded="false"><i class="fas fa-bars"></i></button>
+    </div>
   </div>
 </header>
- 
-<!-- ── HERO + LOGIN ── -->
-<section class="hero">
+
+<!-- ════════════════════════════════════════
+     PAGE: MAIN
+     ════════════════════════════════════════ -->
+<div id="page-main">
+
+<!-- ── HERO ── -->
+<section class="hero" id="hero">
   <div class="hero-bg"></div>
-  <div class="hero-orbs">
+  <div class="hero-orbs" id="heroOrbs">
     <div class="orb orb-1"></div>
     <div class="orb orb-2"></div>
   </div>
- 
+
+  <!-- LEFT -->
   <div class="hero-left">
-    <span class="hero-eyebrow"><i class="fas fa-star"></i> Pakistan's Leading EdTech</span>
+    <span class="hero-eyebrow"><i class="fas fa-infinity"></i> A complete school management platform</span>
     <h1 class="hero-title">
-      Become part of<br>
-      <em>our family.</em><br>
-      Learn. Grow. Belong.
+      Run your whole school<br>
+      from <em id="twTarget">one place</em>
     </h1>
     <p class="hero-sub">
-      EduFlow connects students, teachers, and administrators in one powerful platform. Join thousands of learners building their future with us.
+      Soft School brings student records, staff management, fees, and attendance into a single platform built for administrators, teachers and parents alike.
     </p>
     <div class="hero-actions">
-      <a href="https://wa.me/923001234567?text=Hello%20EduFlow,%20I%20want%20to%20join%20your%20family!" target="_blank" class="btn-whatsapp">
-        <i class="fab fa-whatsapp" style="font-size:18px;"></i>
-        Contact us on WhatsApp
+      <a href="#contact" class="btn-get-started btn-ripple">
+        Get Started <i class="fas fa-arrow-right"></i>
       </a>
-      <button class="btn-video" onclick="openVideo()">
-        <div class="play-circle"><i class="fas fa-play"></i></div>
-        Watch demo
+      <button class="btn-login-hero btn-ripple" onclick="openLogin()">
+        <i class="fas fa-lock"></i> Login
       </button>
     </div>
     <div class="hero-stats">
       <div class="stat-item">
-        <div class="stat-num">12K+</div>
+        <div class="stat-num" data-count="12000" data-suffix="+">0</div>
         <div class="stat-label">Students</div>
       </div>
       <div class="stat-item">
-        <div class="stat-num">340+</div>
+        <div class="stat-num" data-count="340" data-suffix="+">0</div>
         <div class="stat-label">Teachers</div>
       </div>
       <div class="stat-item">
-        <div class="stat-num">98%</div>
+        <div class="stat-num" data-count="85" data-suffix="+">0</div>
+        <div class="stat-label">Schools</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-num" data-count="98" data-suffix="%">0</div>
         <div class="stat-label">Satisfaction</div>
       </div>
     </div>
   </div>
- 
+
+  <!-- RIGHT — dashboard preview -->
   <div class="hero-right">
-    <div class="login-card">
-      <div class="login-card-top">
-        <h2>Welcome back</h2>
-        <p>Sign in to your EduFlow account</p>
+    <div class="dash-preview" aria-hidden="true">
+      <div class="dash-chrome">
+        <span class="chrome-dot" style="background:#FF5F57;"></span>
+        <span class="chrome-dot" style="background:#FFBD2E;"></span>
+        <span class="chrome-dot" style="background:#28C840;"></span>
+        <span class="chrome-title">Soft School — Admin Dashboard</span>
       </div>
- 
-      <form id="loginForm" onsubmit="handleLogin(event)">
-        <div class="field-group">
-          <label for="phone">Phone number</label>
-          <div class="field-wrap">
-            <i class="fas fa-phone field-icon"></i>
-            <input type="tel" id="phone" placeholder="+92 300 0000000" required>
+      <div class="dash-body">
+        <div class="dash-sidebar">
+          <div class="dash-sidebar-logo">
+            <span class="sidebar-logo-mark"></span>SoftSchool
+          </div>
+          <div class="dash-nav-item active"><i class="fas fa-table-columns"></i> Dashboard</div>
+          <div class="dash-nav-item"><i class="fas fa-user-graduate"></i> Students</div>
+          <div class="dash-nav-item"><i class="fas fa-file-invoice-dollar"></i> Fees</div>
+          <div class="dash-nav-item"><i class="fas fa-clipboard-check"></i> Attendance</div>
+          <div class="dash-nav-item"><i class="fas fa-chalkboard-teacher"></i> Staff</div>
+        </div>
+        <div class="dash-main">
+          <div class="dash-stats-row">
+            <div class="dash-stat-card">
+              <div class="dash-stat-icon teal"><i class="fas fa-user-graduate"></i></div>
+              <div class="dash-stat-num">12,482</div>
+              <div class="dash-stat-lbl">Students</div>
+            </div>
+            <div class="dash-stat-card">
+              <div class="dash-stat-icon amber"><i class="fas fa-file-invoice-dollar"></i></div>
+              <div class="dash-stat-num">₨2.8M</div>
+              <div class="dash-stat-lbl">Fees</div>
+            </div>
+            <div class="dash-stat-card">
+              <div class="dash-stat-icon green"><i class="fas fa-clipboard-check"></i></div>
+              <div class="dash-stat-num">96.2%</div>
+              <div class="dash-stat-lbl">Attendance</div>
+            </div>
+          </div>
+          <div class="dash-lower">
+            <div class="dash-activity">
+              <div class="dash-section-title">Recent Activity</div>
+              <div class="dash-activity-item"><span class="act-dot teal"></span>Ahmed Ali enrolled<span class="act-time">2m ago</span></div>
+              <div class="dash-activity-item"><span class="act-dot amber"></span>Fee paid — Fatima K.<span class="act-time">15m ago</span></div>
+              <div class="dash-activity-item"><span class="act-dot green"></span>Attendance marked<span class="act-time">1h ago</span></div>
+              <div class="dash-activity-item"><span class="act-dot teal"></span>Exam scheduled<span class="act-time">3h ago</span></div>
+            </div>
+            <div class="dash-chart">
+              <div class="dash-section-title">Attendance</div>
+              <div class="dash-bars">
+                <div class="dash-bar-wrap"><div class="dash-bar" style="--h:78%"></div><span>M</span></div>
+                <div class="dash-bar-wrap"><div class="dash-bar" style="--h:95%"></div><span>T</span></div>
+                <div class="dash-bar-wrap"><div class="dash-bar" style="--h:88%"></div><span>W</span></div>
+                <div class="dash-bar-wrap"><div class="dash-bar" style="--h:92%"></div><span>T</span></div>
+                <div class="dash-bar-wrap"><div class="dash-bar amber-bar" style="--h:96%"></div><span>F</span></div>
+              </div>
+            </div>
           </div>
         </div>
- 
-        <div class="field-group">
-          <label for="password">Password</label>
-          <div class="field-wrap">
-            <i class="fas fa-lock field-icon"></i>
-            <input type="password" id="password" placeholder="Enter your password" required>
-            <button type="button" class="pw-toggle" onclick="togglePw()" id="eyeBtn">
-              <i class="fas fa-eye" id="eyeIcon"></i>
-            </button>
-          </div>
-          <div class="forgot"><a href="#">Forgot password?</a></div>
-        </div>
- 
-        <button type="submit" class="btn-login">Sign in to dashboard</button>
-      </form>
- 
-      <div class="login-divider">or continue with</div>
- 
-      <a href="https://wa.me/923001234567?text=Hello%20EduFlow,%20I%20need%20help%20logging%20in!" target="_blank" class="btn-whatsapp-login">
-        <i class="fab fa-whatsapp" style="font-size:18px;"></i>
-        Contact support via WhatsApp
-      </a>
+      </div>
+    </div>
+    <!-- floating badges -->
+    <div class="dash-badge dash-badge-1"><i class="fas fa-circle-check"></i> 96% attendance today</div>
+    <div class="dash-badge dash-badge-2"><i class="fas fa-arrow-trend-up"></i> ₨48k collected today</div>
+  </div>
+</section>
+
+<!-- ── TRUST STRIP ── -->
+<div class="trust-strip" id="trust">
+  <div class="trust-inner reveal">
+    <span>Trusted by</span>
+    <div class="trust-pill"><i class="fas fa-school"></i> 85+ schools</div>
+    <div class="trust-pill"><i class="fas fa-shield-halved"></i> Bank-grade data security</div>
+    <div class="trust-pill"><i class="fas fa-headset"></i> 24/7 WhatsApp support</div>
+    <div class="trust-pill"><i class="fas fa-mobile-screen"></i> Works on any device</div>
+  </div>
+</div>
+
+<!-- ── FEATURES ── -->
+<section class="section center" id="features">
+  <p class="section-label reveal">Everything in one platform</p>
+  <h2 class="section-title reveal">Built for every part of running a school</h2>
+  <p class="section-sub reveal">From the front office to the classroom, Soft School replaces spreadsheets and paper registers with one connected system.</p>
+
+  <div class="features-grid reveal-stagger">
+    <div class="feature-card">
+      <div class="feature-icon"><i class="fas fa-table-columns"></i></div>
+      <h3>Command-centre dashboard</h3>
+      <p>A live overview of headcount, revenue, and pending fees the moment an admin logs in, no digging through spreadsheets.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon"><i class="fas fa-user-graduate"></i></div>
+      <h3>Student management</h3>
+      <p>Maintain every student's profile, class, and records in one searchable database that stays in sync across the school.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon"><i class="fas fa-chalkboard-teacher"></i></div>
+      <h3>Staff management</h3>
+      <p>Track teachers and staff, assign classes, and manage salary payments from a single, organised view.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon"><i class="fas fa-file-invoice-dollar"></i></div>
+      <h3>Fees &amp; finance</h3>
+      <p>Generate and collect fees, track pending dues and fines, and see expected vs. collected revenue at a glance.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon"><i class="fas fa-clipboard-check"></i></div>
+      <h3>Attendance tracking</h3>
+      <p>Mark daily attendance for students and staff and keep an accurate, exportable record for every class.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon"><i class="fas fa-cog"></i></div>
+      <h3>Admin settings</h3>
+      <p>Control school details, user permissions, and system preferences from a dedicated admin settings panel.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon"><i class="fas fa-book-open-reader"></i></div>
+      <h3>Student portal</h3>
+      <p>Students log in to see their own assignments and attendance record without needing to ask the office.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon"><i class="fas fa-person-chalkboard"></i></div>
+      <h3>Teacher portal</h3>
+      <p>Teachers see their class schedule, subjects, and grades assigned to them the moment they sign in.</p>
     </div>
   </div>
 </section>
- 
-<!-- ── NEWS SECTION ── -->
+
+<!-- ── HOW IT WORKS ── -->
+<section class="section center" id="how" style="background:var(--paper-deep);max-width:100%;">
+  <div style="max-width:1200px;margin:0 auto;">
+    <p class="section-label reveal">Getting started</p>
+    <h2 class="section-title reveal">Live in three steps</h2>
+    <p class="section-sub reveal">Most schools are fully set up and taking attendance digitally within a week.</p>
+
+    <div class="steps-row reveal-stagger" style="text-align:left;">
+      <div class="step-card">
+        <div class="step-num">1</div>
+        <h3>Tell us about your school</h3>
+        <p>Share your classes, sections, and staff, our team imports your existing student records for you.</p>
+      </div>
+      <div class="step-card">
+        <div class="step-num">2</div>
+        <h3>Set up fees, classes &amp; users</h3>
+        <p>Configure fee structures, timetables, and login access for teachers, students, and parents.</p>
+      </div>
+      <div class="step-card">
+        <div class="step-num">3</div>
+        <h3>Go live and manage daily</h3>
+        <p>Take attendance, collect fees, and send updates to parents, all from one dashboard.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── STATS BAND ── -->
+<div class="stats-band" id="stats">
+  <div class="stats-inner reveal-stagger">
+    <div class="stat-item">
+      <div class="stat-num" data-count="12000" data-suffix="+">0</div>
+      <p>Active students</p>
+    </div>
+    <div class="stat-item">
+      <div class="stat-num" data-count="85" data-suffix="+">0</div>
+      <p>Partner schools</p>
+    </div>
+    <div class="stat-item">
+      <div class="stat-num" data-count="40000" data-suffix="+">0</div>
+      <p>Fee vouchers processed</p>
+    </div>
+    <div class="stat-item">
+      <div class="stat-num" data-count="99.9" data-suffix="%">0</div>
+      <p>Platform uptime</p>
+    </div>
+  </div>
+</div>
+
+<!-- ── TESTIMONIALS ── -->
+<section class="section center">
+  <p class="section-label reveal">What schools say</p>
+  <h2 class="section-title reveal">Trusted by school administrators</h2>
+  <p class="section-sub reveal">Real feedback from the people who use Soft School every day.</p>
+
+  <div class="testi-grid reveal-stagger">
+    <div class="testi-card">
+      <div class="testi-stars"><i class="fas fa-star"></i><i class="fas fa-star"></i><i class="fas fa-star"></i><i class="fas fa-star"></i><i class="fas fa-star"></i></div>
+      <p class="quote">"Fee collection used to take our office a full week each month. With Soft School it's done in a single afternoon."</p>
+      <div class="testi-person">
+        <div class="testi-avatar">AR</div>
+        <div>
+          <div class="testi-name">Ayesha Raza</div>
+          <div class="testi-role">Principal, Greenfield Academy</div>
+        </div>
+      </div>
+    </div>
+    <div class="testi-card">
+      <div class="testi-stars"><i class="fas fa-star"></i><i class="fas fa-star"></i><i class="fas fa-star"></i><i class="fas fa-star"></i><i class="fas fa-star"></i></div>
+      <p class="quote">"Parents finally see attendance and grades the same day, not at the end of term. Complaints dropped almost overnight."</p>
+      <div class="testi-person">
+        <div class="testi-avatar">MT</div>
+        <div>
+          <div class="testi-name">Muhammad Tariq</div>
+          <div class="testi-role">Administrator, City Grammar School</div>
+        </div>
+      </div>
+    </div>
+    <div class="testi-card">
+      <div class="testi-stars"><i class="fas fa-star"></i><i class="fas fa-star"></i><i class="fas fa-star"></i><i class="fas fa-star"></i><i class="fas fa-star-half-stroke"></i></div>
+      <p class="quote">"Setup support over WhatsApp made the switch painless — someone replied within minutes every time we got stuck."</p>
+      <div class="testi-person">
+        <div class="testi-avatar">SK</div>
+        <div>
+          <div class="testi-name">Sana Khalid</div>
+          <div class="testi-role">Vice Principal, Bright Future School</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── ABOUT US ── -->
+<section class="section about-section" id="about-us" style="background:var(--paper-deep);max-width:100%;">
+  <div style="max-width:1200px;margin:0 auto;">
+    <div class="about-grid">
+      <div class="about-left reveal-left">
+        <p class="section-label" style="text-align:left;">Our story</p>
+        <h2 class="section-title" style="text-align:left;">Built by educators,<br>for educators</h2>
+        <p class="about-desc">Soft School was founded with a single mission: to simplify the daily work of running a school. We've seen administrators buried in paperwork, teachers chasing attendance registers, and parents left in the dark, and we built a platform to solve all of it.</p>
+        <p class="about-desc">Today we serve 85+ schools across Pakistan, processing thousands of fee transactions and attendance records every day — all from one connected, easy-to-use platform.</p>
+        <div class="about-values">
+          <div class="about-value">
+            <div class="about-value-icon"><i class="fas fa-heart"></i></div>
+            <span>Built with care for every student and school</span>
+          </div>
+          <div class="about-value">
+            <div class="about-value-icon"><i class="fas fa-shield-halved"></i></div>
+            <span>Data security first, no exceptions</span>
+          </div>
+          <div class="about-value">
+            <div class="about-value-icon"><i class="fas fa-headset"></i></div>
+            <span>Real support from real people, via WhatsApp</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="about-right reveal-right" style="transition-delay:0.1s;">
+        <div class="about-cards">
+          <div class="about-card about-card-1">
+            <div class="about-card-num">2019</div>
+            <div class="about-card-lbl">Year founded</div>
+          </div>
+          <div class="about-card about-card-2">
+            <div class="about-card-num">85+</div>
+            <div class="about-card-lbl">Schools served</div>
+          </div>
+          <div class="about-card about-card-3">
+            <div class="about-card-num">12k+</div>
+            <div class="about-card-lbl">Active students</div>
+          </div>
+          <div class="about-card about-card-4">
+            <div class="about-card-num">99%</div>
+            <div class="about-card-lbl">Uptime record</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── DEMO CTA BAND ── -->
+<section class="cta-band">
+  <div class="cta-band-inner reveal">
+    <span class="cta-badge"><i class="fas fa-calendar-check"></i> Book a demo</span>
+    <h2>See Soft School running for your school</h2>
+    <p>Every module students, staff, finance, and attendance works together from day one. Message our team and we'll walk you through it.</p>
+    <a href="https://wa.me/923181909541?text=Hello%20Soft%20School,%20I%20want%20to%20book%20a%20demo!" target="_blank" class="btn-whatsapp btn-ripple">
+      <i class="fab fa-whatsapp" style="font-size:18px;"></i>
+      Book a demo on WhatsApp
+    </a>
+  </div>
+</section>
+
+<!-- ── FAQ ── -->
+<section class="section center">
+  <p class="section-label reveal">Questions</p>
+  <h2 class="section-title reveal">Frequently asked questions</h2>
+  <p class="section-sub reveal">Can't find your answer? Message us on WhatsApp and we'll reply within minutes.</p>
+
+  <div class="faq-list reveal">
+    <div class="faq-item">
+      <button class="faq-q" aria-expanded="false" aria-controls="faq-a-1">How long does setup take? <i class="fas fa-plus" aria-hidden="true"></i></button>
+      <div class="faq-a" id="faq-a-1" role="region">Most schools are fully onboarded within a week. Our team imports your existing student and class data so you don't start from scratch.</div>
+    </div>
+    <div class="faq-item">
+      <button class="faq-q" aria-expanded="false" aria-controls="faq-a-2">Can parents access the system too? <i class="fas fa-plus" aria-hidden="true"></i></button>
+      <div class="faq-a" id="faq-a-2" role="region">Yes. Parents get their own login to view attendance, grades, fee status, and announcements, plus WhatsApp and SMS alerts.</div>
+    </div>
+    <div class="faq-item">
+      <button class="faq-q" aria-expanded="false" aria-controls="faq-a-3">Is my school's data secure? <i class="fas fa-plus" aria-hidden="true"></i></button>
+      <div class="faq-a" id="faq-a-3" role="region">All data is encrypted in transit and at rest, backed up daily, and accessible only to the staff roles you authorise.</div>
+    </div>
+    <div class="faq-item">
+      <button class="faq-q" aria-expanded="false" aria-controls="faq-a-4">Do you offer training for staff? <i class="fas fa-plus" aria-hidden="true"></i></button>
+      <div class="faq-a" id="faq-a-4" role="region">Yes, every plan includes onboarding sessions for office staff and teachers, plus ongoing support over WhatsApp.</div>
+    </div>
+    <div class="faq-item">
+      <button class="faq-q" aria-expanded="false" aria-controls="faq-a-5">How do I find out about pricing? <i class="fas fa-plus" aria-hidden="true"></i></button>
+      <div class="faq-a" id="faq-a-5" role="region">Message us on WhatsApp or book a demo and our team will walk you through a plan that fits your school's size and needs.</div>
+    </div>
+  </div>
+</section>
+
+<!-- ── NEWS ── -->
 <section id="news">
-  <div class="section">
-    <p class="section-label">Latest updates</p>
-    <h2 class="section-title">News from EduFlow</h2>
-    <p class="section-sub">Stay up to date with the latest announcements, achievements, and events from our learning community.</p>
- 
-    <div class="news-grid">
+  <div class="section center">
+    <p class="section-label reveal">Latest updates</p>
+    <h2 class="section-title reveal">News from Soft School</h2>
+    <p class="section-sub reveal">Stay up to date with the latest announcements, achievements, and events from our learning community.</p>
+
+    <div class="news-grid reveal-stagger">
       <div class="news-card">
         <div class="news-img news-img-1">📚</div>
         <div class="news-body">
           <span class="news-tag tag-blue">Announcement</span>
-          <h3 class="news-headline">EduFlow launches AI-powered personalized learning paths for all students</h3>
-          <p class="news-excerpt">Our new intelligent curriculum engine adapts to each student's pace and learning style, delivering a truly personalized academic journey.</p>
+          <h3 class="news-headline">Soft School launches AI-powered personalised learning paths for all students</h3>
+          <p class="news-excerpt">Our new intelligent curriculum engine adapts to each student's pace and learning style, delivering a truly personalised academic journey.</p>
           <div class="news-meta">
             <span class="news-date"><i class="fas fa-calendar-alt"></i> June 20, 2025</span>
             <span class="read-more">Read more <i class="fas fa-arrow-right"></i></span>
           </div>
         </div>
       </div>
- 
       <div class="news-card">
         <div class="news-img news-img-2">🏆</div>
         <div class="news-body">
           <span class="news-tag tag-gold">Achievement</span>
-          <h3 class="news-headline">10,000 students milestone reached — and we're just getting started</h3>
-          <p class="news-excerpt">We're proud to celebrate our growing community of over 10,000 active learners across Pakistan who are transforming their futures.</p>
+          <h3 class="news-headline">12,000 students milestone reached — and we're just getting started</h3>
+          <p class="news-excerpt">We're proud to celebrate our growing community of over 12,000 active learners who are transforming their futures.</p>
           <div class="news-meta">
             <span class="news-date"><i class="fas fa-calendar-alt"></i> June 10, 2025</span>
             <span class="read-more">Read more <i class="fas fa-arrow-right"></i></span>
           </div>
         </div>
       </div>
- 
       <div class="news-card">
         <div class="news-img news-img-3">🎓</div>
         <div class="news-body">
           <span class="news-tag tag-green">Event</span>
-          <h3 class="news-headline">Annual EduFlow Graduation Ceremony 2025 — save the date</h3>
+          <h3 class="news-headline">Annual Soft School Graduation Ceremony 2025 — save the date</h3>
           <p class="news-excerpt">Join us on July 15th as we celebrate the incredible achievements of this year's graduating cohort with an evening of inspiration and awards.</p>
           <div class="news-meta">
             <span class="news-date"><i class="fas fa-calendar-alt"></i> May 28, 2025</span>
@@ -158,65 +451,232 @@
     </div>
   </div>
 </section>
- 
-<!-- ── FAMILY / CONTACT SECTION ── -->
+
+<!-- ── CONTACT / FAMILY ── -->
 <section class="family-section" id="contact">
   <div class="family-orbs">
     <div class="orb-a"></div>
     <div class="orb-b"></div>
   </div>
   <div class="family-inner">
-    <div class="family-left">
+    <div class="family-left reveal-left">
       <h2>Become part of <em>our family</em> — we'd love to have you.</h2>
-      <p>EduFlow isn't just a platform — it's a community. From students taking their first steps to teachers shaping futures, everyone has a place here. Reach out and let's build something great together.</p>
+      <p>Soft School isn't just a platform — it's a community. From students taking their first steps to teachers shaping futures, everyone has a place here. Reach out and let's build something great together.</p>
       <div class="family-features">
         <div class="feat-item"><div class="feat-dot"></div> Dedicated support for every member</div>
         <div class="feat-item"><div class="feat-dot"></div> Instant response via WhatsApp</div>
         <div class="feat-item"><div class="feat-dot"></div> Onboarding help for teachers and administrators</div>
-        <div class="feat-item"><div class="feat-dot"></div> Free demo session available on request</div>
+        <div class="feat-item"><div class="feat-dot"></div> Demo session available on request</div>
       </div>
     </div>
- 
-    <div class="family-right">
+
+    <div class="family-right reveal-right" style="transition-delay:0.12s;">
       <h3>Get in touch today</h3>
       <p>Our team replies within minutes on WhatsApp.</p>
- 
-      <a href="https://wa.me/923001234567?text=Hello%20EduFlow,%20I%20want%20to%20become%20part%20of%20your%20family!" target="_blank" class="contact-btn-large">
+
+      <a href="https://wa.me/923181909541?text=Hello%20Soft%20School,%20I%20want%20to%20become%20part%20of%20your%20family!" target="_blank" class="contact-btn-large">
         <div class="wa-icon-lg"><i class="fab fa-whatsapp"></i></div>
         <div>
           <div>Chat with us on WhatsApp</div>
-          <div style="font-size:0.78rem; opacity:0.7; font-weight:400; margin-top:2px;">Tap to open conversation</div>
+          <div style="font-size:0.78rem; opacity:0.7; font-weight:400; margin-top:2px;">+92 318 1909541</div>
         </div>
       </a>
- 
-      <button class="video-btn-wrap" onclick="openVideo()" style="width:100%; border:none; cursor:pointer;">
-        <div class="play-big"><i class="fas fa-play"></i></div>
+
+      <button class="btn-get-started-contact btn-ripple" onclick="openLogin()">
+        <i class="fas fa-lock"></i>
         <div>
-          <div class="video-label">Watch our 2-minute demo</div>
-          <div class="video-sub">See EduFlow in action before joining</div>
+          <div class="video-label">Login to your dashboard</div>
+          <div class="video-sub">Access your school's management panel</div>
         </div>
       </button>
- 
-      <p class="contact-note">We respect your privacy. No spam, ever.</p>
+
+      <p class="contact-note"><i class="fas fa-lock" style="margin-right:4px;opacity:0.6;"></i>We respect your privacy. No spam, ever.</p>
     </div>
   </div>
 </section>
- 
-<!-- ── FOOTER ── -->
+
+</div><!-- /#page-main -->
+
+
+<!-- ════════════════════════════════════════
+     PAGE: PRIVACY POLICY
+     ════════════════════════════════════════ -->
+<div id="page-privacy" hidden>
+  <section class="legal-hero">
+    <h1><i class="fas fa-shield-halved" style="color:var(--amber-500);margin-right:12px;font-size:0.9em;" aria-hidden="true"></i>Privacy Policy</h1>
+    <p>Last updated: June 2025</p>
+    <a href="#" class="legal-back-btn"><i class="fas fa-arrow-left" aria-hidden="true"></i> Back to home</a>
+  </section>
+  <div class="legal-body">
+    <h2>1. Introduction</h2>
+    <p>This Privacy Policy explains how Soft School ("we", "us", "our") collects, uses, stores, and protects information when schools, administrators, staff, students, and parents use our school management platform.</p>
+    <h2>2. Information we collect</h2>
+    <p>To operate the platform, we may collect:</p>
+    <ul>
+      <li>Account details for administrators, teachers, and staff, such as name, role, phone number, and email address.</li>
+      <li>Student records entered by the school, including name, class, attendance, and fee status.</li>
+      <li>Contact details for parents or guardians used for notifications and support.</li>
+      <li>Usage data such as login activity and device/browser information, used to keep the platform secure and reliable.</li>
+    </ul>
+    <h2>3. How we use information</h2>
+    <p>Information collected through Soft School is used to operate core features such as student records, staff management, fees and finance, and attendance tracking; to provide customer support over WhatsApp or email; to send service-related notifications to schools, staff, and parents; and to maintain platform security and improve reliability.</p>
+    <h2>4. Data ownership</h2>
+    <p>Each school remains the owner of the student, staff, and fee data it enters into the platform. Soft School acts as a data processor on the school's behalf and does not sell or share this data with third parties for marketing purposes.</p>
+    <h2>5. Data sharing</h2>
+    <p>We do not sell personal data. Limited information may be shared with trusted service providers (such as hosting or messaging providers) strictly to operate the platform, and these providers are bound to protect data confidentiality.</p>
+    <h2>6. Data security</h2>
+    <p>We use encryption in transit and at rest, restrict access to authorised roles only, and back up data regularly to reduce the risk of loss or unauthorised access.</p>
+    <h2>7. Data retention</h2>
+    <p>School data is retained for as long as the school's account is active, or as required by applicable record-keeping obligations. Schools may request deletion of their data by contacting us.</p>
+    <h2>8. Your rights</h2>
+    <p>Depending on your role and applicable local law, you may have the right to access, correct, or request deletion of personal data held about you. Requests can be directed to your school administrator or to us directly.</p>
+    <h2>9. Children's data</h2>
+    <p>Student records are entered and managed by the school on behalf of students and their parents or guardians. We rely on schools to obtain any necessary parental consent required under applicable law before entering student data into the platform.</p>
+    <h2>10. Changes to this policy</h2>
+    <p>We may update this Privacy Policy from time to time. Material changes will be reflected on this page with an updated revision date.</p>
+    <h2>11. Contact us</h2>
+    <p>Questions about this Privacy Policy can be sent to <a href="mailto:hello@softschool.com">hello@softschool.com</a> or via <a href="https://wa.me/923181909541" target="_blank">WhatsApp</a>.</p>
+  </div>
+</div>
+
+
+<!-- ════════════════════════════════════════
+     PAGE: TERMS & CONDITIONS
+     ════════════════════════════════════════ -->
+<div id="page-terms" hidden>
+  <section class="legal-hero">
+    <h1><i class="fas fa-file-contract" style="color:var(--amber-500);margin-right:12px;font-size:0.9em;" aria-hidden="true"></i>Terms &amp; Conditions</h1>
+    <p>Last updated: June 2025</p>
+    <a href="#" class="legal-back-btn"><i class="fas fa-arrow-left" aria-hidden="true"></i> Back to home</a>
+  </section>
+  <div class="legal-body">
+    <h2>1. Acceptance of terms</h2>
+    <p>By creating an account or using Soft School, your school, its staff, students, and parents agree to be bound by these Terms &amp; Conditions. If you do not agree, please do not use the platform.</p>
+    <h2>2. The service</h2>
+    <p>Soft School provides a school management platform covering student management, staff management, fees and finance, attendance tracking, and related administrative tools, accessed by administrators, teachers, students, and parents through dedicated portals.</p>
+    <h2>3. Accounts and access</h2>
+    <p>Schools are responsible for managing which staff, students, and parents are granted accounts, and for keeping login credentials confidential. Soft School is not responsible for losses arising from shared or compromised credentials.</p>
+    <h2>4. Acceptable use</h2>
+    <p>You agree not to misuse the platform, including attempting to access data outside your authorised role, disrupting the service, or uploading unlawful or harmful content. We may suspend accounts that violate these terms.</p>
+    <h2>5. School-entered data</h2>
+    <p>Schools are responsible for the accuracy of student, staff, and financial data they enter into the platform. Soft School provides the tools to manage this data but does not independently verify it.</p>
+    <h2>6. Fees and billing</h2>
+    <p>Use of Soft School is subject to the commercial terms agreed with your school during onboarding. Pricing details and billing arrangements are confirmed directly with our team and are not published on this website.</p>
+    <h2>7. Availability and support</h2>
+    <p>We aim to keep the platform available and reliable, but do not guarantee uninterrupted access. Support is available via WhatsApp and email during normal business hours.</p>
+    <h2>8. Intellectual property</h2>
+    <p>The Soft School platform, including its design, software, and branding, remains the property of Soft School. Schools retain ownership of the data they enter, as described in our Privacy Policy.</p>
+    <h2>9. Limitation of liability</h2>
+    <p>To the extent permitted by law, Soft School is not liable for indirect or consequential losses arising from use of the platform. Our total liability is limited to the fees paid for the service during the relevant period.</p>
+    <h2>10. Termination</h2>
+    <p>Either party may end the service arrangement in line with the agreement made during onboarding. Upon termination, schools may request export of their data within a reasonable period.</p>
+    <h2>11. Changes to these terms</h2>
+    <p>We may update these Terms &amp; Conditions from time to time. Continued use of the platform after changes are posted constitutes acceptance of the updated terms.</p>
+    <h2>12. Contact us</h2>
+    <p>Questions about these Terms can be sent to <a href="mailto:hello@softschool.com">hello@softschool.com</a> or via <a href="https://wa.me/923181909541" target="_blank">WhatsApp</a>.</p>
+  </div>
+</div>
+
+
+<!-- ── FOOTER (shared) ── -->
 <footer id="about">
-  <p>© 2025 <span>EduFlow</span> — Empowering the next generation. Made with ❤️ in Pakistan.</p>
+  <div class="footer-inner">
+    <div class="footer-brand">
+      <div class="footer-logo-card">
+        <img src="logo-icon.png" alt="Soft School" class="logo-icon-footer">
+        <span class="logo-wordmark">Soft<strong>School</strong></span>
+      </div>
+      <p>An all-in-one school management platform helping administrators, teachers, students, and parents stay connected.</p>
+      <div class="footer-social">
+        <a href="#" aria-label="Facebook"><i class="fab fa-facebook-f"></i></a>
+        <a href="#" aria-label="Instagram"><i class="fab fa-instagram"></i></a>
+        <a href="#" aria-label="LinkedIn"><i class="fab fa-linkedin-in"></i></a>
+        <a href="https://wa.me/923181909541" target="_blank" aria-label="WhatsApp"><i class="fab fa-whatsapp"></i></a>
+      </div>
+    </div>
+    <div class="footer-col">
+      <h4>Product</h4>
+      <a href="#features">Features</a>
+      <a href="#how">How it works</a>
+      <a href="javascript:void(0)" onclick="openLogin()">Login</a>
+    </div>
+    <div class="footer-col">
+      <h4>Company</h4>
+      <a href="#about-us">About us</a>
+      <a href="#news">News</a>
+      <a href="#contact">Contact</a>
+    </div>
+    <div class="footer-col">
+      <h4>Get in touch</h4>
+      <a href="https://wa.me/923181909541"><i class="fab fa-whatsapp"></i>&nbsp; +92 318 1909541</a>
+      <a href="mailto:hello@softschool.com"><i class="fas fa-envelope"></i>&nbsp; hello@softschool.com</a>
+    </div>
+  </div>
+  <div class="footer-bottom">
+    <p>© 2025 <span>Soft School</span> — Empowering the next generation.</p>
+    <div class="footer-legal">
+      <a href="#privacy-policy">Privacy Policy</a>
+      <a href="#terms">Terms &amp; Conditions</a>
+    </div>
+  </div>
 </footer>
- 
+
 <!-- ── VIDEO MODAL ── -->
 <div class="modal-overlay" id="videoModal" onclick="closeVideoOutside(event)">
   <div class="modal-box">
-    <button class="modal-close" onclick="closeVideo()"><i class="fas fa-times"></i></button>
+    <button class="modal-close" onclick="closeVideo()" aria-label="Close"><i class="fas fa-times"></i></button>
     <div class="video-placeholder">
       <div class="play-giant"><i class="fas fa-play"></i></div>
-      <p>EduFlow demo video — coming soon</p>
+      <p style="font-size:0.95rem;opacity:0.8;">Soft School demo video — coming soon</p>
     </div>
   </div>
 </div>
-</body>
+
+<!-- ── LOGIN MODAL ── -->
+<div class="modal-overlay" id="loginModal" onclick="closeLoginOutside(event)">
+  <div class="modal-box login-modal-box">
+    <button class="modal-close" onclick="closeLogin()" aria-label="Close login"><i class="fas fa-times"></i></button>
+    <div class="login-card" id="loginCard">
+      <div class="login-modal-brand">
+        <img src="logo-icon.png" alt="Soft School" style="height:32px;">
+        <span class="logo-wordmark">Soft<strong>School</strong></span>
+      </div>
+      <div class="login-card-top">
+        <h2>Welcome back</h2>
+        <p>Sign in to your Soft School account</p>
+      </div>
+
+      <form id="loginForm" onsubmit="handleLogin(event)" novalidate>
+        <div class="field-group">
+          <label for="phone">Phone number</label>
+          <div class="field-wrap">
+            <i class="fas fa-phone field-icon"></i>
+            <input type="tel" id="phone" placeholder="+92 318 1909541" required autocomplete="tel">
+          </div>
+        </div>
+        <div class="field-group">
+          <label for="password">Password</label>
+          <div class="field-wrap">
+            <i class="fas fa-lock field-icon"></i>
+            <input type="password" id="password" placeholder="Enter your password" required autocomplete="current-password">
+            <button type="button" class="pw-toggle" onclick="togglePw()" id="eyeBtn" aria-label="Toggle password visibility">
+              <i class="fas fa-eye" id="eyeIcon"></i>
+            </button>
+          </div>
+          <div class="forgot"><a href="#">Forgot password?</a></div>
+        </div>
+        <button type="submit" class="btn-login btn-ripple" id="loginBtn">Sign in to dashboard</button>
+      </form>
+
+      <div class="login-divider">or get help via</div>
+      <a href="https://wa.me/923181909541?text=Hello%20Soft%20School,%20I%20need%20help%20logging%20in!" target="_blank" class="btn-whatsapp-login">
+        <i class="fab fa-whatsapp" style="font-size:18px;"></i>
+        Contact support via WhatsApp
+      </a>
+    </div>
+  </div>
+</div>
+
 <script src="login.js"></script>
+</body>
 </html>
