@@ -377,14 +377,14 @@ function openClass(cls) {
             state.attendance = {};
             state.savedStudentKeys.clear();
             STUDENTS.filter(s => s.class === cls.name)
-                .forEach(s => { state.attendance[s.regNo] = { status: "present", reason: "" }; });
+                .forEach(s => { state.attendance[s.regNo] = { status: "absent", reason: "" }; });
         }
     } else {
         // No record yet for today — start fresh
         state.attendance = {};
         state.savedStudentKeys.clear();
         STUDENTS.filter(s => s.class === cls.name)
-            .forEach(s => { state.attendance[s.regNo] = { status: "present", reason: "" }; });
+            .forEach(s => { state.attendance[s.regNo] = { status: "absent", reason: "" }; });
     }
 
     $("#table-title").textContent = `${cls.name} — Attendance`;
@@ -465,7 +465,7 @@ function renderTable() {
     rows.length === 0 ? show("#empty-state") : hide("#empty-state");
  
     rows.forEach((s, idx) => {
-        const entry = state.attendance[s.regNo] || { status: "present", reason: "" };
+        const entry = state.attendance[s.regNo] || { status: "absent", reason: "" };
         const isSaved = state.savedStudentKeys.has(s.regNo);
         const isEditing = state.studentEditMode.has(s.regNo);
         const tr = document.createElement("tr");
@@ -514,7 +514,7 @@ function renderTable() {
         btn.addEventListener("click", () => {
             const id = btn.getAttribute("data-id");
             const status = btn.getAttribute("data-status");
-            const prev = state.attendance[id] || { status: "present", reason: "" };
+            const prev = state.attendance[id] || { status: "absent", reason: "" };
             state.attendance[id] = { status, reason: status === "leave" ? prev.reason : "" };
             renderTable();
         });
@@ -550,7 +550,7 @@ function renderSummary() {
         .filter(s => state.selectedSection === "ALL" || s.section === state.selectedSection);
     let p=0,a=0,l=0;
     students.forEach(s => {
-        const st = (state.attendance[s.regNo] || {}).status || "present";
+        const st = (state.attendance[s.regNo] || {}).status || "absent";
         if (st === "present") p++; else if (st === "absent") a++; else l++;
     });
     $("#summary").innerHTML = `
@@ -591,11 +591,11 @@ function initBulk() {
  
 // ---------- SAVE ----------
 function initSave() {
+    // 1. STUDENT SAVE BUTTON
     $("#save-btn").addEventListener("click", () => {
         const cls = state.selectedClass;
         if (!cls) return;
 
-        // Mark all currently visible students as saved, clear edit mode
         STUDENTS.filter(s => s.class === cls.name)
             .filter(s => state.selectedSection === "ALL" || s.section === state.selectedSection)
             .filter(s => matchesSearch(s, state.search))
@@ -604,13 +604,12 @@ function initSave() {
                 state.studentEditMode.delete(s.regNo);
             });
 
-        // Merge with any existing record for today (other sections may already be saved)
         const storageKey = `eduflow_att_${todayKey()}_${cls.name}`;
         let existingRecords = {};
         try {
             const prev = localStorage.getItem(storageKey);
             if (prev) existingRecords = JSON.parse(prev).records || {};
-        } catch(e) { /* ignore */ }
+        } catch(e) { }
 
         const payload = {
             date: todayKey(),
@@ -618,12 +617,16 @@ function initSave() {
             records: { ...existingRecords, ...state.attendance },
         };
         localStorage.setItem(storageKey, JSON.stringify(payload));
+        
+        // --- ADDED THIS LINE FOR DATABASE ---
+        syncCurrentSheetWithDatabase(); 
+
         renderTable();
-        toast("Attendance saved successfully");
+        toast("Attendance saved to Browser & Database");
     });
 
+    // 2. STAFF SAVE BUTTON
     $("#staff-save-btn").addEventListener("click", () => {
-        // Mark all visible staff as saved
         const q = ($("#staff-search").value || "").trim().toLowerCase();
         STAFF.filter(s => !q || s.name.toLowerCase().includes(q) || s.id.toLowerCase().includes(q))
             .forEach(s => {
@@ -631,23 +634,57 @@ function initSave() {
                 state.staffEditMode.delete(s.id);
             });
 
-        // Merge with existing record for today
         const storageKey = `eduflow_staff_att_${todayKey()}`;
         let existingRecords = {};
         try {
             const prev = localStorage.getItem(storageKey);
             if (prev) existingRecords = JSON.parse(prev).records || {};
-        } catch(e) { /* ignore */ }
+        } catch(e) { }
 
         const payload = {
             date: todayKey(),
             records: { ...existingRecords, ...state.staffAttendance },
         };
         localStorage.setItem(storageKey, JSON.stringify(payload));
-        applyAbsenceFines(); // auto-update fines in shared DB
+        
+        // --- ADDED THIS LINE FOR DATABASE ---
+        syncCurrentSheetWithDatabase(); 
+
+        applyAbsenceFines(); 
         renderStaff();
-        toast("Staff attendance saved & fines updated");
+        toast("Staff saved to Browser & Database");
     });
+}
+
+async function loadAttendanceFromDatabase() {
+    try {
+        // 1. Ask Java for the full history of the person we are looking at
+        // If state.studentRecord is open, use its regNo
+        const id = state.mode === 'student' ? state.studentRecord.regNo : state.staffRecord.id;
+        
+        const response = await fetch(`http://localhost:8080/api/attendance/history/${id}`);
+        const data = await response.json();
+
+        // 2. Clear the old history list on the screen
+        const list = state.mode === 'student' ? document.getElementById("history-list") : document.getElementById("staff-history-list");
+        if(!list) return;
+        list.innerHTML = "";
+
+        // 3. Fill the list with data from MySQL
+        data.forEach(r => {
+            const row = document.createElement("div");
+            row.className = "history-row";
+            row.innerHTML = `
+                <span class="history-date">${r.date}</span>
+                <span class="history-reason">${r.reason || "—"}</span>
+                <span class="history-status ${r.status}">${r.status.toUpperCase()}</span>
+            `;
+            list.appendChild(row);
+        });
+
+    } catch (error) {
+        console.error("Failed to load attendance from Database:", error);
+    }
 }
  
 function toast(msg) {
@@ -666,52 +703,40 @@ function initStaff() {
 function initStaffAttendance() {
     const todayStorageKey = `eduflow_staff_att_${todayKey()}`;
     const existing = localStorage.getItem(todayStorageKey);
+    state.savedStaffKeys = new Set();
 
     if (existing) {
         try {
             const payload = JSON.parse(existing);
-            // Pre-load saved records so rows reflect the correct status
             const savedRecords = payload.records || {};
-            // Merge: keep saved data, add defaults only for new staff not yet in the record
             STAFF.forEach(s => {
-                if (savedRecords[s.id] !== undefined) {
+                if (savedRecords[s.id]) {
                     state.staffAttendance[s.id] = savedRecords[s.id];
-                } else if (!state.staffAttendance[s.id]) {
-                    state.staffAttendance[s.id] = { status: "present", reason: "" };
+                    // Only lock if it's a confirmed manual save OR has a biometric checkIn
+                    if (savedRecords[s.id].isFromDB && !savedRecords[s.id].checkIn) {
+                         state.staffAttendance[s.id].isFromDB = false;
+                    } else {
+                         state.savedStaffKeys.add(s.id);
+                    }
+                } else {
+                    state.staffAttendance[s.id] = { status: "absent", reason: "" };
                 }
             });
-            // Lock every staff member that appears in the saved record
-            state.savedStaffKeys = new Set(Object.keys(savedRecords).filter(id => STAFF.some(s => s.id === id)));
-        } catch(e) {
-            // Corrupted — fresh sheet
-            state.savedStaffKeys.clear();
-            STAFF.forEach(s => {
-                if (!state.staffAttendance[s.id]) {
-                    state.staffAttendance[s.id] = { status: "present", reason: "" };
-                }
-            });
-        }
+        } catch(e) { console.error(e); }
     } else {
-        // No record saved today — fresh sheet
-        state.savedStaffKeys.clear();
+        // Default everything to Absent / White Row
         STAFF.forEach(s => {
-            if (!state.staffAttendance[s.id]) {
-                state.staffAttendance[s.id] = { status: "present", reason: "" };
-            }
+            state.staffAttendance[s.id] = { status: "absent", reason: "" };
         });
     }
-
-    // Remove entries for staff that no longer exist
-    const validIds = new Set(STAFF.map(s => s.id));
-    Object.keys(state.staffAttendance).forEach(id => {
-        if (!validIds.has(id)) delete state.staffAttendance[id];
-    });
 }
  
 function renderStaff() {
     const tbody = $("#staff-tbody");
     const q = ($("#staff-search").value || "").trim().toLowerCase();
     tbody.innerHTML = "";
+
+    // 1. Handle Empty State
     if (STAFF.length === 0) {
         tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:48px;color:var(--text-muted);">
             <i class="fas fa-user-slash" style="font-size:2rem;margin-bottom:10px;display:block;opacity:0.4;"></i>
@@ -719,75 +744,133 @@ function renderStaff() {
         </td></tr>`;
         return;
     }
+
+    // 2. Filter rows based on search input
     const rows = STAFF.filter(s => !q || s.name.toLowerCase().includes(q) || s.id.toLowerCase().includes(q));
+
     rows.forEach((s, idx) => {
-        const entry = state.staffAttendance[s.id] || { status: "present", reason: "" };
+        // Get current data for this staff. Default to 'absent' if nothing exists.
+        const entry = state.staffAttendance[s.id] || { status: "absent", reason: "" };
+        
+        // LOGIC: Row is "Locked" (Green) ONLY if:
+        // - It was explicitly saved (savedStaffKeys) OR came from Biometric (isFromDB)
+        // - AND we are NOT currently in Edit mode for this person
         const isSaved = state.savedStaffKeys.has(s.id);
+        const isFromDB = !!entry.isFromDB;
         const isEditing = state.staffEditMode.has(s.id);
+        const isRowLocked = (isSaved || isFromDB) && !isEditing;
+
         const tr = document.createElement("tr");
- 
-        if (isSaved && !isEditing) {
+
+        // Helper for time formatting
+        const fmtTime = (t) => {
+            if (!t) return "";
+            const m = String(t).match(/^(\d{1,2}):(\d{2})/);
+            return m ? `${m[1].padStart(2,'0')}:${m[2]}` : String(t);
+        };
+
+        // Build Biometric time labels if they exist
+        let timeLabel = "";
+        if (entry.checkIn)  timeLabel += `<br><small class="bio-time"><i class="fas fa-sign-in-alt"></i> In: ${fmtTime(entry.checkIn)}</small>`;
+        if (entry.checkOut) timeLabel += `<br><small class="bio-time"><i class="fas fa-sign-out-alt"></i> Out: ${fmtTime(entry.checkOut)}</small>`;
+
+        if (isRowLocked) {
+            // --- LOCKED STATE (Green Row) ---
             tr.classList.add("row-done");
+            if (isFromDB) tr.classList.add("row-biometric");
+
             const statusLabel = entry.status.charAt(0).toUpperCase() + entry.status.slice(1);
-            const statusClass = entry.status === "present" ? "done-present" : entry.status === "absent" ? "done-absent" : "done-leave";
+            const statusClass = entry.status === "present" ? "done-present" : (entry.status === "absent" ? "done-absent" : "done-leave");
+
             tr.innerHTML = `
-                <td>${idx+1}</td>
+                <td>${idx + 1}</td>
                 <td><span class="id-badge">${s.id}</span></td>
-                <td>${s.name}${entry.reason ? `<span class="done-reason">(${entry.reason})</span>` : ""}</td>
+                <td>
+                    ${s.name}
+                    ${entry.reason ? `<span class="done-reason">(${entry.reason})</span>` : ""} 
+                    ${timeLabel}
+                </td>
                 <td>${s.role}</td>
                 <td>${s.department}</td>
                 <td>
                     <div class="done-cell">
-                        <span class="done-badge ${statusClass}"><i class="fas fa-check-circle"></i> Done · ${statusLabel}</span>
+                        ${isFromDB ? 
+                            `<span class="done-badge done-present" title="Recorded by biometric device"><i class="fas fa-fingerprint"></i> Biometric Marked</span>` : 
+                            `<span class="done-badge ${statusClass}"><i class="fas fa-check-circle"></i> Done · ${statusLabel}</span>`
+                        }
                         <button class="edit-btn" data-edit-staff="${s.id}"><i class="fas fa-pen"></i> Edit</button>
                     </div>
                 </td>
             `;
         } else {
+            // --- OPEN STATE (White Row) ---
+            // The "Absent" button will be active/highlighted by default because status is "absent"
             tr.innerHTML = `
-                <td>${idx+1}</td>
+                <td>${idx + 1}</td>
                 <td><span class="id-badge">${s.id}</span></td>
                 <td>
-                    ${s.name}
+                    ${s.name}${timeLabel}
                     ${entry.status === "leave" ? renderLeaveReason(s.id, entry.reason, "staff") : ""}
                 </td>
                 <td>${s.role}</td>
                 <td>${s.department}</td>
                 <td>
                     <div class="status-cell">
-                        <button class="status-btn present ${entry.status==='present'?'active':''}" data-sid="${s.id}" data-status="present"><i class="fas fa-check"></i><span>Present</span></button>
-                        <button class="status-btn absent  ${entry.status==='absent' ?'active':''}" data-sid="${s.id}" data-status="absent"><i class="fas fa-times"></i><span>Absent</span></button>
-                        <button class="status-btn leave   ${entry.status==='leave'  ?'active':''}" data-sid="${s.id}" data-status="leave"><i class="fas fa-clock"></i><span>Leave</span></button>
+                        <button class="status-btn present ${entry.status === 'present' ? 'active' : ''}" data-sid="${s.id}" data-status="present">
+                            <i class="fas fa-check"></i><span>Present</span>
+                        </button>
+                        <button class="status-btn absent ${entry.status === 'absent' ? 'active' : ''}" data-sid="${s.id}" data-status="absent">
+                            <i class="fas fa-times"></i><span>Absent</span>
+                        </button>
+                        <button class="status-btn leave ${entry.status === 'leave' ? 'active' : ''}" data-sid="${s.id}" data-status="leave">
+                            <i class="fas fa-clock"></i><span>Leave</span>
+                        </button>
                     </div>
                 </td>
             `;
         }
         tbody.appendChild(tr);
     });
+
+    // 3. Attach Event Listeners to the newly rendered buttons
     tbody.querySelectorAll(".status-btn").forEach(btn => {
         btn.addEventListener("click", () => {
             const sid = btn.getAttribute("data-sid");
             const status = btn.getAttribute("data-status");
             const prev = state.staffAttendance[sid] || {};
-            state.staffAttendance[sid] = { status, reason: status === "leave" ? (prev.reason || "") : "" };
+            // Update state: if changing to leave, keep existing reason, otherwise clear it.
+            state.staffAttendance[sid] = { 
+                ...prev, 
+                status, 
+                reason: status === "leave" ? (prev.reason || "") : "",
+                isFromDB: false // If manually clicked, it's no longer strictly a DB-unmodified record
+            };
             renderStaff();
         });
     });
+
     tbody.querySelectorAll(".leave-reason input").forEach(inp => {
         inp.addEventListener("input", (e) => {
             const id = inp.getAttribute("data-id");
             if (state.staffAttendance[id]) state.staffAttendance[id].reason = e.target.value;
         });
     });
+
     tbody.querySelectorAll(".edit-btn[data-edit-staff]").forEach(btn => {
         btn.addEventListener("click", () => {
             const id = btn.getAttribute("data-edit-staff");
-            state.staffEditMode.add(id);
+            state.staffEditMode.add(id); // Open the row for editing
             renderStaff();
         });
     });
-    let p=0,a=0,l=0;
-    STAFF.forEach(s => { const st = (state.staffAttendance[s.id]||{}).status; if(st==='present')p++; else if(st==='absent')a++; else l++; });
+
+    // 4. Update the Summary Totals at the bottom
+    let p = 0, a = 0, l = 0;
+    STAFF.forEach(s => { 
+        const st = (state.staffAttendance[s.id] || {}).status; 
+        if (st === 'present') p++; else if (st === 'absent') a++; else l++; 
+    });
+    
     $("#staff-summary").innerHTML = `
         <span>Total: <strong>${STAFF.length}</strong></span>
         <span class="pill present"><i class="fas fa-check"></i> ${p} Present</span>
@@ -2943,6 +3026,69 @@ function initCamera() {
         await startCamera();
     }
 
+    async function saveAttendanceToMySQL() {
+    const isStudent = state.mode === "student";
+    const date = todayKey(); // Gets YYYY-MM-DD
+    
+    // Get the Base64 image from your camera preview
+    const photo = document.getElementById('camera-preview-img')?.src || "";
+
+    let finalRecords = [];
+
+    if (isStudent) {
+        // Collect all students currently shown in the table
+        const filteredStudents = STUDENTS.filter(s => s.class === state.selectedClass.name);
+        
+        finalRecords = filteredStudents.map(s => {
+            const entry = state.attendance[s.regNo] || { status: "absent", reason: "" };
+            return {
+                memberId: s.regNo,
+                memberName: s.name,
+                memberType: "STUDENT",
+                className: s.class,
+                section: s.section,
+                date: date,
+                status: entry.status,
+                reason: entry.reason,
+                capturedPhoto: photo
+            };
+        });
+    } else {
+        // Collect all staff
+        finalRecords = STAFF.map(s => {
+            const entry = state.staffAttendance[s.id] || { status: "absent", reason: "" };
+            return {
+                memberId: s.id,
+                memberName: s.name,
+                memberType: "STAFF",
+                role: s.role,
+                date: date,
+                status: entry.status,
+                reason: entry.reason,
+                capturedPhoto: photo
+            };
+        });
+    }
+
+    // SEND TO JAVA BACKEND
+    try {
+        const response = await fetch('http://localhost:8080/api/attendance/save', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(finalRecords)
+        });
+
+        if (response.ok) {
+            alert("✅ SUCCESS: Attendance and Photos saved to MySQL!");
+        } else {
+            alert("❌ ERROR: Check the terminal for Java errors.");
+        }
+    } catch (err) {
+        console.error("Connection failed:", err);
+        alert("❌ CRITICAL: Java Backend is not running!");
+    }
+}
+
     openBtn.addEventListener("click", openModal);
     closeBtn.addEventListener("click", closeModal);
     backdrop.addEventListener("click", closeModal);
@@ -2952,3 +3098,526 @@ function initCamera() {
     stopBtn.addEventListener("click", stopCamera);
     retakeBtn.addEventListener("click", () => { previewWrap.classList.add("hidden"); });
 }
+
+
+// This function prepares the list to send to Java
+async function syncCurrentSheetWithDatabase() {
+    const isStudent = state.mode === "student";
+    const date = todayKey(); // Current date YYYY-MM-DD
+    
+    // We capture the photo if one was taken in this session
+    const photo = document.getElementById('camera-preview-img')?.src || "";
+
+    let records = [];
+
+    if (isStudent) {
+        // --- STUDENT SYNC LOGIC ---
+        // Students usually aren't on the biometric machine, so we sync the whole class
+        const clsName = state.selectedClass.name;
+        records = STUDENTS.filter(s => s.class === clsName).map(s => {
+            const entry = state.attendance[s.regNo] || { status: "absent", reason: "" };
+            return {
+                memberId: s.regNo,
+                memberName: s.name,
+                memberType: "STUDENT",
+                className: s.class,
+                section: s.section,
+                date: date,
+                status: entry.status,
+                reason: entry.reason,
+                capturedPhoto: photo
+            };
+        });
+    } else {
+        // --- STAFF SYNC LOGIC ---
+        records = STAFF.map(s => {
+            const entry = state.staffAttendance[s.id];
+            
+            if (!entry) return null;
+
+            // CRITICAL CHECK: 
+            // If the entry has 'isFromDB: true', it means the Biometric Machine 
+            // has already saved this person to MySQL. We DO NOT send them again
+            // because we don't want to lose the Check-In/Check-Out times.
+            if (entry.isFromDB) {
+                console.log(`Skipping sync for ${s.name} (Already in Database via Biometric)`);
+                return null;
+            }
+
+            // Only prepare manual records (usually 'absent' or 'leave')
+            return {
+                memberId: s.id,
+                memberName: s.name,
+                memberType: "STAFF",
+                role: s.role,
+                date: date,
+                status: entry.status,
+                reason: entry.reason,
+                capturedPhoto: photo
+            };
+        }).filter(r => r !== null); // Remove the skipped biometric records from the array
+    }
+
+    // If there is nothing to sync (e.g., everyone was already marked by the machine)
+    if (records.length === 0) {
+        console.log("No new manual updates to sync to Database.");
+        return;
+    }
+
+    // --- SEND DATA TO JAVA BACKEND ---
+    try {
+        const response = await fetch('http://localhost:8080/api/attendance/save', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(records)
+        });
+
+        if (response.ok) {
+            console.log("Manual attendance records successfully synced with MySQL.");
+        } else {
+            console.error("Server error during database sync.");
+        }
+    } catch (err) {
+        console.error("Failed to connect to Java Backend for sync:", err);
+    }
+}
+
+async function pollBiometricUpdates() {
+    const stageStaff = document.getElementById('stage-staff');
+    if (!stageStaff || stageStaff.classList.contains('hidden')) return;
+
+    try {
+        const response = await fetch(`http://localhost:8080/api/attendance/staff?date=${todayKey()}`);
+        const logs = await response.json();
+        if (!Array.isArray(logs) || logs.length === 0) return;
+
+        let changed = false;
+        logs.forEach(log => {
+            const prev = state.staffAttendance[log.memberId] || {};
+
+            // CRITICAL FIX: Only treat as "Biometric" if the machine actually 
+            // recorded a Check-In time. If checkIn is null, it's just a placeholder 
+            // and we should NOT lock the row.
+            if (log.checkIn) { 
+                const isNewData = !prev.isFromDB || 
+                                  prev.checkIn !== log.checkIn || 
+                                  prev.checkOut !== log.checkOut;
+
+                if (isNewData) {
+                    state.staffAttendance[log.memberId] = {
+                        status:   'present', // If there's a check-in, they are present
+                        checkIn:  log.checkIn,
+                        checkOut: log.checkOut,
+                        isFromDB: true,      // This turns the row GREEN
+                        reason:   prev.reason || ""
+                    };
+                    changed = true;
+                }
+            } else {
+                // If there is no checkIn, but the state was previously 
+                // wrongly marked as isFromDB, we reset it to White.
+                if (prev.isFromDB) {
+                    state.staffAttendance[log.memberId] = {
+                        status: "absent",
+                        isFromDB: false,
+                        reason: ""
+                    };
+                    changed = true;
+                }
+            }
+        });
+
+        if (changed) renderStaff();
+    } catch (e) {
+        console.error("Biometric Polling error:", e);
+    }
+}
+
+
+// Start polling every 3 seconds
+setInterval(pollBiometricUpdates, 3000);
+
+
+/* ============================================================
+   BIOMETRIC LINK MODAL
+   Stores att2000.mdb path in localStorage: eduflow_biometric_path
+   Also pushes the (normalized) path to the Java backend so the
+   server-side process knows where to find/open the device's
+   Access database.
+   ============================================================ */
+
+// Backend expects Windows-style backslashes (the biometric software /
+// att2000.mdb file always lives on a Windows machine). This normalizes
+// whatever the user types or picks (forward slashes, mixed slashes,
+// double slashes, trailing slashes) into that single consistent form.
+function normalizeBiometricPath(raw) {
+    if (!raw) return '';
+    let p = raw.trim();
+    // Unify every slash direction to backslash first...
+    p = p.replace(/\//g, '\\');
+    // ...then collapse any accidental doubled slashes (but keep the
+    // leading "\\" of a UNC/network path like \\SERVER\share\...).
+    const isUNC = /^\\\\/.test(p);
+    p = p.replace(/\\{2,}/g, '\\');
+    if (isUNC) p = '\\' + p;
+    // Trim a trailing slash (unless it's just a drive root like "C:\")
+    p = p.replace(/([^:])\\+$/, '$1');
+    return p;
+}
+
+(function initBiometricLink() {
+    document.addEventListener('DOMContentLoaded', () => {
+        const openBtn    = document.getElementById('link-biometric-btn');
+        const modal      = document.getElementById('biometric-modal');
+        if (!openBtn || !modal) return;
+
+        const backdrop   = document.getElementById('biometric-backdrop');
+        const closeBtn   = document.getElementById('biometric-close-btn');
+        const cancelBtn  = document.getElementById('biometric-cancel-btn');
+        const saveBtn    = document.getElementById('biometric-save-btn');
+        const videoBtn   = document.getElementById('biometric-video-btn');
+        const browseBtn  = document.getElementById('biometric-browse-btn');
+        const filePicker = document.getElementById('biometric-file-picker');
+        const pathInp    = document.getElementById('biometric-path');
+        const previewEl  = document.getElementById('biometric-path-preview');
+        const statusEl   = document.getElementById('biometric-status');
+
+        const BACKEND_URL = 'http://localhost:8080/api/biometric/link';
+
+        // Configurable demo video URL (also settable from settings page)
+        const DEMO_URL = localStorage.getItem('eduflow_biometric_demo_url')
+            || 'https://www.youtube.com/watch?v=YQm7g7lWQ4E';
+
+        function refreshStatus() {
+            const saved = localStorage.getItem('eduflow_biometric_path');
+            if (saved) {
+                statusEl.style.color = '';
+                statusEl.innerHTML = '<i class="fas fa-check-circle"></i> Linked';
+                pathInp.value = saved;
+            } else {
+                statusEl.textContent = '';
+            }
+            previewEl.textContent = '';
+            previewEl.classList.remove('is-note');
+        }
+        function open()  { modal.classList.remove('hidden'); refreshStatus(); setTimeout(() => pathInp.focus(), 50); }
+        function close() { modal.classList.add('hidden'); }
+
+        openBtn.addEventListener('click', open);
+        closeBtn.addEventListener('click', close);
+        cancelBtn.addEventListener('click', close);
+        backdrop.addEventListener('click', close);
+        videoBtn.addEventListener('click', () => window.open(DEMO_URL, '_blank', 'noopener'));
+
+        // --- Auto-normalize slashes as the user types/pastes ---
+        // IMPORTANT: setting `.value` always resets the cursor to the end of
+        // the field unless we explicitly restore it. The old version only
+        // restored the cursor when you were typing at the very end of the
+        // path, so typing "/" or "\" anywhere in the *middle* of the path
+        // (e.g. "C:\Program|Files" -> "C:\Program\|Files") made the cursor
+        // jump to the end on every keystroke, which made it look like you
+        // couldn't type slashes at all. This now recalculates where the
+        // cursor should land no matter where in the string you're typing.
+        function liveNormalize() {
+            const raw = pathInp.value;
+            const start = pathInp.selectionStart;
+            const normalized = normalizeBiometricPath(raw);
+            if (normalized === raw) return;
+
+            if (start === raw.length) {
+                // Typing/pasting at the end - simplest & most common case.
+                pathInp.value = normalized;
+                pathInp.setSelectionRange(normalized.length, normalized.length);
+                return;
+            }
+
+            // Mid-string edit: normalize just the text before the cursor
+            // the same way, so the cursor stays right after the character
+            // that was just typed instead of jumping to the end.
+            let prefix = raw.slice(0, start).replace(/\//g, '\\');
+            const isUNC = /^\\\\/.test(prefix);
+            prefix = prefix.replace(/\\{2,}/g, '\\');
+            if (isUNC) prefix = '\\' + prefix;
+
+            const newPos = Math.min(prefix.length, normalized.length);
+            pathInp.value = normalized;
+            pathInp.setSelectionRange(newPos, newPos);
+        }
+        pathInp.addEventListener('input', liveNormalize);
+        pathInp.addEventListener('blur', liveNormalize);
+
+        // --- Browse button: open native file picker ---
+        browseBtn.addEventListener('click', () => filePicker.click());
+
+        filePicker.addEventListener('change', () => {
+            const file = filePicker.files && filePicker.files[0];
+            if (!file) return;
+
+            // Electron / some packaged webviews expose the real absolute
+            // path on the File object. Regular browsers do not, for
+            // security reasons — they only expose the file name. This is a
+            // browser security restriction, not something JS can bypass.
+            const fullPath = file.path; // undefined in normal browsers
+
+            if (fullPath) {
+                pathInp.value = normalizeBiometricPath(fullPath);
+                previewEl.classList.remove('is-note');
+                previewEl.textContent = '';
+                pathInp.focus();
+                pathInp.setSelectionRange(pathInp.value.length, pathInp.value.length);
+            } else {
+                // Fall back to just the file name. Prefill the folder with
+                // (in priority order) whatever folder the user already
+                // typed, otherwise the last folder they successfully saved,
+                // so they usually don't have to type the folder from
+                // scratch each time.
+                const existing = normalizeBiometricPath(pathInp.value);
+                const existingSlash = existing.lastIndexOf('\\');
+                const existingFolder = existingSlash > -1 ? existing.slice(0, existingSlash + 1) : '';
+                const lastFolder = localStorage.getItem('eduflow_biometric_last_folder') || '';
+                const folder = existingFolder || lastFolder;
+
+                pathInp.value = normalizeBiometricPath(folder + file.name);
+                previewEl.classList.add('is-note');
+                previewEl.innerHTML = '<i class="fas fa-circle-info"></i> Browsers only reveal the file name, not the folder — '
+                    + 'the folder part is highlighted below, just type or paste over it.';
+
+                // Select the folder portion so the user can simply type or
+                // paste straight over it instead of manually deleting it
+                // character by character.
+                pathInp.focus();
+                pathInp.setSelectionRange(0, folder.length);
+            }
+        });
+
+        saveBtn.addEventListener('click', async () => {
+            const normalized = normalizeBiometricPath(pathInp.value);
+            pathInp.value = normalized;
+
+            if (!normalized) {
+                statusEl.style.color = 'var(--rose)';
+                statusEl.innerHTML = '<i class="fas fa-triangle-exclamation"></i> Please enter or browse for the path';
+                return;
+            }
+            if (!/att2000\.mdb$/i.test(normalized) && !/\.accdb$/i.test(normalized)) {
+                statusEl.style.color = 'var(--amber)';
+                statusEl.innerHTML = '<i class="fas fa-triangle-exclamation"></i> Path should end with att2000.mdb';
+                return;
+            }
+
+            saveBtn.disabled = true;
+            statusEl.style.color = '';
+            statusEl.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Connecting to device...';
+
+            // Always keep a local copy so the app still works offline.
+            localStorage.setItem('eduflow_biometric_path', normalized);
+            localStorage.setItem('eduflow_biometric_linked_at', new Date().toISOString());
+
+            // Remember the folder so the next time "Browse" is used (which
+            // can only see the file name, not the folder) we can prefill it
+            // automatically instead of leaving it blank.
+            const slashIdx = normalized.lastIndexOf('\\');
+            if (slashIdx > -1) {
+                localStorage.setItem('eduflow_biometric_last_folder', normalized.slice(0, slashIdx + 1));
+            }
+
+            // Push the normalized path to the backend so it can open the
+            // biometric machine's Access database and start reading punches.
+            try {
+                const response = await fetch(BACKEND_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ path: normalized })
+                });
+
+                if (response.ok) {
+                    statusEl.innerHTML = '<i class="fas fa-check-circle"></i> Linked & connected';
+                    if (typeof toast === 'function') toast('Biometric device linked');
+                    setTimeout(close, 800);
+                } else {
+                    statusEl.style.color = 'var(--amber)';
+                    statusEl.innerHTML = '<i class="fas fa-triangle-exclamation"></i> Saved locally, but the server rejected the path';
+                }
+            } catch (err) {
+                console.error('Failed to send biometric path to backend:', err);
+                statusEl.style.color = 'var(--amber)';
+                statusEl.innerHTML = '<i class="fas fa-triangle-exclamation"></i> Saved locally — could not reach the server';
+            } finally {
+                saveBtn.disabled = false;
+            }
+        });
+    });
+})();
+
+
+/* ============================================================
+   AUTO-SAVE SCHEDULER
+   Linked directly to the Attendance Timing set in Settings.
+   Reads the SAME localStorage key that settings.js writes to
+   (edu_attendance_timing, via saveAttendanceTiming()):
+     { first:  { hour, minute, meridiem, enabled },
+       second: { hour, minute, meridiem, enabled } }
+   Whatever time the user sets on the Settings page is exactly
+   the time this scheduler acts on — there is only one source
+   of truth for the timing.
+
+   At each enabled slot's time, if the staff/student attendance
+   stage is currently open, this clicks the real Save button
+   (#staff-save-btn / #save-btn), which is the same code path a
+   manual save uses — so it writes to localStorage AND syncs to
+   the real database via syncCurrentSheetWithDatabase().
+   ============================================================ */
+(function initAutoSaveScheduler() {
+    const TIMING_KEY = 'edu_attendance_timing'; // same key settings.js uses
+    const FIRED_KEY   = 'eduflow_autosave_fired'; // JSON { date, first, second }
+
+    const DEFAULT_TIMING = {
+        first:  { hour: 10, minute: 0, meridiem: 'AM', enabled: true },
+        second: { hour: 2,  minute: 0, meridiem: 'PM', enabled: true },
+    };
+
+    function getTiming() {
+        try {
+            const saved = JSON.parse(localStorage.getItem(TIMING_KEY) || '{}');
+            return {
+                first:  Object.assign({}, DEFAULT_TIMING.first,  saved.first  || {}),
+                second: Object.assign({}, DEFAULT_TIMING.second, saved.second || {}),
+            };
+        } catch (e) { return DEFAULT_TIMING; }
+    }
+
+    // { hour: 1-12, minute, meridiem: 'AM'|'PM' } -> "HH:MM" (24hr, for comparison)
+    function slotToHHMM(slot) {
+        let h = Number(slot.hour) % 12;
+        if (slot.meridiem === 'PM') h += 12;
+        return String(h).padStart(2, '0') + ':' + String(Number(slot.minute)).padStart(2, '0');
+    }
+    function slotToLabel(slot) {
+        return `${slot.hour}:${String(slot.minute).padStart(2, '0')} ${slot.meridiem}`;
+    }
+
+    function todayStr() {
+        const d = new Date();
+        return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+    }
+    function loadFired() {
+        try {
+            const raw = JSON.parse(localStorage.getItem(FIRED_KEY) || '{}');
+            if (raw.date !== todayStr()) return { date: todayStr(), first: false, second: false };
+            return raw;
+        } catch(e) { return { date: todayStr(), first: false, second: false }; }
+    }
+    function saveFired(f) { localStorage.setItem(FIRED_KEY, JSON.stringify(f)); }
+
+    function updateLabels() {
+        const t = getTiming();
+        // Support either old or new label element ids, in case they're on the page.
+        const m = document.getElementById('autosave-morning-lbl') || document.getElementById('autosave-first-lbl');
+        const a = document.getElementById('autosave-afternoon-lbl') || document.getElementById('autosave-second-lbl');
+        if (m) m.textContent = t.first.enabled  ? slotToLabel(t.first)  : 'Off';
+        if (a) a.textContent = t.second.enabled ? slotToLabel(t.second) : 'Off';
+    }
+
+    function isStaffAddStageActive() {
+        const el = document.getElementById('stage-staff');
+        return el && !el.classList.contains('hidden');
+    }
+
+    function isStudentAddStageActive() {
+        const el = document.getElementById('stage-table');
+        return el && !el.classList.contains('hidden');
+    }
+
+    function triggerSave(label) {
+        // Whatever status is currently showing for each row (biometric-marked,
+        // manually tapped, or the default Absent) gets committed/"Done" now,
+        // through the exact same click handlers a manual save would use.
+        let firedAny = false;
+
+        if (isStaffAddStageActive()) {
+            const staffBtn = document.getElementById('staff-save-btn');
+            if (staffBtn) { staffBtn.click(); firedAny = true; }
+        } else {
+            console.log('[auto-save] Skipped staff (' + label + ') — staff attendance page not open.');
+        }
+
+        if (isStudentAddStageActive()) {
+            const studentBtn = document.getElementById('save-btn');
+            if (studentBtn) { studentBtn.click(); firedAny = true; }
+        } else {
+            console.log('[auto-save] Skipped student (' + label + ') — student attendance page not open.');
+        }
+
+        if (firedAny) {
+            if (typeof toast === 'function') toast('Auto-saved (' + label + ')');
+            console.log('[auto-save] Triggered ' + label + ' at ' + new Date().toLocaleTimeString());
+        }
+        return firedAny;
+    }
+
+    function nowHHMM() {
+        const d = new Date();
+        return String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0');
+    }
+
+    function tick() {
+        updateLabels();
+        const t = getTiming();
+        const now = nowHHMM();
+        const fired = loadFired();
+
+        [['first', t.first], ['second', t.second]].forEach(([key, slot]) => {
+            if (!slot.enabled) return;   // slot turned off in Settings
+            if (fired[key]) return;      // already saved for this slot today
+
+            const targetHHMM = slotToHHMM(slot);
+            if (now < targetHHMM) return; // not time yet
+
+            // Time has arrived (or passed). Try to save; if the attendance
+            // page isn't open yet, keep retrying every tick (every 30s)
+            // until it succeeds or the day resets — so opening the page a
+            // little late still triggers the save.
+            if (triggerSave(slotToLabel(slot))) {
+                fired[key] = true;
+                saveFired(fired);
+            }
+        });
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+        updateLabels();
+        // React immediately when Settings saves a new time — same tab
+        // (custom event) or another open tab (native storage event).
+        window.addEventListener('eduflow-attendance-timing-changed', () => { updateLabels(); tick(); });
+        window.addEventListener('storage', (e) => {
+            if (e.key === TIMING_KEY) { updateLabels(); tick(); }
+        });
+        // Check every 30 seconds
+        setInterval(tick, 30 * 1000);
+        // First tick after 5s so page is ready
+        setTimeout(tick, 5000);
+    });
+
+    // Kept for any older code that still calls window.EduFlowAutoSave.
+    window.EduFlowAutoSave = {
+        get: getTiming,
+        set: (firstHHMM, secondHHMM) => {
+            const parseHHMM = (hhmm) => {
+                const [hStr, mStr] = hhmm.split(':');
+                let h = parseInt(hStr, 10), m = parseInt(mStr, 10);
+                const meridiem = h >= 12 ? 'PM' : 'AM';
+                h = h % 12; if (h === 0) h = 12;
+                return { hour: h, minute: m, meridiem, enabled: true };
+            };
+            const current = getTiming();
+            const timing = {
+                first:  firstHHMM  ? parseHHMM(firstHHMM)  : current.first,
+                second: secondHHMM ? parseHHMM(secondHHMM) : current.second,
+            };
+            localStorage.setItem(TIMING_KEY, JSON.stringify(timing));
+            updateLabels();
+        },
+    };
+})();
