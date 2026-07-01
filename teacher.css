@@ -1,7 +1,0 @@
-body { font-family: sans-serif; background: #eef2f3; margin: 0; }
-header { background: #8e44ad; color: white; padding: 1rem 2rem; display: flex; justify-content: space-between; align-items: center; }
-header a { color: white; text-decoration: none; }
-.container { padding: 20px; }
-table { width: 100%; background: white; border-collapse: collapse; margin-top: 20px; border-radius: 8px; overflow: hidden; }
-th, td { padding: 15px; text-align: left; border-bottom: 1px solid #ddd; }
-th { background: #9b59b6; color: white; }
