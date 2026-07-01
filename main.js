@@ -5,13 +5,15 @@
 document.addEventListener('DOMContentLoaded', () => {
     initTheme();
     initSidebar();
+    initNavSearch();
     initDate();
     calculateAndLoadDashboardData();
     // Add this inside DOMContentLoaded in index.js
 window.addEventListener('storage', (e) => {
     if (['edu_students', 'eduflow-db', 'eduflow-student-fines',
          'eduflow-staff-fines', 'eduflow-staff-bonus', 'eduflow-other-expenses',
-         'edu_staff', 'eduflow-staff-advances', 'edu_latefee_config'].includes(e.key)) {
+         'edu_staff', 'eduflow-staff-advances', 'edu_latefee_config',
+         'edu_attendance', 'eduflow-attendance-records'].includes(e.key)) {
         calculateAndLoadDashboardData();
     }
 });
@@ -64,6 +66,23 @@ function initSidebar() {
 }
 
 /* ============================================
+   SIDEBAR SEARCH FILTER
+   ============================================ */
+function initNavSearch() {
+    const input = document.getElementById('nav-search');
+    if (!input) return;
+    const links = document.querySelectorAll('.sidebar-nav .nav-link');
+
+    input.addEventListener('input', () => {
+        const q = input.value.trim().toLowerCase();
+        links.forEach(link => {
+            const label = link.querySelector('span')?.textContent.toLowerCase() || '';
+            link.style.display = label.includes(q) ? 'flex' : 'none';
+        });
+    });
+}
+
+/* ============================================
    HEADER DATE
    ============================================ */
 function initDate() {
@@ -94,10 +113,8 @@ function calculateAndLoadDashboardData() {
     // Net Profit = Revenue - Expenses
     const netProfit = totalRev - netExp;
 
-    // 2. UPDATE THE UI (Demographics)
-    animateCounter('total-students', data.realStudentCount);
+    // 2. HEADCOUNT (feeds the quick-stats strip, no dedicated card anymore)
     const totalStaff = (data.db.staff['Teaching']?.length || 0) + (data.db.staff['Non-Teaching']?.length || 0);
-    animateCounter('total-staff', totalStaff);
 
     // 3. UPDATE THE UI (Revenue)
     animateCounter('expected-fees', data.fees.expected);
@@ -132,6 +149,106 @@ function calculateAndLoadDashboardData() {
             trendEl.innerHTML = `<i class="fas fa-arrow-down"></i> ${Math.abs(percentChange)}% vs last month`;
         }
     }
+
+    // 7. UPDATE QUICK STATS STRIP + TODAY'S ATTENDANCE
+    loadAttendanceData(data.realStudentCount, totalStaff);
+}
+
+/* ============================================
+   TODAY'S ATTENDANCE
+   ============================================
+   Looks for attendance data under 'edu_attendance', keyed by date
+   (YYYY-MM-DD) with the shape:
+   { "2026-07-01": { students: { studentId: true/false, ... },
+                      staff:    { staffId: true/false, ... } } }
+   Also supports a flat record list under 'eduflow-attendance-records':
+   [{ date: "2026-07-01", type: "student"|"staff", present: true/false }, ...]
+   If your attendance.html page (once built) writes to either of these
+   keys/shapes, this card updates automatically — no other changes needed.
+   ============================================ */
+function getTodayAttendance() {
+    const todayKey = new Date().toISOString().split('T')[0];
+
+    // Format 1: unified object keyed by date
+    try {
+        const store = JSON.parse(localStorage.getItem('edu_attendance') || '{}');
+        const today = store[todayKey];
+        if (today && (today.students || today.staff)) {
+            const studentVals = today.students ? Object.values(today.students) : [];
+            const staffVals = today.staff ? Object.values(today.staff) : [];
+            const presentStudents = studentVals.filter(v => v === true || v === 'present').length;
+            const presentStaff = staffVals.filter(v => v === true || v === 'present').length;
+            return { presentStudents, presentStaff, hasData: true };
+        }
+    } catch (e) { /* ignore malformed data */ }
+
+    // Format 2: flat record array
+    try {
+        const records = JSON.parse(localStorage.getItem('eduflow-attendance-records') || '[]');
+        const todays = records.filter(r => r.date === todayKey);
+        if (todays.length) {
+            const presentStudents = todays.filter(r => r.type === 'student' && (r.status === 'present' || r.present === true)).length;
+            const presentStaff = todays.filter(r => r.type === 'staff' && (r.status === 'present' || r.present === true)).length;
+            return { presentStudents, presentStaff, hasData: true };
+        }
+    } catch (e) { /* ignore malformed data */ }
+
+    return { presentStudents: 0, presentStaff: 0, hasData: false };
+}
+
+function loadAttendanceData(totalStudents, totalStaff) {
+    const { presentStudents, presentStaff, hasData } = getTodayAttendance();
+
+    // Quick stats strip
+    animateCounter('strip-total-students', totalStudents);
+    animateCounter('strip-total-staff', totalStaff);
+    animateCounter('strip-present-students', presentStudents);
+    animateCounter('strip-present-staff', presentStaff);
+
+    // Ring captions
+    const setText = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+    setText('present-students-count', presentStudents);
+    setText('total-students-2', totalStudents);
+    setText('present-teachers-count', presentStaff);
+    setText('total-staff-2', totalStaff);
+
+    // Percentages
+    const studentPct = totalStudents > 0 ? Math.round((presentStudents / totalStudents) * 100) : 0;
+    const staffPct = totalStaff > 0 ? Math.round((presentStaff / totalStaff) * 100) : 0;
+    setText('student-attendance-pct', studentPct + '%');
+    setText('teacher-attendance-pct', staffPct + '%');
+
+    setRingProgress('ring-students', studentPct);
+    setRingProgress('ring-staff', staffPct);
+
+    // Badge + empty-state note
+    const badge = document.getElementById('attendance-date-badge');
+    const note = document.getElementById('attendance-empty-note');
+    if (badge) {
+        if (hasData) {
+            badge.className = 'trend up';
+            badge.innerHTML = '<i class="fas fa-circle" style="font-size:7px;"></i> Live';
+        } else {
+            badge.className = 'trend neutral';
+            badge.innerHTML = '<i class="fas fa-circle" style="font-size:7px;"></i> Not marked yet';
+        }
+    }
+    if (note) {
+        note.style.display = hasData ? 'none' : 'block';
+    }
+}
+
+function setRingProgress(elementId, percent) {
+    const el = document.getElementById(elementId);
+    if (!el) return;
+    const radius = 45;
+    const circumference = 2 * Math.PI * radius; // ~282.74
+    const clamped = Math.max(0, Math.min(100, percent));
+    const offset = circumference - (clamped / 100) * circumference;
+    // Defer so the transition animates from the initial full-offset state
+    requestAnimationFrame(() => {
+        el.style.strokeDashoffset = offset;
+    });
 }
 
 /* ============================================
@@ -139,6 +256,7 @@ function calculateAndLoadDashboardData() {
    ============================================ */
 function animateCounter(elementId, target) {
     const el = document.getElementById(elementId);
+    if (!el) return;
     if (target === 0) {
         el.textContent = '0';
         return;

@@ -25,8 +25,13 @@
             </button>
         </div>
 
+        <div class="sidebar-search">
+            <i class="fas fa-search"></i>
+            <input type="text" id="nav-search" placeholder="Search menu...">
+        </div>
+
         <nav class="sidebar-nav">
-            <div class="nav-label">Manage School</div>
+            <div class="nav-label">Menu</div>
             <a href="main.html" class="nav-link active">
                 <i class="fas fa-th-large"></i>
                 <span>Dashboard</span>
@@ -39,17 +44,17 @@
                 <i class="fas fa-chalkboard-teacher"></i>
                 <span>Staff Management</span>
             </a>
-            <a href="manage-finance.html" class="nav-link">
-                <i class="fas fa-file-invoice-dollar"></i>
-                <span>Fees & Finance</span>
-            </a>
             <a href="attendance.html" class="nav-link">
                 <i class="fas fa-clipboard-check"></i>
                 <span>Attendance</span>
             </a>
+            <a href="manage-finance.html" class="nav-link">
+                <i class="fas fa-file-invoice-dollar"></i>
+                <span>Fees & Finance</span>
+            </a>
             <a href="settings.html" class="nav-link">
                 <i class="fas fa-cog"></i>
-                <span>Admin Settings</span>
+                <span>Settings</span>
             </a>
         </nav>
 
@@ -72,7 +77,6 @@
                 </button>
                 <div class="school-branding">
                     <h1 class="school-name">ST. LAWRENCE INTERNATIONAL SCHOOL</h1>
-                    <p class="school-subtitle">Command Center & Analytics</p>
                 </div>
             </div>
             <div class="header-right">
@@ -89,39 +93,84 @@
         <div class="glow-spot glow-1"></div>
         <div class="glow-spot glow-2"></div>
 
-        <!-- PAGE TITLE SECTION -->
-        <section class="page-title-section">
-            <h2 class="page-title">Executive Overview</h2>
-            <p class="page-description">Real-time overview of school operations, finances, and staff.</p>
-            <div class="title-divider"></div>
+        <!-- QUICK STATS STRIP -->
+        <section class="quick-stats-strip">
+            <div class="stat-pill">
+                <div class="stat-pill-icon icon-students"><i class="fas fa-user-graduate"></i></div>
+                <div class="stat-pill-info">
+                    <span class="stat-pill-value" id="strip-total-students">0</span>
+                    <span class="stat-pill-label">Total Students</span>
+                </div>
+            </div>
+            <div class="stat-pill">
+                <div class="stat-pill-icon icon-staff"><i class="fas fa-chalkboard-teacher"></i></div>
+                <div class="stat-pill-info">
+                    <span class="stat-pill-value" id="strip-total-staff">0</span>
+                    <span class="stat-pill-label">Total Staff</span>
+                </div>
+            </div>
+            <div class="stat-pill">
+                <div class="stat-pill-icon icon-present-students"><i class="fas fa-user-check"></i></div>
+                <div class="stat-pill-info">
+                    <span class="stat-pill-value" id="strip-present-students">0</span>
+                    <span class="stat-pill-label">Present Students</span>
+                </div>
+            </div>
+            <div class="stat-pill">
+                <div class="stat-pill-icon icon-present-staff"><i class="fas fa-user-clock"></i></div>
+                <div class="stat-pill-info">
+                    <span class="stat-pill-value" id="strip-present-staff">0</span>
+                    <span class="stat-pill-label">Present Staff</span>
+                </div>
+            </div>
         </section>
 
         <!-- DASHBOARD GRID -->
         <section class="dashboard-grid">
 
-            <!-- Demographics Overview -->
-            <div class="dash-card demo-card">
-                <div class="card-glow demo-glow"></div>
+            <!-- Today's Attendance -->
+            <div class="dash-card attendance-card">
                 <div class="dash-card-header">
-                    <h3><i class="fas fa-users"></i> School Headcount</h3>
+                    <h3><span class="card-icon icon-attendance"><i class="fas fa-clipboard-check"></i></span> Today's Attendance</h3>
+                    <span class="trend neutral" id="attendance-date-badge"><i class="fas fa-circle" style="font-size:7px;"></i> --</span>
                 </div>
                 <div class="dash-card-body">
-                    <div class="metric">
-                        <span class="metric-label">Total Students</span>
-                        <span class="metric-value" id="total-students">0</span>
+                    <div class="attendance-rings">
+                        <div class="ring-block">
+                            <div class="ring-wrapper">
+                                <svg class="ring-svg" width="100" height="100" viewBox="0 0 100 100">
+                                    <circle class="ring-bg" cx="50" cy="50" r="45"></circle>
+                                    <circle class="ring-progress students" id="ring-students" cx="50" cy="50" r="45" stroke-dasharray="283" stroke-dashoffset="283"></circle>
+                                </svg>
+                                <div class="ring-percent">
+                                    <span class="pct" id="student-attendance-pct">0%</span>
+                                    <span class="lbl">Present</span>
+                                </div>
+                            </div>
+                            <span class="ring-caption"><strong id="present-students-count">0</strong> / <span id="total-students-2">0</span> Students</span>
+                        </div>
+                        <div class="ring-block">
+                            <div class="ring-wrapper">
+                                <svg class="ring-svg" width="100" height="100" viewBox="0 0 100 100">
+                                    <circle class="ring-bg" cx="50" cy="50" r="45"></circle>
+                                    <circle class="ring-progress staff" id="ring-staff" cx="50" cy="50" r="45" stroke-dasharray="283" stroke-dashoffset="283"></circle>
+                                </svg>
+                                <div class="ring-percent">
+                                    <span class="pct" id="teacher-attendance-pct">0%</span>
+                                    <span class="lbl">Present</span>
+                                </div>
+                            </div>
+                            <span class="ring-caption"><strong id="present-teachers-count">0</strong> / <span id="total-staff-2">0</span> Staff</span>
+                        </div>
                     </div>
-                    <div class="metric">
-                        <span class="metric-label">Total Staff</span>
-                        <span class="metric-value" id="total-staff">0</span>
-                    </div>
+                    <p class="attendance-empty-note" id="attendance-empty-note" style="display:none;">No attendance marked for today yet.</p>
                 </div>
             </div>
 
             <!-- Revenue: Fees & Fines -->
             <div class="dash-card revenue-card">
-                <div class="card-glow revenue-glow"></div>
                 <div class="dash-card-header">
-                    <h3><i class="fas fa-wallet"></i> Revenue Overview</h3>
+                    <h3><span class="card-icon icon-revenue"><i class="fas fa-wallet"></i></span> Revenue</h3>
                 </div>
                 <div class="dash-card-body">
                     <div class="metric-group">
@@ -155,14 +204,13 @@
 
             <!-- Expenses: Salaries & Operational -->
             <div class="dash-card expense-card">
-                <div class="card-glow expense-glow"></div>
                 <div class="dash-card-header">
-                    <h3><i class="fas fa-file-invoice-dollar"></i> Expenses & Adjustments</h3>
+                    <h3><span class="card-icon icon-expense"><i class="fas fa-file-invoice-dollar"></i></span> Expenses</h3>
                 </div>
                 <div class="dash-card-body">
                     <div class="metric-group">
                         <div class="metric">
-                            <span class="metric-label">Base Salary Expenses</span>
+                            <span class="metric-label">Base Salaries</span>
                             <span class="metric-value text-red">RS <span id="base-salaries">0</span></span>
                         </div>
                         <div class="metric">
@@ -183,9 +231,8 @@
 
             <!-- Profit & Loss (Bottom Line) -->
             <div class="dash-card profit-card">
-                <div class="card-glow profit-glow"></div>
                 <div class="dash-card-header">
-                    <h3><i class="fas fa-chart-line"></i> Net Profit</h3>
+                    <h3><span class="card-icon icon-profit"><i class="fas fa-chart-line"></i></span> Net Profit</h3>
                     <span class="trend up" id="profit-trend"><i class="fas fa-arrow-up"></i> 0% vs last month</span>
                 </div>
                 <div class="dash-card-body">
