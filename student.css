@@ -1,5 +1,0 @@
-body { font-family: sans-serif; background: #f9f9f9; margin: 0; }
-.navbar { background: #27ae60; color: white; padding: 15px 30px; display: flex; justify-content: space-between; }
-.main { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; padding: 30px; }
-.box { background: white; padding: 20px; border-left: 5px solid #27ae60; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-.pending { color: #e67e22; font-weight: bold; }
