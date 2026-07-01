@@ -9,6 +9,21 @@
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <link rel="stylesheet" href="attendance.css">
     <script>(function(){const t=localStorage.getItem('eduflow-theme')||'dark';document.documentElement.setAttribute('data-theme',t);})()</script>
+    <style>
+        .biometric-input-row{display:flex;gap:8px;align-items:stretch;}
+        .biometric-input-row .biometric-input{flex:1;}
+        .biometric-browse-btn{
+            display:flex;align-items:center;gap:6px;white-space:nowrap;
+            padding:0 14px;border-radius:8px;border:1px solid var(--bg-secondary,#333);
+            background:var(--accent);color:#fff;font-weight:600;font-size:.85rem;cursor:pointer;
+        }
+        .biometric-browse-btn:hover{filter:brightness(1.08);}
+        .biometric-path-preview{
+            margin:6px 2px 0;font-size:.78rem;color:var(--text-muted);min-height:1em;
+            word-break:break-all;
+        }
+        .biometric-path-preview.is-note{color:var(--amber);}
+    </style>
 </head>
 <body>
     <aside id="sidebar" class="sidebar">
@@ -23,7 +38,7 @@
         </div>
         <nav class="sidebar-nav">
             <div class="nav-label">Core Modules</div>
-                        <a href="main.html" class="nav-link"><i class="fas fa-th-large"></i><span>Dashboard</span></a>
+                        <a href="index.html" class="nav-link"><i class="fas fa-th-large"></i><span>Dashboard</span></a>
             <a href="manage-students.html" class="nav-link"><i class="fas fa-user-graduate"></i><span>Student Management</span></a>
             <a href="manage-staff.html" class="nav-link"><i class="fas fa-chalkboard-teacher"></i><span>Staff Management</span></a>
             <a href="manage-finance.html" class="nav-link"><i class="fas fa-file-invoice-dollar"></i><span>Fees &amp; Finance</span></a>
@@ -184,7 +199,12 @@
                     <button class="bulk-btn bulk-present" data-staff-bulk="present">All Present</button>
                     <button class="bulk-btn bulk-absent"  data-staff-bulk="absent">All Absent</button>
                     <button class="bulk-btn bulk-leave"   data-staff-bulk="leave">All Leave</button>
+                    <button id="link-biometric-btn" class="bulk-btn biometric-btn" title="Link biometric device"><i class="fas fa-fingerprint"></i> Link Biometric</button>
                 </div>
+            </div>
+            <div class="autosave-strip" id="autosave-strip">
+                <i class="fas fa-clock"></i>
+                <span>Auto-save scheduled at <b id="autosave-morning-lbl">09:00</b> and <b id="autosave-afternoon-lbl">14:30</b> daily. Change in Settings.</span>
             </div>
             <div class="table-card">
                 <div class="table-scroll">
@@ -649,6 +669,55 @@
                             <a id="camera-download-btn" class="cam-ctrl-btn cam-ctrl-capture" download="attendance-photo.png"><i class="fas fa-download"></i> Download</a>
                             <button id="camera-retake-btn" class="cam-ctrl-btn cam-ctrl-switch"><i class="fas fa-redo"></i> Retake</button>
                         </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+
+        <!-- BIOMETRIC LINK MODAL -->
+        <div id="biometric-modal" class="report-modal hidden" aria-hidden="true">
+            <div class="report-modal__backdrop" id="biometric-backdrop"></div>
+            <div class="report-modal__panel biometric-panel" role="dialog" aria-modal="true" aria-labelledby="biometric-modal-title">
+                <div class="report-modal__head">
+                    <h3 id="biometric-modal-title"><i class="fas fa-fingerprint"></i> Link Biometric Device</h3>
+                    <button class="report-modal__close" id="biometric-close-btn" aria-label="Close"><i class="fas fa-times"></i></button>
+                </div>
+                <div class="biometric-body">
+                    <label class="biometric-label" for="biometric-path">Path to <code>att2000.mdb</code> file</label>
+                    <div class="biometric-input-row">
+                        <input id="biometric-path" type="text" class="biometric-input" placeholder="C:\Program Files\ZKTeco\Attendance\att2000.mdb" />
+                        <button id="biometric-browse-btn" class="biometric-browse-btn" type="button" title="Browse for the .mdb file">
+                            <i class="fas fa-folder-open"></i> Browse
+                        </button>
+                    </div>
+                    <input id="biometric-file-picker" type="file" accept=".mdb,.accdb" style="display:none;" />
+                    <p class="biometric-path-preview" id="biometric-path-preview"></p>
+                    <div class="biometric-actions-row">
+                        <button id="biometric-video-btn" class="biometric-video-btn" type="button">
+                            <i class="fas fa-play-circle"></i> Watch Demo Video
+                        </button>
+                        <span class="biometric-status" id="biometric-status"></span>
+                    </div>
+
+                    <div class="biometric-notes">
+                        <h4><i class="fas fa-list-check"></i> Instructions</h4>
+                        <ol>
+                            <li>Install your biometric software (e.g. ZKTeco Attendance Management) on this computer.</li>
+                            <li>Click <b>Browse</b> and select the database file, usually named <code>att2000.mdb</code>, inside the install folder &mdash; or paste the full path manually.</li>
+                            <li>Slashes are normalized automatically to match what the backend expects, so it doesn't matter if you type <code>/</code> or <code>\</code>.</li>
+                            <li>Click <b>Save &amp; Link</b> to send the path to the attendance server and connect the device.</li>
+                            <li>Make sure the machine is powered on and connected to the same network.</li>
+                        </ol>
+                        <div class="biometric-note">
+                            <i class="fas fa-circle-info"></i>
+                            <span><b>Note:</b> Because of browser security restrictions, the file picker on its own cannot reveal the full folder path &mdash; only the file name. After browsing, double-check (or complete) the folder portion of the path before saving.</span>
+                        </div>
+                    </div>
+
+                    <div class="biometric-footer">
+                        <button id="biometric-cancel-btn" class="biometric-cancel">Cancel</button>
+                        <button id="biometric-save-btn" class="biometric-save"><i class="fas fa-link"></i> Save &amp; Link</button>
                     </div>
                 </div>
             </div>
