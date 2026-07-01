@@ -1080,3 +1080,83 @@ body {
   .save-bar { padding: 12px 14px; }
   .class-grid, .teacher-grid { grid-template-columns: 1fr; }
 }
+/* ═══════════════════════════════════════════════
+   Attendance Timing Control
+   ═══════════════════════════════════════════════ */
+.timing-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 20px;
+  padding: 24px;
+}
+.timing-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px;
+  box-shadow: var(--card-shadow);
+}
+.timing-card-head {
+  display: flex; align-items: center; gap: 10px;
+  margin-bottom: 16px;
+}
+.timing-card-head h3 {
+  margin: 0; font-size: 16px; color: var(--text-main);
+}
+.timing-badge {
+  width: 28px; height: 28px; border-radius: 50%;
+  background: var(--accent); color: #fff;
+  font-weight: 700; font-size: 13px;
+  display: flex; align-items: center; justify-content: center;
+}
+.timing-card label {
+  display: block;
+  font-size: 12px;
+  color: var(--text-muted);
+  margin: 12px 0 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-weight: 600;
+}
+.time-row {
+  display: flex; align-items: center; gap: 8px;
+}
+.time-row input,
+.time-row select {
+  padding: 10px 12px;
+  border: 1px solid var(--input-border);
+  background: var(--input-bg);
+  color: var(--text-main);
+  border-radius: var(--radius-sm);
+  font-size: 15px;
+  width: 70px;
+  font-family: inherit;
+}
+.time-row select { width: 80px; }
+.time-row input:focus,
+.time-row select:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-glow);
+}
+.switch-row {
+  display: flex; align-items: center; gap: 8px;
+  margin-top: 14px;
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: 14px;
+  color: var(--text-main);
+  font-weight: 500;
+}
+.switch-row input {
+  width: 18px; height: 18px; accent-color: var(--accent);
+}
+.timing-actions {
+  display: flex; align-items: center; gap: 14px;
+  padding: 0 24px 24px;
+}
+.timing-status {
+  color: var(--accent);
+  font-weight: 500;
+  font-size: 14px;
+}
