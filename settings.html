@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+=<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -77,6 +77,9 @@
       </button>
       <button class="tab-btn" onclick="switchTab('variables', this)">
         <i class="fas fa-sliders-h"></i> Pay Variables
+      </button>
+      <button class="tab-btn" onclick="switchTab('attendance-timing', this)">
+        <i class="fas fa-clock"></i> Attendance Timing
       </button>
     </div>
 
@@ -283,6 +286,74 @@
             <div class="var-hint">Bonus paid when a teacher has zero absences in a month.</div>
           </div>
 
+        </div>
+      </div>
+    </div>
+
+
+    <!-- ═══════════════════ TAB: ATTENDANCE TIMING ═══════════════════ -->
+    <div class="tab-panel" id="tab-attendance-timing">
+      <div class="section-card">
+        <div class="section-header">
+          <div class="section-header-info">
+            <h2><i class="fas fa-clock"></i> Attendance Timing Control</h2>
+            <p>Configure two automatic staff attendance save times. At each scheduled time the current staff attendance snapshot is saved locally and pushed to the database.</p>
+          </div>
+        </div>
+
+        <div class="timing-grid">
+          <!-- FIRST AUTO SAVE -->
+          <div class="timing-card">
+            <div class="timing-card-head">
+              <span class="timing-badge">1</span>
+              <h3>First Auto Save</h3>
+            </div>
+            <label>Time</label>
+            <div class="time-row">
+              <input type="number" id="autosave1-hour"   min="1" max="12" placeholder="HH">
+              <span>:</span>
+              <input type="number" id="autosave1-minute" min="0" max="59" placeholder="MM">
+              <select id="autosave1-meridiem">
+                <option value="AM">AM</option>
+                <option value="PM">PM</option>
+              </select>
+            </div>
+            <label class="switch-row">
+              <input type="checkbox" id="autosave1-enabled" checked>
+              <span>Enabled</span>
+            </label>
+            <div class="var-hint">Attendance will auto-save daily at this time.</div>
+          </div>
+
+          <!-- SECOND AUTO SAVE -->
+          <div class="timing-card">
+            <div class="timing-card-head">
+              <span class="timing-badge">2</span>
+              <h3>Second Auto Save</h3>
+            </div>
+            <label>Time</label>
+            <div class="time-row">
+              <input type="number" id="autosave2-hour"   min="1" max="12" placeholder="HH">
+              <span>:</span>
+              <input type="number" id="autosave2-minute" min="0" max="59" placeholder="MM">
+              <select id="autosave2-meridiem">
+                <option value="AM">AM</option>
+                <option value="PM">PM</option>
+              </select>
+            </div>
+            <label class="switch-row">
+              <input type="checkbox" id="autosave2-enabled" checked>
+              <span>Enabled</span>
+            </label>
+            <div class="var-hint">A second daily auto-save at this time.</div>
+          </div>
+        </div>
+
+        <div class="timing-actions">
+          <button class="btn-primary" onclick="saveAttendanceTiming()">
+            <i class="fas fa-save"></i> Save Timings
+          </button>
+          <span id="timing-status" class="timing-status"></span>
         </div>
       </div>
     </div>
