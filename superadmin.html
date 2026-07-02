@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex, nofollow">
+<title>Super Admin | Soft School</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+<link rel="stylesheet" href="superadmin.css">
+<script src="access-control.js"></script>
+</head>
+<body>
+
+<!-- ══════════════ MAIN APP ══════════════
+     No login here on purpose — this file isn't linked from
+     anywhere in the app, so it's only reachable by whoever has
+     the direct URL / repo access. ══════════════ -->
+<div id="saApp">
+  <div class="sa-topbar">
+    <div class="sa-topbar-brand">
+      <img src="logo-icon.png" alt="Soft School">
+      <div>
+        <span>Soft<strong>School</strong></span>
+        <small>Super Admin</small>
+      </div>
+    </div>
+    <div class="sa-topbar-right"></div>
+  </div>
+
+  <div class="sa-main">
+    <div class="sa-header-row">
+      <div>
+        <h1>Schools</h1>
+        <p>Add, manage, and control access for every school using Soft School.</p>
+      </div>
+      <button class="sa-btn-add" id="btnOpenAddSchool"><i class="fas fa-plus"></i> Add School</button>
+    </div>
+
+    <div class="sa-stats">
+      <div class="sa-stat accent-teal"><div class="num" id="statTotal">0</div><div class="lbl">Total Schools</div></div>
+      <div class="sa-stat accent-green"><div class="num" id="statActive">0</div><div class="lbl">Active</div></div>
+      <div class="sa-stat accent-coral"><div class="num" id="statBlocked">0</div><div class="lbl">Blocked</div></div>
+      <div class="sa-stat accent-amber"><div class="num" id="statRevenue">Rs 0</div><div class="lbl">Monthly Plan Value</div></div>
+    </div>
+
+    <div class="sa-panel">
+      <div class="sa-panel-head">
+        <h2>Present Schools</h2>
+        <div class="sa-search">
+          <i class="fas fa-search"></i>
+          <input type="text" id="schoolSearch" placeholder="Search by name or ID…">
+        </div>
+      </div>
+      <div id="schoolsTableWrap"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════ ADD SCHOOL MODAL ══════════════ -->
+<div class="sa-modal-overlay" id="addSchoolOverlay">
+  <div class="sa-modal">
+    <div class="sa-modal-head">
+      <h2><i class="fas fa-school"></i> Add a new school</h2>
+      <button class="sa-modal-close" id="closeAddSchool"><i class="fas fa-times"></i></button>
+    </div>
+    <div class="sa-modal-body">
+      <div class="sa-form-row full sa-field-group">
+        <div>
+          <label>School name</label>
+          <input type="text" id="newSchoolName" placeholder="e.g. Greenwood High School">
+        </div>
+      </div>
+
+      <div class="sa-form-row full">
+        <div class="sa-field-group">
+          <label>School logo</label>
+          <div class="sa-logo-upload">
+            <img id="newSchoolLogoPreview" class="sa-logo-preview" src="" alt="">
+            <label class="btn-choose" for="newSchoolLogoInput"><i class="fas fa-upload"></i> Choose image</label>
+            <input type="file" id="newSchoolLogoInput" accept="image/*">
+          </div>
+        </div>
+      </div>
+
+      <div class="sa-form-row full">
+        <div class="sa-field-group"><label>Choose a plan</label></div>
+      </div>
+      <div class="sa-plans" id="planCards"></div>
+
+      <div class="sa-form-row">
+        <div class="sa-field-group">
+          <label>Username (for school login)</label>
+          <input type="text" id="newSchoolUsername" placeholder="e.g. greenwood_admin">
+        </div>
+        <div class="sa-field-group">
+          <label>Password</label>
+          <input type="text" id="newSchoolPassword" placeholder="Set a login password">
+        </div>
+      </div>
+
+      <div class="sa-limits-box">
+        <h4><i class="fas fa-sliders-h"></i> Add limitation (optional)</h4>
+        <div class="sa-form-row">
+          <div class="sa-field-group">
+            <label>Custom student limit</label>
+            <input type="number" id="newSchoolStudentLimit" placeholder="Uses plan default">
+          </div>
+          <div class="sa-field-group">
+            <label>Extra features to lock</label>
+            <select id="newSchoolExtraLock">
+              <option value="">None</option>
+            </select>
+          </div>
+        </div>
+        <p class="sa-hint">You can fine-tune exactly which features this school can access after it's created, from its management page.</p>
+      </div>
+    </div>
+    <div class="sa-modal-foot">
+      <button class="sa-btn-secondary" id="cancelAddSchool">Cancel</button>
+      <button class="sa-btn-add" id="saveNewSchool"><i class="fas fa-check"></i> Add School</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════ MANAGE SCHOOL MODAL ══════════════ -->
+<div class="sa-modal-overlay" id="manageSchoolOverlay">
+  <div class="sa-modal">
+    <div class="sa-modal-head">
+      <h2 id="manageSchoolTitle"><i class="fas fa-school"></i> Manage school</h2>
+      <button class="sa-modal-close" id="closeManageSchool"><i class="fas fa-times"></i></button>
+    </div>
+    <div class="sa-modal-body" id="manageSchoolBody">
+      <!-- populated by JS -->
+    </div>
+    <div class="sa-modal-foot">
+      <button class="sa-btn-danger" id="deleteSchoolBtn"><i class="fas fa-trash"></i> Delete school</button>
+      <button class="sa-btn-secondary" id="closeManageSchool2">Close</button>
+      <button class="sa-btn-add" id="saveManageSchool"><i class="fas fa-check"></i> Save changes</button>
+    </div>
+  </div>
+</div>
+
+<div class="sa-toast-wrap" id="saToastWrap"></div>
+
+<script src="superadmin.js"></script>
+</body>
+</html>

@@ -10,6 +10,7 @@
     <link rel="stylesheet" href="manage-staff.css">
     <link rel="stylesheet" href="manage-finance.css">
     <script>(function(){const t=localStorage.getItem('eduflow-theme')||'dark';document.documentElement.setAttribute('data-theme',t);})()</script>
+    <script src="access-control.js"></script>
 </head>
 <body>
 
@@ -34,7 +35,7 @@
         </nav>
 
         <div class="sidebar-footer">
-            <a href="index.html" class="nav-link logout-btn"><i class="fas fa-sign-out-alt"></i><span>Logout</span></a>
+            <a href="index.html" class="nav-link logout-btn" onclick="if(window.SoftSchoolAdmin)window.SoftSchoolAdmin.clearSession();"><i class="fas fa-sign-out-alt"></i><span>Logout</span></a>
         </div>
     </aside>
 

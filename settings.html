@@ -7,6 +7,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
 <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
 <link rel="stylesheet" href="settings.css">
+<script src="access-control.js"></script>
 </head>
 <body>
 
@@ -34,7 +35,7 @@
     <a href="settings.html" class="nav-link active"><i class="fas fa-cog"></i><span>Admin Settings</span></a>
   </nav>
   <div class="sidebar-footer">
-    <a href="#" class="nav-link logout-btn"><i class="fas fa-sign-out-alt"></i> Logout</a>
+    <a href="index.html" class="nav-link logout-btn" onclick="if(window.SoftSchoolAdmin)window.SoftSchoolAdmin.clearSession();"><i class="fas fa-sign-out-alt"></i> Logout</a>
   </div>
 </aside>
 

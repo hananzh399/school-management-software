@@ -24,6 +24,7 @@
         }
         .biometric-path-preview.is-note{color:var(--amber);}
     </style>
+    <script src="access-control.js"></script>
 </head>
 <body>
     <aside id="sidebar" class="sidebar">
@@ -46,7 +47,7 @@
             <a href="settings.html" class="nav-link"><i class="fas fa-cog"></i><span>Admin Settings</span></a>
         </nav>
         <div class="sidebar-footer">
-            <a href="#" class="nav-link logout-btn"><i class="fas fa-sign-out-alt"></i><span>Logout</span></a>
+            <a href="index.html" class="nav-link logout-btn" onclick="if(window.SoftSchoolAdmin)window.SoftSchoolAdmin.clearSession();"><i class="fas fa-sign-out-alt"></i><span>Logout</span></a>
         </div>
     </aside>
     <div id="sidebar-overlay" class="sidebar-overlay"></div>

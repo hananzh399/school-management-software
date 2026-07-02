@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -11,7 +10,7 @@
     <link rel="stylesheet" href="manage-staff.css">
     <script>(function(){const t=localStorage.getItem('eduflow-theme')||'dark';document.documentElement.setAttribute('data-theme',t);})()</script>
     <script src="shared-data.js"></script>
-<script src="manage-finance.js"></script>
+    <script src="access-control.js"></script>
 
 </head>
 <body>
@@ -57,7 +56,7 @@
         </nav>
 
         <div class="sidebar-footer">
-            <a href="index.html" class="nav-link logout-btn">
+            <a href="index.html" class="nav-link logout-btn" onclick="if(window.SoftSchoolAdmin)window.SoftSchoolAdmin.clearSession();">
                 <i class="fas fa-sign-out-alt"></i>
                 <span>Logout</span>
             </a>

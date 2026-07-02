@@ -23,6 +23,16 @@
 const DEMO_VIDEO_ID = "PJYZTVhMNfo"; // YouTube video ID
 const DEMO_VIDEO_SRC = ""; // Direct video URL  e.g. 'https://example.com/demo.mp4'
 
+/* ── SHOW A TOAST IF REDIRECTED HERE AFTER A BLOCK ── */
+(function () {
+  const params = new URLSearchParams(window.location.search);
+  if (params.get("blocked")) {
+    window.addEventListener("DOMContentLoaded", () => {
+      setTimeout(() => showToast("Your school's access has been suspended. Please contact support.", "error"), 400);
+    });
+  }
+})();
+
 /* ── SCROLL PROGRESS BAR ── */
 (function () {
   const bar = document.getElementById("scrollProgress");
@@ -129,7 +139,28 @@ function handleLogin(e) {
     btn.textContent = origText;
     btn.disabled = false;
     btn.style.opacity = "";
+
+    const result = window.SoftSchoolAdmin
+      ? window.SoftSchoolAdmin.authenticateSchool(phone.value, pass.value)
+      : { ok: false, reason: "not_found" };
+
+    if (!result.ok) {
+      if (result.reason === "blocked") {
+        showToast("Your school's access has been suspended. Please contact support.", "error");
+      } else {
+        showToast("Invalid username or password.", "error");
+      }
+      pass.classList.add("error");
+      phone.closest(".login-card").classList.add("shake");
+      phone.closest(".login-card").addEventListener("animationend", () => {
+        phone.closest(".login-card").classList.remove("shake");
+      }, { once: true });
+      return;
+    }
+
+    window.SoftSchoolAdmin.setSession(result.school.id);
     showToast("Redirecting to your dashboard…", "success");
+    setTimeout(() => { window.location.href = "main.html"; }, 900);
   }, 1400);
 }
 
