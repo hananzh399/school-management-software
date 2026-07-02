@@ -69,6 +69,7 @@ let newSchoolLogoData = "";
 
 function openAddSchoolModal() {
   document.getElementById("newSchoolName").value = "";
+  document.getElementById("newSchoolPrefix").value = "";
   document.getElementById("newSchoolUsername").value = "";
   document.getElementById("newSchoolPassword").value = "";
   document.getElementById("newSchoolStudentLimit").value = "";
@@ -103,6 +104,7 @@ document.getElementById("newSchoolLogoInput").addEventListener("change", functio
 
 document.getElementById("saveNewSchool").addEventListener("click", function () {
   const name = document.getElementById("newSchoolName").value.trim();
+  const prefix = document.getElementById("newSchoolPrefix").value.trim().toUpperCase().replace(/[^A-Z]/g, "").slice(0, 4);
   const username = document.getElementById("newSchoolUsername").value.trim();
   const password = document.getElementById("newSchoolPassword").value;
   const customLimit = document.getElementById("newSchoolStudentLimit").value;
@@ -122,7 +124,7 @@ document.getElementById("saveNewSchool").addEventListener("click", function () {
   if (extraLock && locks.indexOf(extraLock) === -1) locks.push(extraLock);
 
   const school = SSA.addSchool({
-    name, username, password,
+    name, prefix, username, password,
     logo: newSchoolLogoData,
     planId: currentPlanId,
     studentLimit: customLimit ? parseInt(customLimit, 10) : plan.studentLimit,
@@ -237,6 +239,13 @@ function openManageSchool(id) {
         <input type="text" id="mgName" value="${school.name.replace(/"/g, "&quot;")}">
       </div>
     </div>
+    <div class="sa-form-row full sa-field-group">
+      <div>
+        <label>Registration prefix <span style="font-size:0.76rem;font-weight:400;color:var(--ink-faint);">(2–4 letters · used in student IDs)</span></label>
+        <input type="text" id="mgPrefix" value="${(school.prefix || "").replace(/"/g, "&quot;")}" maxlength="4" placeholder="Auto from name" style="text-transform:uppercase;letter-spacing:0.08em;">
+        <p class="sa-hint">Student IDs look like <strong>${school.prefix || "HRK"}_77001</strong>. Leave blank to auto-derive from school name initials.</p>
+      </div>
+    </div>
 
     <div class="sa-form-row">
       <div class="sa-field-group">
@@ -316,6 +325,7 @@ document.getElementById("manageSchoolOverlay").addEventListener("click", functio
 document.getElementById("saveManageSchool").addEventListener("click", function () {
   if (!managingSchoolId) return;
   const name = document.getElementById("mgName").value.trim();
+  const prefix = document.getElementById("mgPrefix").value.trim().toUpperCase().replace(/[^A-Z]/g, "").slice(0, 4);
   const username = document.getElementById("mgUsername").value.trim();
   const password = document.getElementById("mgPassword").value;
   const planId = document.getElementById("mgPlan").value;
@@ -330,7 +340,7 @@ document.getElementById("saveManageSchool").addEventListener("click", function (
     .filter(cb => cb.checked)
     .map(cb => cb.getAttribute("data-feature"));
 
-  SSA.updateSchool(managingSchoolId, { name, username, password, planId, studentLimit, locks });
+  SSA.updateSchool(managingSchoolId, { name, prefix, username, password, planId, studentLimit, locks });
   closeManageSchool();
   renderAll();
   saToast("Changes saved.", "success");

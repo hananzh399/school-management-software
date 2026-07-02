@@ -127,10 +127,7 @@ body {
 }
 
 .sidebar-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 24px 20px;
+    padding: 18px 16px 14px;
     border-bottom: 1px solid var(--border-subtle);
 }
 
@@ -160,77 +157,119 @@ body {
 
 .close-btn:hover { color: var(--text-primary); }
 
+/* Sidebar search box (matches dashboard) */
+.sidebar-search {
+    position: relative;
+    margin: 14px 16px;
+}
+
+.sidebar-search i {
+    position: absolute;
+    left: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 12px;
+    color: var(--text-muted);
+}
+
+.sidebar-search input {
+    width: 100%;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-md);
+    padding: 8px 10px 8px 32px;
+    font-size: 12.5px;
+    color: var(--text-secondary);
+    font-family: inherit;
+    outline: none;
+    transition: border-color var(--transition);
+}
+
+[data-theme="light"] .sidebar-search input {
+    background: rgba(0, 0, 0, 0.02);
+}
+
+.sidebar-search input:focus {
+    border-color: #17716A;
+}
+
+.sidebar-search input::placeholder {
+    color: var(--text-muted);
+}
+
 .sidebar-nav {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 0 10px;
     flex: 1;
-    padding: 16px 12px;
     overflow-y: auto;
 }
 
 .nav-label {
-    font-size: 10px;
+    font-size: 10.5px;
     font-weight: 700;
     text-transform: uppercase;
-    letter-spacing: 1.5px;
+    letter-spacing: 0.6px;
     color: var(--text-muted);
-    padding: 12px 12px 8px;
+    padding: 4px 16px 8px;
 }
 
 .nav-link {
     display: flex;
     align-items: center;
-    gap: 12px;
-    padding: 11px 14px;
-    border-radius: var(--radius-sm);
+    gap: 11px;
+    padding: 9px 12px;
+    border-radius: var(--radius-md);
+    font-size: 13.5px;
+    font-weight: 500;
     color: var(--text-secondary);
     text-decoration: none;
-    font-size: 14px;
-    font-weight: 500;
-    transition: all var(--transition);
+    border-left: 3px solid transparent;
+    transition: background var(--transition), color var(--transition);
     position: relative;
-    margin-bottom: 2px;
 }
 
 .nav-link i {
-    width: 20px;
+    width: 16px;
     text-align: center;
-    font-size: 15px;
+    font-size: 14px;
+    opacity: 0.85;
 }
 
 .nav-link:hover {
+    background: rgba(255, 255, 255, 0.04);
     color: var(--text-primary);
-    background: rgba(255, 255, 255, 0.05);
 }
 
 [data-theme="light"] .nav-link:hover {
-    background: rgba(0, 0, 0, 0.04);
+    background: rgba(0, 0, 0, 0.03);
 }
 
 .nav-link.active {
-    color: var(--accent-primary-light);
-    background: rgba(59, 130, 246, 0.1);
+    background: rgba(23, 113, 106, 0.1);
+    color: #17716A;
+    font-weight: 700;
+    border-left-color: #17716A;
+    padding-left: 9px;
 }
 
-.nav-link.active::before {
-    content: '';
-    position: absolute;
-    left: 0;
-    top: 50%;
-    transform: translateY(-50%);
-    width: 3px;
-    height: 60%;
-    border-radius: 0 4px 4px 0;
-    background: var(--accent-primary);
-    box-shadow: 0 0 10px var(--accent-primary-glow);
+.nav-link.active i {
+    opacity: 1;
 }
 
 .sidebar-footer {
-    padding: 16px 12px;
     border-top: 1px solid var(--border-subtle);
+    padding: 10px;
+}
+
+.logout-btn {
+    color: #ef4444;
 }
 
 .logout-btn:hover {
-    color: #f87171 !important;
-    background: rgba(248, 113, 113, 0.08) !important;
+    background: rgba(239, 68, 68, 0.08) !important;
+    color: #ef4444 !important;
 }
 
 /* Sidebar overlay */
@@ -333,10 +372,7 @@ body {
     font-size: 18px;
     font-weight: 800;
     letter-spacing: 1px;
-    background: linear-gradient(90deg, var(--text-primary), var(--accent-primary-light));
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
+    color: #17716A;
 }
 
 .school-subtitle {
@@ -457,6 +493,20 @@ body {
     box-shadow: 0 0 14px rgba(59, 130, 246, 0.4);
 }
 
+/* Left-aligned page title variant (e.g. "Manage Students" heading) */
+.page-title-section.align-left {
+    text-align: left;
+}
+
+.page-title-section.align-left .page-title,
+.page-title-section.align-left .page-description {
+    text-align: left;
+}
+
+.page-title-section.align-left .title-divider {
+    margin: 14px 0 0;
+}
+
 @keyframes fadeInDown {
     from { opacity: 0; transform: translateY(-20px); }
     to   { opacity: 1; transform: translateY(0); }
@@ -486,9 +536,9 @@ body {
 .stats-overview-grid {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
-    gap: 20px;
+    gap: 16px;
     width: 85vw;
-    max-width: 1400px;
+    max-width: 1100px;
     margin: 0 auto;
 }
 
@@ -496,10 +546,10 @@ body {
     background: var(--bg-card);
     border: 1px solid var(--border-subtle);
     border-radius: var(--radius-md);
-    padding: 18px 20px;
+    padding: 13px 16px;
     display: flex;
     align-items: center;
-    gap: 16px;
+    gap: 12px;
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
     transition: all var(--transition);
@@ -512,13 +562,13 @@ body {
 }
 
 .stat-icon-box {
-    width: 46px;
-    height: 46px;
-    border-radius: 12px;
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 1.2rem;
+    font-size: 1rem;
     flex-shrink: 0;
 }
 
@@ -539,16 +589,16 @@ body {
 
 .stat-title {
     color: var(--text-muted);
-    font-size: 0.75rem;
+    font-size: 0.68rem;
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.5px;
     display: block;
-    margin-bottom: 3px;
+    margin-bottom: 2px;
 }
 
 .stat-details h2 {
-    font-size: 1.6rem;
+    font-size: 1.3rem;
     font-weight: 800;
     color: var(--text-primary);
     line-height: 1;
@@ -649,7 +699,7 @@ body {
     position: absolute;
     inset: 0;
     border-radius: 16px;
-    opacity: 0;
+    opacity: 0.45;
     transition: opacity 0.3s ease;
     z-index: 0;
     pointer-events: none;
@@ -661,6 +711,7 @@ body {
     position: absolute;
     top: 0; left: 0; right: 0;
     height: 2px;
+    background: var(--mc-accent, rgba(99, 102, 241, 0.85));
     transform: scaleX(0);
     transform-origin: left center;
     transition: transform 0.3s cubic-bezier(0.4,0,0.2,1);
@@ -682,6 +733,7 @@ body {
     bottom: 20px;
     right: 22px;
     font-size: 13px;
+    color: var(--mc-accent, rgba(99, 102, 241, 0.85));
     opacity: 0;
     transform: translateX(-6px);
     transition: opacity 0.25s ease, transform 0.25s ease;
@@ -711,9 +763,35 @@ body {
 
 .manage-card:hover .card-glow { opacity: 1; }
 
-/* Hover lift */
+/* Class incharge header row in section-card grids */
+.msc-incharge-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 16px;
+    background: rgba(23, 113, 106, 0.08);
+    border: 1px solid rgba(23, 113, 106, 0.2);
+    border-radius: 10px;
+    font-size: 13.5px;
+    color: var(--text-secondary);
+    margin-bottom: 4px;
+}
+
+.msc-incharge-header i {
+    color: #17716A;
+    font-size: 15px;
+}
+
+.msc-incharge-header strong {
+    color: #17716A;
+    font-weight: 700;
+}
+
+/* Hover lift — applies to every management card, same feel as the finance cards */
 .manage-card:hover {
     transform: translateY(-4px);
+    border-color: var(--mc-border, rgba(99, 102, 241, 0.35));
+    box-shadow: var(--mc-shadow, 0 12px 32px -8px rgba(99, 102, 241, 0.18));
 }
 
 .admission-card:hover {
@@ -1097,7 +1175,7 @@ body {
 
 .hrk-id-badge {
     display: inline-block;
-    background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+    background: #17716A;
     color: white;
     padding: 5px 20px;
     border-radius: 50px;
@@ -1106,7 +1184,7 @@ body {
     margin-top: 10px;
     letter-spacing: 1px;
     font-size: 0.9rem;
-    box-shadow: 0 4px 12px var(--accent-primary-glow);
+    box-shadow: 0 4px 12px rgba(23, 113, 106, 0.35);
 }
 
 .upload-hint {
@@ -3602,3 +3680,89 @@ select option {
     color: #17716A;
 }
 
+
+/* ============================================================
+   MANAGE-STUDENTS — CLASS CARD SELECTOR (View / Edit modals)
+   Staged flow: Classes -> Sections -> Table (idea reused from
+   the Attendance module's class-card grid).
+   ============================================================ */
+.msc-stage.hidden { display: none !important; }
+
+.msc-classes-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+    gap: 16px;
+    padding: 4px 2px 8px;
+}
+
+.msc-class-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-md);
+    padding: 20px 18px;
+    cursor: pointer;
+    transition: var(--transition);
+    color: var(--text-primary);
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    box-shadow: var(--shadow-card);
+}
+.msc-class-card:hover {
+    transform: translateY(-6px);
+    border-color: var(--accent-primary);
+    box-shadow: 0 14px 28px rgba(0,0,0,0.18);
+}
+.msc-class-card .class-name {
+    font-size: 16px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+.msc-class-card .class-meta {
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+.msc-class-card .class-count {
+    margin-top: 8px;
+    font-size: 12px;
+    color: var(--accent-primary-light);
+    font-weight: 600;
+}
+.msc-class-card--all {
+    border-color: rgba(16,185,129,0.35);
+    background: rgba(16,185,129,0.06);
+}
+.msc-class-card--all:hover {
+    border-color: var(--accent-secondary);
+    box-shadow: 0 14px 28px rgba(16,185,129,0.16);
+}
+.msc-class-card--all .class-name i { color: var(--accent-secondary); }
+.msc-class-card--all .class-count { color: var(--accent-secondary-light); }
+
+.msc-stage-header {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+}
+.msc-stage-title {
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin: 0;
+}
+.msc-back-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    white-space: nowrap;
+}
+.msc-sr-cell {
+    color: var(--text-muted);
+    font-weight: 600;
+    text-align: center;
+}

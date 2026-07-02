@@ -61,6 +61,10 @@
 // ============================================================================
 const SETTINGS_CLASSES_KEY = 'edu_class_configs';
 
+// Sentinel value for the "All Students" master card in the View / Edit
+// class-card selectors — means "no class filter applied".
+const ALL_STUDENTS_KEY = '__ALL__';
+
 const DEFAULT_CLASS_CONFIGS = [
     { name: 'Montessori', fee: 3000, fund: 2000, sections: ['A', 'B'] },
     { name: 'Nursery',    fee: 3500, fund: 2000, sections: ['A', 'B'] },
@@ -113,8 +117,35 @@ const ANNUAL_FUND_AMOUNT = getAnnualFundForClass();
 
 // --- GLOBAL STATE & CONFIGURATION ---
 const DB_KEY        = 'edu_students';
-const SYSTEM_PREFIX = 'HRK_77';   // prefix for registration numbers
 const SIBLING_PREFIX = '00';       // prefix for sibling-group IDs
+
+/**
+ * Derive a short registration prefix from the logged-in school's name.
+ * e.g. "St. Lawrence International School" → "SLIS_77"
+ * Falls back to "HRK_77" when no school session exists (demo / superadmin mode).
+ */
+function getSchoolPrefix() {
+    if (window.SoftSchoolAdmin) {
+        const school = window.SoftSchoolAdmin.getCurrentSchool();
+        if (school) {
+            // 1. Use the custom prefix set by superadmin (stored on the school record)
+            if (school.prefix && school.prefix.trim().length > 0) {
+                return school.prefix.trim().toUpperCase() + '_77';
+            }
+            // 2. Derive from school name initials if no prefix was set
+            if (school.name) {
+                const words = school.name.trim().split(/[\s\.\-\/]+/);
+                const initials = words
+                    .filter(w => w.length > 0 && /[A-Za-z]/.test(w[0]))
+                    .map(w => w[0].toUpperCase())
+                    .join('');
+                return (initials.slice(0, 4) || 'SCH') + '_77';
+            }
+        }
+    }
+    return 'HRK_77'; // final fallback (demo / superadmin mode)
+}
+const SYSTEM_PREFIX = getSchoolPrefix();
 
 // ============================================================================
 // INITIALIZATION
@@ -271,15 +302,21 @@ document.addEventListener('DOMContentLoaded', () => {
             // Clear the new unified search bar
             const updSearch = document.getElementById('upd-search-input');
             if (updSearch) updSearch.value = '';
-            // Build class/section tabs, which also calls renderStudentTable()
-            buildUpdClassTabs();
+            // Always re-open on the class-cards stage
+            updActiveClass = null;
+            updActiveSection = null;
+            updRenderClassCards();
+            updShowStage('classes');
         }
 
         if (modalId === 'view-only-modal') {
             const searchEl = document.getElementById('vo-search-name');
             if (searchEl) searchEl.value = '';
-            // Build class tabs from settings, then render
-            buildVoClassTabs();
+            // Always re-open on the class-cards stage
+            voActiveClass = null;
+            voActiveSection = null;
+            voRenderClassCards();
+            voShowStage('classes');
         }
 
         modal.style.display = 'block';
@@ -868,14 +905,25 @@ document.addEventListener('DOMContentLoaded', () => {
      */
     function getClassTeacher(className, section) {
         try {
-            // Read from shared global data (staff management uses 'edu_global_data' via shared-data.js)
+            // Staff Management (manage-staff.js) persists via shared-data.js, which
+            // stores everything under the 'eduflow-db' localStorage key. Reading from
+            // 'edu_global_data' here was the bug — that key is never written to, so
+            // the class-teacher lookup always silently failed.
             let allTeachers = [];
             try {
-                const gd = JSON.parse(localStorage.getItem('edu_global_data') || '{}');
+                const gd = (typeof getGlobalData === 'function')
+                    ? getGlobalData()
+                    : JSON.parse(localStorage.getItem('eduflow-db') || '{}');
                 allTeachers = (gd.staff && Array.isArray(gd.staff['Teaching'])) ? gd.staff['Teaching'] : [];
             } catch(e) {}
 
-            // Also check legacy 'edu_staff' key
+            // Legacy fallbacks, kept in case older data was ever saved under these keys
+            if (!allTeachers.length) {
+                try {
+                    const gd2 = JSON.parse(localStorage.getItem('edu_global_data') || '{}');
+                    if (gd2.staff && Array.isArray(gd2.staff['Teaching'])) allTeachers = gd2.staff['Teaching'];
+                } catch(e) {}
+            }
             if (!allTeachers.length) {
                 try { allTeachers = JSON.parse(localStorage.getItem('edu_staff') || '[]'); } catch(e) {}
             }
@@ -906,9 +954,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
     /** Update the class teacher badge in the update modal */
     function updRefreshTeacherBadge() {
-        const badge     = document.getElementById('upd-class-teacher-badge');
-        const nameEl    = document.getElementById('upd-teacher-name');
-        const teacher   = getClassTeacher(updActiveClass, updActiveSection);
+        const badge   = document.getElementById('upd-class-teacher-badge');
+        const nameEl  = document.getElementById('upd-teacher-name');
+        const topName = document.getElementById('upd-class-incharge-name');
+        const topWrap = document.getElementById('upd-class-incharge-top');
+
+        // "All Students" view has no single class, so hide the incharge readout
+        if (!updActiveClass || updActiveClass === ALL_STUDENTS_KEY) {
+            if (badge) badge.style.display = 'none';
+            if (topWrap) topWrap.style.display = 'none';
+            return;
+        }
+        if (topWrap) topWrap.style.display = '';
+
+        const teacher = getClassTeacher(updActiveClass, updActiveSection);
         // Inline badge next to sections (only when assigned)
         if (badge && nameEl) {
             if (teacher) {
@@ -919,8 +978,6 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
         // Top-row badge — always visible, shows assigned name or "Not Assigned"
-        const topName = document.getElementById('upd-class-incharge-name');
-        const topWrap = document.getElementById('upd-class-incharge-top');
         if (topName && topWrap) {
             topName.textContent = teacher || 'Not Assigned';
             topWrap.classList.toggle('upd-class-incharge-top--none', !teacher);
@@ -931,6 +988,17 @@ document.addEventListener('DOMContentLoaded', () => {
     function voRefreshTeacherBadge() {
         const badge   = document.getElementById('vo-class-teacher-badge');
         const nameEl  = document.getElementById('vo-teacher-name');
+        const topName = document.getElementById('vo-class-incharge-name');
+        const topWrap = document.getElementById('vo-class-incharge-top');
+
+        // "All Students" view has no single class, so hide the incharge readout
+        if (!voActiveClass || voActiveClass === ALL_STUDENTS_KEY) {
+            if (badge) badge.style.display = 'none';
+            if (topWrap) topWrap.style.display = 'none';
+            return;
+        }
+        if (topWrap) topWrap.style.display = '';
+
         const teacher = getClassTeacher(voActiveClass, voActiveSection);
         if (badge && nameEl) {
             if (teacher) {
@@ -940,109 +1008,158 @@ document.addEventListener('DOMContentLoaded', () => {
                 badge.style.display = 'none';
             }
         }
-        const topName = document.getElementById('vo-class-incharge-name');
-        const topWrap = document.getElementById('vo-class-incharge-top');
         if (topName && topWrap) {
             topName.textContent = teacher || 'Not Assigned';
             topWrap.classList.toggle('upd-class-incharge-top--none', !teacher);
         }
     }
 
-    /** Build class tabs for update database modal */
-    function buildUpdClassTabs() {
-        const configs = getClassConfigs();
-        const db      = getDatabase();
-        const tabsEl  = document.getElementById('upd-class-tabs');
-        if (!tabsEl) return;
-
-        const classesWithStudents = new Set(db.map(s => s.studentClass).filter(Boolean));
-        const available = configs.filter(c => classesWithStudents.has(c.name));
-
-        if (available.length === 0) {
-            tabsEl.innerHTML = '<span style="color:var(--text-muted);font-size:0.9rem;padding:8px;">No students registered yet.</span>';
-            document.getElementById('upd-section-tabs').innerHTML = '';
-            const tbody = document.getElementById('student-list-tbody');
-            if (tbody) tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;padding:50px;color:#94a3b8;">No students found.</td></tr>';
-            return;
-        }
-
-        if (!updActiveClass || !available.find(c => c.name === updActiveClass)) {
-            updActiveClass = available[0].name;
-        }
-
-        tabsEl.innerHTML = available.map(c => `
-            <button class="vo-class-tab ${c.name === updActiveClass ? 'active' : ''}"
-                    onclick="updSelectClass('${c.name}')">
-                ${c.name}
-                <span class="vo-tab-count">${db.filter(s => s.studentClass === c.name).length}</span>
-            </button>
-        `).join('');
-
-        buildUpdSectionTabs();
+    /** Show one of the three Edit-modal stages: 'classes' | 'sections' | 'table' */
+    function updShowStage(stage) {
+        ['classes', 'sections', 'table'].forEach(s => {
+            const el = document.getElementById('upd-stage-' + s);
+            if (el) el.classList.toggle('hidden', s !== stage);
+        });
     }
 
-    /** Build section tabs for the active class in update modal */
-    function buildUpdSectionTabs() {
-        const sectionTabsEl = document.getElementById('upd-section-tabs');
-        if (!sectionTabsEl) return;
+    /**
+     * Render the class-cards grid for the Edit modal — an "All Students" master
+     * card plus one card per class configured in Settings (edu_class_configs),
+     * regardless of whether that class has any students yet.
+     */
+    function updRenderClassCards() {
+        const configs = getClassConfigs();
+        const db      = getDatabase();
+        const grid    = document.getElementById('upd-classes-grid');
+        if (!grid) return;
+
+        let html = `
+            <div class="msc-class-card msc-class-card--all" onclick="updOpenAllStudents()">
+                <div class="class-name"><i class="fas fa-users"></i> All Students</div>
+                <div class="class-meta">Every class &amp; section</div>
+                <div class="class-count"><i class="fas fa-user-graduate"></i> ${db.length} students</div>
+            </div>
+        `;
+
+        if (configs.length === 0) {
+            html += `<div style="grid-column:1/-1;text-align:center;padding:32px 12px;color:var(--text-muted);">
+                <i class="fas fa-school" style="font-size:2rem;margin-bottom:10px;display:block;opacity:0.4;"></i>
+                No classes configured yet. Add classes in <a href="settings.html" style="color:var(--accent-primary);">Admin Settings</a>.
+            </div>`;
+        } else {
+            configs.forEach(c => {
+                const count    = db.filter(s => s.studentClass === c.name).length;
+                const sections = (Array.isArray(c.sections) && c.sections.length) ? c.sections.join(', ') : 'No sections configured';
+                html += `
+                    <div class="msc-class-card" onclick="updOpenClass('${c.name}')">
+                        <div class="class-name">${c.name}</div>
+                        <div class="class-meta">Sections: ${sections}</div>
+                        <div class="class-count"><i class="fas fa-users"></i> ${count} students</div>
+                    </div>
+                `;
+            });
+        }
+
+        grid.innerHTML = html;
+    }
+
+    /** Render the section-cards grid for the active class in the Edit modal */
+    function updRenderSectionCards() {
+        const grid    = document.getElementById('upd-sections-grid');
+        const titleEl = document.getElementById('upd-sections-title');
+        if (titleEl) titleEl.textContent = updActiveClass;
+        if (!grid) return;
 
         const cfg      = getClassConfigMap()[updActiveClass];
         const sections = (cfg && Array.isArray(cfg.sections) && cfg.sections.length) ? cfg.sections : [];
         const db       = getDatabase();
         const classStu = db.filter(s => s.studentClass === updActiveClass);
+        const allTeacher = getClassTeacher(updActiveClass, 'ALL');
+
+        let html = `
+            <div class="msc-incharge-header" style="grid-column:1/-1;">
+                <i class="fas fa-chalkboard-teacher"></i>
+                <span>Class Incharge: <strong>${allTeacher || 'Not Assigned'}</strong></span>
+            </div>
+            <div class="msc-class-card msc-class-card--all" onclick="updOpenSection('ALL')">
+                <div class="class-name"><i class="fas fa-layer-group"></i> All Sections</div>
+                <div class="class-meta">All ${classStu.length} students</div>
+                <div class="class-count"><i class="fas fa-users"></i> ${classStu.length} students</div>
+            </div>
+        `;
 
         if (sections.length === 0) {
-            sectionTabsEl.innerHTML = '';
-            updActiveSection = 'ALL';
-            updRefreshTeacherBadge();
-            renderStudentTable();
-            return;
+            html += `<div style="grid-column:1/-1;text-align:center;padding:24px 12px;color:var(--text-muted);">
+                No sections configured for this class in <a href="settings.html" style="color:var(--accent-primary);">Admin Settings</a>.
+            </div>`;
+        } else {
+            sections.forEach(sec => {
+                const cnt = classStu.filter(s => s.section === sec).length;
+                const t   = getClassTeacher(updActiveClass, sec);
+                html += `
+                    <div class="msc-class-card" onclick="updOpenSection('${sec}')">
+                        <div class="class-name">Section ${sec}</div>
+                        <div class="class-meta">${t ? 'Incharge: ' + t : 'No incharge assigned'}</div>
+                        <div class="class-count"><i class="fas fa-users"></i> ${cnt} students</div>
+                    </div>
+                `;
+            });
         }
 
-        if (!updActiveSection || (updActiveSection !== 'ALL' && !sections.includes(updActiveSection))) {
-            updActiveSection = sections[0];
-        }
-
-        const allCount = classStu.length;
-        let html = `<button class="vo-section-tab ${updActiveSection === 'ALL' ? 'active' : ''}"
-                            onclick="updSelectSection('ALL')">
-                        All <span class="vo-tab-count">${allCount}</span>
-                    </button>`;
-        sections.forEach(sec => {
-            const cnt = classStu.filter(s => s.section === sec).length;
-            const t = getClassTeacher(updActiveClass, sec);
-            const tHtml = t
-                ? `<span class="vo-tab-incharge" title="Class Incharge">· ${t}</span>`
-                : `<span class="vo-tab-incharge vo-tab-incharge--none" title="No incharge assigned">· Unassigned</span>`;
-            html += `<button class="vo-section-tab ${updActiveSection === sec ? 'active' : ''}"
-                             onclick="updSelectSection('${sec}')">
-                         Section ${sec} <span class="vo-tab-count">${cnt}</span> ${tHtml}
-                     </button>`;
-        });
-
-        sectionTabsEl.innerHTML = html;
-        updRefreshTeacherBadge();
-        renderStudentTable();
+        grid.innerHTML = html;
     }
 
-    window.updSelectClass = function(className) {
-        updActiveClass   = className;
+    /** "All Students" card clicked — skip class/section filtering entirely */
+    window.updOpenAllStudents = function() {
+        updActiveClass   = ALL_STUDENTS_KEY;
         updActiveSection = null;
         const srch = document.getElementById('upd-search-input');
         if (srch) srch.value = '';
-        buildUpdClassTabs();
-    };
-
-    window.updSelectSection = function(section) {
-        updActiveSection = section;
-        document.querySelectorAll('#upd-section-tabs .vo-section-tab').forEach(btn => {
-            const label = btn.textContent.trim();
-            btn.classList.toggle('active',
-                section === 'ALL' ? label.startsWith('All') : label.startsWith('Section ' + section)
-            );
-        });
+        const titleEl = document.getElementById('upd-table-context-title');
+        if (titleEl) titleEl.textContent = 'All Students';
+        updShowStage('table');
         updRefreshTeacherBadge();
         renderStudentTable();
+    };
+
+    /** A class card was clicked — move to the section-cards stage */
+    window.updOpenClass = function(className) {
+        updActiveClass   = className;
+        updActiveSection = null;
+        updRenderSectionCards();
+        updShowStage('sections');
+    };
+
+    /** A section card (or "All Sections") was clicked — show the student table */
+    window.updOpenSection = function(section) {
+        updActiveSection = section;
+        const srch = document.getElementById('upd-search-input');
+        if (srch) srch.value = '';
+        const titleEl = document.getElementById('upd-table-context-title');
+        if (titleEl) {
+            titleEl.textContent = section === 'ALL'
+                ? `${updActiveClass} — All Sections`
+                : `${updActiveClass} — Section ${section}`;
+        }
+        updShowStage('table');
+        updRefreshTeacherBadge();
+        renderStudentTable();
+    };
+
+    /** Back button: table -> sections (or straight to classes if we came from "All Students") */
+    window.updBackToSections = function() {
+        if (updActiveClass === ALL_STUDENTS_KEY) { window.updBackToClasses(); return; }
+        updActiveSection = null;
+        updRenderSectionCards();
+        updShowStage('sections');
+    };
+
+    /** Back button: sections -> classes */
+    window.updBackToClasses = function() {
+        updActiveClass   = null;
+        updActiveSection = null;
+        updRenderClassCards();
+        updShowStage('classes');
     };
 
     window.renderStudentTable = function() {
@@ -1052,8 +1169,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
         tbody.innerHTML = "";
 
-        // Use the new tab-based class/section filtering when upd tabs are active
-        const useTabFilter = (updActiveClass !== null);
+        // Card flow sets updActiveClass to a real class name, or to ALL_STUDENTS_KEY
+        // for the "All Students" master card (which applies no class filter).
+        const useTabFilter = (updActiveClass !== null && updActiveClass !== ALL_STUDENTS_KEY);
 
         // Unified search bar (new)
         const qUnified = (document.getElementById('upd-search-input')
@@ -1067,12 +1185,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
         let filtered = db;
 
-        // Apply class filter from tabs
+        // Apply class filter (skipped entirely for "All Students")
         if (useTabFilter && updActiveClass) {
             filtered = filtered.filter(s => s.studentClass === updActiveClass);
         }
 
-        // Apply section filter from tabs
+        // Apply section filter
         if (useTabFilter && updActiveSection && updActiveSection !== 'ALL') {
             filtered = filtered.filter(s => s.section === updActiveSection);
         }
@@ -1104,12 +1222,12 @@ document.addEventListener('DOMContentLoaded', () => {
         const promoteMode = document.body.classList.contains('promote-mode-active');
 
         if (filtered.length === 0) {
-            const colCount = promoteMode ? 10 : 9;
+            const colCount = promoteMode ? 11 : 10;
             tbody.innerHTML = `<tr><td colspan="${colCount}" style="text-align:center;padding:50px;color:#94a3b8;">No matching records found in this class/section.</td></tr>`;
             return;
         }
 
-        filtered.forEach(s => {
+        filtered.forEach((s, idx) => {
             // ── MAIN TABLE always shows HRK_77 number ──
             const displayId = s.regNo || s.id;
 
@@ -1131,6 +1249,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const row = `
                 <tr>
                     ${checkboxCell}
+                    <td class="msc-sr-cell">${idx + 1}</td>
                     <td><span class="hrk-id-badge">${displayId}</span></td>
                     <td>${s.rollNo || '—'}</td>
                     <td><strong>${s.fullName}</strong>${siblingTag}</td>
@@ -1158,112 +1277,150 @@ document.addEventListener('DOMContentLoaded', () => {
     let voActiveClass   = null;  // currently selected class name
     let voActiveSection = null;  // currently selected section, or 'ALL'
 
-    /**
-     * Build class tabs from settings — only classes that actually have students
-     * OR exist in settings are shown. We show all configured classes.
-     */
-    function buildVoClassTabs() {
-        const configs  = getClassConfigs();
-        const db       = getDatabase();
-        const tabsEl   = document.getElementById('vo-class-tabs');
-        if (!tabsEl) return;
-
-        // Only show classes that have at least one student registered
-        const classesWithStudents = new Set(db.map(s => s.studentClass).filter(Boolean));
-        const availableClasses = configs.filter(c => classesWithStudents.has(c.name));
-
-        if (availableClasses.length === 0) {
-            tabsEl.innerHTML = '<span style="color:var(--text-muted);font-size:0.9rem;padding:8px;">No students registered yet.</span>';
-            document.getElementById('vo-section-tabs').innerHTML = '';
-            const tbody = document.getElementById('vo-student-tbody');
-            if (tbody) tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:50px;color:#94a3b8;">No students found.</td></tr>';
-            return;
-        }
-
-        // Default to first class if none selected or current no longer exists
-        if (!voActiveClass || !availableClasses.find(c => c.name === voActiveClass)) {
-            voActiveClass = availableClasses[0].name;
-        }
-
-        tabsEl.innerHTML = availableClasses.map(c => `
-            <button class="vo-class-tab ${c.name === voActiveClass ? 'active' : ''}"
-                    onclick="voSelectClass('${c.name}')">
-                ${c.name}
-                <span class="vo-tab-count">${db.filter(s => s.studentClass === c.name).length}</span>
-            </button>
-        `).join('');
-
-        buildVoSectionTabs();
+    /** Show one of the three View-only modal stages: 'classes' | 'sections' | 'table' */
+    function voShowStage(stage) {
+        ['classes', 'sections', 'table'].forEach(s => {
+            const el = document.getElementById('vo-stage-' + s);
+            if (el) el.classList.toggle('hidden', s !== stage);
+        });
     }
 
-    /** Build section tabs for the currently active class */
-    function buildVoSectionTabs() {
-        const sectionTabsEl = document.getElementById('vo-section-tabs');
-        if (!sectionTabsEl) return;
+    /**
+     * Render the class-cards grid for the View-only modal — an "All Students"
+     * master card plus one card per class configured in Settings, regardless
+     * of whether that class currently has any students.
+     */
+    function voRenderClassCards() {
+        const configs = getClassConfigs();
+        const db      = getDatabase();
+        const grid    = document.getElementById('vo-classes-grid');
+        if (!grid) return;
+
+        let html = `
+            <div class="msc-class-card msc-class-card--all" onclick="voOpenAllStudents()">
+                <div class="class-name"><i class="fas fa-users"></i> All Students</div>
+                <div class="class-meta">Every class &amp; section</div>
+                <div class="class-count"><i class="fas fa-user-graduate"></i> ${db.length} students</div>
+            </div>
+        `;
+
+        if (configs.length === 0) {
+            html += `<div style="grid-column:1/-1;text-align:center;padding:32px 12px;color:var(--text-muted);">
+                <i class="fas fa-school" style="font-size:2rem;margin-bottom:10px;display:block;opacity:0.4;"></i>
+                No classes configured yet. Add classes in <a href="settings.html" style="color:var(--accent-primary);">Admin Settings</a>.
+            </div>`;
+        } else {
+            configs.forEach(c => {
+                const count    = db.filter(s => s.studentClass === c.name).length;
+                const sections = (Array.isArray(c.sections) && c.sections.length) ? c.sections.join(', ') : 'No sections configured';
+                html += `
+                    <div class="msc-class-card" onclick="voOpenClass('${c.name}')">
+                        <div class="class-name">${c.name}</div>
+                        <div class="class-meta">Sections: ${sections}</div>
+                        <div class="class-count"><i class="fas fa-users"></i> ${count} students</div>
+                    </div>
+                `;
+            });
+        }
+
+        grid.innerHTML = html;
+    }
+
+    /** Render the section-cards grid for the currently active class */
+    function voRenderSectionCards() {
+        const grid    = document.getElementById('vo-sections-grid');
+        const titleEl = document.getElementById('vo-sections-title');
+        if (titleEl) titleEl.textContent = voActiveClass;
+        if (!grid) return;
 
         const cfg      = getClassConfigMap()[voActiveClass];
-        const sections = (cfg && Array.isArray(cfg.sections) && cfg.sections.length)
-            ? cfg.sections : [];
-
-        const db = getDatabase();
+        const sections = (cfg && Array.isArray(cfg.sections) && cfg.sections.length) ? cfg.sections : [];
+        const db       = getDatabase();
         const classStudents = db.filter(s => s.studentClass === voActiveClass);
+        const allTeacher = getClassTeacher(voActiveClass, 'ALL');
 
-        // If no sections configured, hide section tabs entirely
+        let html = `
+            <div class="msc-incharge-header" style="grid-column:1/-1;">
+                <i class="fas fa-chalkboard-teacher"></i>
+                <span>Class Incharge: <strong>${allTeacher || 'Not Assigned'}</strong></span>
+            </div>
+            <div class="msc-class-card msc-class-card--all" onclick="voOpenSection('ALL')">
+                <div class="class-name"><i class="fas fa-layer-group"></i> All Sections</div>
+                <div class="class-meta">All ${classStudents.length} students</div>
+                <div class="class-count"><i class="fas fa-users"></i> ${classStudents.length} students</div>
+            </div>
+        `;
+
         if (sections.length === 0) {
-            sectionTabsEl.innerHTML = '';
-            voActiveSection = 'ALL';
-            renderViewOnlyTable();
-            return;
+            html += `<div style="grid-column:1/-1;text-align:center;padding:24px 12px;color:var(--text-muted);">
+                No sections configured for this class in <a href="settings.html" style="color:var(--accent-primary);">Admin Settings</a>.
+            </div>`;
+        } else {
+            sections.forEach(sec => {
+                const cnt = classStudents.filter(s => s.section === sec).length;
+                const t   = getClassTeacher(voActiveClass, sec);
+                html += `
+                    <div class="msc-class-card" onclick="voOpenSection('${sec}')">
+                        <div class="class-name">Section ${sec}</div>
+                        <div class="class-meta">${t ? 'Incharge: ' + t : 'No incharge assigned'}</div>
+                        <div class="class-count"><i class="fas fa-users"></i> ${cnt} students</div>
+                    </div>
+                `;
+            });
         }
 
-        // Default section
-        if (!voActiveSection || (voActiveSection !== 'ALL' && !sections.includes(voActiveSection))) {
-            voActiveSection = sections[0];
-        }
-
-        // Build: "All" tab + one tab per section
-        const allCount = classStudents.length;
-        let html = `<button class="vo-section-tab ${voActiveSection === 'ALL' ? 'active' : ''}"
-                            onclick="voSelectSection('ALL')">
-                        All <span class="vo-tab-count">${allCount}</span>
-                    </button>`;
-
-        sections.forEach(sec => {
-            const cnt = classStudents.filter(s => s.section === sec).length;
-            const t = getClassTeacher(voActiveClass, sec);
-            const tHtml = t
-                ? `<span class="vo-tab-incharge" title="Class Incharge">· ${t}</span>`
-                : `<span class="vo-tab-incharge vo-tab-incharge--none" title="No incharge assigned">· Unassigned</span>`;
-            html += `<button class="vo-section-tab ${voActiveSection === sec ? 'active' : ''}"
-                             onclick="voSelectSection('${sec}')">
-                         Section ${sec} <span class="vo-tab-count">${cnt}</span> ${tHtml}
-                     </button>`;
-        });
-
-        sectionTabsEl.innerHTML = html;
-        renderViewOnlyTable();
+        grid.innerHTML = html;
     }
 
-    /** Called when user clicks a class tab */
-    window.voSelectClass = function(className) {
-        voActiveClass = className;
-        voActiveSection = null; // reset section so buildVoSectionTabs picks the first
-        // Clear search
+    /** "All Students" card clicked — skip class/section filtering entirely */
+    window.voOpenAllStudents = function() {
+        voActiveClass   = ALL_STUDENTS_KEY;
+        voActiveSection = null;
         const srch = document.getElementById('vo-search-name');
         if (srch) srch.value = '';
-        buildVoClassTabs(); // rebuilds both class + section tabs + table
+        const titleEl = document.getElementById('vo-table-context-title');
+        if (titleEl) titleEl.textContent = 'All Students';
+        voShowStage('table');
+        renderViewOnlyTable();
     };
 
-    /** Called when user clicks a section tab */
-    window.voSelectSection = function(section) {
+    /** A class card was clicked — move to the section-cards stage */
+    window.voOpenClass = function(className) {
+        voActiveClass   = className;
+        voActiveSection = null;
+        voRenderSectionCards();
+        voShowStage('sections');
+    };
+
+    /** A section card (or "All Sections") was clicked — show the student table */
+    window.voOpenSection = function(section) {
         voActiveSection = section;
-        // Update section tab active state
-        document.querySelectorAll('.vo-section-tab').forEach(btn => {
-            btn.classList.toggle('active', btn.textContent.trim().startsWith(
-                section === 'ALL' ? 'All' : 'Section ' + section
-            ));
-        });
+        const srch = document.getElementById('vo-search-name');
+        if (srch) srch.value = '';
+        const titleEl = document.getElementById('vo-table-context-title');
+        if (titleEl) {
+            titleEl.textContent = section === 'ALL'
+                ? `${voActiveClass} — All Sections`
+                : `${voActiveClass} — Section ${section}`;
+        }
+        voShowStage('table');
         renderViewOnlyTable();
+    };
+
+    /** Back button: table -> sections (or straight to classes if we came from "All Students") */
+    window.voBackToSections = function() {
+        if (voActiveClass === ALL_STUDENTS_KEY) { window.voBackToClasses(); return; }
+        voActiveSection = null;
+        voRenderSectionCards();
+        voShowStage('sections');
+    };
+
+    /** Back button: sections -> classes */
+    window.voBackToClasses = function() {
+        voActiveClass   = null;
+        voActiveSection = null;
+        voRenderClassCards();
+        voShowStage('classes');
     };
 
     window.renderViewOnlyTable = function() {
@@ -1276,12 +1433,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const qName = (document.getElementById('vo-search-name') ? document.getElementById('vo-search-name').value : '').toLowerCase().trim();
 
-        // Filter by active class first
-        let filtered = db.filter(s => s.studentClass === voActiveClass);
+        // "All Students" master card applies no class filter at all
+        let filtered = db;
+        if (voActiveClass && voActiveClass !== ALL_STUDENTS_KEY) {
+            filtered = filtered.filter(s => s.studentClass === voActiveClass);
 
-        // Then by active section (unless ALL)
-        if (voActiveSection && voActiveSection !== 'ALL') {
-            filtered = filtered.filter(s => s.section === voActiveSection);
+            // Then by active section (unless ALL)
+            if (voActiveSection && voActiveSection !== 'ALL') {
+                filtered = filtered.filter(s => s.section === voActiveSection);
+            }
         }
 
         // Then by search query (name or reg no)
@@ -1295,14 +1455,14 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         if (filtered.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:50px;color:#94a3b8;">No students found in this class/section.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:50px;color:#94a3b8;">No students found in this class/section.</td></tr>';
             return;
         }
 
         // Sort by roll number
         filtered.sort((a, b) => (parseInt(a.rollNo) || 0) - (parseInt(b.rollNo) || 0));
 
-        filtered.forEach(s => {
+        filtered.forEach((s, idx) => {
             const displayId  = s.regNo || s.id;
             const siblingTag = (s.isSibling && s.siblingOf)
                 ? `<br><span class="sibling-tag"><i class="fas fa-user-friends"></i> Sibling of ${s.siblingOf}</span>`
@@ -1310,6 +1470,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             tbody.innerHTML += `
                 <tr>
+                    <td class="msc-sr-cell">${idx + 1}</td>
                     <td><span class="hrk-id-badge">${displayId}</span></td>
                     <td>${s.rollNo || '—'}</td>
                     <td><strong>${s.fullName}</strong>${siblingTag}</td>
@@ -1333,11 +1494,15 @@ document.addEventListener('DOMContentLoaded', () => {
     const updSearchEl = document.getElementById('upd-search-input');
     if (updSearchEl) updSearchEl.addEventListener('input', renderStudentTable);
 
-    // Re-sync tabs if settings change in another tab
+    // Re-sync class cards if settings change in another tab
     window.addEventListener('storage', (e) => {
         if (e.key === SETTINGS_CLASSES_KEY) {
-            buildVoClassTabs();
-            buildUpdClassTabs();
+            if (document.getElementById('vo-stage-classes') && !document.getElementById('vo-stage-classes').classList.contains('hidden')) {
+                voRenderClassCards();
+            }
+            if (document.getElementById('upd-stage-classes') && !document.getElementById('upd-stage-classes').classList.contains('hidden')) {
+                updRenderClassCards();
+            }
         }
     });
 
