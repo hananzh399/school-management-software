@@ -1137,3 +1137,154 @@ appendTeacherCard = function (t, isNew) {
   updateStaffCounts();
   return card;
 };
+// ═══════════════════════════════════════════════
+//  Attendance Timing Control
+//  Two daily auto-save times for staff attendance
+// ═══════════════════════════════════════════════
+const ATT_TIMING_KEY = 'edu_attendance_timing';
+
+// Optional: point this at your real DB endpoint. If blank, only localStorage
+// is updated (eduflow-db → attendance.autoSaves[]) so the app keeps working.
+const ATTENDANCE_DB_ENDPOINT = ''; // e.g. 'https://your-api.example.com/attendance/auto-save'
+
+const DEFAULT_ATT_TIMING = {
+  first:  { hour: 10, minute: 0, meridiem: 'AM', enabled: true },
+  second: { hour: 2,  minute: 0, meridiem: 'PM', enabled: true },
+};
+
+function loadAttendanceTiming() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(ATT_TIMING_KEY) || '{}');
+    return {
+      first:  Object.assign({}, DEFAULT_ATT_TIMING.first,  saved.first  || {}),
+      second: Object.assign({}, DEFAULT_ATT_TIMING.second, saved.second || {}),
+    };
+  } catch { return DEFAULT_ATT_TIMING; }
+}
+
+function renderAttendanceTiming() {
+  const t = loadAttendanceTiming();
+  const set = (id, val) => { const el = document.getElementById(id); if (el) el.value = val; };
+  const check = (id, val) => { const el = document.getElementById(id); if (el) el.checked = !!val; };
+
+  set('autosave1-hour',     t.first.hour);
+  set('autosave1-minute',   t.first.minute);
+  set('autosave1-meridiem', t.first.meridiem);
+  check('autosave1-enabled', t.first.enabled);
+
+  set('autosave2-hour',     t.second.hour);
+  set('autosave2-minute',   t.second.minute);
+  set('autosave2-meridiem', t.second.meridiem);
+  check('autosave2-enabled', t.second.enabled);
+}
+
+function _readTimingSlot(prefix) {
+  const h   = parseInt(document.getElementById(prefix + '-hour').value, 10);
+  const m   = parseInt(document.getElementById(prefix + '-minute').value, 10);
+  const mer = document.getElementById(prefix + '-meridiem').value;
+  const en  = document.getElementById(prefix + '-enabled').checked;
+  if (isNaN(h) || h < 1 || h > 12) throw new Error('Hour must be between 1 and 12');
+  if (isNaN(m) || m < 0 || m > 59) throw new Error('Minutes must be between 0 and 59');
+  return { hour: h, minute: m, meridiem: mer, enabled: en };
+}
+
+function saveAttendanceTiming() {
+  const status = document.getElementById('timing-status');
+  try {
+    const timing = {
+      first:  _readTimingSlot('autosave1'),
+      second: _readTimingSlot('autosave2'),
+    };
+    localStorage.setItem(ATT_TIMING_KEY, JSON.stringify(timing));
+    if (status) {
+      status.textContent = '✓ Saved. Auto-save times updated.';
+      setTimeout(() => (status.textContent = ''), 2500);
+    }
+    // The Attendance page (attendance.js) is what actually clicks the real
+    // Save buttons at the configured time. Tell it right away — via a
+    // same-tab custom event, and via the native 'storage' event for any
+    // other open tab — so the new time takes effect immediately instead of
+    // waiting for its next periodic check.
+    window.dispatchEvent(new CustomEvent('eduflow-attendance-timing-changed', { detail: timing }));
+    if (typeof showToast === 'function') showToast('Attendance timings saved.', 'success');
+  } catch (e) {
+    if (status) status.textContent = '⚠ ' + e.message;
+  }
+}
+
+// ── Scheduler ─────────────────────────────────────
+function _to24Hour(hour, meridiem) {
+  let h = hour % 12;
+  if (meridiem === 'PM') h += 12;
+  return h;
+}
+function _msUntil(hour24, minute) {
+  const now = new Date();
+  const target = new Date(now);
+  target.setHours(hour24, minute, 0, 0);
+  if (target <= now) target.setDate(target.getDate() + 1);
+  return target - now;
+}
+
+let _attAutoSaveTimers = [];
+function scheduleAttendanceAutoSaves() {
+  _attAutoSaveTimers.forEach(clearTimeout);
+  _attAutoSaveTimers = [];
+
+  const t = loadAttendanceTiming();
+  [['first', t.first], ['second', t.second]].forEach(([label, slot]) => {
+    if (!slot.enabled) return;
+    const h24 = _to24Hour(slot.hour, slot.meridiem);
+    const delay = _msUntil(h24, slot.minute);
+    const id = setTimeout(async function fire() {
+      await runStaffAttendanceAutoSave(label, slot);
+      // reschedule for next day
+      _attAutoSaveTimers.push(setTimeout(fire, 24 * 60 * 60 * 1000));
+    }, delay);
+    _attAutoSaveTimers.push(id);
+  });
+}
+
+async function runStaffAttendanceAutoSave(label, slot) {
+  const db = JSON.parse(localStorage.getItem('eduflow-db') || '{}');
+  const today = new Date().toISOString().slice(0, 10);
+
+  const snapshot = {
+    date: today,
+    slot: label,                    // 'first' | 'second'
+    time: `${slot.hour}:${String(slot.minute).padStart(2, '0')} ${slot.meridiem}`,
+    savedAt: new Date().toISOString(),
+    staff: (db.attendance && db.attendance.staff && db.attendance.staff[today]) || [],
+  };
+
+  // 1) Persist locally
+  db.attendance = db.attendance || {};
+  db.attendance.autoSaves = db.attendance.autoSaves || [];
+  db.attendance.autoSaves.push(snapshot);
+  localStorage.setItem('eduflow-db', JSON.stringify(db));
+
+  // 2) Push to real database if endpoint configured
+  if (ATTENDANCE_DB_ENDPOINT) {
+    try {
+      await fetch(ATTENDANCE_DB_ENDPOINT, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(snapshot),
+      });
+    } catch (err) {
+      console.warn('[Attendance] Auto-save network error:', err);
+    }
+  }
+  console.log(`[Attendance] Auto-saved (${label}) at`, snapshot.time);
+}
+
+// Hook into DOM ready — render inputs and start schedulers
+document.addEventListener('DOMContentLoaded', () => {
+  renderAttendanceTiming();
+  // NOTE: actually *executing* the auto-save (clicking the real Save
+  // buttons and writing attendance to the database) now happens over in
+  // attendance.js, which reads this same ATT_TIMING_KEY
+  // ('edu_attendance_timing') value. That keeps a single source of truth:
+  // whatever time is set here in Settings is exactly what the Attendance
+  // page acts on.
+});
