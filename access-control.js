@@ -92,6 +92,7 @@
   function addSchool(data) {
     const schools = getSchools();
     const plan = PLANS[data.planId] || PLANS.basic;
+    const rawPrefix = (data.prefix || "").trim().toUpperCase().replace(/[^A-Z]/g, "").slice(0, 4);
     const record = {
       id: genSchoolId(),
       name: data.name,
@@ -102,6 +103,7 @@
       studentLimit: data.studentLimit || plan.studentLimit,
       status: "active",
       locks: Array.isArray(data.locks) ? data.locks.slice() : plan.defaultLocks.slice(),
+      prefix: rawPrefix,
       createdAt: new Date().toISOString()
     };
     schools.push(record);
