@@ -103,12 +103,13 @@ function calculateAndLoadDashboardData() {
     // Net Expenses = Salaries + Bonuses + Other Expenses
     const netExp = data.salaries.total + data.staffBonusTotal + data.otherExpensesTotal;
     
-    // Total Revenue = Collected Fees + all fines (late, manual student+staff, staff absence)
+    // Total Revenue = Collected Fees + all fines (late, manual student+staff, staff absence) + Admission Fees
     const totalRev = data.fees.collected
         + data.fines.studentLate
         + data.fines.studentOther
         + data.fines.staffTotal
-        + data.fines.teacherAbsence;
+        + data.fines.teacherAbsence
+        + data.admissionFees;
     
     // Net Profit = Revenue - Expenses
     const netProfit = totalRev - netExp;
@@ -123,6 +124,13 @@ function calculateAndLoadDashboardData() {
     animateCounter('student-late-fines', data.fines.studentLate); 
     animateCounter('student-other-fines', data.fines.studentOther + data.fines.staffTotal); 
     animateCounter('teacher-absence-fines', data.fines.teacherAbsence);
+
+    // 3b. ADMISSION FEES — only appears once at least one student has an
+    // admission fee on record; otherwise it just sits at 0 like any other metric.
+    animateCounter('admission-fees', data.admissionFees);
+
+    // 3c. TOTAL REVENUE — collected fees + every fine + admission fees, all together
+    animateCounter('total-revenue', totalRev);
 
     // 4. UPDATE THE UI (Expenses)
     animateCounter('base-salaries', data.salaries.total);
@@ -308,11 +316,15 @@ function calculateFinancials() {
     // 8. Calculate Student Fees
     let expected = 0;
     let collected = 0;
+    let admissionFees = 0;
     students.forEach(s => {
         expected += (Number(s.standardFee) || 0);
         (s.feePayments || []).forEach(p => {
             collected += (Number(p.amount) || 0);
         });
+        // Admission Fee is a one-time charge captured on the student's record
+        // at the time of admission — only counts once anything is actually entered.
+        admissionFees += (Number(s.admissionFee) || 0);
     });
 
     // 9. Return the data object
@@ -324,6 +336,7 @@ function calculateFinancials() {
             collected: collected,
             pending: Math.max(0, expected - collected)
         },
+        admissionFees: admissionFees,
         fines: {
             studentLate: computeStudentLateFinesTotal() + (db.students?.fines?.lateFees || 0),
             studentOther: totalStudentFines,

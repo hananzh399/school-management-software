@@ -329,6 +329,11 @@
     border-color: rgba(239, 68, 68, 0.2);
 }
 
+.total-revenue-metric {
+    background: rgba(59, 130, 246, 0.05);
+    border-color: rgba(59, 130, 246, 0.2);
+}
+
 /* Colors */
 .text-green { color: #10b981; }
 .text-red { color: #ef4444; }
