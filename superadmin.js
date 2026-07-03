@@ -3,7 +3,7 @@
  * SOFT SCHOOL — SUPER ADMIN PANEL LOGIC
  * ------------------------------------------------------------
  * There's no login screen here on purpose: this file is only
- * ever opened directly from the repo/hosting by you — it isn't
+ * ever opened directly from the repo/hsting by you — it isn't
  * linked from anywhere inside the app itself, so that's what
  * keeps it private. If you ever host this publicly and want a
  * password on top of that, that's easy to add back in later.
