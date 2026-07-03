@@ -19,11 +19,13 @@
  * ─────────────────────
  * Every student gets TWO identifiers:
  *
- *   regNo  →  HRK_77XXX  (e.g. HRK_771, HRK_772, HRK_773 …)
+ *   regNo  →  PREFIX_X  (e.g. PSC_1, PSC_2, PSC_3 …) — PREFIX is whatever
+ *             prefix Super Admin set for this school (falls back to "HRK"
+ *             only when no school is logged in at all).
  *             Sequential, unique per student, assigned at registration.
  *             This is what appears in the MAIN TABLE and on the profile header.
  *
- *   id     →  For independent students : same as regNo  (HRK_77XXX)
+ *   id     →  For independent students : same as regNo  (PREFIX_X)
  *             For sibling students      : shared sibling-group code (00X)
  *
  * SIBLING-GROUP ID (stored as `id` on sibling records):
@@ -41,7 +43,7 @@
  *   each time a new sibling joins the group.
  *
  * WHAT SHOWS WHERE:
- *   Main table   → regNo badge (HRK_77XXX) for every student
+ *   Main table   → regNo badge (PREFIX_X) for every student
  *   Full profile → regNo badge in header  +  Sibling ID (00X) in details
  *                  +  "Sibling of …" list for every family member
  * ============================================================================
@@ -121,8 +123,12 @@ const SIBLING_PREFIX = '00';       // prefix for sibling-group IDs
 
 /**
  * Derive a short registration prefix from the logged-in school's name.
- * e.g. "St. Lawrence International School" → "SLIS_77"
- * Falls back to "HRK_77" when no school session exists (demo / superadmin mode).
+ * e.g. school prefix "PSC" set in Super Admin → "PSC_"  (so IDs read PSC_1, PSC_2, PSC_3 …)
+ * Falls back to "HRK_" when no school session exists (demo / superadmin mode).
+ *
+ * IMPORTANT: this is re-read from the school's session/record every time the
+ * page loads, so whatever prefix Super Admin has set for THIS school is what
+ * gets used — it is never hardcoded to "HRK".
  */
 function getSchoolPrefix() {
     if (window.SoftSchoolAdmin) {
@@ -130,7 +136,7 @@ function getSchoolPrefix() {
         if (school) {
             // 1. Use the custom prefix set by superadmin (stored on the school record)
             if (school.prefix && school.prefix.trim().length > 0) {
-                return school.prefix.trim().toUpperCase() + '_77';
+                return school.prefix.trim().toUpperCase() + '_';
             }
             // 2. Derive from school name initials if no prefix was set
             if (school.name) {
@@ -139,13 +145,18 @@ function getSchoolPrefix() {
                     .filter(w => w.length > 0 && /[A-Za-z]/.test(w[0]))
                     .map(w => w[0].toUpperCase())
                     .join('');
-                return (initials.slice(0, 4) || 'SCH') + '_77';
+                return (initials.slice(0, 4) || 'SCH') + '_';
             }
         }
     }
-    return 'HRK_77'; // final fallback (demo / superadmin mode)
+    return 'HRK_'; // final fallback (demo / superadmin mode, no school logged in)
 }
 const SYSTEM_PREFIX = getSchoolPrefix();
+
+/** Escape a string for safe use inside a RegExp (prefix may contain odd chars). */
+function escapeRegExp(str) {
+    return String(str).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
 
 // ============================================================================
 // INITIALIZATION
@@ -278,6 +289,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 rollNoInput.value = '—';
                 displayRegBadge.innerText = nextRegNo;
                 admissionForm.dataset.pendingRegNo = nextRegNo;
+
+                // New admission — never a sibling badge to show yet
+                const newSiblingBadge = document.getElementById('edit-sibling-badge');
+                if (newSiblingBadge) { newSiblingBadge.style.display = 'none'; newSiblingBadge.innerHTML = ''; }
 
                 if (booksFeePanel) {
                     booksFeePanel.style.display = 'none';
@@ -588,18 +603,24 @@ document.addEventListener('DOMContentLoaded', () => {
     // ── 6. DATA PERSISTENCE (CRUD) ───────────────────────────────────────────
 
     /**
-     * Generate next HRK_77 registration number.
-     * Scans ALL records (including siblings) for the highest number already used.
-     * Format: HRK_771, HRK_772, HRK_773 … (no leading zeros, never "00")
+     * Generate the next registration number using THIS school's own prefix
+     * (set in Super Admin → school → "Registration prefix"; falls back to
+     * name initials, then to "HRK" only if no school is logged in at all).
+     * Scans ALL records (including siblings) for the highest number already
+     * used WITH THE CURRENT PREFIX, so switching a school's prefix in Super
+     * Admin cleanly starts a fresh sequence under the new prefix instead of
+     * silently reusing/colliding with old numbers.
+     * Format: PREFIX_1, PREFIX_2, PREFIX_3 … (no leading zeros, starts at 1)
      */
     function generateNextRegistrationNumber() {
         const db = getDatabase();
         let maxSeq = 0;
+        const prefixRegex = new RegExp('^' + escapeRegExp(SYSTEM_PREFIX) + '(\\d+)$');
         db.forEach(s => {
             // Check both regNo and id fields so we never collide
             [s.regNo, s.id].forEach(val => {
                 if (val) {
-                    const match = val.match(/^HRK_77(\d+)$/);
+                    const match = val.match(prefixRegex);
                     if (match) maxSeq = Math.max(maxSeq, parseInt(match[1], 10));
                 }
             });
@@ -609,12 +630,28 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     /**
+     * The "next reg no" badge shown when the admission modal opens is cached in
+     * admissionForm.dataset.pendingRegNo so it stays visible while the form is filled in.
+     * If enough time passes — or another admission/import happens in another tab — before
+     * the form is submitted, that cached number can go stale and collide with a regNo that
+     * was assigned to someone else in the meantime. This re-validates against the live
+     * database right before the regNo is actually used, and silently generates a fresh one
+     * if the cached value is no longer free. This was the root cause of two different
+     * students ending up with the same Reg No (which then made Delete/Edit sometimes act
+     * on the wrong — already archived — record).
+     */
+    function resolveFreshRegNo(db, cachedRegNo) {
+        const taken = cachedRegNo && db.some(s => s.regNo === cachedRegNo || s.id === cachedRegNo);
+        return (cachedRegNo && !taken) ? cachedRegNo : generateNextRegistrationNumber();
+    }
+
+    /**
      * Generate class-based roll number.
      * Sequential within each class, starting from 1.
      */
     function generateClassRollNumber(studentClass) {
         if (!studentClass) return '1';
-        const db = getDatabase();
+        const db = getActiveDatabase();
         const classStudents = db.filter(s => s.studentClass === studentClass);
         let maxRoll = 0;
         classStudents.forEach(s => {
@@ -697,6 +734,36 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     /**
+     * Unified student search matcher — used by the View and Update search bars.
+     * Supports the "~" (tilde) shortcut to search by Student Name AND Father /
+     * Guardian Name together in one go, e.g. typing:
+     *   Ali~Khan
+     * finds students named "Ali" whose guardian's name includes "Khan".
+     * Without a "~" it falls back to a general match across name, reg no,
+     * student ID and guardian name.
+     */
+    function studentMatchesSearch(s, rawQuery) {
+        const query = (rawQuery || '').toLowerCase().trim();
+        if (!query) return true;
+
+        const name     = (s.fullName || '').toLowerCase();
+        const guardian = (s.guardianName || '').toLowerCase();
+        const regNo    = (s.regNo || '').toLowerCase();
+        const id       = (s.id || '').toLowerCase();
+
+        if (query.includes('~')) {
+            const [namePartRaw, fatherPartRaw] = query.split('~');
+            const namePart   = (namePartRaw || '').trim();
+            const fatherPart = (fatherPartRaw || '').trim();
+            const nameOk   = !namePart   || name.includes(namePart);
+            const fatherOk = !fatherPart || guardian.includes(fatherPart);
+            return nameOk && fatherOk;
+        }
+
+        return name.includes(query) || guardian.includes(query) || regNo.includes(query) || id.includes(query);
+    }
+
+    /**
      * Check if the new student's guardian details match an existing record.
      * Match criteria: Guardian Name, Guardian CNIC, Permanent Address, Guardian Role.
      */
@@ -711,6 +778,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function getDatabase()    { return JSON.parse(localStorage.getItem(DB_KEY) || '[]'); }
     function saveDatabase(d)  { localStorage.setItem(DB_KEY, JSON.stringify(d)); }
+
+    // ── ARCHIVE HELPERS ──────────────────────────────────────────────────────
+    // A student with no `status` (or status "active") is on the live roster.
+    // "graduated" / "dropped" students are excluded from every active list
+    // (dashboard counters, class cards, roll numbers, search tables) and only
+    // surface inside the Archive Center.
+    function isActiveStudent(s)     { return !s.status || s.status === 'active'; }
+    function getActiveDatabase()    { return getDatabase().filter(isActiveStudent); }
+    function getGraduatedStudents() { return getDatabase().filter(s => s.status === 'graduated'); }
+    function getDroppedStudents()   { return getDatabase().filter(s => s.status === 'dropped'); }
 
     // ── FORM SUBMISSION ──────────────────────────────────────────────────────
 
@@ -768,8 +845,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (guardianMatch) {
                     showSiblingDialog(guardianMatch.fullName, studentData, db, guardianMatch);
                 } else {
-                    // Independent student — regNo = id = HRK_77X
-                    const regNo       = admissionForm.dataset.pendingRegNo || generateNextRegistrationNumber();
+                    // Independent student — regNo = id = PREFIX_X
+                    const regNo       = resolveFreshRegNo(db, admissionForm.dataset.pendingRegNo);
                     studentData.regNo = regNo;
                     studentData.id    = regNo;
                     db.push(studentData);
@@ -827,8 +904,8 @@ document.addEventListener('DOMContentLoaded', () => {
             // 1. Get or create the shared sibling-group id (00X)
             const groupId = getOrCreateSiblingGroupId(matchedStudent);
 
-            // 2. Generate a real HRK_77 registration number for the new student
-            const newRegNo = admissionForm.dataset.pendingRegNo || generateNextRegistrationNumber();
+            // 2. Generate a real registration number (school prefix) for the new student
+            const newRegNo = resolveFreshRegNo(db, admissionForm.dataset.pendingRegNo);
 
             // 3. Configure the NEW student
             studentData.regNo         = newRegNo;
@@ -876,7 +953,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // ── NO: register independently ───────────────────────────────────────
         document.getElementById('sibling-no-btn').addEventListener('click', () => {
-            const regNo       = admissionForm.dataset.pendingRegNo || generateNextRegistrationNumber();
+            const regNo       = resolveFreshRegNo(db, admissionForm.dataset.pendingRegNo);
             studentData.regNo = regNo;
             studentData.id    = regNo;
             db.push(studentData);
@@ -893,7 +970,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     /**
      * Render the Students Table.
-     * Main table ALWAYS shows the HRK_77 reg number — never the 00X sibling id.
+     * Main table ALWAYS shows the PREFIX_X reg number — never the 00X sibling id.
      */
     // ── State for update database modal tabs ──────────────────────────────────
     let updActiveClass   = null;
@@ -1029,7 +1106,7 @@ document.addEventListener('DOMContentLoaded', () => {
      */
     function updRenderClassCards() {
         const configs = getClassConfigs();
-        const db      = getDatabase();
+        const db      = getActiveDatabase();
         const grid    = document.getElementById('upd-classes-grid');
         if (!grid) return;
 
@@ -1072,7 +1149,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const cfg      = getClassConfigMap()[updActiveClass];
         const sections = (cfg && Array.isArray(cfg.sections) && cfg.sections.length) ? cfg.sections : [];
-        const db       = getDatabase();
+        const db       = getActiveDatabase();
         const classStu = db.filter(s => s.studentClass === updActiveClass);
         const allTeacher = getClassTeacher(updActiveClass, 'ALL');
 
@@ -1163,7 +1240,7 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     window.renderStudentTable = function() {
-        const db    = getDatabase();
+        const db    = getActiveDatabase();
         const tbody = document.getElementById('student-list-tbody');
         if (!tbody) return;
 
@@ -1206,18 +1283,21 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         }
 
-        // Apply unified search (name, ID, guardian)
+        // Apply unified search (name, ID, guardian — supports "Name~Father" tilde search)
         if (qUnified) {
-            filtered = filtered.filter(s =>
-                (s.fullName     || "").toLowerCase().includes(qUnified) ||
-                (s.regNo        || "").toLowerCase().includes(qUnified) ||
-                (s.id           || "").toLowerCase().includes(qUnified) ||
-                (s.guardianName || "").toLowerCase().includes(qUnified)
-            );
+            filtered = filtered.filter(s => studentMatchesSearch(s, qUnified));
         }
 
         // Sort by roll number
         filtered.sort((a, b) => (parseInt(a.rollNo) || 0) - (parseInt(b.rollNo) || 0));
+
+        // "All Students" card: the class isn't obvious from context anymore, so swap the
+        // Section column for a combined Class + Section value (e.g. "Grade 10 A") instead.
+        // Any specific class/section view already shows the class in the page title, so it
+        // keeps the plain Section column as before.
+        const showClassCol = (updActiveClass === ALL_STUDENTS_KEY);
+        const updClassColHeader = document.getElementById('upd-class-col-header');
+        if (updClassColHeader) updClassColHeader.textContent = showClassCol ? 'Class' : 'Section';
 
         const promoteMode = document.body.classList.contains('promote-mode-active');
 
@@ -1228,7 +1308,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         filtered.forEach((s, idx) => {
-            // ── MAIN TABLE always shows HRK_77 number ──
+            // ── MAIN TABLE always shows PREFIX_X number ──
             const displayId = s.regNo || s.id;
 
             // ── "Sibling of …" tag under the name ──
@@ -1246,6 +1326,10 @@ document.addEventListener('DOMContentLoaded', () => {
                         : '<span class="promotion-status-badge pending"><i class="fas fa-hourglass-half"></i> Not Promoted</span>'}</td>`
                 : '';
 
+            const classSectionCell = showClassCol
+                ? `${s.studentClass || '—'}${s.section ? ' ' + s.section : ''}`
+                : (s.section || '—');
+
             const row = `
                 <tr>
                     ${checkboxCell}
@@ -1254,7 +1338,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     <td>${s.rollNo || '—'}</td>
                     <td><strong>${s.fullName}</strong>${siblingTag}</td>
                     <td>${s.guardianName}</td>
-                    <td><span class="class-chip">${s.section || '—'}</span></td>
+                    <td><span class="class-chip">${classSectionCell}</span></td>
                     <td>${s.gender}</td>
                     ${statusCell}
                     <td>
@@ -1292,7 +1376,7 @@ document.addEventListener('DOMContentLoaded', () => {
      */
     function voRenderClassCards() {
         const configs = getClassConfigs();
-        const db      = getDatabase();
+        const db      = getActiveDatabase();
         const grid    = document.getElementById('vo-classes-grid');
         if (!grid) return;
 
@@ -1335,7 +1419,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const cfg      = getClassConfigMap()[voActiveClass];
         const sections = (cfg && Array.isArray(cfg.sections) && cfg.sections.length) ? cfg.sections : [];
-        const db       = getDatabase();
+        const db       = getActiveDatabase();
         const classStudents = db.filter(s => s.studentClass === voActiveClass);
         const allTeacher = getClassTeacher(voActiveClass, 'ALL');
 
@@ -1425,7 +1509,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     window.renderViewOnlyTable = function() {
         try { voRefreshTeacherBadge(); } catch(e) {}
-        const db    = getDatabase();
+        const db    = getActiveDatabase();
         const tbody = document.getElementById('vo-student-tbody');
         if (!tbody) return;
 
@@ -1444,14 +1528,9 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
 
-        // Then by search query (name or reg no)
+        // Then by search query (name, reg no, guardian — supports "Name~Father" tilde search)
         if (qName) {
-            filtered = filtered.filter(s =>
-                (s.fullName || '').toLowerCase().includes(qName) ||
-                (s.regNo   || '').toLowerCase().includes(qName) ||
-                (s.id      || '').toLowerCase().includes(qName) ||
-                (s.guardianName || '').toLowerCase().includes(qName)
-            );
+            filtered = filtered.filter(s => studentMatchesSearch(s, qName));
         }
 
         if (filtered.length === 0) {
@@ -1462,11 +1541,22 @@ document.addEventListener('DOMContentLoaded', () => {
         // Sort by roll number
         filtered.sort((a, b) => (parseInt(a.rollNo) || 0) - (parseInt(b.rollNo) || 0));
 
+        // "All Students" card: swap the Section column for a combined Class + Section value
+        // (e.g. "Grade 10 A") since the class isn't obvious from context there. Specific
+        // class/section views already show the class in the page title, so those keep the
+        // plain Section column as before.
+        const showClassCol = (voActiveClass === ALL_STUDENTS_KEY);
+        const voClassColHeader = document.getElementById('vo-class-col-header');
+        if (voClassColHeader) voClassColHeader.textContent = showClassCol ? 'Class' : 'Section';
+
         filtered.forEach((s, idx) => {
             const displayId  = s.regNo || s.id;
             const siblingTag = (s.isSibling && s.siblingOf)
                 ? `<br><span class="sibling-tag"><i class="fas fa-user-friends"></i> Sibling of ${s.siblingOf}</span>`
                 : '';
+            const classSectionCell = showClassCol
+                ? `${s.studentClass || '—'}${s.section ? ' ' + s.section : ''}`
+                : (s.section || '—');
 
             tbody.innerHTML += `
                 <tr>
@@ -1475,7 +1565,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     <td>${s.rollNo || '—'}</td>
                     <td><strong>${s.fullName}</strong>${siblingTag}</td>
                     <td>${s.guardianName}</td>
-                    <td><span class="class-chip">${s.section || '—'}</span></td>
+                    <td><span class="class-chip">${classSectionCell}</span></td>
                     <td>${s.gender}</td>
                     <td style="text-align:center;">
                         <button class="btn-icon view" onclick="viewFullProfile('${s.regNo}')" title="View Profile">
@@ -1508,16 +1598,30 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // ── PROMOTE ALL STUDENTS ─────────────────────────────────────────────────
 
+    // Fallback progression, only used if no classes have been configured yet
+    // in Settings (edu_class_configs).
     const CLASS_PROGRESSION = [
         "Montessori", "Nursery", "Prep",
         "Grade 1", "Grade 2", "Grade 3", "Grade 4", "Grade 5",
         "Grade 6", "Grade 7", "Grade 8", "Grade 9", "Grade 10"
     ];
 
+    /**
+     * The real class ladder is whatever the school configured on the Settings
+     * page (could stop at Grade 5, Grade 10, or anywhere else). Promoting a
+     * student out of the LAST class in this list is what triggers graduation.
+     */
+    function getClassProgression() {
+        const configs = getClassConfigs();
+        if (Array.isArray(configs) && configs.length) return configs.map(c => c.name);
+        return CLASS_PROGRESSION;
+    }
+
     function getNextClass(currentClass) {
-        const idx = CLASS_PROGRESSION.indexOf(currentClass);
-        if (idx === -1 || idx === CLASS_PROGRESSION.length - 1) return null; // unknown or final class
-        return CLASS_PROGRESSION[idx + 1];
+        const progression = getClassProgression();
+        const idx = progression.indexOf(currentClass);
+        if (idx === -1 || idx === progression.length - 1) return null; // unknown or final (graduating) class
+        return progression[idx + 1];
     }
 
     window.togglePromoteMode = function() {
@@ -1549,8 +1653,10 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!confirm(`Promote ${selectedRegNos.length} selected student(s) to their next class?`)) return;
 
         const db = getDatabase();
+        const todayISO = new Date().toISOString().slice(0, 10);
+        const thisYear = new Date().getFullYear();
         let promotedCount = 0;
-        let skippedCount = 0;
+        let graduatedCount = 0;
 
         db.forEach(s => {
             if (selectedRegNos.includes(s.regNo)) {
@@ -1561,7 +1667,16 @@ document.addEventListener('DOMContentLoaded', () => {
                     s.promoted = true;
                     promotedCount++;
                 } else {
-                    skippedCount++;
+                    // Being promoted out of the school's LAST configured class
+                    // means this student has completed school — graduate them
+                    // into the Archive Center instead of leaving them stuck.
+                    s.status           = 'graduated';
+                    s.graduatedDate    = todayISO;
+                    s.graduatedYear    = thisYear;
+                    s.graduatedClass   = s.studentClass;
+                    s.graduatedSection = s.section || '';
+                    s.promoted         = true;
+                    graduatedCount++;
                 }
             }
         });
@@ -1569,7 +1684,7 @@ document.addEventListener('DOMContentLoaded', () => {
         saveDatabase(db);
         showToast(
             "Promotion Complete",
-            `${promotedCount} student(s) promoted.` + (skippedCount ? ` ${skippedCount} already at final class.` : ''),
+            `${promotedCount} student(s) promoted.` + (graduatedCount ? ` ${graduatedCount} graduated and moved to the Archive Center.` : ''),
             "success"
         );
 
@@ -1577,12 +1692,184 @@ document.addEventListener('DOMContentLoaded', () => {
         updateDashboardStats();
     };
 
+    // ── ARCHIVE CENTER ───────────────────────────────────────────────────────
+    // Two archives: "graduated" (promoted out of the school's final configured
+    // class) and "dropped" (removed via the Delete button). Both are read-only
+    // browsing views — records live permanently in the same DB_KEY store, just
+    // filtered out of every active list by their `status` field.
+
+    /** Open the Archive Center inline page (same pattern as Certificates / Data I-O) */
+    window.openArchivePage = function() {
+        _hideMainSections();
+        const certView   = document.getElementById('cert-page-view');
+        const dataIoView = document.getElementById('data-io-page-view');
+        const archiveView= document.getElementById('archive-page-view');
+        if (certView)    certView.style.display = 'none';
+        if (dataIoView)  dataIoView.style.display = 'none';
+        if (archiveView) archiveView.style.display = 'block';
+        archiveBackToHub();
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    };
+
+    window.closeArchivePage = function() {
+        const archiveView = document.getElementById('archive-page-view');
+        if (archiveView) archiveView.style.display = 'none';
+        _showMainSections();
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    };
+
+    function archiveShowStage(stage) {
+        ['hub', 'graduated', 'dropped'].forEach(s => {
+            const el = document.getElementById('archive-stage-' + s);
+            if (el) el.classList.toggle('hidden', s !== stage);
+        });
+    }
+
+    window.archiveBackToHub = function() {
+        archiveShowStage('hub');
+    };
+
+    /** Section filter state for the graduated "class roster" table: 'BOTH' | 'A' | 'B' | any configured section value */
+    let archiveGradSection = 'BOTH';
+    window.archiveSetGradSection = function(val) {
+        archiveGradSection = val;
+        document.querySelectorAll('#archive-grad-section-seg .archive-seg-btn').forEach(b => {
+            b.classList.toggle('active', b.dataset.val === val);
+        });
+        renderArchiveGraduatedTable();
+    };
+
+    window.archiveOpenGraduated = function() {
+        archiveShowStage('graduated');
+        archiveGradSection = 'BOTH';
+        document.querySelectorAll('#archive-grad-section-seg .archive-seg-btn').forEach(b => {
+            b.classList.toggle('active', b.dataset.val === 'BOTH');
+        });
+        const classSearch = document.getElementById('archive-grad-class-search');
+        if (classSearch) classSearch.value = '';
+        archivePopulateGradClassFilter();
+        renderArchiveGraduatedTable();
+    };
+
+    window.archiveOpenDropped = function() {
+        archiveShowStage('dropped');
+        const dropSearch = document.getElementById('archive-drop-search');
+        if (dropSearch) dropSearch.value = '';
+        renderArchiveDroppedTable();
+    };
+
+    /** Populate the class dropdown for the graduated "class roster" filter bar */
+    function archivePopulateGradClassFilter() {
+        const sel = document.getElementById('archive-grad-class-filter');
+        if (!sel) return;
+
+        const configNames = getClassConfigs().map(c => c.name);
+        const grads       = getGraduatedStudents();
+        const classNames  = configNames.slice();
+        grads.forEach(s => {
+            if (s.graduatedClass && !classNames.includes(s.graduatedClass)) classNames.push(s.graduatedClass);
+        });
+
+        const current = sel.value;
+        sel.innerHTML = `<option value="${ALL_STUDENTS_KEY}">All Classes</option>` +
+            classNames.map(c => `<option value="${c}">${c}</option>`).join('');
+        if (current && Array.from(sel.options).some(o => o.value === current)) sel.value = current;
+    }
+
+    /** Single merged table inside Graduated: full roster across ALL graduating batches, filterable by class / section / year */
+    window.renderArchiveGraduatedTable = function() {
+        const tbody = document.getElementById('archive-grad-tbody');
+        const label = document.getElementById('archive-grad-this-year-label');
+        if (!tbody) return;
+
+        const classSel = document.getElementById('archive-grad-class-filter');
+        const yearSel  = document.getElementById('archive-grad-year-filter');
+        const qEl      = document.getElementById('archive-grad-class-search');
+
+        const classVal = classSel ? classSel.value : ALL_STUDENTS_KEY;
+        const yearVal  = yearSel ? yearSel.value : '0';
+        const q        = qEl ? qEl.value.toLowerCase().trim() : '';
+
+        if (label) label.textContent = yearVal === '0' ? new Date().getFullYear() : '';
+
+        let list = getGraduatedStudents();
+
+        if (classVal && classVal !== ALL_STUDENTS_KEY) {
+            list = list.filter(s => s.graduatedClass === classVal);
+        }
+        if (archiveGradSection === 'A' || archiveGradSection === 'B' ||
+            (archiveGradSection !== 'BOTH' && archiveGradSection)) {
+            list = list.filter(s => s.graduatedSection === archiveGradSection);
+        }
+        if (yearVal !== 'ALL') {
+            const targetYear = new Date().getFullYear() - parseInt(yearVal, 10);
+            list = list.filter(s => Number(s.graduatedYear) === targetYear);
+        }
+        if (q) list = list.filter(s => studentMatchesSearch(s, q));
+
+        list.sort((a, b) =>
+            (Number(b.graduatedYear) || 0) - (Number(a.graduatedYear) || 0) ||
+            (a.fullName || '').localeCompare(b.fullName || '')
+        );
+
+        renderArchiveTableRows(tbody, list, 'graduated');
+    };
+
+    /** Dropped Out: single searchable table, newest removal first */
+    window.renderArchiveDroppedTable = function() {
+        const tbody = document.getElementById('archive-drop-tbody');
+        if (!tbody) return;
+
+        const qEl = document.getElementById('archive-drop-search');
+        const q   = qEl ? qEl.value.toLowerCase().trim() : '';
+
+        let list = getDroppedStudents();
+        if (q) list = list.filter(s => studentMatchesSearch(s, q));
+        list.sort((a, b) => new Date(b.droppedDate || 0) - new Date(a.droppedDate || 0));
+
+        renderArchiveTableRows(tbody, list, 'dropped');
+    };
+
+    /** Shared row-renderer for all three archive tables */
+    function renderArchiveTableRows(tbody, list, kind) {
+        if (!list.length) {
+            tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;padding:50px;color:#94a3b8;">No ${kind === 'graduated' ? 'graduated' : 'dropped-out'} students found.</td></tr>`;
+            return;
+        }
+
+        tbody.innerHTML = list.map((s, idx) => {
+            const displayId = s.regNo || s.id;
+            const cls    = kind === 'graduated' ? (s.graduatedClass   || s.studentClass || '—') : (s.studentClass || '—');
+            const sec    = kind === 'graduated' ? (s.graduatedSection || s.section      || '—') : (s.section      || '—');
+            const dateVal= kind === 'graduated' ? (s.graduatedDate    || '—')                    : (s.droppedDate  || '—');
+
+            return `
+                <tr>
+                    <td class="msc-sr-cell">${idx + 1}</td>
+                    <td><span class="hrk-id-badge">${displayId}</span></td>
+                    <td><strong>${s.fullName || '—'}</strong></td>
+                    <td>${s.guardianName || '—'}</td>
+                    <td><span class="class-chip">${cls}</span></td>
+                    <td><span class="class-chip">${sec}</span></td>
+                    <td>${dateVal}</td>
+                    <td style="text-align:center;">
+                        <button class="btn-icon view" onclick="viewFullProfile('${s.regNo}')" title="View Profile">
+                            <i class="fas fa-eye"></i>
+                        </button>
+                    </td>
+                </tr>`;
+        }).join('');
+    }
+
     // ── 8. EDIT STUDENT ──────────────────────────────────────────────────────
 
    window.editStudentInfo = function(studentId) {
     const db = getDatabase();
-    // Strictly find by regNo to avoid sibling group confusion
-    const student = db.find(s => s.regNo === studentId);
+    // Match against the ACTIVE roster first — this button only ever appears next to an
+    // active student's row, so a duplicate regNo on an already-archived record must never
+    // be picked up instead of the real active student.
+    let student = db.find(s => s.regNo === studentId && isActiveStudent(s));
+    if (!student) student = db.find(s => s.regNo === studentId); // fallback, shouldn't normally be needed
 
     if (!student) {
         showToast("Error", "Student record not found.", "danger");
@@ -1632,6 +1919,18 @@ document.addEventListener('DOMContentLoaded', () => {
     displayRegBadge.innerText = student.regNo;
     rollNoInput.value = student.rollNo || '';
 
+    // Highlighted "Sibling of …" badge shown right below the name/reg-no area
+    const editSiblingBadge = document.getElementById('edit-sibling-badge');
+    if (editSiblingBadge) {
+        if (student.isSibling && student.siblingOf) {
+            editSiblingBadge.style.display = 'inline-flex';
+            editSiblingBadge.innerHTML = `<i class="fas fa-user-friends"></i> Sibling of ${student.siblingOf}`;
+        } else {
+            editSiblingBadge.style.display = 'none';
+            editSiblingBadge.innerHTML = '';
+        }
+    }
+
     // Books fee panel — show if there's existing books data
     const hasBooks = (parseFloat(student.booksFee || 0) > 0) || (parseFloat(student.booksDiscount || 0) > 0);
     if (booksFeePanel) {
@@ -1669,47 +1968,25 @@ document.addEventListener('DOMContentLoaded', () => {
     // ── 9. DELETE STUDENT ────────────────────────────────────────────────────
 
     window.deleteRecord = function(studentId) {
-        if (!confirm(`CRITICAL ACTION: Are you sure you want to permanently delete this record?`)) return;
+        if (!confirm(`Remove this student from the active roster?\n\nThey will NOT be permanently deleted — the record moves to the "Dropped Out" archive in the Archive Center, where it can still be viewed anytime.`)) return;
 
-        let db      = getDatabase();
-        const student = db.find(s => (s.regNo || s.id) === studentId);
+        const db = getDatabase();
+        // Match against the ACTIVE roster first. This button only ever appears next to an
+        // active student's row, so if a duplicate regNo happens to exist on an already-dropped
+        // or graduated record, that stale duplicate must never be picked up instead of the
+        // real active student (this was causing the wrong name to show / wrong record to move).
+        let student = db.find(s => (s.regNo || s.id) === studentId && isActiveStudent(s));
+        if (!student) student = db.find(s => (s.regNo || s.id) === studentId); // fallback, shouldn't normally be needed
+        if (!student) return;
 
-        if (student && student.siblingGroupId) {
-            const groupId = student.siblingGroupId;
-
-            // Remove from every other group member's hasSiblings list
-            db.forEach(s => {
-                if (s.siblingGroupId === groupId && (s.regNo || s.id) !== studentId) {
-                    if (s.hasSiblings) {
-                        s.hasSiblings = s.hasSiblings.filter(sib => sib.regNo !== student.regNo);
-                    }
-                }
-            });
-
-            // Remove the student
-            db = db.filter(s => (s.regNo || s.id) !== studentId);
-
-            // Rebuild "Sibling of …" for remaining group members
-            refreshSiblingOfStrings(db, groupId);
-
-            // If only one member left in the group, dissolve the group:
-            // restore their id to their regNo and clear sibling flags
-            const remaining = db.filter(s => s.siblingGroupId === groupId);
-            if (remaining.length === 1) {
-                remaining[0].id             = remaining[0].regNo;
-                remaining[0].isSibling      = false;
-                remaining[0].siblingOf      = null;
-                remaining[0].siblingGroupId = null;
-                remaining[0].hasSiblings    = [];
-            } else if (remaining.length === 0) {
-                // nothing left — already fine
-            }
-        } else {
-            db = db.filter(s => (s.regNo || s.id) !== studentId);
-        }
+        // Soft-delete: keep the record, just mark it dropped so it disappears
+        // from every active list and instead surfaces in the Archive Center.
+        student.status      = 'dropped';
+        student.droppedDate = new Date().toISOString().slice(0, 10);
+        student.droppedYear = new Date().getFullYear();
 
         saveDatabase(db);
-        showToast("Record Deleted", "The student has been removed from the system.", "danger");
+        showToast("Student Archived", `${student.fullName} has been moved to the Dropped Out archive.`, "danger");
         updateDashboardStats();
         renderStudentTable();
     };
@@ -1829,6 +2106,7 @@ document.addEventListener('DOMContentLoaded', () => {
                          onerror="this.src='https://ui-avatars.com/api/?name=${encodeURIComponent(s.fullName)}&background=3b82f6&color=fff&bold=true'">
                 </div>
                 <h2 class="profile-name-title">${s.fullName}</h2>
+                ${(s.isSibling && s.siblingOf) ? `<div class="sibling-tag" style="margin:2px 0 8px;"><i class="fas fa-user-friends"></i> Sibling of ${s.siblingOf}</div>` : ''}
                 <div class="profile-header-badges">
                     <span class="hrk-id-badge">${s.regNo || s.id}</span>
                     ${s.studentClass ? `<span class="profile-class-badge"><i class="fas fa-graduation-cap"></i> ${s.studentClass}${s.section ? ' – ' + s.section : ''}</span>` : ''}
@@ -1958,7 +2236,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
     function updateDashboardStats() {
-        const db      = getDatabase();
+        const db      = getActiveDatabase();
         const total   = db.length;
         const males   = db.filter(s => s.gender === "Male").length;
         const females = db.filter(s => s.gender === "Female").length;
@@ -2048,6 +2326,8 @@ document.addEventListener('DOMContentLoaded', () => {
 function openCertPage() {
     _hideMainSections();
     document.getElementById('data-io-page-view').style.display = 'none';
+    const archiveView = document.getElementById('archive-page-view');
+    if (archiveView) archiveView.style.display = 'none';
     document.getElementById('cert-page-view').style.display = 'block';
     window.scrollTo({ top: 0, behavior: 'smooth' });
 }
@@ -2061,15 +2341,16 @@ function closeCertPage() {
 }
 
 /* Helpers: toggle only the real "home" sections, never the inline page-views */
+const _INLINE_PAGE_VIEW_IDS = ['cert-page-view', 'data-io-page-view', 'archive-page-view'];
 function _hideMainSections() {
     document.querySelectorAll('main > section').forEach(s => {
-        if (s.id === 'cert-page-view' || s.id === 'data-io-page-view') return;
+        if (_INLINE_PAGE_VIEW_IDS.includes(s.id)) return;
         s.style.display = 'none';
     });
 }
 function _showMainSections() {
     document.querySelectorAll('main > section').forEach(s => {
-        if (s.id === 'cert-page-view' || s.id === 'data-io-page-view') return;
+        if (_INLINE_PAGE_VIEW_IDS.includes(s.id)) return;
         s.style.display = '';
     });
 }
@@ -2773,6 +3054,8 @@ function printCertificate(docId) {
 function openDataIOPage() {
     _hideMainSections();
     document.getElementById('cert-page-view').style.display = 'none';
+    const archiveView = document.getElementById('archive-page-view');
+    if (archiveView) archiveView.style.display = 'none';
     document.getElementById('data-io-page-view').style.display = 'block';
     const statusEl = document.getElementById('data-io-status');
     if (statusEl) statusEl.style.display = 'none';
@@ -3301,24 +3584,53 @@ function importStudentsFromExcel(event) {
 
             /* Map header names back to our student object keys.
                IMPORTANT: keys here must match what the form saves to localStorage,
-               i.e. the HTML input[name] attributes — not display aliases. */
+               i.e. the HTML input[name] attributes — not display aliases.
+               This list must stay in sync with the `dirHeaders` array in
+               exportStudentsToExcel(); a mismatch here is what causes fields to
+               come back blank (showing "Select…" / "Not Provided") after import. */
             const colMap = {
-                'Reg No'              : 'regNo',
-                'Student ID'          : 'id',
-                'Full Name'           : 'fullName',        // form saves as fullName, not name
-                'Father / Guardian'   : 'guardianName',    // form saves as guardianName, not fatherName
-                'Gender'              : 'gender',
-                'Date of Birth'       : 'dob',
-                'Age'                 : 'age',
-                'Class'               : 'studentClass',    // form saves as studentClass, not class
-                'Section'             : 'section',
-                'Roll No'             : 'rollNo',
-                'Admission Date'      : 'admissionDate',
-                'Monthly Fee (PKR)'   : 'monthlyFee',
-                'Annual Fund (PKR)'   : 'annualFund',
-                'Phone'               : 'phone',
-                'Address'             : 'permanentAddress', // form saves as permanentAddress, not address
-                'Sibling Of'          : 'siblingOf'
+                'Reg No'                      : 'regNo',
+                'Student ID'                  : 'id',
+                'Sibling Group ID'            : 'siblingGroupId',
+                'Full Name'                   : 'fullName',        // form saves as fullName, not name
+                'Father / Guardian'           : 'guardianName',    // form saves as guardianName, not fatherName
+                'Guardian Role'                : 'guardianRole',
+                'Guardian CNIC'                : 'guardianCnic',
+                'Gender'                       : 'gender',
+                'Date of Birth'                : 'dob',
+                'Age'                          : 'age',
+                'Class'                        : 'studentClass',    // form saves as studentClass, not class
+                'Section'                      : 'section',
+                'Roll No'                      : 'rollNo',
+                'Admission Date'               : 'admissionDate',
+                'Phone 1'                      : 'phone1',
+                'Phone 2'                      : 'phone2',
+                'Permanent Address'            : 'permanentAddress', // form saves as permanentAddress, not address
+                'Mailing Address'               : 'mailingAddress',
+                'Student B-Form No.'           : 'studentBform',
+                'Medical Issues'               : 'medicalIssues',
+                'Transport Mode'               : 'transportMode',
+                'Transport Type'               : 'transportType',
+                'Transport Fee (PKR)'          : 'transportFee',
+                'Monthly Tuition Fee (PKR)'    : 'standardFee',
+                'Annual Fund (PKR)'            : 'annualFundAmount',
+                'Annual Fund Month'            : 'annualFundMonth',
+                'Tuition Discount (PKR)'       : 'tuitionDiscount',
+                'Transport Discount (PKR)'     : 'transportDiscount',
+                'Sibling Discount (PKR)'       : 'siblingDiscount',
+                'Discount Valid Until'         : 'discountExpiry',
+                'Net Payable (PKR)'            : 'netPayable',
+                'Sibling Of'                   : 'siblingOf'
+                /* 'Total Discount (PKR)' is a computed display column, not a stored field — skip.
+                   'Discount Type' and 'Has Sibling' need value translation — handled below.
+                   'Student Photo (Link)' / 'B-Form / Cert (Link)' only ever hold a status note in
+                   the export, never the actual image data (that lives in the separate photo-gallery
+                   HTML file), so they're intentionally not mapped back to photo/certData. */
+            };
+
+            const MONTH_NAME_TO_NUM = {
+                january:1, february:2, march:3, april:4, may:5, june:6,
+                july:7, august:8, september:9, october:10, november:11, december:12
             };
 
             const existing  = JSON.parse(localStorage.getItem(DB_KEY) || '[]');
@@ -3332,6 +3644,30 @@ function importStudentsFromExcel(event) {
                         student[key] = row[header];
                     }
                 });
+
+                /* "Annual Fund Month" is exported as a month name (e.g. "January") but the
+                   form's <select> stores it as a number (1-12) — convert back. */
+                if (student.annualFundMonth) {
+                    const num = MONTH_NAME_TO_NUM[String(student.annualFundMonth).toLowerCase().trim()];
+                    if (num) {
+                        student.annualFundMonth = String(num);
+                        student.annualFundEnabled = 'on';
+                    }
+                }
+
+                /* "Discount Type" tells us whether the discount is Lifetime, Temporary or None —
+                   translate that into the isLifetime checkbox + discountExpiry date the form uses. */
+                const discountTypeVal = row['Discount Type'];
+                if (discountTypeVal === 'Lifetime') {
+                    student.isLifetime = 'on';
+                    delete student.discountExpiry; // "Lifetime" text may have leaked into this column — never a real date
+                } else if (student.discountExpiry === 'Lifetime') {
+                    delete student.discountExpiry;
+                }
+
+                /* "Has Sibling" is exported as Yes/No text — translate to the boolean the app expects. */
+                if (row['Has Sibling'] === 'Yes') student.isSibling = true;
+                else if (row['Has Sibling'] === 'No') student.isSibling = false;
 
                 /* Skip rows without a registration number */
                 if (!student.regNo && !student.id) { skipped++; return; }

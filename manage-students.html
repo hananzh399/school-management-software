@@ -78,7 +78,6 @@
                 </button>
                 <div class="school-branding">
                     <h1 class="school-name">ST. LAWRENCE INTERNATIONAL SCHOOL</h1>
-                    <p class="school-subtitle">Student Management Control Panel</p>
                 </div>
             </div>
             <div class="header-right">
@@ -144,7 +143,7 @@
                         <i class="fas fa-user-plus"></i>
                     </div>
                     <h3 class="card-title">New Admission</h3>
-                    <p class="card-description">Register a new student with full details and photo upload.</p>
+                    <p class="card-description">Register a new student with full details.</p>
                 </div>
 
                 <!-- Card: View Database -->
@@ -154,7 +153,7 @@
                         <i class="fas fa-database"></i>
                     </div>
                     <h3 class="card-title">View Database</h3>
-                    <p class="card-description">Browse, search, and export the entire student roster.</p>
+                    <p class="card-description">Browse and search the entire roster.</p>
                 </div>
 
                 <!-- Card: Update Record -->
@@ -164,17 +163,17 @@
                         <i class="fas fa-pen-to-square"></i>
                     </div>
                     <h3 class="card-title">Update Record</h3>
-                    <p class="card-description">Search specifically by ID to modify existing student info.</p>
+                    <p class="card-description">Search by ID to edit student info.</p>
                 </div>
 
                 <!-- Card: Archive -->
-                <div class="manage-card archive-card" id="card-archive">
+                <div class="manage-card archive-card" id="card-archive" onclick="openArchivePage()">
                     <div class="card-glow"></div>
                     <div class="m-icon-wrapper archive-icon">
                         <i class="fas fa-box-archive"></i>
                     </div>
                     <h3 class="card-title">Archive Center</h3>
-                    <p class="card-description">Manage graduated or withdrawn student archives.</p>
+                    <p class="card-description">View graduated and dropped-out records.</p>
                 </div>
 
                 <!-- Card: Certificates -->
@@ -184,7 +183,7 @@
                         <i class="fas fa-certificate"></i>
                     </div>
                     <h3 class="card-title">Certificates</h3>
-                    <p class="card-description">Generate and print official school certificates for students.</p>
+                    <p class="card-description">Generate and print school certificates.</p>
                 </div>
 
                 <!-- Card: Data Export & Import -->
@@ -194,7 +193,7 @@
                         <i class="fas fa-file-export"></i>
                     </div>
                     <h3 class="card-title">Data Export &amp; Import</h3>
-                    <p class="card-description">Export all student records to Excel or import data from a backup file.</p>
+                    <p class="card-description">Export records to Excel or import a backup.</p>
                 </div>
             </div>
         </section>
@@ -211,7 +210,7 @@
                     <i class="fas fa-file-export"></i>
                     <h2 class="cert-page-title">Data Export &amp; Import</h2>
                 </div>
-                <p class="cert-page-subtitle">Export all student records to a formatted Excel sheet or restore from a backup.</p>
+                <p class="cert-page-subtitle">Export records to Excel or restore a backup.</p>
             </div>
             <div class="cert-page-grid">
                 <!-- Export Card -->
@@ -221,7 +220,7 @@
                         <i class="fas fa-file-excel"></i>
                     </div>
                     <h3 class="card-title">Export Data</h3>
-                    <p class="card-description">Download all student records as a well-formatted Excel file named <strong>EduSoft (Student Data).xlsx</strong>, plus a companion <strong>EduSoft (Student Photos).html</strong> gallery with student photos, B-Form images, and full discount breakdowns.</p>
+                    <p class="card-description">Download all records as an Excel file, plus a photo gallery.</p>
                 </div>
                 <!-- Import Card -->
                 <div class="manage-card data-import-card cert-page-card" onclick="document.getElementById('import-file-input').click()">
@@ -230,7 +229,7 @@
                         <i class="fas fa-file-import"></i>
                     </div>
                     <h3 class="card-title">Import Data</h3>
-                    <p class="card-description">Restore student records from a previously exported Excel backup file. Existing records will be merged with imported ones.</p>
+                    <p class="card-description">Restore records from a previously exported Excel backup.</p>
                     <input type="file" id="import-file-input" accept=".xlsx,.xls" style="display:none" onchange="importStudentsFromExcel(event)">
                 </div>
             </div>
@@ -250,7 +249,7 @@
                     <i class="fas fa-certificate"></i>
                     <h2 class="cert-page-title">Certificates</h2>
                 </div>
-                <p class="cert-page-subtitle">Select the certificate type you want to generate and print.</p>
+                <p class="cert-page-subtitle">Choose a certificate to generate.</p>
             </div>
             <div class="cert-page-grid">
                 <div class="manage-card slc-card cert-page-card" onclick="openModal('slc-modal')">
@@ -259,7 +258,7 @@
                         <i class="fas fa-graduation-cap"></i>
                     </div>
                     <h3 class="card-title">School Leaving Certificate</h3>
-                    <p class="card-description">Issue an official School Leaving Certificate for a departing or graduated student.</p>
+                    <p class="card-description">Issue a School Leaving Certificate.</p>
                 </div>
                 <div class="manage-card char-card cert-page-card" onclick="openModal('character-modal')">
                     <div class="card-glow"></div>
@@ -267,7 +266,127 @@
                         <i class="fas fa-award"></i>
                     </div>
                     <h3 class="card-title">Character Certificate</h3>
-                    <p class="card-description">Generate a Character Certificate attesting to a student's conduct and behaviour.</p>
+                    <p class="card-description">Generate a Character Certificate.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- =============================================
+             ARCHIVE CENTER PAGE VIEW (inline page)
+        ============================================== -->
+        <section id="archive-page-view" class="cert-page-view" style="display:none;">
+            <div class="cert-page-header">
+                <button class="cert-back-btn" onclick="closeArchivePage()">
+                    <i class="fas fa-arrow-left"></i> Back
+                </button>
+                <div class="cert-page-title-wrap">
+                    <i class="fas fa-box-archive"></i>
+                    <h2 class="cert-page-title">Archive Center</h2>
+                </div>
+                <p class="cert-page-subtitle">Browse graduated and dropped-out student records.</p>
+            </div>
+
+            <!-- STAGE: HUB (2 cards) -->
+            <div id="archive-stage-hub" class="msc-stage">
+                <div class="cert-page-grid">
+                    <div class="manage-card cert-page-card archive-grad-card" onclick="archiveOpenGraduated()">
+                        <div class="card-glow"></div>
+                        <div class="m-icon-wrapper archive-grad-icon">
+                            <i class="fas fa-user-graduate"></i>
+                        </div>
+                        <h3 class="card-title">Graduated Students</h3>
+                        <p class="card-description">View graduated alumni.</p>
+                    </div>
+                    <div class="manage-card cert-page-card archive-drop-card" onclick="archiveOpenDropped()">
+                        <div class="card-glow"></div>
+                        <div class="m-icon-wrapper archive-drop-icon">
+                            <i class="fas fa-user-slash"></i>
+                        </div>
+                        <h3 class="card-title">Dropped Out Students</h3>
+                        <p class="card-description">View dropped-out students.</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- STAGE: GRADUATED -->
+            <div id="archive-stage-graduated" class="msc-stage hidden">
+                <div class="msc-stage-header">
+                    <button class="btn-ghost msc-back-btn" onclick="archiveBackToHub()"><i class="fas fa-arrow-left"></i> Back</button>
+                    <h4 class="msc-stage-title"><i class="fas fa-user-graduate"></i> Graduated Students</h4>
+                </div>
+
+                <!-- Single merged table: all graduated students, filterable by class / section / year -->
+                <div class="archive-subsection">
+                    <div class="archive-subsection-header archive-subsection-header--wrap">
+                        <h5><i class="fas fa-layer-group"></i> Graduated Students</h5>
+                        <div class="archive-filter-bar">
+                            <div class="archive-filter-group">
+                                <label>Class</label>
+                                <select id="archive-grad-class-filter" onchange="renderArchiveGraduatedTable()">
+                                    <option value="__ALL__">All Classes</option>
+                                </select>
+                            </div>
+                            <div class="archive-seg-group" id="archive-grad-section-seg">
+                                <button type="button" class="archive-seg-btn active" data-val="BOTH" onclick="archiveSetGradSection('BOTH')">Both</button>
+                                <button type="button" class="archive-seg-btn" data-val="A" onclick="archiveSetGradSection('A')">A</button>
+                                <button type="button" class="archive-seg-btn" data-val="B" onclick="archiveSetGradSection('B')">B</button>
+                            </div>
+                            <div class="archive-filter-group">
+                                <label>Year</label>
+                                <select id="archive-grad-year-filter" onchange="renderArchiveGraduatedTable()">
+                                    <option value="0">This Year</option>
+                                    <option value="1">Past Year</option>
+                                    <option value="2">2 Years Ago</option>
+                                    <option value="3">3 Years Ago</option>
+                                    <option value="4">4 Years Ago</option>
+                                    <option value="5">5 Years Ago</option>
+                                    <option value="ALL">All Years</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="upd-search-row">
+                        <div class="search-box-wrapper upd-search-bar">
+                            <i class="fas fa-search"></i>
+                            <input type="text" id="archive-grad-class-search" placeholder="Search by name, ID or guardian…" oninput="renderArchiveGraduatedTable()">
+                        </div>
+                    </div>
+                    <div class="data-table-wrapper">
+                        <table class="student-table">
+                            <thead>
+                                <tr>
+                                    <th>#</th><th>Student ID</th><th>Name</th><th>Guardian</th>
+                                    <th>Class</th><th>Section</th><th>Graduation Date</th><th class="text-center">View</th>
+                                </tr>
+                            </thead>
+                            <tbody id="archive-grad-tbody"><!-- Populated by JS --></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- STAGE: DROPPED OUT -->
+            <div id="archive-stage-dropped" class="msc-stage hidden">
+                <div class="msc-stage-header">
+                    <button class="btn-ghost msc-back-btn" onclick="archiveBackToHub()"><i class="fas fa-arrow-left"></i> Back</button>
+                    <h4 class="msc-stage-title"><i class="fas fa-user-slash"></i> Dropped Out Students</h4>
+                </div>
+                <div class="upd-search-row">
+                    <div class="search-box-wrapper upd-search-bar">
+                        <i class="fas fa-search"></i>
+                        <input type="text" id="archive-drop-search" placeholder="Search by name, ID or guardian…" oninput="renderArchiveDroppedTable()">
+                    </div>
+                </div>
+                <div class="data-table-wrapper">
+                    <table class="student-table">
+                        <thead>
+                            <tr>
+                                <th>#</th><th>Student ID</th><th>Name</th><th>Guardian</th>
+                                <th>Class</th><th>Section</th><th>Date Removed</th><th class="text-center">View</th>
+                            </tr>
+                        </thead>
+                        <tbody id="archive-drop-tbody"><!-- Populated by JS --></tbody>
+                    </table>
                 </div>
             </div>
         </section>
@@ -295,8 +414,9 @@
                         <label for="student-photo" class="upload-trigger"><i class="fas fa-camera"></i></label>
                         <input type="file" id="student-photo" accept="image/*" hidden>
                     </div>
-                    <h4 id="display-reg-no" class="hrk-id-badge">HRK_77???</h4>
+                    <h4 id="display-reg-no" class="hrk-id-badge">—</h4>
                     <p class="upload-hint">Registration Number (System ID)</p>
+                    <div id="edit-sibling-badge" class="sibling-tag" style="display:none;margin-top:6px;"></div>
                     <p class="upload-hint" style="color:var(--text-muted);font-size:0.78rem;">Official Student Photograph</p>
                 </div>
 
@@ -471,10 +591,10 @@
                         <label>Standard Tuition Fee <span style="font-weight:400;color:var(--text-muted)">(Auto — by Class)</span></label>
                         <input type="number" id="fee-standard" name="standardFee" required readonly class="input-readonly" placeholder="Select class first">
                     </div>
-                    <!-- <div class="form-input-group">
+                    <div class="form-input-group">
                         <label>Admission Fee</label>
                         <input type="number" id="fee-admission" name="admissionFee" value="0">
-                    </div> -->
+                    </div>
                     <div class="form-input-group">
                         <label>Tuition Discount</label>
                         <input type="number" id="fee-discount-tuition" name="tuitionDiscount" value="0">
@@ -609,8 +729,9 @@
                     <div class="upd-search-row">
                         <div class="search-box-wrapper upd-search-bar">
                             <i class="fas fa-search"></i>
-                            <input type="text" id="vo-search-name" placeholder="Search by name or ID...">
+                            <input type="text" id="vo-search-name" placeholder="Search by name, ID or guardian… (use ~ for Name~Father)">
                         </div>
+                        <span class="upd-search-hint" title="Tip: separate student name and father/guardian name with a tilde to search both at once."><i class="fas fa-info-circle"></i> Use <strong>~</strong> to search Name~Father, e.g. <em>Ali~Khan</em></span>
                     </div>
 
                     <!-- STUDENT TABLE -->
@@ -623,7 +744,7 @@
                                     <th>Roll No.</th>
                                     <th>Name</th>
                                     <th>Guardian / Father</th>
-                                    <th>Section</th>
+                                    <th id="vo-class-col-header">Section</th>
                                     <th>Gender</th>
                                     <th class="text-center">View</th>
                                 </tr>
@@ -700,8 +821,9 @@
                     <div class="upd-search-row">
                         <div class="search-box-wrapper upd-search-bar">
                             <i class="fas fa-search"></i>
-                            <input type="text" id="upd-search-input" placeholder="Search by name, ID or guardian…">
+                            <input type="text" id="upd-search-input" placeholder="Search by name, ID or guardian… (use ~ for Name~Father)">
                         </div>
+                        <span class="upd-search-hint" title="Tip: separate student name and father/guardian name with a tilde to search both at once."><i class="fas fa-info-circle"></i> Use <strong>~</strong> to search Name~Father, e.g. <em>Ali~Khan</em></span>
                         <div id="promote-actions-bar" style="display:none; align-items:center; gap:10px;">
                             <button onclick="togglePromoteMode()" class="btn-ghost"><i class="fas fa-times"></i> Cancel</button>
                             <button onclick="confirmPromotion()" class="btn-primary-submit"><i class="fas fa-check"></i> Confirm</button>
@@ -724,7 +846,7 @@
                                     <th>Roll No.</th>
                                     <th>Name</th>
                                     <th>Guardian / Father</th>
-                                    <th>Section</th>
+                                    <th id="upd-class-col-header">Section</th>
                                     <th>Gender</th>
                                     <th id="promote-status-header" style="display:none;">Promotion</th>
                                     <th class="text-center">Actions</th>
@@ -810,7 +932,7 @@
                         <div class="slc-manual-fields">
                             <div class="slc-mini-field">
                                 <label>Student ID</label>
-                                <input type="text" id="slc-manual-id" class="slc-mini-input" placeholder="e.g. HRK_771">
+                                <input type="text" id="slc-manual-id" class="slc-mini-input" placeholder="e.g. PSC_1">
                             </div>
                             <div class="slc-mini-field slc-mini-wide">
                                 <label>Names <span class="slc-hint">(Student~Guardian)</span></label>
@@ -970,7 +1092,7 @@
                         <div class="slc-manual-fields">
                             <div class="slc-mini-field">
                                 <label>Student ID</label>
-                                <input type="text" id="char-manual-id" class="slc-mini-input" placeholder="e.g. HRK_771">
+                                <input type="text" id="char-manual-id" class="slc-mini-input" placeholder="e.g. PSC_1">
                             </div>
                             <div class="slc-mini-field slc-mini-wide">
                                 <label>Names <span class="slc-hint">(Student~Guardian)</span></label>
