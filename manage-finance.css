@@ -2,7 +2,7 @@
    FINANCE SPECIFIC STYLES
    =========================================== */
 
-/* Override the gradient school name (inherited from manage-staff.css)
+/* Override the gradient school name (inherited from manage-taff.css)
    with a plain, solid color — black in light theme, white in dark theme. */
 .school-branding .school-name {
     background: none !important;
