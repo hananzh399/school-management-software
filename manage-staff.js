@@ -1,5 +1,5 @@
 /**
- * EDUFLOW PRO - STAFF MANAGEMENT LOGIC
+ * EDUFLOW - STAFF MANAGEMENT LOGIC
  * Handles: sidebar toggle, counter animation, ripple, date display
  */
 
