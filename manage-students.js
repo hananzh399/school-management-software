@@ -5,7 +5,7 @@
  * Developed for: St. Lawrence International School
  * Module: Student Information System (SIS)
  *
- * Features:
+ * Features
  * 1. Intelligent CRUD (Create, Read, Update, Delete)
  * 2. Real-time Age & Financial Calculations
  * 3. Base64 Image Processing for Photos & Documents
