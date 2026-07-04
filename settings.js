@@ -1,6 +1,6 @@
 // ═══════════════════════════════════════════════
 //  EduFlow Pro — Admin Settings
-//  settings.js  (updated: dark mode + attendance link)
+//  settings.js  (updated: dark mode + attendane link)
 // ═══════════════════════════════════════════════
 
 const CLASSES_KEY     = 'edu_class_configs';
