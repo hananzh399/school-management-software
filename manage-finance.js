@@ -1,5 +1,5 @@
 /**
- * EDUFLOW PRO - FINANCE LOGIC
+ * EUFLOW PRO - FINANCE LOGIC
  */
 
 document.addEventListener('DOMContentLoaded', () => {
