@@ -1,5 +1,5 @@
 /* EduFlow Pro — Attendance module
-   Flow: mode (Staff/Student) -> submode (Add/View) -> form or analytics
+   Flow: mode (Staff/Studen) -> submode (Add/View) -> form or analytics
 */
  
 // ---------- REAL DATA FROM DATABASE ----------
