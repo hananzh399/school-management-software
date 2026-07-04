@@ -2,6 +2,221 @@
    FINANCE SPECIFIC STYLES
    ============================================ */
 
+/* Override the gradient school name (inherited from manage-staff.css)
+   with a plain, solid color — black in light theme, white in dark theme. */
+.school-branding .school-name {
+    background: none !important;
+    -webkit-background-clip: initial !important;
+    background-clip: initial !important;
+    -webkit-text-fill-color: #000 !important;
+    color: #000 !important;
+}
+
+[data-theme="dark"] .school-branding .school-name {
+    -webkit-text-fill-color: #fff !important;
+    color: #fff !important;
+}
+
+/* ============================================
+   SIDEBAR — forced to match Student Management's sidebar exactly
+   (manage-staff.css, shared with the Staff module, styles this sidebar
+   differently — different active color/spacing — so everything below is
+   overridden explicitly using the same values as manage-students.css)
+   ============================================ */
+#sidebar.sidebar {
+    background: var(--bg-sidebar) !important;
+}
+
+#sidebar .sidebar-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 18px 16px 14px;
+    border-bottom: 1px solid var(--border-subtle);
+}
+
+#sidebar .brand {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+#sidebar .close-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    flex-shrink: 0;
+    background: none;
+    border: none;
+    border-radius: 8px;
+    color: var(--text-secondary);
+    font-size: 16px;
+    cursor: pointer;
+    padding: 0;
+    transition: color 0.2s ease;
+}
+
+#sidebar .close-btn:hover { color: var(--text-primary); }
+
+#sidebar .sidebar-nav {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 0 10px;
+    flex: 1;
+    overflow-y: auto;
+}
+
+#sidebar .nav-label {
+    font-size: 10.5px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    color: var(--text-muted);
+    padding: 4px 16px 8px;
+}
+
+#sidebar .nav-link {
+    display: flex;
+    align-items: center;
+    gap: 11px;
+    padding: 9px 12px;
+    border-radius: var(--radius-md, 16px);
+    font-size: 13.5px;
+    font-weight: 500;
+    color: var(--text-secondary) !important;
+    text-decoration: none;
+    border-left: 3px solid transparent;
+    background: none;
+    transition: background 0.2s ease, color 0.2s ease;
+    position: relative;
+}
+
+#sidebar .nav-link i {
+    width: 16px;
+    text-align: center;
+    font-size: 14px;
+    opacity: 0.85;
+}
+
+#sidebar .nav-link:hover {
+    background: rgba(255, 255, 255, 0.04) !important;
+    color: var(--text-primary) !important;
+}
+
+[data-theme="light"] #sidebar .nav-link:hover {
+    background: rgba(0, 0, 0, 0.03) !important;
+}
+
+#sidebar .nav-link.active {
+    background: rgba(23, 113, 106, 0.1) !important;
+    color: #17716A !important;
+    font-weight: 700;
+    border-left-color: #17716A !important;
+    padding-left: 9px;
+}
+
+#sidebar .nav-link.active i {
+    opacity: 1;
+}
+
+#sidebar .sidebar-footer {
+    border-top: 1px solid var(--border-subtle);
+    padding: 10px;
+}
+
+#sidebar .logout-btn {
+    color: #ef4444 !important;
+}
+
+#sidebar .logout-btn:hover {
+    background: rgba(239, 68, 68, 0.08) !important;
+    color: #ef4444 !important;
+}
+
+.school-branding .school-subtitle {
+    display: none;
+}
+
+/* Sidebar search box (was missing here, causing the unstyled/broken look —
+   matches the Student Management sidebar's search box) */
+.sidebar-search {
+    position: relative;
+    margin: 14px 16px;
+}
+
+.sidebar-search i {
+    position: absolute;
+    left: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 12px;
+    color: var(--text-muted);
+}
+
+.sidebar-search input {
+    width: 100%;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-md, 10px);
+    padding: 8px 10px 8px 32px;
+    font-size: 12.5px;
+    color: var(--text-secondary);
+    font-family: inherit;
+    outline: none;
+    transition: border-color 0.2s ease;
+    box-sizing: border-box;
+}
+
+[data-theme="light"] .sidebar-search input {
+    background: rgba(0, 0, 0, 0.02);
+}
+
+.sidebar-search input:focus {
+    border-color: #17716A;
+}
+
+.sidebar-search input::placeholder {
+    color: var(--text-muted);
+}
+
+/* ---- "Fees & Finance" main heading: move to the side, lift it (and the
+   cards below it) up, and trim the title size slightly ---- */
+#page-main .page-title-section {
+    text-align: left;
+    margin-top: -10px;
+    margin-bottom: 16px;
+}
+
+#page-main .page-title-section .page-title,
+#page-main .page-title-section .page-description {
+    text-align: left;
+}
+
+#page-main .page-title-section .title-divider {
+    margin: 12px 0 0;
+}
+
+.page-title {
+    font-size: 23px;
+}
+
+#page-main .finance-cards-container {
+    margin-top: 28px;
+}
+
+/* Solid, non-gradient title-divider (replaces the inherited gradient bar) */
+.title-divider {
+    width: 40px !important;
+    height: 4px !important;
+    border-radius: 4px !important;
+    background: var(--accent-primary, #3b82f6) !important;
+    box-shadow: 0 2px 8px rgba(59, 130, 246, 0.35) !important;
+}
+
 .finance-cards-container {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
@@ -9,21 +224,19 @@
     margin-top: 24px;
 }
 
-/* Centered sub-page cards (Add / View pairs) */
+/* Sub-page cards (Add / View pairs) — same card size as the main cards,
+   but using flexbox so a short row of 1-2 cards actually centers instead
+   of stretching or sitting flush left (which is what CSS Grid does). */
 .finance-cards-container.sub-cards {
-    grid-template-columns: repeat(auto-fit, minmax(260px, 300px));
+    display: flex;
+    flex-wrap: wrap;
     justify-content: center;
-    max-width: 680px;
-    margin-left: auto;
-    margin-right: auto;
 }
 
 .finance-cards-container.sub-cards .finance-card {
-    padding: 26px 22px 22px;
-}
-
-.finance-cards-container.sub-cards .icon-wrapper {
-    margin-bottom: 16px;
+    flex: 0 1 320px;
+    min-width: 280px;
+    max-width: 320px;
 }
 
 .finance-card {
@@ -173,7 +386,7 @@
     position: relative;
     text-align: center;
     padding-top: 0px;
-    margin-bottom: 16px;
+    margin-bottom: 24px;
 }
 
 .sub-title-section .page-title,

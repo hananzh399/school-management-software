@@ -2044,7 +2044,7 @@ document.addEventListener('DOMContentLoaded', () => {
             bformActionBtn = `
                 <div class="profile-section-title"><i class="fas fa-id-card"></i> B-Form / School Certificate (from Admission Form)</div>
                 <div style="padding:18px 25px;display:flex;flex-wrap:wrap;gap:10px;align-items:center;">
-                    <button type="button" class="btn-primary" onclick="window.open('${s.certData}','_blank')"
+                    <button type="button" class="btn-primary-submit" onclick="window.open('${s.certData}','_blank')"
                         style="display:inline-flex;align-items:center;gap:8px;padding:10px 18px;border-radius:8px;border:none;cursor:pointer;">
                         <i class="fas fa-eye"></i> View B-Form
                     </button>
@@ -2068,7 +2068,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     <div class="profile-section-title"><i class="fas fa-certificate"></i> School Certificate / B-Form</div>
                     <div style="padding:20px 25px;">
                         <a href="${s.certData}" download="certificate_${s.regNo}.pdf"
-                           class="btn-primary" style="display:inline-flex;align-items:center;gap:8px;text-decoration:none;padding:10px 20px;border-radius:8px;">
+                           class="btn-primary-submit" style="display:inline-flex;align-items:center;gap:8px;text-decoration:none;padding:10px 20px;border-radius:8px;">
                             <i class="fas fa-file-pdf"></i> Download Certificate PDF
                         </a>
                     </div>`;

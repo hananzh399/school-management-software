@@ -30,22 +30,29 @@
     <aside id="sidebar" class="sidebar">
         <div class="sidebar-header">
             <div class="brand">
-                <div class="brand-icon"><i class="fas fa-graduation-cap"></i></div>
-                <span>EduFlow Pro</span>
+                <img src="logo-icon.png" alt="SoftSchool Logo" class="brand-logo">
+                <span class="brand-name">Soft<strong>School</strong></span>
             </div>
             <button id="close-sidebar" class="close-btn" aria-label="Close sidebar">
                 <i class="fas fa-times"></i>
             </button>
         </div>
+
+        <div class="sidebar-search">
+            <i class="fas fa-search"></i>
+            <input type="text" id="nav-search" placeholder="Search menu...">
+        </div>
+
         <nav class="sidebar-nav">
-            <div class="nav-label">Core Modules</div>
-                        <a href="index.html" class="nav-link"><i class="fas fa-th-large"></i><span>Dashboard</span></a>
+            <div class="nav-label">Menu</div>
+            <a href="main.html" class="nav-link"><i class="fas fa-th-large"></i><span>Dashboard</span></a>
             <a href="manage-students.html" class="nav-link"><i class="fas fa-user-graduate"></i><span>Student Management</span></a>
             <a href="manage-staff.html" class="nav-link"><i class="fas fa-chalkboard-teacher"></i><span>Staff Management</span></a>
-            <a href="manage-finance.html" class="nav-link"><i class="fas fa-file-invoice-dollar"></i><span>Fees &amp; Finance</span></a>
             <a href="attendance.html" class="nav-link active"><i class="fas fa-clipboard-check"></i><span>Attendance</span></a>
-            <a href="settings.html" class="nav-link"><i class="fas fa-cog"></i><span>Admin Settings</span></a>
+            <a href="manage-finance.html" class="nav-link"><i class="fas fa-file-invoice-dollar"></i><span>Fees &amp; Finance</span></a>
+            <a href="settings.html" class="nav-link"><i class="fas fa-cog"></i><span>Settings</span></a>
         </nav>
+
         <div class="sidebar-footer">
             <a href="index.html" class="nav-link logout-btn" onclick="if(window.SoftSchoolAdmin)window.SoftSchoolAdmin.clearSession();"><i class="fas fa-sign-out-alt"></i><span>Logout</span></a>
         </div>
@@ -58,9 +65,8 @@
                 <button id="open-sidebar" class="menu-toggle" aria-label="Open sidebar">
                     <i class="fas fa-bars"></i>
                 </button>
-                <div>
-                    <div class="school-name">ST. LAWRENCE INTERNATIONAL SCHOOL</div>
-                    <div class="school-subtitle">Daily Attendance Register</div>
+                <div class="school-branding">
+                    <h1 class="school-name">ST. LAWRENCE INTERNATIONAL SCHOOL</h1>
                 </div>
             </div>
             <div class="header-right">
@@ -77,22 +83,56 @@
             </div>
         </header>
 
-        <section class="page-title-section">
-            <h1 class="page-title">Attendance</h1>
-            <p class="page-description">Mark, save, and review daily attendance for staff and students.</p>
+        <section class="page-title-section" id="main-page-title-section">
+            <h1 class="page-title">Today's Attendance</h1>
             <div class="title-divider"></div>
+        </section>
+
+        <!-- LIVE ATTENDANCE STATS -->
+        <section id="attendance-stats" class="attn-stats-grid">
+            <div class="attn-stat-card icon-emerald">
+                <div class="attn-stat-icon"><i class="fas fa-user-graduate"></i></div>
+                <div class="attn-stat-meta">
+                    <span class="attn-stat-value" id="stat-students-present">0</span>
+                    <span class="attn-stat-label">Students Present</span>
+                </div>
+            </div>
+            <div class="attn-stat-card icon-rose">
+                <div class="attn-stat-icon"><i class="fas fa-user-graduate"></i></div>
+                <div class="attn-stat-meta">
+                    <span class="attn-stat-value" id="stat-students-absent">0</span>
+                    <span class="attn-stat-label">Students Absent</span>
+                </div>
+            </div>
+            <div class="attn-stat-card icon-indigo">
+                <div class="attn-stat-icon"><i class="fas fa-chalkboard-teacher"></i></div>
+                <div class="attn-stat-meta">
+                    <span class="attn-stat-value" id="stat-staff-present">0</span>
+                    <span class="attn-stat-label">Staff Present</span>
+                </div>
+            </div>
+            <div class="attn-stat-card icon-amber">
+                <div class="attn-stat-icon"><i class="fas fa-chalkboard-teacher"></i></div>
+                <div class="attn-stat-meta">
+                    <span class="attn-stat-value" id="stat-staff-absent">0</span>
+                    <span class="attn-stat-label">Staff Absent</span>
+                </div>
+            </div>
         </section>
 
         <!-- STAGE 1: Pick mode -->
         <section id="stage-mode" class="stage">
+            <h2 class="section-heading">Mark Attendance</h2>
             <div class="choice-grid">
-                <button class="choice-card" data-mode="staff">
-                    <div class="choice-icon icon-indigo"><i class="fas fa-chalkboard-teacher"></i></div>
+                <button class="choice-card icon-indigo" data-mode="staff">
+                    <div class="card-glow"></div>
+                    <div class="choice-icon"><i class="fas fa-chalkboard-teacher"></i></div>
                     <h3>Staff Attendance</h3>
                     <p>Mark or review attendance for teaching &amp; non-teaching staff.</p>
                 </button>
-                <button class="choice-card" data-mode="student">
-                    <div class="choice-icon icon-emerald"><i class="fas fa-user-graduate"></i></div>
+                <button class="choice-card icon-emerald" data-mode="student">
+                    <div class="card-glow"></div>
+                    <div class="choice-icon"><i class="fas fa-user-graduate"></i></div>
                     <h3>Student Attendance</h3>
                     <p>Select a class, mark daily status, and review records.</p>
                 </button>
@@ -106,13 +146,15 @@
                 <h2 class="stage-title" id="submode-title">Choose Action</h2>
             </div>
             <div class="choice-grid">
-                <button class="choice-card" data-action="add">
-                    <div class="choice-icon icon-indigo"><i class="fas fa-plus-circle"></i></div>
+                <button class="choice-card icon-indigo" data-action="add">
+                    <div class="card-glow"></div>
+                    <div class="choice-icon"><i class="fas fa-plus-circle"></i></div>
                     <h3>Add Attendance</h3>
                     <p>Mark today's attendance using the entry form.</p>
                 </button>
-                <button class="choice-card" data-action="view">
-                    <div class="choice-icon icon-emerald"><i class="fas fa-chart-line"></i></div>
+                <button class="choice-card icon-emerald" data-action="view">
+                    <div class="card-glow"></div>
+                    <div class="choice-icon"><i class="fas fa-chart-line"></i></div>
                     <h3>View Attendance</h3>
                     <p>Search records and review analytics.</p>
                 </button>
@@ -383,7 +425,7 @@
         <section id="stage-staff-monthly" class="stage hidden">
             <div class="stage-header">
                 <button class="back-btn" data-back="submode"><i class="fas fa-arrow-left"></i> Back</button>
-                <h2 class="stage-title" id="staff-monthly-title">Staff Monthly Attendance</h2>
+                <h2 class="stage-title" id="staff-monthly-title">Staff Attendance</h2>
             </div>
 
             <div class="toolbar">

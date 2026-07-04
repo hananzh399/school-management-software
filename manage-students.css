@@ -376,7 +376,11 @@ body {
     font-size: 18px;
     font-weight: 800;
     letter-spacing: 1px;
-    color: #17716A;
+    color: #000;
+}
+
+[data-theme="dark"] .school-name {
+    color: #fff;
 }
 
 .header-right {
@@ -468,7 +472,7 @@ body {
 }
 
 .page-title {
-    font-size: 26px;
+    font-size: 23px;
     font-weight: 800;
     letter-spacing: -0.5px;
     margin-bottom: 6px;
@@ -482,12 +486,12 @@ body {
 }
 
 .title-divider {
-    width: 50px;
-    height: 3px;
+    width: 40px;
+    height: 4px;
     margin: 14px auto 0;
-    border-radius: 3px;
-    background: linear-gradient(90deg, var(--accent-primary), var(--accent-secondary));
-    box-shadow: 0 0 14px rgba(59, 130, 246, 0.4);
+    border-radius: 4px;
+    background: var(--accent-primary);
+    box-shadow: 0 2px 8px var(--accent-primary-glow, rgba(59, 130, 246, 0.35));
 }
 
 /* Left-aligned page title variant (e.g. "Manage Students" heading) */
@@ -678,18 +682,7 @@ body {
     display: flex;
     flex-direction: column;
     gap: 0;
-    animation: cardFadeIn 0.5s ease-out both;
 }
-
-@keyframes cardFadeIn {
-    from { opacity: 0; transform: translateY(16px); }
-    to   { opacity: 1; transform: translateY(0); }
-}
-
-.manage-card:nth-child(1) { animation-delay: 0.1s; }
-.manage-card:nth-child(2) { animation-delay: 0.2s; }
-.manage-card:nth-child(3) { animation-delay: 0.3s; }
-.manage-card:nth-child(4) { animation-delay: 0.4s; }
 
 /* Per-card glow layers */
 .card-glow {

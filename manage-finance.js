@@ -289,7 +289,6 @@ function handleAddStudentFine() {
         const baseRows = [];
         if (Number(student.standardFee)  > 0) baseRows.push({ description: 'Tuition Fee',        period: new Date().toLocaleDateString('en-GB', { month: 'long', year: 'numeric' }), amount: Number(student.standardFee),  discount: Number(student.tuitionDiscount)   || 0 });
         if (Number(student.transportFee) > 0) baseRows.push({ description: 'Transportation Fee', period: new Date().toLocaleDateString('en-GB', { month: 'long', year: 'numeric' }), amount: Number(student.transportFee), discount: Number(student.transportDiscount) || 0 });
-        if (Number(student.admissionFee) > 0) baseRows.push({ description: 'Admission Fee',      period: 'One-time',   amount: Number(student.admissionFee), discount: 0 });
         if (Number(student.otherFee)     > 0) baseRows.push({ description: student.otherFeeLabel || 'Other Charges', period: '-', amount: Number(student.otherFee), discount: 0 });
         if (Number(student.booksFee)     > 0) baseRows.push({ description: 'Books Fee',          period: new Date().toLocaleDateString('en-GB', { month: 'long', year: 'numeric' }), amount: Number(student.booksFee), discount: Number(student.booksDiscount) || 0 });
         existingFees = [...baseRows, ...existingFees];
@@ -992,7 +991,10 @@ function computeFeeBreakdown(s) {
     // --- 1. Core Charges (stored in DB, shown in table) ---
     const tuitionFee   = usingCustomVoucher ? 0 : (Number(s.standardFee)   || 0);
     const transportFee = usingCustomVoucher ? 0 : (Number(s.transportFee)  || 0);
-    const admissionFee = usingCustomVoucher ? 0 : (Number(s.admissionFee)  || 0);
+    // Admission fee is a one-time, display-only figure (shown on the dashboard /
+    // student profile). It must NOT be counted in the fee voucher or pending-dues
+    // totals, so it is tracked separately from totalCharges below.
+    const admissionFee = Number(s.admissionFee) || 0;
     const otherFee     = usingCustomVoucher ? 0 : (Number(s.otherFee)      || 0);
     const otherFeeLabel = s.otherFeeLabel || 'Other Charges';
 
@@ -1078,8 +1080,9 @@ function computeFeeBreakdown(s) {
     const trDisc  = Number(s.transportDiscount) || 0;
     const sibDisc = Number(s.siblingDiscount)   || 0;
 
-    // Core total (what the table "pending fees" shows)
-    const totalCharges   = tuitionFee + transportFee + admissionFee + otherFee;
+    // Core total (what the table "pending fees" shows) — admission fee
+    // deliberately excluded; it is display-only (see note above).
+    const totalCharges   = tuitionFee + transportFee + otherFee;
     const totalDiscounts = tDisc + trDisc + sibDisc;
     const totalWithinDueDate = (totalCharges - totalDiscounts) + arrears;
 
@@ -1148,7 +1151,6 @@ function buildVoucherHTML(s) {
     let rowsHTML = `
         ${f.tuitionFee > 0 ? `<tr><td>Tuition Fee</td><td>${f.monthLabel}</td><td>Rs. ${f.tuitionFee.toLocaleString()}</td></tr>` : ''}
         ${f.transportFee > 0 ? `<tr><td>Transportation Fee</td><td>${f.monthLabel}</td><td>Rs. ${f.transportFee.toLocaleString()}</td></tr>` : ''}
-        ${f.admissionFee > 0 ? `<tr><td>Admission Fee</td><td>One-time</td><td>Rs. ${f.admissionFee.toLocaleString()}</td></tr>` : ''}
         ${f.otherFee > 0 ? `<tr><td>${f.otherFeeLabel}</td><td>-</td><td>Rs. ${f.otherFee.toLocaleString()}</td></tr>` : ''}
     `;
 
@@ -1822,7 +1824,6 @@ function openAddToVoucherModal(studentId, fullName, editMode) {
         if (f.tuitionFee > 0)   atvAddFeeRow('tuition',   f.tuitionFee,   f.tDisc);
         if (f.transportFee > 0) atvAddFeeRow('transport', f.transportFee, f.trDisc);
         if (f.booksFee > 0)     atvAddFeeRow('book',      f.booksFee,     f.booksDiscount);
-        if (f.admissionFee > 0) atvAddFeeRow('admission', f.admissionFee, 0);
         if (f.otherFee > 0)     atvAddFeeRow('other',     f.otherFee,     0);
         if (f.showAnnualFund)   atvAddFeeRow('annual',    f.annualFundAmt, 0);
     }
@@ -2594,7 +2595,6 @@ function openInlineVoucherEditor(studentId, fullName) {
     const rows = [];
     if (f.tuitionFee   > 0) rows.push({ description: 'Tuition Fee',        period: f.monthLabel, amount: f.tuitionFee,   discount: 0 });
     if (f.transportFee > 0) rows.push({ description: 'Transportation Fee', period: f.monthLabel, amount: f.transportFee, discount: 0 });
-    if (f.admissionFee > 0) rows.push({ description: 'Admission Fee',      period: 'One-time',   amount: f.admissionFee, discount: 0 });
     if (f.otherFee     > 0) rows.push({ description: f.otherFeeLabel,      period: '-',          amount: f.otherFee,     discount: 0 });
     if (f.booksFee     > 0) rows.push({ description: 'Books Fee',          period: f.monthLabel, amount: f.booksFee,     discount: Number(student.booksDiscount) || 0 });
     (f.additionalFees || []).forEach(fee => {

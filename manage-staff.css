@@ -116,7 +116,8 @@ body {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 24px 20px;
+    gap: 12px;
+    padding: 18px 16px 14px;
     border-bottom: 1px solid var(--border-subtle);
 }
 
@@ -148,69 +149,98 @@ body {
     color: var(--text-primary);
 }
 
+.sidebar-search {
+    position: relative;
+    margin: 14px 16px;
+}
+
+.sidebar-search i {
+    position: absolute;
+    left: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 12px;
+    color: var(--text-muted);
+}
+
+.sidebar-search input {
+    width: 100%;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-md, 10px);
+    padding: 8px 10px 8px 32px;
+    font-size: 12.5px;
+    color: var(--text-secondary);
+    font-family: inherit;
+    outline: none;
+    transition: border-color 0.2s ease;
+    box-sizing: border-box;
+}
+
+.sidebar-search input:focus { border-color: #17716A; }
+.sidebar-search input::placeholder { color: var(--text-muted); }
+
 /* Nav Links */
 .sidebar-nav {
     flex: 1;
-    padding: 16px 12px;
+    padding: 0 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
     overflow-y: auto;
 }
 
 .nav-label {
-    font-size: 10px;
+    font-size: 10.5px;
     font-weight: 700;
     text-transform: uppercase;
-    letter-spacing: 1.5px;
+    letter-spacing: 0.6px;
     color: var(--text-muted);
-    padding: 12px 12px 8px;
+    padding: 4px 16px 8px;
 }
 
 .nav-link {
     display: flex;
     align-items: center;
-    gap: 12px;
-    padding: 11px 14px;
-    border-radius: var(--radius-sm);
+    gap: 11px;
+    padding: 9px 12px;
+    border-radius: var(--radius-md, 16px);
     color: var(--text-secondary);
     text-decoration: none;
-    font-size: 14px;
+    font-size: 13.5px;
     font-weight: 500;
-    transition: all var(--transition);
+    border-left: 3px solid transparent;
+    transition: background 0.2s ease, color 0.2s ease;
     position: relative;
-    margin-bottom: 2px;
 }
 
 .nav-link i {
-    width: 20px;
+    width: 16px;
     text-align: center;
-    font-size: 15px;
+    font-size: 14px;
+    opacity: 0.85;
 }
 
 .nav-link:hover {
     color: var(--text-primary);
-    background: rgba(255, 255, 255, 0.05);
+    background: rgba(255, 255, 255, 0.04);
 }
 
 .nav-link.active {
-    color: var(--accent-teaching-light);
-    background: rgba(59, 130, 246, 0.1);
+    color: #17716A;
+    background: rgba(23, 113, 106, 0.1);
+    font-weight: 700;
+    border-left-color: #17716A;
+    padding-left: 9px;
 }
 
-.nav-link.active::before {
-    content: '';
-    position: absolute;
-    left: 0;
-    top: 50%;
-    transform: translateY(-50%);
-    width: 3px;
-    height: 60%;
-    border-radius: 0 4px 4px 0;
-    background: var(--accent-teaching);
-    box-shadow: 0 0 10px var(--accent-teaching-glow);
+.nav-link.active i {
+    opacity: 1;
 }
 
 /* Sidebar Footer */
 .sidebar-footer {
-    padding: 16px 12px;
+    padding: 10px;
     border-top: 1px solid var(--border-subtle);
 }
 
@@ -305,17 +335,15 @@ body {
     font-size: 18px;
     font-weight: 800;
     letter-spacing: 1px;
-    background: linear-gradient(90deg, var(--text-primary), var(--accent-teaching-light));
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
+    color: #000;
+}
+
+[data-theme="dark"] .school-name {
+    color: #fff;
 }
 
 .school-subtitle {
-    font-size: 13px;
-    color: var(--text-muted);
-    font-weight: 400;
-    margin-top: 2px;
+    display: none;
 }
 
 .header-right {
@@ -407,14 +435,15 @@ body {
    ============================================ */
 .page-title-section {
     text-align: center;
-    margin-bottom: 48px;
+    margin-top: -10px;
+    margin-bottom: 28px;
     position: relative;
     z-index: 1;
     animation: fadeInDown 0.6s ease-out both;
 }
 
 .page-title {
-    font-size: 32px;
+    font-size: 26px;
     font-weight: 800;
     letter-spacing: -0.5px;
     margin-bottom: 8px;
@@ -427,12 +456,12 @@ body {
 }
 
 .title-divider {
-    width: 60px;
-    height: 3px;
-    margin: 20px auto 0;
-    border-radius: 3px;
-    background: linear-gradient(90deg, var(--accent-teaching), var(--accent-nonteaching));
-    box-shadow: 0 0 14px rgba(99, 102, 241, 0.4);
+    width: 40px;
+    height: 4px;
+    margin: 12px auto 0;
+    border-radius: 4px;
+    background: var(--accent-primary, #3b82f6);
+    box-shadow: 0 2px 8px rgba(59, 130, 246, 0.35);
 }
 
 @keyframes fadeInDown {
@@ -455,7 +484,7 @@ body {
     grid-template-columns: repeat(2, 1fr);
     gap: 32px;
     max-width: 900px;
-    margin: 0 auto 48px;
+    margin: -6px auto 48px;
     position: relative;
     z-index: 1;
 }

@@ -16,26 +16,33 @@
 
 <!-- SIDEBAR -->
 <aside class="sidebar" id="sidebar">
-  <div class="sidebar-brand">
-    <div class="sidebar-brand-left">
+  <div class="sidebar-header">
+    <div class="brand">
       <img src="logo-icon.png" alt="SoftSchool Logo" class="brand-logo">
       <span class="brand-name">Soft<strong>School</strong></span>
     </div>
-    <button class="sidebar-close-btn" onclick="closeSidebar()" title="Close menu">
+    <button id="close-sidebar" class="close-btn" onclick="closeSidebar()" aria-label="Close sidebar" title="Close menu">
       <i class="fas fa-times"></i>
     </button>
   </div>
-  <nav class="nav-section">
-    <div class="nav-label">Core Modules</div>
-        <a href="main.html" class="nav-link"><i class="fas fa-th-large"></i> Dashboard Home</a>
-    <a href="manage-students.html" class="nav-link"><i class="fas fa-user-graduate"></i> Student Management</a>
+
+  <div class="sidebar-search">
+    <i class="fas fa-search"></i>
+    <input type="text" id="nav-search" placeholder="Search menu...">
+  </div>
+
+  <nav class="sidebar-nav">
+    <div class="nav-label">Menu</div>
+    <a href="main.html" class="nav-link"><i class="fas fa-th-large"></i><span>Dashboard</span></a>
+    <a href="manage-students.html" class="nav-link"><i class="fas fa-user-graduate"></i><span>Student Management</span></a>
     <a href="manage-staff.html" class="nav-link"><i class="fas fa-chalkboard-teacher"></i><span>Staff Management</span></a>
-    <a href="manage-finance.html" class="nav-link"><i class="fas fa-file-invoice-dollar"></i><span>Fees &amp; Finance</span></a>
     <a href="attendance.html" class="nav-link"><i class="fas fa-clipboard-check"></i><span>Attendance</span></a>
-    <a href="settings.html" class="nav-link active"><i class="fas fa-cog"></i><span>Admin Settings</span></a>
+    <a href="manage-finance.html" class="nav-link"><i class="fas fa-file-invoice-dollar"></i><span>Fees &amp; Finance</span></a>
+    <a href="settings.html" class="nav-link active"><i class="fas fa-cog"></i><span>Settings</span></a>
   </nav>
+
   <div class="sidebar-footer">
-    <a href="index.html" class="nav-link logout-btn" onclick="if(window.SoftSchoolAdmin)window.SoftSchoolAdmin.clearSession();"><i class="fas fa-sign-out-alt"></i> Logout</a>
+    <a href="index.html" class="nav-link logout-btn" onclick="if(window.SoftSchoolAdmin)window.SoftSchoolAdmin.clearSession();"><i class="fas fa-sign-out-alt"></i><span>Logout</span></a>
   </div>
 </aside>
 

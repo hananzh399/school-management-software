@@ -219,7 +219,20 @@ function scheduleMidnightRefresh() {
 // ---------- DOM HELPERS ----------
 const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => document.querySelectorAll(sel);
-function show(id) { $(id).classList.remove("hidden"); }
+function show(id) {
+    $(id).classList.remove("hidden");
+    if (id === "#stage-mode") {
+        const stats = $("#attendance-stats");
+        if (stats) stats.classList.remove("hidden");
+        const mainTitle = $("#main-page-title-section");
+        if (mainTitle) mainTitle.classList.remove("hidden");
+    } else if (id && id.startsWith("#stage-")) {
+        const stats = $("#attendance-stats");
+        if (stats) stats.classList.add("hidden");
+        const mainTitle = $("#main-page-title-section");
+        if (mainTitle) mainTitle.classList.add("hidden");
+    }
+}
 function hide(id) { $(id).classList.add("hidden"); }
 function hideAllStages() {
     ["#stage-mode","#stage-submode","#stage-classes","#stage-table","#stage-staff","#stage-view","#stage-monthly","#stage-student-record","#stage-staff-monthly","#stage-staff-record"].forEach(hide);
@@ -233,6 +246,7 @@ document.addEventListener("DOMContentLoaded", () => {
     initTheme();
     initSidebar();
     initDate();
+    initAttendanceStats();
     initModeCards();
     initSubmodeCards();
     initBackButtons();
@@ -253,7 +267,58 @@ function initDate() {
     const d = new Date();
     $("#header-date").textContent = d.toLocaleDateString(undefined, { weekday:'long', year:'numeric', month:'long', day:'numeric' });
 }
- 
+
+// ---------- LIVE ATTENDANCE STATS (Students/Staff Present/Absent) ----------
+function computeAttendanceStats() {
+    const today = todayKey();
+    let studentsPresent = 0, studentsAbsent = 0, staffPresent = 0, staffAbsent = 0;
+
+    // Student attendance is saved per class per day: eduflow_att_<date>_<className>
+    const studentPrefix = `eduflow_att_${today}_`;
+    for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (!key || !key.startsWith(studentPrefix)) continue;
+        try {
+            const payload = JSON.parse(localStorage.getItem(key));
+            const records = (payload && payload.records) || {};
+            Object.values(records).forEach(rec => {
+                if (rec.status === "present") studentsPresent++;
+                else if (rec.status === "absent") studentsAbsent++;
+            });
+        } catch (e) { /* ignore malformed entries */ }
+    }
+
+    // Staff attendance is saved once per day: eduflow_staff_att_<date>
+    try {
+        const staffPayload = JSON.parse(localStorage.getItem(`eduflow_staff_att_${today}`) || "null");
+        const staffRecords = (staffPayload && staffPayload.records) || {};
+        Object.values(staffRecords).forEach(rec => {
+            if (rec.status === "present") staffPresent++;
+            else if (rec.status === "absent") staffAbsent++;
+        });
+    } catch (e) { /* ignore malformed entries */ }
+
+    return { studentsPresent, studentsAbsent, staffPresent, staffAbsent };
+}
+
+function renderAttendanceStats() {
+    if (!$("#attendance-stats")) return;
+    const s = computeAttendanceStats();
+    const setVal = (id, val) => { const node = document.getElementById(id); if (node) node.textContent = val; };
+    setVal("stat-students-present", s.studentsPresent);
+    setVal("stat-students-absent", s.studentsAbsent);
+    setVal("stat-staff-present", s.staffPresent);
+    setVal("stat-staff-absent", s.staffAbsent);
+}
+
+function initAttendanceStats() {
+    renderAttendanceStats();
+    // Real-time refresh: pick up changes from other tabs immediately, and
+    // poll periodically to catch same-tab updates without needing a page reload.
+    window.addEventListener("storage", renderAttendanceStats);
+    setInterval(renderAttendanceStats, 5000);
+}
+
 function initTheme() {
     const saved = localStorage.getItem("eduflow-theme") || "dark";
     document.documentElement.setAttribute("data-theme", saved);
@@ -377,14 +442,14 @@ function openClass(cls) {
             state.attendance = {};
             state.savedStudentKeys.clear();
             STUDENTS.filter(s => s.class === cls.name)
-                .forEach(s => { state.attendance[s.regNo] = { status: "absent", reason: "" }; });
+                .forEach(s => { state.attendance[s.regNo] = { status: "present", reason: "" }; });
         }
     } else {
         // No record yet for today — start fresh
         state.attendance = {};
         state.savedStudentKeys.clear();
         STUDENTS.filter(s => s.class === cls.name)
-            .forEach(s => { state.attendance[s.regNo] = { status: "absent", reason: "" }; });
+            .forEach(s => { state.attendance[s.regNo] = { status: "present", reason: "" }; });
     }
 
     $("#table-title").textContent = `${cls.name} — Attendance`;
@@ -617,6 +682,7 @@ function initSave() {
             records: { ...existingRecords, ...state.attendance },
         };
         localStorage.setItem(storageKey, JSON.stringify(payload));
+        renderAttendanceStats();
         
         // --- ADDED THIS LINE FOR DATABASE ---
         syncCurrentSheetWithDatabase(); 
@@ -646,6 +712,7 @@ function initSave() {
             records: { ...existingRecords, ...state.staffAttendance },
         };
         localStorage.setItem(storageKey, JSON.stringify(payload));
+        renderAttendanceStats();
         
         // --- ADDED THIS LINE FOR DATABASE ---
         syncCurrentSheetWithDatabase(); 
