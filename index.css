@@ -1479,8 +1479,8 @@ footer {
   display: flex;
   align-items: center;
   gap: 10px;
-  margin-bottom: 1.6rem;
-  padding-bottom: 1.2rem;
+  margin-bottom: 1.1rem;
+  padding-bottom: 0.9rem;
   border-bottom: 1px solid var(--border);
 }
 
@@ -1488,7 +1488,7 @@ footer {
 .login-card {
   background: var(--white);
   border-radius: var(--radius-lg);
-  padding: 2.4rem;
+  padding: 1.9rem 2.2rem;
   max-width: 440px;
   margin-left: auto;
   box-shadow: 0 30px 60px -20px rgba(11,43,40,0.45);
@@ -1514,6 +1514,78 @@ footer {
   margin-top: 4px;
 }
 
+.login-welcome {
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: var(--ink);
+  margin-bottom: 1.1rem;
+}
+
+/* ── ROLE SWITCHER — pinned above the active login form ──
+   Every circle is the same size whether active or not — only the
+   fill changes. Label always sits below, outside the circle. ── */
+.login-role-switch {
+  display: flex;
+  gap: 1.3rem;
+  justify-content: center;
+  margin-bottom: 1.3rem;
+}
+.role-tab {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.4rem;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  font-family: inherit;
+  transition: transform 0.2s ease;
+}
+.role-tab:hover, .role-tab:focus-visible {
+  transform: translateY(-2px);
+  outline: none;
+}
+.role-tab-circle {
+  width: 68px;
+  height: 68px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--white);
+  border: 2px solid var(--teal-200);
+  color: var(--teal-700);
+  font-size: 1.2rem;
+  transition: all 0.22s ease;
+}
+.role-tab:hover .role-tab-circle { border-color: var(--teal-500); }
+.role-tab-label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--ink-soft);
+}
+.role-tab.active .role-tab-circle {
+  background: var(--teal-900);
+  border-color: var(--teal-900);
+  color: #fff;
+  box-shadow: 0 8px 16px -6px rgba(12,53,49,0.4);
+}
+.role-tab.active .role-tab-label { color: var(--ink); }
+
+
+.login-hint {
+  background: var(--paper-deep);
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-sm);
+  padding: 0.8rem 0.9rem;
+  font-size: 0.78rem;
+  color: var(--ink-soft);
+  margin-bottom: 1.2rem;
+  line-height: 1.5;
+}
+.login-hint strong { color: var(--teal-700); }
+
 .field-group { margin-bottom: 1.1rem; }
 .field-group label {
   display: block;
@@ -1524,6 +1596,57 @@ footer {
   transition: color 0.2s;
 }
 .field-group:focus-within label { color: var(--teal-600); }
+
+/* Underline variant (used on the unified login modal) — icon + input
+   sitting on a plain bottom border, no box, closer to the reference. */
+.field-group-underline { margin-bottom: 1.15rem; }
+.field-wrap-underline {
+  border-bottom: 1.5px solid var(--border);
+  padding-bottom: 4px;
+  transition: border-color 0.2s ease;
+}
+.field-wrap-underline:focus-within { border-color: var(--teal-600); }
+.field-wrap-underline input {
+  border: none !important;
+  background: none !important;
+  border-radius: 0 !important;
+  padding: 8px 8px 8px 30px !important;
+  box-shadow: none !important;
+}
+.field-wrap-underline .field-icon { left: 2px; }
+
+.remember-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0.1rem 0 1rem;
+  cursor: pointer;
+  font-size: 0.88rem;
+  font-weight: 500;
+  color: var(--ink);
+  user-select: none;
+}
+.toggle-input { display: none; }
+.toggle-track {
+  width: 38px;
+  height: 20px;
+  border-radius: 999px;
+  background: var(--border);
+  position: relative;
+  flex-shrink: 0;
+  transition: background 0.2s ease;
+}
+.toggle-thumb {
+  position: absolute;
+  top: 2px; left: 2px;
+  width: 16px; height: 16px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+  transition: transform 0.2s ease;
+}
+.toggle-input:checked + .toggle-track { background: var(--teal-600); }
+.toggle-input:checked + .toggle-track .toggle-thumb { transform: translateX(18px); }
 
 .field-wrap {
   position: relative;
@@ -1597,9 +1720,9 @@ footer {
   background: var(--teal-600);
   color: var(--white);
   border: none;
-  border-radius: var(--radius-sm);
+  border-radius: 14px;
   font-size: 0.98rem;
-  font-weight: 600;
+  font-weight: 700;
   font-family: inherit;
   cursor: pointer;
   margin-top: 0.4rem;
@@ -1607,6 +1730,10 @@ footer {
   position: relative;
   overflow: hidden;
   letter-spacing: 0.01em;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
 }
 .btn-login:hover {
   background: var(--teal-700);
@@ -1614,6 +1741,30 @@ footer {
   box-shadow: 0 14px 32px -8px rgba(19,87,80,0.6);
 }
 .btn-login:active { transform: translateY(0) scale(0.98); box-shadow: none; }
+
+.login-signup-row {
+  text-align: center;
+  margin-top: 1.1rem;
+  font-size: 0.88rem;
+  color: var(--ink-soft);
+}
+.btn-signup-login {
+  display: inline-block;
+  margin-left: 6px;
+  color: var(--teal-700);
+  font-weight: 700;
+  text-decoration: none;
+  position: relative;
+}
+.btn-signup-login::after {
+  content: '';
+  position: absolute;
+  bottom: -2px; left: 0; right: 100%;
+  height: 1.5px;
+  background: var(--teal-700);
+  transition: right 0.25s ease;
+}
+.btn-signup-login:hover::after { right: 0; }
 
 .login-divider {
   text-align: center;

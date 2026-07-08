@@ -356,9 +356,10 @@ function openLogin() {
   _loginLastFocused = document.activeElement;
   modal.classList.add("open");
   document.body.style.overflow = "hidden";
+  selectLoginRole("admin");
   setTimeout(() => {
-    const f = document.getElementById("phone");
-    if (f) f.focus();
+    const first = modal.querySelector(".login-step:not([style*='display: none']) input");
+    if (first) first.focus();
   }, 300);
   if (_loginTrap) modal.removeEventListener("keydown", _loginTrap);
   _loginTrap = createFocusTrap(modal);
@@ -380,6 +381,110 @@ function closeLogin() {
 }
 function closeLoginOutside(e) {
   if (e.target === document.getElementById("loginModal")) closeLogin();
+}
+
+/* ── LOGIN ROLE SWITCHING (admin / teacher / parent) ──
+   A persistent tab row stays visible at the top of the login card;
+   clicking a tab just swaps which form is shown beneath it. ── */
+const LOGIN_STEP_IDS = ["adminLoginStep", "teacherLoginStep", "parentLoginStep"];
+const LOGIN_STEP_BY_ROLE = { admin: "adminLoginStep", teacher: "teacherLoginStep", parent: "parentLoginStep" };
+
+function showLoginStep(stepId) {
+  LOGIN_STEP_IDS.forEach((id) => {
+    const el = document.getElementById(id);
+    if (el) el.style.display = id === stepId ? "" : "none";
+  });
+  const modal = document.getElementById("loginModal");
+  setTimeout(() => {
+    if (!modal) return;
+    const first = modal.querySelector(`#${stepId} input`);
+    if (first) first.focus();
+  }, 60);
+}
+
+function selectLoginRole(role) {
+  const stepId = LOGIN_STEP_BY_ROLE[role];
+  if (!stepId) return;
+  showLoginStep(stepId);
+  document.querySelectorAll(".role-tab").forEach((tab) => {
+    tab.classList.toggle("active", tab.getAttribute("data-role") === role);
+  });
+}
+
+/* ── TEACHER LOGIN (from the unified modal) ── */
+function toggleTeacherPwIndex() {
+  const pw = document.getElementById("teacherPassIndex");
+  const icon = document.getElementById("eyeIconTeacherIndex");
+  if (!pw || !icon) return;
+  if (pw.type === "password") {
+    pw.type = "text";
+    icon.className = "fas fa-eye-slash";
+  } else {
+    pw.type = "password";
+    icon.className = "fas fa-eye";
+  }
+}
+
+function handleTeacherLoginIndex(e) {
+  e.preventDefault();
+  const idInput = document.getElementById("teacherIdIndex");
+  const passInput = document.getElementById("teacherPassIndex");
+  const btn = document.getElementById("teacherLoginBtnIndex");
+  const card = document.getElementById("loginCard");
+
+  [idInput, passInput].forEach((el) => el.classList.remove("error"));
+
+  if (!idInput.value.trim()) {
+    idInput.classList.add("error");
+    showToast("Please enter your Teacher ID.", "error");
+    return;
+  }
+  if (!passInput.value.trim()) {
+    passInput.classList.add("error");
+    showToast("Please enter your password.", "error");
+    return;
+  }
+  if (!window.SoftSchoolTeacher) {
+    showToast("Teacher login isn't available right now.", "error");
+    return;
+  }
+
+  const origText = btn.textContent;
+  btn.textContent = "Signing in…";
+  btn.disabled = true;
+  btn.style.opacity = "0.8";
+
+  setTimeout(() => {
+    btn.textContent = origText;
+    btn.disabled = false;
+    btn.style.opacity = "";
+
+    const result = window.SoftSchoolTeacher.authenticateTeacher(idInput.value, passInput.value);
+
+    if (!result.ok) {
+      passInput.classList.add("error");
+      if (card) {
+        card.classList.add("shake");
+        card.addEventListener("animationend", () => card.classList.remove("shake"), { once: true });
+      }
+      if (result.reason === "not_found") {
+        showToast("No teacher found with that ID. Check with your admin.", "error");
+      } else {
+        showToast("Incorrect password. Please try again.", "error");
+      }
+      return;
+    }
+
+    window.SoftSchoolTeacher.setSession(result.teacher.id);
+    showToast("Welcome back, " + result.teacher.name.split(" ")[0] + "!", "success");
+    setTimeout(() => { window.location.href = "teacher-portal.html"; }, 700);
+  }, 700);
+}
+
+/* ── PARENT LOGIN (dummy placeholder until the portal ships) ── */
+function handleParentDummy(e) {
+  e.preventDefault();
+  showToast("Parent portal is coming soon — check back later!", "info");
 }
 
 /* ── GLOBAL ESCAPE KEY ── */

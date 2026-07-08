@@ -225,6 +225,9 @@
       <div class="feature-icon"><i class="fas fa-person-chalkboard"></i></div>
       <h3>Teacher portal</h3>
       <p>Teachers see their class schedule, subjects, and grades assigned to them the moment they sign in.</p>
+      <a href="javascript:void(0)" onclick="openLogin(); selectLoginRole('teacher');" style="display:inline-flex;align-items:center;gap:6px;margin-top:0.9rem;color:var(--teal-700);font-weight:600;font-size:0.88rem;text-decoration:none;">
+        Teacher login <i class="fas fa-arrow-right" style="font-size:0.75rem;"></i>
+      </a>
     </div>
   </div>
 </section>
@@ -702,43 +705,113 @@
         <img src="logo-icon.png" alt="Soft School" style="height:32px;">
         <span class="logo-wordmark">Soft<strong>School</strong></span>
       </div>
-      <div class="login-card-top">
-        <h2>Welcome to SoftSchool</h2>
-        <p>Sign in to your Soft School account</p>
+
+      <div class="login-welcome">Welcome</div>
+
+      <!-- ROLE SWITCHER — always visible, sits above whichever form is active -->
+      <div class="login-role-switch">
+        <button type="button" class="role-tab active" data-role="admin" onclick="selectLoginRole('admin')">
+          <span class="role-tab-circle"><i class="fas fa-user-shield"></i></span>
+          <span class="role-tab-label">Admin</span>
+        </button>
+        <button type="button" class="role-tab" data-role="teacher" onclick="selectLoginRole('teacher')">
+          <span class="role-tab-circle"><i class="fas fa-chalkboard-teacher"></i></span>
+          <span class="role-tab-label">Teacher</span>
+        </button>
+        <button type="button" class="role-tab" data-role="parent" onclick="selectLoginRole('parent')">
+          <span class="role-tab-circle"><i class="fas fa-user-friends"></i></span>
+          <span class="role-tab-label">Parent</span>
+        </button>
       </div>
 
-      <form id="loginForm" onsubmit="handleLogin(event)" novalidate>
-        <div class="field-group">
-          <label for="phone">School username</label>
-          <div class="field-wrap">
-            <i class="fas fa-user field-icon"></i>
-            <input type="text" id="phone" placeholder="Enter your school username" required autocomplete="username">
+      <!-- ADMIN LOGIN (shown by default) -->
+      <div class="login-step" id="adminLoginStep">
+        <form id="loginForm" onsubmit="handleLogin(event)" novalidate>
+          <div class="field-group field-group-underline">
+            <div class="field-wrap field-wrap-underline">
+              <i class="fas fa-user field-icon"></i>
+              <input type="text" id="phone" placeholder="Your Username*" required autocomplete="username" aria-label="School username">
+            </div>
           </div>
-        </div>
-        <div class="field-group">
-          <label for="password">Password</label>
-          <div class="field-wrap">
-            <i class="fas fa-lock field-icon"></i>
-            <input type="password" id="password" placeholder="Enter your password" required autocomplete="current-password">
-            <button type="button" class="pw-toggle" onclick="togglePw()" id="eyeBtn" aria-label="Toggle password visibility">
-              <i class="fas fa-eye" id="eyeIcon"></i>
-            </button>
+          <div class="field-group field-group-underline">
+            <div class="field-wrap field-wrap-underline">
+              <i class="fas fa-lock field-icon"></i>
+              <input type="password" id="password" placeholder="Your Password*" required autocomplete="current-password" aria-label="Password">
+              <button type="button" class="pw-toggle" onclick="togglePw()" id="eyeBtn" aria-label="Toggle password visibility">
+                <i class="fas fa-eye" id="eyeIcon"></i>
+              </button>
+            </div>
+            <div class="forgot"><a href="#">Forgot password?</a></div>
           </div>
-          <div class="forgot"><a href="#">Forgot password?</a></div>
-        </div>
-        <button type="submit" class="btn-login btn-ripple" id="loginBtn">Sign in to dashboard</button>
-      </form>
 
-      <div class="login-divider">or get help via</div>
-      <a href="https://wa.me/923181909541?text=Hello%20Soft%20School,%20I%20need%20help%20logging%20in!" target="_blank" class="btn-whatsapp-login">
-        <i class="fab fa-whatsapp" style="font-size:18px;"></i>
-        Contact support via WhatsApp
-      </a>
+          <label class="remember-row">
+            <input type="checkbox" class="toggle-input" id="rememberAdmin">
+            <span class="toggle-track"><span class="toggle-thumb"></span></span>
+            Remember Me
+          </label>
+
+          <button type="submit" class="btn-login btn-ripple" id="loginBtn"><i class="fas fa-lock"></i> Login</button>
+        </form>
+      </div>
+
+      <!-- TEACHER LOGIN -->
+      <div class="login-step" id="teacherLoginStep" style="display:none;">
+        <form id="teacherLoginFormIndex" onsubmit="handleTeacherLoginIndex(event)" novalidate>
+          <div class="field-group field-group-underline">
+            <div class="field-wrap field-wrap-underline">
+              <i class="fas fa-id-badge field-icon"></i>
+              <input type="text" id="teacherIdIndex" placeholder="Your Teacher ID*" required autocomplete="username" aria-label="Teacher ID">
+            </div>
+          </div>
+          <div class="field-group field-group-underline">
+            <div class="field-wrap field-wrap-underline">
+              <i class="fas fa-lock field-icon"></i>
+              <input type="password" id="teacherPassIndex" placeholder="Your Password*" required autocomplete="current-password" aria-label="Password">
+              <button type="button" class="pw-toggle" onclick="toggleTeacherPwIndex()" id="eyeBtnTeacherIndex" aria-label="Toggle password visibility">
+                <i class="fas fa-eye" id="eyeIconTeacherIndex"></i>
+              </button>
+            </div>
+          </div>
+
+          <label class="remember-row">
+            <input type="checkbox" class="toggle-input" id="rememberTeacher">
+            <span class="toggle-track"><span class="toggle-thumb"></span></span>
+            Remember Me
+          </label>
+
+          <button type="submit" class="btn-login btn-ripple" id="teacherLoginBtnIndex"><i class="fas fa-lock"></i> Login</button>
+        </form>
+      </div>
+
+      <!-- PARENT LOGIN (dummy, coming soon) -->
+      <div class="login-step" id="parentLoginStep" style="display:none;">
+        <form id="parentLoginFormDummy" onsubmit="handleParentDummy(event)" novalidate>
+          <div class="field-group field-group-underline">
+            <div class="field-wrap field-wrap-underline">
+              <i class="fas fa-phone field-icon"></i>
+              <input type="text" id="parentPhoneDummy" placeholder="Your Phone Number" aria-label="Phone number">
+            </div>
+          </div>
+          <div class="field-group field-group-underline">
+            <div class="field-wrap field-wrap-underline">
+              <i class="fas fa-lock field-icon"></i>
+              <input type="password" id="parentPassDummy" placeholder="Your Password" aria-label="Password">
+            </div>
+          </div>
+
+          <button type="submit" class="btn-login btn-ripple"><i class="fas fa-bell"></i> Notify me when ready</button>
+        </form>
+      </div>
+
+      <div class="login-signup-row">
+        New here? <a href="https://wa.me/923181909541?text=Hello%20Soft%20School,%20I%20want%20to%20sign%20up!" target="_blank" class="btn-signup-login">Sign Up</a>
+      </div>
     </div>
   </div>
 </div>
 
 <script src="access-control.js"></script>
+<script src="teacher-auth.js"></script>
 <script src="index.js"></script>
 </body>
 </html>

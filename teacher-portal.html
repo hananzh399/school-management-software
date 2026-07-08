@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Teacher Portal — Soft School</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+<link rel="stylesheet" href="teacher-portal.css">
+</head>
+<body>
+
+<div class="portal-shell">
+
+  <div class="sidebar-overlay" id="sidebarOverlay"></div>
+
+  <aside class="portal-sidebar" id="sidebar">
+    <div class="sidebar-brand">
+      <img src="logo-icon.png" alt="Soft School" style="height:30px;">
+      <div>
+        <span class="logo-wordmark" style="font-size:0.98rem;">Soft<strong>School</strong></span>
+        <span class="tag">Teacher Portal</span>
+      </div>
+    </div>
+
+    <nav class="sidebar-nav">
+      <div class="nav-section-label">Overview</div>
+      <button class="nav-item active" data-view="dashboard"><i class="fas fa-house"></i> Dashboard</button>
+      <button class="nav-item" data-view="classes"><i class="fas fa-users"></i> My Classes</button>
+
+      <div class="nav-section-label">Daily work</div>
+      <button class="nav-item" data-view="attendance"><i class="fas fa-clipboard-check"></i> Attendance</button>
+      <button class="nav-item" data-view="gradebook"><i class="fas fa-file-pen"></i> Assign Test</button>
+
+      <div class="nav-section-label">School</div>
+      <button class="nav-item" data-view="announcements"><i class="fas fa-bullhorn"></i> Announcements</button>
+      <button class="nav-item" data-view="profile"><i class="fas fa-id-badge"></i> My Profile</button>
+    </nav>
+
+    <div class="sidebar-foot">
+      <button class="btn-logout" id="logoutBtn"><i class="fas fa-arrow-right-from-bracket"></i> Log out</button>
+    </div>
+  </aside>
+
+  <div class="portal-main">
+    <header class="portal-topbar">
+      <div class="topbar-left">
+        <button class="menu-toggle" id="menuToggle"><i class="fas fa-bars"></i></button>
+        <div class="topbar-title">
+          <h2 id="pageTitle">Dashboard</h2>
+          <p id="pageSubtitle">A quick look at your day</p>
+        </div>
+      </div>
+      <div class="topbar-right">
+        <div class="topbar-date"><i class="fas fa-calendar"></i> <span id="todayLabel"></span></div>
+        <div class="topbar-avatar">
+          <div class="avatar-circle" id="avatarInitials">--</div>
+          <div class="avatar-meta">
+            <span id="teacherNameLabel">Teacher</span>
+            <span id="teacherSubjectLabel">—</span>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <main class="portal-content">
+
+      <!-- ═══ DASHBOARD ═══ -->
+      <section class="view active" id="view-dashboard">
+        <div class="stat-grid stat-grid-3">
+          <div class="stat-card">
+            <div class="stat-icon"><i class="fas fa-star"></i></div>
+            <div class="stat-value" id="statInchargeClass">—</div>
+            <div class="stat-label">Class you're incharge of</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon"><i class="fas fa-user-graduate"></i></div>
+            <div class="stat-value" id="statInchargeStudents">0</div>
+            <div class="stat-label">Students in that class</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon"><i class="fas fa-clipboard-check"></i></div>
+            <div class="stat-value" id="statInchargeAttendance">—</div>
+            <div class="stat-label">Attendance today (your class)</div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-head">
+            <div>
+              <h3>Classes I teach</h3>
+              <p>Every class you teach, with the subjects you take there</p>
+            </div>
+          </div>
+          <div class="classes-row" id="quickActions"></div>
+        </div>
+
+        <div class="card">
+          <div class="card-head">
+            <div>
+              <h3>Latest announcements</h3>
+              <p>From your school administration</p>
+            </div>
+            <button class="btn btn-secondary btn-sm" data-goto="announcements">View all</button>
+          </div>
+          <div id="dashAnnouncements"></div>
+        </div>
+      </section>
+
+      <!-- ═══ MY CLASSES ═══ -->
+      <section class="view" id="view-classes">
+        <div class="page-head">
+          <h1>My Classes</h1>
+          <p>Every class and section assigned to you this term — tap a class to see its students</p>
+        </div>
+        <div class="classes-row" id="classesList"></div>
+        <div id="classDetailPanel"></div>
+      </section>
+
+      <!-- ═══ ATTENDANCE ═══ -->
+      <section class="view" id="view-attendance">
+        <div class="page-head">
+          <h1>Attendance</h1>
+          <p>Mark today's attendance for the class you're incharge of</p>
+        </div>
+        <div class="card">
+          <div class="card-head">
+            <div>
+              <h3 id="attClassName">—</h3>
+              <p>Saved records sync with the school's admin dashboard</p>
+            </div>
+            <div id="attStatusBadge"></div>
+          </div>
+          <div id="attTableWrap"></div>
+        </div>
+      </section>
+
+      <!-- ═══ ASSIGN TEST ═══ -->
+      <section class="view" id="view-gradebook">
+        <div class="page-head">
+          <h1>Assign Test</h1>
+          <p>Schedule a weekly assessment, then come back to fill in marks</p>
+        </div>
+
+        <div class="card">
+          <div class="card-head"><div><h3>Schedule a test</h3><p>Pick a class and one of your subjects, then create the test</p></div></div>
+          <div class="profile-grid" style="margin-bottom:1.1rem;">
+            <div>
+              <label class="field-label">Class</label>
+              <select class="select" id="gbClassSelect"></select>
+            </div>
+            <div>
+              <label class="field-label">Subject</label>
+              <select class="select" id="gbSubjectSelect"></select>
+            </div>
+            <div>
+              <label class="field-label">Assessment name</label>
+              <input class="input" id="gbExamName" placeholder="e.g. Midterm Test">
+            </div>
+            <div>
+              <label class="field-label">Total marks</label>
+              <input class="input" type="number" min="1" id="gbTotalMarks" placeholder="e.g. 50">
+            </div>
+          </div>
+          <button class="btn btn-primary" id="gbSaveBtn"><i class="fas fa-plus"></i> Create test</button>
+        </div>
+
+        <div class="card">
+          <div class="card-head"><div><h3>Your tests</h3><p>Tap "Fill marks" to enter results — once saved, a test locks and can't be edited</p></div></div>
+          <div id="gbHistoryWrap"></div>
+        </div>
+      </section>
+
+      <!-- ═══ ANNOUNCEMENTS ═══ -->
+      <section class="view" id="view-announcements">
+        <div class="page-head">
+          <h1>Announcements</h1>
+          <p>Updates from your school administration</p>
+        </div>
+        <div class="card">
+          <div id="announcementsList"></div>
+        </div>
+      </section>
+
+      <!-- ═══ PROFILE ═══ -->
+      <section class="view" id="view-profile">
+        <div class="page-head">
+          <h1>My Profile</h1>
+          <p>Your details on file — contact info can be updated below</p>
+        </div>
+        <div class="card">
+          <div class="card-head"><div><h3>Staff record</h3><p>Managed by your school admin in Manage Staff</p></div></div>
+          <div class="profile-grid" id="profileReadonly"></div>
+        </div>
+        <div class="card">
+          <div class="card-head"><div><h3>Contact details</h3><p>You can keep these up to date yourself</p></div></div>
+          <div class="profile-grid" style="margin-bottom:1.1rem;">
+            <div>
+              <label class="field-label">Phone</label>
+              <input class="input" id="profPhone">
+            </div>
+            <div>
+              <label class="field-label">Address</label>
+              <input class="input" id="profAddress">
+            </div>
+          </div>
+          <button class="btn btn-primary" id="profSaveBtn"><i class="fas fa-save"></i> Save contact info</button>
+        </div>
+      </section>
+
+    </main>
+  </div>
+</div>
+
+<!-- Fill marks modal (Assign Test) -->
+<div class="modal-overlay" id="marksModal">
+  <div class="modal-box" style="max-width:640px;">
+    <button class="modal-close" id="marksModalClose"><i class="fas fa-times"></i></button>
+    <h3 style="margin-bottom:0.3rem;" id="marksModalTitle">Fill marks</h3>
+    <p style="color:var(--ink-soft);font-size:0.85rem;margin-bottom:1.1rem;" id="marksModalSubtitle"></p>
+    <div id="marksModalTableWrap"></div>
+    <button class="btn btn-primary" style="width:100%;margin-top:1.1rem;" id="marksModalSave"><i class="fas fa-save"></i> Save marks</button>
+  </div>
+</div>
+
+<div class="toast-container" id="toastContainer"></div>
+
+<script src="teacher-auth.js"></script>
+<script src="shared-data.js"></script>
+<script src="teacher-portal.js"></script>
+</body>
+</html>
