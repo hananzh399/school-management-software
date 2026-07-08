@@ -5,7 +5,7 @@
  * Independent from access-control.js (which governs the school
  * admin / super-admin login). This layer authenticates TEACHERS
  * against the real staff records already created in
- * Manage Staff (stored in the 'eduflow-db' key, db.staff.Teaching).
+ * Manage Staff (stored inthe 'eduflow-db' key, db.staff.Teaching).
  *
  * DEMO CREDENTIALS:
  * Manage Staff does not currently have username/password fields,
