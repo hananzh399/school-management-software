@@ -6,7 +6,6 @@
    DEMO VIDEO CONFIGURATION
    ══════════════════════════════════════════════════════
    To add your demo video, choose one option:
-
    Option A — YouTube video:
      1. Get your YouTube video ID from the URL
         e.g. https://youtube.com/watch?v=ABC123  → ID is "ABC123"
