@@ -3825,3 +3825,378 @@
     font-weight: 700;
     color: #17716A;
 }
+
+.salary-row-clickable {
+    cursor: pointer;
+    transition: background 0.2s;
+}
+.salary-row-clickable:hover {
+    background: rgba(244, 63, 94, 0.05) !important; /* light red tint */
+}
+
+/* Frosted Green Student Card */
+.frosted-green-card {
+    background: rgba(16, 185, 129, 0.1);
+    backdrop-filter: blur(15px);
+    -webkit-backdrop-filter: blur(15px);
+    border: 1px solid rgba(16, 185, 129, 0.2);
+    border-radius: 24px;
+    padding: 30px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    color: var(--text-primary);
+    box-shadow: 0 8px 32px 0 rgba(16, 185, 129, 0.1);
+}
+
+[data-theme="dark"] .frosted-green-card {
+    background: rgba(16, 185, 129, 0.05);
+    border-color: rgba(16, 185, 129, 0.3);
+}
+
+.frosted-green-card h2 {
+    font-size: 2rem;
+    margin: 0;
+    font-weight: 800;
+}
+
+.total-fine-badge {
+    background: #dc2626;
+    color: white;
+    padding: 10px 20px;
+    border-radius: 12px;
+    font-size: 1.5rem;
+    font-weight: 800;
+}
+
+.sorting-group {
+    display: flex;
+    gap: 10px;
+}
+
+.sorting-group .category-btn {
+    padding: 8px 16px;
+    font-size: 12px;
+    border-radius: 50px;
+}
+
+/* Styling for inputs inside the Full Screen View */
+#fine-full-record-page .search-box-wrapper input {
+    background: var(--bg-card);
+    border: 1px solid var(--border-subtle);
+    border-radius: 12px;
+    padding: 10px 15px 10px 35px;
+    width: 100%;
+    color: var(--text-primary);
+    transition: all 0.3s ease;
+}
+
+#fine-full-record-page .search-box-wrapper input:focus {
+    border-color: #10b981;
+    box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.1);
+    outline: none;
+}
+
+/* Hide the default arrow on some date pickers to keep it clean */
+input[type="date"]::-webkit-calendar-picker-indicator {
+    filter: invert(0.5);
+    cursor: pointer;
+}
+
+.modern-toolbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: var(--bg-card);
+    padding: 15px 25px;
+    border-radius: 20px;
+    border: 1px solid var(--border-subtle);
+    margin-bottom: 25px;
+    backdrop-filter: blur(10px);
+}
+
+.search-group-inline {
+    display: flex;
+    gap: 10px;
+    background: rgba(0,0,0,0.1);
+    padding: 5px;
+    border-radius: 15px;
+}
+
+.input-with-icon {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.input-with-icon i {
+    position: absolute;
+    left: 12px;
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+}
+
+.input-with-icon input {
+    background: var(--bg-primary) !important;
+    border: 1px solid var(--border-subtle) !important;
+    border-radius: 12px !important;
+    padding: 8px 12px 8px 35px !important;
+    font-size: 0.85rem;
+}
+
+.segemented-control {
+    display: flex;
+    background: rgba(0,0,0,0.1);
+    padding: 5px;
+    border-radius: 15px;
+    gap: 5px;
+}
+
+.seg-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-secondary);
+    padding: 8px 15px;
+    border-radius: 10px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: 0.3s;
+}
+
+.seg-btn.active {
+    background: #10b981;
+    color: white;
+}
+
+.btn-pay-small {
+    background: #10b981;
+    color: white;
+    border: none;
+    padding: 6px 12px;
+    border-radius: 8px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.btn-pay-small:disabled {
+    background: var(--border-subtle);
+    color: var(--text-muted);
+    cursor: not-allowed;
+}
+
+.history-table-wrap {
+    background: var(--bg-card);
+    border: 1px solid var(--border-subtle);
+    border-radius: 20px;
+    overflow: hidden;
+}
+
+#fine-full-record-page {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    background: var(--bg-primary);
+    background-image: 
+        radial-gradient(at 0% 0%, rgba(16, 185, 129, 0.05) 0px, transparent 50%),
+        radial-gradient(at 100% 100%, rgba(244, 63, 94, 0.05) 0px, transparent 50%);
+    overflow: hidden;
+    padding: 20px;
+    animation: fadeIn 0.4s ease;
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    box-sizing: border-box;
+}
+
+/* Professional App Bar */
+.portfolio-navbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    max-width: 1300px;
+    width: 100%;
+    margin: 0 auto 25px;
+    padding: 10px 0;
+    flex-shrink: 0;
+}
+
+.portfolio-exit-btn {
+    background: var(--bg-card);
+    border: 1px solid var(--border-subtle);
+    padding: 10px 20px;
+    border-radius: 14px;
+    color: var(--text-primary);
+    font-weight: 600;
+    cursor: pointer;
+    transition: 0.3s;
+}
+
+.portfolio-exit-btn:hover { background: #ef4444; color: white; border-color: #ef4444; }
+
+/* Filter Toolbar */
+.portfolio-toolbar {
+    display: flex;
+    gap: 15px;
+    background: var(--bg-card);
+    padding: 10px 15px;
+    border-radius: 20px;
+    border: 1px solid var(--border-subtle);
+    backdrop-filter: blur(10px);
+}
+
+.portfolio-search-box {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.portfolio-search-box i { position: absolute; left: 12px; color: var(--text-muted); }
+.portfolio-search-box input {
+    background: var(--bg-primary) !important;
+    border: 1px solid var(--border-subtle) !important;
+    padding: 8px 15px 8px 35px !important;
+    border-radius: 12px !important;
+    width: 250px;
+}
+
+/* Frosted Green Portfolio Card */
+.portfolio-banner {
+    background: linear-gradient(135deg, rgba(16, 185, 129, 0.15) 0%, rgba(5, 150, 105, 0.05) 100%);
+    backdrop-filter: blur(20px);
+    border: 1px solid rgba(16, 185, 129, 0.2);
+    border-radius: 30px;
+    padding: 35px;
+    max-width: 1300px;
+    width: 100%;
+    margin: 0 auto 30px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-shrink: 0;
+    box-sizing: border-box;
+}
+
+.portfolio-student-info h1 { font-size: 2.5rem; margin: 0; font-weight: 800; letter-spacing: -1px; }
+.portfolio-meta { display: flex; gap: 20px; margin-top: 10px; color: var(--text-secondary); font-size: 0.95rem; }
+.portfolio-meta b { color: var(--text-primary); }
+
+.portfolio-stats { display: flex; gap: 15px; }
+.stat-pill {
+    background: var(--bg-card);
+    padding: 15px 25px;
+    border-radius: 20px;
+    border: 1px solid var(--border-subtle);
+    text-align: center;
+}
+.stat-pill label { display: block; font-size: 0.7rem; text-transform: uppercase; font-weight: 700; opacity: 0.6; }
+.stat-pill span { font-size: 1.4rem; font-weight: 800; }
+
+/* Ledger Table */
+.ledger-container {
+    background: var(--bg-card);
+    border-radius: 24px;
+    border: 1px solid var(--border-subtle);
+    max-width: 1300px;
+    width: 100%;
+    margin: 0 auto;
+    overflow: hidden auto;
+    flex: 1;
+    min-height: 0;
+    box-sizing: border-box;
+}
+
+.ledger-container {
+    scrollbar-width: thin;
+    scrollbar-color: var(--border-hover) transparent;
+}
+.ledger-container::-webkit-scrollbar { width: 6px; }
+.ledger-container::-webkit-scrollbar-track { background: transparent; }
+.ledger-container::-webkit-scrollbar-thumb { background: var(--border-hover); border-radius: 3px; }
+
+.ledger-table { width: 100%; border-collapse: collapse; }
+.ledger-table th {
+    padding: 20px;
+    text-align: left;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    border-bottom: 1px solid var(--border-subtle);
+    background: var(--bg-card);
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    opacity: 0.85;
+    transition: opacity 0.25s ease, box-shadow 0.25s ease;
+}
+
+/* When the ledger table is scrolled, the header row becomes fully solid (not transparent) */
+.ledger-container.is-scrolled .ledger-table th {
+    opacity: 1;
+    box-shadow: 0 6px 14px rgba(0, 0, 0, 0.15);
+}
+.ledger-table td { padding: 20px; border-bottom: 1px solid var(--border-subtle); }
+.ledger-table tr:last-child td { border-bottom: none; }
+
+/* Transaction Badge */
+.tx-id { font-family: 'Monospace'; font-weight: 700; color: #8b5cf6; background: rgba(139, 92, 246, 0.1); padding: 4px 8px; border-radius: 6px; }
+
+/* Action Button */
+.btn-settle {
+    background: #10b981;
+    color: white;
+    border: none;
+    padding: 8px 18px;
+    border-radius: 10px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: 0.2s;
+}
+.btn-settle:hover { transform: scale(1.05); filter: brightness(1.1); }
+.btn-settle:disabled { background: var(--border-subtle); cursor: not-allowed; }
+
+/* Fix visibility in Dark Mode */
+#fine-full-record-page input {
+    color: var(--text-primary) !important; /* Forces white/light gray in dark mode */
+}
+
+#fine-full-record-page input::placeholder {
+    color: var(--text-muted) !important;
+    opacity: 0.7;
+}
+
+/* Enhanced Toolbar Inputs */
+.portfolio-search-box input, 
+.input-with-icon input {
+    background: var(--bg-primary) !important;
+    border: 1px solid var(--border-subtle) !important;
+    color: var(--text-primary) !important;
+    font-family: inherit;
+    font-size: 0.9rem;
+    transition: all 0.3s ease;
+}
+
+.portfolio-search-box input:focus, 
+.input-with-icon input:focus {
+    border-color: #10b981 !important;
+    background: var(--bg-card) !important;
+    box-shadow: 0 0 0 4px rgba(16, 185, 129, 0.1);
+}
+
+/* Fix Date Picker Icon color in Dark Mode */
+input[type="date"]::-webkit-calendar-picker-indicator {
+    filter: invert(var(--calendar-inv, 0));
+    cursor: pointer;
+}
+
+[data-theme="dark"] {
+    --calendar-inv: 1; /* Makes the calendar icon white in dark mode */
+}
+
+/* Professional App Bar Styling */
+.modern-toolbar {
+    background: var(--bg-card);
+    border: 1px solid var(--border-subtle);
+    box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+}
