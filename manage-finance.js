@@ -2,13 +2,80 @@
  * EUFLOW PRO - FINNCE LOGIC
  */
 
+const API_BASE = "http://localhost:8080/api/finance";
+
+async function apiCall(endpoint, method = "GET", body = null) {
+    const config = {
+        method,
+        headers: { "Content-Type": "application/json" }
+    };
+    if (body) config.body = JSON.stringify(body);
+
+    const res = await fetch(`${API_BASE}${endpoint}`, config);
+    
+    if (!res.ok) {
+        const err = await res.text();
+        throw new Error(err || "Server Error");
+    }
+    
+    // Check if response is empty before parsing JSON
+    const text = await res.text();
+    return text ? JSON.parse(text) : null;
+}
+
+async function apiRequest(endpoint, method = "GET", body = null) {
+    const config = {
+        method,
+        headers: { "Content-Type": "application/json" }
+    };
+    if (body) config.body = JSON.stringify(body);
+
+    try {
+        const res = await fetch(`${API_BASE}${endpoint}`, config);
+        
+        if (!res.ok) {
+            const errorText = await res.text();
+            console.error(`API Error (${res.status}): ${errorText}`);
+            return null; // Return null so the frontend handles the 404/500 gracefully
+        }
+        
+        // Handle empty responses
+        const text = await res.text();
+        return text ? JSON.parse(text) : null;
+    } catch (error) {
+        console.error("Network connection failed:", error);
+        return null;
+    }
+}
+
+let currentDetailedFines = []; // Global cache for current student's fines
+
 document.addEventListener('DOMContentLoaded', () => {
     initTheme();
     initSidebar();
     initDate();
     initAtvVoucherModal();
     renderClassCardGrid();
+    initLedgerScrollEffect();
 });
+
+/* ============================================
+   LEDGER TABLE HEADER SCROLL EFFECT
+   (Full Student Fines Record page)
+   ============================================ */
+function initLedgerScrollEffect() {
+    const container = document.querySelector('.ledger-container');
+    if (!container || container.dataset.scrollBound === 'true') return;
+    container.dataset.scrollBound = 'true';
+
+    container.addEventListener('scroll', () => {
+        if (container.scrollTop > 0) {
+            container.classList.add('is-scrolled');
+        } else {
+            container.classList.remove('is-scrolled');
+        }
+    });
+}
 
 /* ============================================
    THEME TOGGLE
@@ -167,6 +234,7 @@ let selectedStudentFineId = null;
 // Reset the Add-Student-Fine page each time it opens
 function populateStudentDropdown() {
     selectedStudentFineId = null;
+    selectedStudentFineRegNo = null;
     const input = document.getElementById('student-fine-search');
     if (input) input.value = '';
     renderStudentSearchResults('');
@@ -214,13 +282,19 @@ function renderStudentSearchResults(query) {
     }
 
     container.innerHTML = matches.map((s, index) => {
+        // "id" is only a local selection key (used to highlight the picked row).
+        // "regNo" is the REAL identifier that must be sent to the backend —
+        // it must always match what showFineDetails()/StudentFinance use,
+        // otherwise a fine gets saved under an identifier the history view
+        // never queries for, and that record silently disappears.
         const id = s.id || s.regNo || '';
+        const regNo = s.regNo || s.id || '';
         const name = s.fullName || s.name || 'Unnamed';
         const cls = s.studentClass || s.className || '-';
         const father = s.guardianName || '-';
         const active = (String(id) === String(selectedStudentFineId)) ? 'selected' : '';
         return `
-        <div class="staff-member-item ${active}" id="stu-fine-item-${index}" onclick="selectStudentForFine('${id}', ${index})">
+        <div class="staff-member-item ${active}" id="stu-fine-item-${index}" onclick="selectStudentForFine('${id}', '${regNo}', ${index})">
             <div class="staff-member-info">
                 <span class="staff-member-name">${name}</span>
                 <span class="staff-member-role"><b>ID:</b> ${id} &nbsp;&bull;&nbsp; <b>Class:</b> ${cls} &nbsp;&bull;&nbsp; <b>Father:</b> ${father}</span>
@@ -230,122 +304,124 @@ function renderStudentSearchResults(query) {
     }).join('');
 }
 
-function selectStudentForFine(id, index) {
+let selectedStudentFineRegNo = null;
+
+function selectStudentForFine(id, regNo, index) {
     selectedStudentFineId = id;
+    selectedStudentFineRegNo = regNo;
     document.querySelectorAll('#student-fine-results .staff-member-item').forEach(el => el.classList.remove('selected'));
     const item = document.getElementById('stu-fine-item-' + index);
     if (item) item.classList.add('selected');
 }
 
-function handleAddStudentFine() {
-    const amount = Number(document.getElementById('student-fine-amount').value);
+async function handleAddStudentFine() {
+    const amount = document.getElementById('student-fine-amount').value;
     const desc = document.getElementById('student-fine-desc').value.trim();
+    if (!selectedStudentFineId || !amount) return alert("Fill all fields");
 
-    if (!selectedStudentFineId) { alert('Please search and select a student.'); return; }
-    if (!amount || amount < 1) { alert('Please enter a valid fine amount.'); return; }
-    if (!desc) { alert('Please enter a fine description/cause.'); return; }
-
-    const students = getRealStudents();
-    const idx = students.findIndex(s => String(s.id || s.regNo) === String(selectedStudentFineId));
-    if (idx === -1) { alert('Student not found.'); return; }
-    const student = students[idx];
-
-    const name = student.fullName || student.name || 'Unnamed';
-    const cls = student.studentClass || student.className || '-';
-    const father = student.guardianName || '-';
-
-    // Determine whether the current month's fee voucher has already been paid.
-    // If yes, the fine must be deferred to NEXT month's voucher instead of
-    // appearing on the already-paid one.
-    const currentMonthKey = getCurrentMonthKey();
-    const hasPaidThisMonth = Array.isArray(student.feePayments) &&
-        student.feePayments.some(p => p.monthKey === currentMonthKey);
-
-    const now = new Date();
-    const targetDate = hasPaidThisMonth
-        ? new Date(now.getFullYear(), now.getMonth() + 1, 1)
-        : now;
-    const targetMonthKey = `${targetDate.getFullYear()}-${String(targetDate.getMonth() + 1).padStart(2, '0')}`;
-    const targetPeriodShort = targetDate.toLocaleDateString('en-GB', { month: 'short', year: 'numeric' });
-    const targetPeriodLong  = targetDate.toLocaleDateString('en-GB', { month: 'long',  year: 'numeric' });
-
-    // 1) Log the fine record (shown in View Records of student fines for that month)
-    const fines = getStudentFinesData();
-    fines.push({
-        id: student.id || student.regNo, name: name, className: cls, father: father,
-        amount: amount, cause: desc, date: new Date().toLocaleDateString('en-US'),
-        monthKey: targetMonthKey
-    });
-    saveStudentFinesData(fines);
-
-    // 2) Add the fine as a line item in the student's fee voucher (otherFeesData)
-    // so it shows up explicitly on the correct month's voucher. We tag it with
-    // monthKey so computeFeeBreakdown can hide future-month items from the
-    // current voucher. We do NOT touch arrears here.
-    let existingFees = [];
-    try { existingFees = JSON.parse(student.otherFeesData || '[]'); } catch(e) { existingFees = []; }
-    // If voucherCustomFees is not already set, seed the base charges first so they aren't lost
-    if (!student.voucherCustomFees) {
-        const baseRows = [];
-        if (Number(student.standardFee)  > 0) baseRows.push({ description: 'Tuition Fee',        period: new Date().toLocaleDateString('en-GB', { month: 'long', year: 'numeric' }), amount: Number(student.standardFee),  discount: Number(student.tuitionDiscount)   || 0 });
-        if (Number(student.transportFee) > 0) baseRows.push({ description: 'Transportation Fee', period: new Date().toLocaleDateString('en-GB', { month: 'long', year: 'numeric' }), amount: Number(student.transportFee), discount: Number(student.transportDiscount) || 0 });
-        if (Number(student.otherFee)     > 0) baseRows.push({ description: student.otherFeeLabel || 'Other Charges', period: '-', amount: Number(student.otherFee), discount: 0 });
-        if (Number(student.booksFee)     > 0) baseRows.push({ description: 'Books Fee',          period: new Date().toLocaleDateString('en-GB', { month: 'long', year: 'numeric' }), amount: Number(student.booksFee), discount: Number(student.booksDiscount) || 0 });
-        existingFees = [...baseRows, ...existingFees];
-    }
-    existingFees.push({
-        description: 'Fine: ' + desc,
-        period: targetPeriodShort,
+    await apiRequest("/add-fine", "POST", {
+        regNo: selectedStudentFineRegNo || selectedStudentFineId,
+        monthKey: getCurrentMonthKey(),
         amount: amount,
-        discount: 0,
-        monthKey: targetMonthKey
+        reason: desc
     });
-    student.otherFeesData = JSON.stringify(existingFees);
-    student.voucherCustomFees = true;
-    students[idx] = student;
-    localStorage.setItem('edu_students', JSON.stringify(students));
 
-    // 3) Update global finance counters so the DASHBOARD reflects it in real time
-    const db = getGlobalData();
-    if (!db.students) db.students = {};
-    if (!db.students.fines) db.students.fines = { lateFees: 0, other: 0 };
-    db.students.fines.other = (Number(db.students.fines.other) || 0) + amount;
-    saveGlobalData(db);
-
-    if (hasPaidThisMonth) {
-        alert(`Current month already paid. Fine of RS ${amount.toLocaleString()} added to ${name}'s ${targetPeriodLong} voucher.`);
-        document.getElementById('student-fine-amount').value = '';
-        document.getElementById('student-fine-desc').value = '';
-        selectedStudentFineId = null;
-        showPage('page-student-fine');
-        return;
-    }
-
-    alert(`Fine of RS ${amount.toLocaleString()} added to ${name} and posted to their fee bill.`);
-    document.getElementById('student-fine-amount').value = '';
-    document.getElementById('student-fine-desc').value = '';
-    selectedStudentFineId = null;
+    alert("Fine added to MySQL Database");
     showPage('page-student-fine');
 }
 
-function renderStudentFinesTable() {
+let allStudentFinesCache = [];
+let studentFinesMonthKey = null;
+
+async function renderStudentFinesTable() {
     const tbody = document.getElementById('student-fines-tbody');
-    const allFines = getStudentFinesData();
-    const currentMonthKey = getCurrentMonthKey();
-    const fines = allFines.filter(f => !f.monthKey || f.monthKey === currentMonthKey);
-    if (fines.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="5" class="empty-row">No fines recorded this month.</td></tr>';
+    const monthKey = getCurrentMonthKey();
+    studentFinesMonthKey = monthKey;
+
+    if(!tbody) return;
+    tbody.innerHTML = "<tr><td colspan='6' class='empty-row'><i class='fas fa-spinner fa-spin'></i> Fetching aggregated records...</td></tr>";
+
+    // Reset the search box whenever this page is (re)loaded fresh
+    const searchInput = document.getElementById('student-fines-view-search');
+    if (searchInput) searchInput.value = '';
+
+    try {
+        const fines = await apiCall(`/all-fines/${monthKey}`);
+        allStudentFinesCache = fines || [];
+
+        if (allStudentFinesCache.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="6" class="empty-row">No students found with fines this month.</td></tr>';
+            return;
+        }
+
+        renderStudentFinesRows(allStudentFinesCache);
+    } catch (err) {
+        console.error(err);
+        tbody.innerHTML = '<tr><td colspan="6" class="empty-row" style="color:red;">Error connecting to MySQL.</td></tr>';
+    }
+}
+
+function renderStudentFinesRows(fines) {
+    const tbody = document.getElementById('student-fines-tbody');
+    if (!tbody) return;
+
+    if (!fines || fines.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" class="empty-row">No students match your search.</td></tr>';
         return;
     }
-    tbody.innerHTML = fines.map(f => `
-        <tr>
-            <td>${f.id || '-'}</td>
-            <td>${f.name}</td>
-            <td>${f.className || '-'}</td>
-            <td>${f.father || '-'}</td>
-            <td>RS ${Number(f.amount).toLocaleString()} <span style="color:var(--text-secondary);font-size:12px;">(${f.cause})</span></td>
-        </tr>
-    `).join('');
+
+    const monthKey = studentFinesMonthKey || getCurrentMonthKey();
+
+    tbody.innerHTML = fines.map(f => {
+        // Use our smart reason processor
+        const smartReason = getSmartFineReason(f.fineReason);
+
+        return `
+             <tr class="salary-row-clickable" onclick="showFineDetails('${f.regNo}', '${monthKey}')">
+                <td><span class="hrk-id-badge">${f.regNo}</span></td>
+                <td><strong>${f.studentName}</strong></td>
+                <td>${f.studentClass}</td>
+                <td><span class="class-chip" style="background: rgba(139, 92, 246, 0.1); color: #8b5cf6;">${f.section || 'N/A'}</span></td>
+                <td>${f.guardianName || '-'}</td>
+                <td>
+                    <div style="color:#dc2626; font-weight:800; font-size:1.05rem;">RS ${f.fineAmount.toLocaleString()}</div>
+                    <div style="color:var(--text-secondary); line-height: 1.2;">${smartReason}</div>
+                </td>
+            </tr>
+        `;
+    }).join('');
+}
+
+// Supports:
+//  - plain text: matches Reg No, Name, OR Guardian Name
+//  - "Name~Guardian": BOTH the name part AND the guardian part must match
+//    (either side can be left empty, e.g. "~Ahmed" or "Ali~")
+function studentFineMatchesQuery(f, query) {
+    const regNo = String(f.regNo || '').toLowerCase();
+    const name = (f.studentName || '').toLowerCase();
+    const guardian = (f.guardianName || '').toLowerCase();
+    const q = (query || '').trim().toLowerCase();
+    if (!q) return true;
+
+    if (q.includes('~')) {
+        const parts = q.split('~');
+        const namePart = (parts[0] || '').trim();
+        const guardianPart = (parts[1] || '').trim();
+        const nameOk = !namePart || name.includes(namePart) || regNo.includes(namePart);
+        const guardianOk = !guardianPart || guardian.includes(guardianPart);
+        return nameOk && guardianOk;
+    }
+
+    return regNo.includes(q) || name.includes(q) || guardian.includes(q);
+}
+
+function filterStudentFinesTable() {
+    const input = document.getElementById('student-fines-view-search');
+    const q = input ? input.value : '';
+    const filtered = q.trim()
+        ? allStudentFinesCache.filter(f => studentFineMatchesQuery(f, q))
+        : allStudentFinesCache;
+    renderStudentFinesRows(filtered);
 }
 
 /* ============================================
@@ -834,35 +910,75 @@ function backToClassSelection() {
 let currentVoucherStudentId = null;
 let currentVoucherStudentName = null;
 
-function viewVoucher(studentId, fullName, isPaidBill = false) {
-    const students = JSON.parse(localStorage.getItem('edu_students') || '[]');
-    const student = findStudentExact(students, studentId, fullName);
-    if (!student) {
-        alert('Student not found.');
+async function viewVoucher(studentId, fullName, isPaidBill = false) {
+    // 1. Validation
+    if (!studentId || studentId === "null") {
+        alert("Invalid Student ID.");
         return;
     }
 
-    currentVoucherStudentId = studentId;
-    currentVoucherStudentName = fullName;
-
-    let html = buildVoucherHTML(student);
-    const editBtn = document.getElementById('edit-voucher-btn');
-    if (isPaidBill) {
-        html = '<div style="position:relative;">' + html + '<div class="paid-stamp-overlay">PAID</div></div>';
-        // Paid bills are read-only — hide Edit Voucher completely from the entire pay area
-        if (editBtn) {
-            editBtn.style.display = 'none';
-            editBtn.setAttribute('data-paid-locked', '1');
-        }
-    } else {
-        if (editBtn) {
-            editBtn.removeAttribute('data-paid-locked');
-            editBtn.style.display = 'inline-block';
-        }
+    // 2. Get the base student profile from local storage
+    const students = JSON.parse(localStorage.getItem('edu_students') || '[]');
+    let student = findStudentExact(students, studentId, fullName);
+    
+    if (!student) { 
+        alert('Student profile not found in local cache.'); 
+        return; 
     }
 
-    document.getElementById('voucher-render-target').innerHTML = html;
-    document.getElementById('voucher-modal-overlay').style.display = 'flex';
+    const monthKey = getCurrentMonthKey();
+    
+    try {
+        // 3. API CALL: Fetch FRESH status from the MySQL database.
+        // If a fine was just settled/paid in the ledger, the backend logic 
+        // has already subtracted it from 'fineAmount'.
+        const finance = await apiRequest(`/status/${studentId}/${monthKey}`);
+        
+        if (!finance) {
+            alert("No finance record found for this student in the database.");
+            return;
+        }
+
+        // 4. Sync backend data to the student object used for rendering.
+        // This 'backendFine' is picked up by computeFeeBreakdown() inside buildVoucherHTML().
+        student.backendFine = finance.fineAmount || 0; 
+        student.backendFineReason = finance.fineReason || "";
+
+        // Set global variables for the Edit/Share functionality
+        currentVoucherStudentId = studentId;
+        currentVoucherStudentName = fullName;
+
+        // 5. Build the HTML content
+        let html = buildVoucherHTML(student);
+        
+        // 6. Apply the "PAID" stamp if the monthly bill is fully settled
+        if (isPaidBill) {
+            html = `
+                <div style="position:relative;">
+                    ${html}
+                    <div class="paid-stamp-overlay">PAID</div>
+                </div>`;
+        }
+
+        // 7. Update the Modal UI
+        const renderTarget = document.getElementById('voucher-render-target');
+        const modalOverlay = document.getElementById('voucher-modal-overlay');
+        
+        if (renderTarget) renderTarget.innerHTML = html;
+        if (modalOverlay) modalOverlay.style.display = 'flex';
+        
+        // 8. Control the "Edit Voucher" button visibility
+        // We disable editing if the bill is already marked as Paid.
+        const editBtn = document.getElementById('edit-voucher-btn');
+        if (editBtn) {
+            editBtn.style.display = isPaidBill ? 'none' : 'inline-flex';
+            editBtn.setAttribute('data-paid-locked', isPaidBill ? '1' : '0');
+        }
+
+    } catch (err) {
+        console.error("Voucher Rendering Error:", err);
+        alert("Failed to sync with the server. The voucher might show outdated information.");
+    }
 }
 
 function openVoucherEditModal() {
@@ -980,163 +1096,49 @@ function printVoucherFromModal() {
 function computeFeeBreakdown(s) {
     const today = new Date();
     const monthLabel = today.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
-    // Always use HRK_77-prefixed registration ID for display
-    const regNo = s.regNo && String(s.regNo).startsWith('HRK_') ? s.regNo : `HRK_77${String(s.id).padStart(3, '0')}`;
+    const regNo = s.regNo || s.id;
 
-    // If the admin saved a custom voucher (via Edit Voucher), the saved fee
-    // rows REPLACE the base charges — otherwise they would be double-counted
-    // (once as base charges and again as additional fees).
-    const usingCustomVoucher = s.voucherCustomFees === true || s.voucherCustomFees === 'true';
+    // Core Charges
+    const tuitionFee   = Number(s.standardFee)   || 0;
+    const transportFee = Number(s.transportFee)  || 0;
+    const otherFee     = Number(s.otherFee)      || 0;
+    
+    // Fines from MySQL handshake
+    const fineFromBackend = s.backendFine || 0; 
 
-    // --- 1. Core Charges (stored in DB, shown in table) ---
-    const tuitionFee   = usingCustomVoucher ? 0 : (Number(s.standardFee)   || 0);
-    const transportFee = usingCustomVoucher ? 0 : (Number(s.transportFee)  || 0);
-    // Admission fee is a one-time, display-only figure (shown on the dashboard /
-    // student profile). It must NOT be counted in the fee voucher or pending-dues
-    // totals, so it is tracked separately from totalCharges below.
-    const admissionFee = Number(s.admissionFee) || 0;
-    const otherFee     = usingCustomVoucher ? 0 : (Number(s.otherFee)      || 0);
-    const otherFeeLabel = s.otherFeeLabel || 'Other Charges';
-
-    // --- 2. Voucher-Only: Books Fee ---
-    const booksFeeEnabled = s.takesBooks === true || s.booksFee > 0;
-    const booksFee     = usingCustomVoucher ? 0 : (Number(s.booksFee) || 0);
-    const booksDiscount= usingCustomVoucher ? 0 : (Number(s.booksDiscount) || 0);
-    const booksNet     = Math.max(0, booksFee - booksDiscount);
-
-    // --- 3. Voucher-Only: Additional (Other) Fees ---
-    let additionalFees = [];
-    try { additionalFees = JSON.parse(s.otherFeesData || '[]'); } catch(e) { additionalFees = []; }
-    // Hide line items tagged for a FUTURE month (e.g. a fine added after the
-    // current month's voucher was already paid is deferred to next month).
-    const __curMonthKey = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
-    additionalFees = additionalFees.filter(f => !f.monthKey || f.monthKey <= __curMonthKey);
-
-    // --- 4. Voucher-Only: Annual Fund (only in the configured month) ---
-    const annualFundEnabled = s.annualFundEnabled === 'on' || s.annualFundEnabled === true;
-    const annualFundMonth   = parseInt(s.annualFundMonth) || 0;   // 1–12
-    const annualFundAmt     = Number(s.annualFundAmount) || ANNUAL_FUND_AMOUNT;
-    const currentMonth      = today.getMonth() + 1; // 1–12
-    const showAnnualFund    = annualFundEnabled && annualFundMonth === currentMonth;
-
-    // --- 5. Arrears (Previous Balance) ---
-    // Stored arrears from the student record
-    let arrears = Number(s.arrears) || 0;
-
-    // Auto-rollover: if the previous month was not paid in full, add the
-    // shortfall to arrears for the current month. (E.g. unpaid June fees
-    // automatically appear in the July voucher.)
-    //
-    // BUGFIX: Only roll over previous-month unpaid amounts for students who
-    // were actually enrolled BEFORE the previous month started. Newly admitted
-    // students were incorrectly being charged "arrears" for months they were
-    // not even in the school.
-    try {
-        const prev = new Date(today.getFullYear(), today.getMonth() - 1, 1);
-        const prevKey = `${prev.getFullYear()}-${String(prev.getMonth() + 1).padStart(2, '0')}`;
-
-        // Determine the date the student joined the software.
-        // We avoid using admissionDate because that's when they joined the school, not the software.
-        // Using admissionDate causes newly added (but old) students to get hit with past months' arrears.
-        let softwareJoinDate = null;
-        if (s.createdAt) {
-            const d = new Date(s.createdAt);
-            if (!isNaN(d)) softwareJoinDate = d;
-        }
-        if (!softwareJoinDate && Array.isArray(s.feePayments) && s.feePayments.length) {
-            const dates = s.feePayments
-                .map(p => p.date ? new Date(p.date) : null)
-                .filter(d => d && !isNaN(d));
-            if (dates.length) softwareJoinDate = new Date(Math.min(...dates.map(d => d.getTime())));
-        }
-        if (!softwareJoinDate) softwareJoinDate = new Date(today);
-
-        // Student must have been active in the software on or before the FIRST day of the
-        // previous month to automatically owe anything for that month.
-        const enrolledBeforePrevMonth = softwareJoinDate <= prev;
-
-        let prevUnpaid = 0;
-        if (enrolledBeforePrevMonth) {
-            const prevPayments = (s.feePayments || [])
-                .filter(p => p.monthKey === prevKey)
-                .reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
-            const monthlyExpected =
-                (Number(s.standardFee) || 0) +
-                (Number(s.transportFee) || 0) +
-                (Number(s.otherFee) || 0) -
-                ((Number(s.tuitionDiscount) || 0) +
-                 (Number(s.transportDiscount) || 0) +
-                 (Number(s.siblingDiscount) || 0));
-            prevUnpaid = Math.max(0, monthlyExpected - prevPayments);
-        }
-        // Mark as auto-rolled so the voucher row can label it clearly
-        s.__rolledOverArrears = prevUnpaid;
-        s.__rolledOverFromMonth = prev.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
-        arrears += prevUnpaid;
-    } catch (e) { /* ignore */ }
-
-    // --- 6. Specific Discounts (from Student Form) ---
+    // Specific Discounts from Student Profile
     const tDisc   = Number(s.tuitionDiscount)   || 0;
     const trDisc  = Number(s.transportDiscount) || 0;
     const sibDisc = Number(s.siblingDiscount)   || 0;
+    const arrears = Number(s.arrears)           || 0;
 
-    // Core total (what the table "pending fees" shows) — admission fee
-    // deliberately excluded; it is display-only (see note above).
-    const totalCharges   = tuitionFee + transportFee + otherFee;
+    // Create a list of active discounts for the UI
+    const activeDiscounts = [];
+    if (tDisc > 0) activeDiscounts.push({ label: 'Tuition Concession', amount: tDisc });
+    if (trDisc > 0) activeDiscounts.push({ label: 'Transport Discount', amount: trDisc });
+    if (sibDisc > 0) activeDiscounts.push({ label: 'Sibling Discount', amount: sibDisc });
+
+    const totalCharges   = tuitionFee + transportFee + otherFee + fineFromBackend;
     const totalDiscounts = tDisc + trDisc + sibDisc;
-    const totalWithinDueDate = (totalCharges - totalDiscounts) + arrears;
+    
+    // Final Calculation
+    const voucherTotal = Math.max(0, (totalCharges - totalDiscounts) + arrears);
 
-    // Voucher grand total (core + voucher-only items)
-    const additionalFeesNet = additionalFees.reduce((sum, f) =>
-        sum + Math.max(0, (parseFloat(f.amount)||0) - (parseFloat(f.discount)||0)), 0);
-    const bulkVoucherDiscount = Math.max(0, Number(s.voucherBulkDiscount) || 0);
-    const voucherTotal = Math.max(0,
-        totalWithinDueDate + booksNet + additionalFeesNet + (showAnnualFund ? annualFundAmt : 0) - bulkVoucherDiscount
-    );
-
-    // --- 7. Live settings snapshot (reads 'edu_latefee_config' from localStorage) ---
     const vs = getVoucherSettings();
-
-    // Dates — due date is NEXT month's deadline day (from settings)
-    // Grace period extends the "no fine" window by vs.graceDays extra days.
-    const dueDate    = new Date(today.getFullYear(), today.getMonth() + 1, vs.dueDayOfMonth);
-    const expiryDate = new Date(today.getFullYear(), today.getMonth() + 1, vs.expiryDayOfMonth);
-    const dueDateStr    = dueDate.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
-    const expiryDateStr = expiryDate.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
-    const discountDeadline = s.discountExpiry
-        ? new Date(s.discountExpiry).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
-        : dueDateStr;
-
-    // Late Surcharge — uses fixed amount or percentage from live settings.
-    // If late fee is disabled in Admin Settings the surcharge is Rs. 0.
-    const lateFeeSurcharge = vs.lateFineEnabled
-        ? (vs.lateFineFixedAmount > 0
-            ? vs.lateFineFixedAmount
-            : Math.round(voucherTotal * (vs.lateFinePercent / 100)))
-        : 0;
-    const totalAfterDueDate = voucherTotal + lateFeeSurcharge;
-
-    // Grace info — surfaced so the voucher HTML can show the right label
-    const graceDays       = vs.graceDays;
-    const lateFineEnabled = vs.lateFineEnabled;
+    const lateFeeSurcharge = vs.lateFineEnabled ? (vs.lateFineFixedAmount > 0 ? vs.lateFineFixedAmount : Math.round(voucherTotal * (vs.lateFinePercent / 100))) : 0;
 
     return {
-        regNo, monthLabel, dueDateStr, expiryDateStr,
-        tuitionFee, transportFee, admissionFee, otherFee, otherFeeLabel, arrears,
-        tDisc, trDisc, sibDisc,
-        // Books (voucher-only)
-        booksFee, booksDiscount, booksNet, booksFeeEnabled,
-        // Additional fees (voucher-only)
-        additionalFees,
-        // Annual fund (voucher-only)
-        showAnnualFund, annualFundAmt,
-        totalCharges, totalDiscounts,
-        totalWithinDueDate,  // core total for table display
-        voucherTotal,        // grand total for the voucher
-        lateFeeSurcharge, totalAfterDueDate,
-        discountDeadline,
-        // Late fee settings (live from Admin Settings)
-        graceDays, lateFineEnabled
+        regNo, monthLabel, 
+        tuitionFee, transportFee, otherFee, arrears,
+        fineAmount: fineFromBackend,
+        activeDiscounts, // Pass the array of individual discounts
+        totalDiscounts,
+        voucherTotal: voucherTotal,
+        totalAfterDueDate: voucherTotal + lateFeeSurcharge,
+        lateFineEnabled: vs.lateFineEnabled,
+        lateFeeSurcharge: lateFeeSurcharge,
+        dueDateStr: new Date(today.getFullYear(), today.getMonth() + 1, vs.dueDayOfMonth).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
+        expiryDateStr: new Date(today.getFullYear(), today.getMonth() + 1, vs.expiryDayOfMonth).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
     };
 }
 
@@ -1147,87 +1149,45 @@ function buildVoucherHTML(s) {
     const photoSrc = s.photo || '';
     const f = computeFeeBreakdown(s);
 
-    // Build Charges Rows
+    // 1. Build Base Fee Rows
     let rowsHTML = `
         ${f.tuitionFee > 0 ? `<tr><td>Tuition Fee</td><td>${f.monthLabel}</td><td>Rs. ${f.tuitionFee.toLocaleString()}</td></tr>` : ''}
         ${f.transportFee > 0 ? `<tr><td>Transportation Fee</td><td>${f.monthLabel}</td><td>Rs. ${f.transportFee.toLocaleString()}</td></tr>` : ''}
-        ${f.otherFee > 0 ? `<tr><td>${f.otherFeeLabel}</td><td>-</td><td>Rs. ${f.otherFee.toLocaleString()}</td></tr>` : ''}
+        ${f.otherFee > 0 ? `<tr><td>Other Charges</td><td>-</td><td>Rs. ${f.otherFee.toLocaleString()}</td></tr>` : ''}
+        ${f.fineAmount > 0 ? `<tr style="color:#dc2626;"><td><strong>Fine / Penalty</strong></td><td>${s.backendFineReason || 'Disciplinary'}</td><td>Rs. ${f.fineAmount.toLocaleString()}</td></tr>` : ''}
     `;
 
-    // ── Voucher-Only: Books Fee ──────────────────────────────────────────────
-    // (Books discount, if any, is shown in the unified Discounts Breakdown below.)
-    if (f.booksFee > 0) {
-        rowsHTML += `<tr><td>Books Fee</td><td>${f.monthLabel}</td><td>Rs. ${f.booksFee.toLocaleString()}</td></tr>`;
-    }
-
-    // ── Voucher-Only: Additional Fees ────────────────────────────────────────
-    // Per-row discounts are aggregated into the Discounts Breakdown section
-    // below instead of being rendered inline under each fee row.
-    f.additionalFees.forEach(fee => {
-        if (!fee.description && !fee.amount) return;
-        rowsHTML += `<tr><td>${fee.description || 'Additional Fee'}</td><td>${f.monthLabel}</td><td>Rs. ${parseFloat(fee.amount||0).toLocaleString()}</td></tr>`;
-    });
-
-    // ── Voucher-Only: Annual Fund (only in designated month) ─────────────────
-    if (f.showAnnualFund) {
-        rowsHTML += `<tr style="background:#fffbeb;"><td><strong>Annual Fund</strong></td><td>Annual (${today.toLocaleDateString('en-GB', { month: 'long' })} only)</td><td>Rs. ${f.annualFundAmt.toLocaleString()}</td></tr>`;
-    }
-
-    // ── Unified Discounts Breakdown ─────────────────────────────────────────
-    // Collect every discount (form-level concessions, books, per-row edited
-    // discounts, and one-time bulk discount) into a single breakdown block
-    // so admins can see exactly what was deducted and why.
-    const breakdownDiscounts = [];
-    if (f.tDisc  > 0) breakdownDiscounts.push({ label: 'Tuition Concession',  amount: f.tDisc  });
-    if (f.trDisc > 0) breakdownDiscounts.push({ label: 'Transport Subsidy',   amount: f.trDisc });
-    if (f.sibDisc> 0) breakdownDiscounts.push({ label: 'Sibling Discount',    amount: f.sibDisc});
-    if (f.booksDiscount > 0) breakdownDiscounts.push({ label: 'Books Discount', amount: f.booksDiscount });
-    f.additionalFees.forEach(fee => {
-        const d = parseFloat(fee.discount || 0);
-        if (d > 0) breakdownDiscounts.push({
-            label: `${fee.description || 'Additional Fee'} Discount`,
-            amount: d
+    // 2. Build Specific Discounts Section
+    if (f.activeDiscounts.length > 0) {
+        rowsHTML += `<tr class="voucher-row-discount" style="background: rgba(21, 128, 61, 0.03);"><td colspan="3" style="font-size: 0.7rem; font-weight: 700; text-transform: uppercase; color: #64748b; padding-top: 10px;">Applied Concessions</td></tr>`;
+        
+        f.activeDiscounts.forEach(d => {
+            rowsHTML += `
+                <tr class="voucher-row-discount">
+                    <td style="padding-left: 20px;">- ${d.label}</td>
+                    <td>Concession</td>
+                    <td>- Rs. ${d.amount.toLocaleString()}</td>
+                </tr>`;
         });
-    });
-    const bulkVoucherDisc = Math.max(0, Number(s.voucherBulkDiscount) || 0);
-    if (bulkVoucherDisc > 0) breakdownDiscounts.push({ label: 'One-time Voucher Discount', amount: bulkVoucherDisc });
 
-    const breakdownTotal = breakdownDiscounts.reduce((sum, d) => sum + d.amount, 0);
-    if (breakdownTotal > 0) {
-        rowsHTML += `<tr class="voucher-row-discount"><td colspan="3"><strong>Discounts Breakdown:</strong></td></tr>`;
-        breakdownDiscounts.forEach(d => {
-            rowsHTML += `<tr class="voucher-row-discount"><td>- ${d.label}</td><td>-</td><td>- Rs. ${d.amount.toLocaleString()}</td></tr>`;
-        });
-        rowsHTML += `<tr class="voucher-row-discount" style="background:#f0fdf4; border-top:1px solid #bbf7d0">
-            <td><strong>Total Discounts</strong></td><td>Valid till ${f.discountDeadline}</td><td><strong>- Rs. ${breakdownTotal.toLocaleString()}</strong></td></tr>`;
+        // 3. Highlighted Total Discount Row
+        rowsHTML += `
+            <tr style="background: #f0fdf4; color: #166534; border-top: 1px solid #bbf7d0;">
+                <td><strong>TOTAL DISCOUNT</strong></td>
+                <td>-</td>
+                <td><strong>- Rs. ${f.totalDiscounts.toLocaleString()}</strong></td>
+            </tr>`;
     }
 
-    // Arrears Row (may include auto-rolled previous-month unpaid)
+    // 4. Arrears Row
     if (f.arrears > 0) {
-        const rolled = Number(s.__rolledOverArrears) || 0;
-        const stored = Math.max(0, f.arrears - rolled);
-        if (stored > 0) {
-            rowsHTML += `
-                <tr class="voucher-row-arrears">
-                    <td><strong>Previous Arrears / Balance</strong></td>
-                    <td>Past Dues</td>
-                    <td>Rs. ${stored.toLocaleString()}</td>
-                </tr>`;
-        }
-        if (rolled > 0) {
-            rowsHTML += `
-                <tr class="voucher-row-arrears">
-                    <td><strong>Unpaid Carried Forward</strong></td>
-                    <td>${s.__rolledOverFromMonth || 'Previous month'}</td>
-                    <td>Rs. ${rolled.toLocaleString()}</td>
-                </tr>`;
-        }
+        rowsHTML += `
+            <tr class="voucher-row-arrears">
+                <td><strong>Previous Arrears</strong></td>
+                <td>Balance B/F</td>
+                <td>Rs. ${f.arrears.toLocaleString()}</td>
+            </tr>`;
     }
-
-    const savedNote = (s.voucherNote || '').trim();
-    const defaultNote = 'Arrears are included in the Net Payable amount. Please clear all dues.';
-    const noteText = savedNote || defaultNote;
-    const noteClass = savedNote ? 'voucher-note voucher-note-custom' : 'voucher-note';
 
     const copy = (label) => `
         <div class="voucher-copy">
@@ -1280,7 +1240,7 @@ function buildVoucherHTML(s) {
             </table>
 
             <div class="voucher-footer">
-                <div class="${noteClass}"><i class="fas fa-info-circle"></i> ${escapeHtml(noteText)}</div>
+                <div class="voucher-note"><i class="fas fa-info-circle"></i> Please clear dues by the due date to avoid late fees.</div>
                 <div class="voucher-signature">
                     <div class="sig-line"></div>
                     <span>Principal / Accounts</span>
@@ -1350,12 +1310,15 @@ buildVoucherHTML = function(s) {
     return html;
 };
 
-function renderFees(className) {
+async function renderFees(className) {
     const students = JSON.parse(localStorage.getItem('edu_students') || '[]');
     const tbody = document.getElementById('fee-table-body');
+    const monthKey = getCurrentMonthKey(); 
+    
     if(!tbody) return;
     
-    tbody.innerHTML = "";
+    // Show loading state while syncing with database
+    tbody.innerHTML = "<tr><td colspan='6' style='text-align:center; padding:20px;'><i class='fas fa-spinner fa-spin'></i> Syncing with MySQL Database...</td></tr>";
     
     const filtered = students.filter(s => s.studentClass === className);
 
@@ -1364,75 +1327,65 @@ function renderFees(className) {
         return;
     }
 
-    filtered.forEach(s => {
-        const f = computeFeeBreakdown(s);
-        const currentMonthKey = getCurrentMonthKey();
-        const payments = s.feePayments || [];
-        const thisMonthPaid = payments.filter(p => p.monthKey === currentMonthKey).reduce((sum, p) => sum + p.amount, 0);
-        const pendingAmount = Math.max(0, f.voucherTotal - thisMonthPaid);
-        const isPaid = pendingAmount <= 0;
-        const hasArrears = f.arrears > 0;
-        const hasFines = f.monthlyFineTotal > 0;
+    let rowsHtml = "";
 
-        const hasPaidThisMonth = payments.some(p => p.monthKey === currentMonthKey);
+    // Loop through filtered students and fetch fresh backend status for each
+    for (const s of filtered) {
+        const studentIdentifier = s.regNo || s.id; 
+        
+        try {
+            // API CALL: Fetch current finance status (includes unpaid fines only)
+            const finance = await apiRequest(`/status/${studentIdentifier}/${monthKey}`);
+            
+            if (!finance) {
+                rowsHtml += `
+                    <tr>
+                        <td><span class="hrk-id-badge">${studentIdentifier}</span></td>
+                        <td><strong>${s.fullName}</strong></td>
+                        <td colspan="4" style="color:#ef4444; font-size: 0.8rem;">
+                            <i class="fas fa-exclamation-circle"></i> Error: Not found in Finance Database.
+                        </td>
+                    </tr>`;
+                continue;
+            }
 
-        let statusBadge = '';
-        if (hasPaidThisMonth) {
-            statusBadge = `<span class="fee-status-badge fee-paid"><i class="fas fa-check-circle"></i> Paid</span>`;
-        } else if (hasArrears) {
-            statusBadge = `<span class="fee-status-badge fee-overdue"><i class="fas fa-exclamation-circle"></i> Arrears</span>`;
-        } else {
-            statusBadge = `<span class="fee-status-badge fee-pending"><i class="fas fa-clock"></i> Pending</span>`;
-        }
-        // If paid this month, never show arrears badge — it's already settled
-        const showArrearsInRow = hasArrears && !hasPaidThisMonth;
+            const isPaid = finance.paymentStatus === "Paid";
+            // If the fine was paid in the ledger, the backend returns fineAmount as 0
+            const hasUnpaidFine = finance.fineAmount > 0;
+            
+            const statusClass = isPaid ? 'fee-paid' : (finance.paidAmount > 0 ? 'fee-pending' : 'fee-overdue');
 
-        let actionButtons = '';
-        if (hasPaidThisMonth) {
-            actionButtons = `
-                <button class="btn-tiny" onclick="viewVoucher('${s.id}', '${escapeForAttr(s.fullName||'')}', true)">
-                    <i class="fas fa-eye"></i> View Paid Bill
-                </button>
+            rowsHtml += `
+                <tr>
+                    <td><span class="hrk-id-badge">${finance.regNo}</span></td>
+                    <td>
+                        <strong>${finance.studentName}</strong>
+                        ${hasUnpaidFine ? `<br><span style="font-size:0.72rem;color:#dc2626;font-weight:700;"><i class="fas fa-exclamation-triangle"></i> Unpaid Fine: Rs. ${finance.fineAmount}</span>` : ''}
+                    </td>
+                    <td>${finance.guardianName || '-'}</td>
+                    <td>
+                        <strong style="color:${isPaid ? '#27ae60' : '#c2410c'}">Rs. ${finance.remainingBalance.toLocaleString()}</strong>
+                        ${finance.paidAmount > 0 ? `<br><span style="font-size:0.7rem; color:#16a34a;">Paid so far: Rs. ${finance.paidAmount}</span>` : ''}
+                    </td>
+                    <td><span class="fee-status-badge ${statusClass}">${finance.paymentStatus}</span></td>
+                    <td class="fee-actions-cell">
+                        <button class="btn-tiny" onclick="viewVoucher('${finance.regNo}', '${escapeForAttr(finance.studentName)}', ${isPaid})">
+                            <i class="fas fa-eye"></i> View Voucher
+                        </button>
+                        ${!isPaid ? `
+                            <button class="btn-tiny btn-add-fees" onclick="openAddFeesModal('${finance.regNo}', '${escapeForAttr(finance.studentName)}')">
+                                <i class="fas fa-plus-circle"></i> Pay Fee
+                            </button>
+                        ` : ''}
+                    </td>
+                </tr>
             `;
-        } else {
-            actionButtons = `
-                <button class="btn-tiny" onclick="viewVoucher('${s.id}', '${escapeForAttr(s.fullName||'')}', false)">
-                    <i class="fas fa-eye"></i> View Voucher
-                </button>
-                <!--<button class="btn-tiny btn-add-to-voucher" onclick="openAddToVoucherModal('${s.id}', '${escapeForAttr(s.fullName||'')}', true)">
-                    <i class="fas fa-edit"></i> Edit Voucher
-                </button>-->
-                <button class="btn-tiny btn-add-fees" onclick="openAddFeesModal('${s.id}', '${escapeForAttr(s.fullName||'')}')">
-                    <i class="fas fa-plus-circle"></i> Pay Fee
-                </button>
-            `;
+        } catch (err) {
+            console.error("Failed to load row for " + studentIdentifier, err);
         }
-
-        tbody.innerHTML += `
-            <tr>
-                <td><span class="hrk-id-badge">${f.regNo}</span></td>
-                <td>
-                    <strong>${s.fullName}</strong>
-                    ${hasFines ? `<br><span style="font-size:0.72rem;color:#dc2626;"><i class="fas fa-exclamation-triangle"></i> Active fines</span>` : ''}
-                </td>
-                <td>${s.guardianName || '-'}</td>
-                <td>
-                    <strong style="color:${isPaid ? '#27ae60' : '#c2410c'}">Rs. ${pendingAmount.toLocaleString()}</strong>
-                    ${thisMonthPaid > 0 ? `<br><span style="font-size:0.72rem;color:#16a34a;"><i class="fas fa-check"></i> Rs. ${thisMonthPaid.toLocaleString()} paid</span>` : ''}
-                    ${showArrearsInRow ? `<br><span style="font-size:0.72rem;color:#c2410c;">Arrears: Rs. ${f.arrears.toLocaleString()}</span>` : ''}
-                </td>
-                <td>${statusBadge}</td>
-                <td class="fee-actions-cell">
-                    ${actionButtons}
-                </td>
-            </tr>
-        `;
-    });
-
-    // Reset & apply search after re-render
-    const search = document.getElementById('fee-search-input');
-    if (search) { search.value = ''; }
-    filterFeeTable();
+    }
+    
+    tbody.innerHTML = rowsHtml;
 }
 
 // Filter the fee table rows by name / id / guardian
@@ -1591,62 +1544,20 @@ function recalcSimpleAFTotal() {
     set('afm-t-remaining', `Rs. ${remaining.toLocaleString()}`, remaining > 0 ? '#c2410c' : '#16a34a');
 }
 
-function saveSimpleStudentFeePayment() {
+async function saveSimpleStudentFeePayment() {
     const studentId = document.getElementById('add-fees-student-id').value;
-    const method = document.getElementById('af-payment-method').value;
-    const notes = document.getElementById('af-fee-notes').value;
-    const discount = parseFloat(document.getElementById('afm-pay-discount').value) || 0;
     const paid = parseFloat(document.getElementById('afm-pay-amount').value) || 0;
 
-    if (paid <= 0 && discount <= 0) { alert('Please enter a valid amount or discount.'); return; }
+    await apiRequest("/pay", "POST", {
+        regNo: studentId,
+        monthKey: getCurrentMonthKey(),
+        amount: paid
+    });
 
-    const monthValue = getCurrentMonthKey();
-    const [year, month] = monthValue.split('-');
-    const monthLabel = new Date(parseInt(year), parseInt(month) - 1, 1)
-        .toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
-
-    let students = JSON.parse(localStorage.getItem('edu_students') || '[]');
-    const wantName = afmCurrentStudent ? afmCurrentStudent.fullName : null;
-    let idx = -1;
-    if (wantName) idx = students.findIndex(s => String(s.id) === String(studentId) && s.fullName === wantName);
-    if (idx === -1) idx = students.findIndex(s => String(s.id) === String(studentId));
-    if (idx === -1) { alert('Student not found.'); return; }
-
-    if (!students[idx].feePayments) students[idx].feePayments = [];
-
-    // We treat `amount` as the EFFECTIVE coverage (cash paid + admin discount)
-    // so that a fee paid e.g. Rs. 4500 + Rs. 500 discount on a Rs. 5000 bill
-    // marks the month as fully paid and doesn't roll over to next month's arrears.
-    const effective = paid + discount;
-    const payment = {
-        id: Date.now(),
-        monthKey: monthValue,
-        monthLabel,
-        feeType: "Voucher Payment",
-        feeItems: [{ type: 'voucher', label: 'Voucher Payment', amount: paid + discount, discount: discount, net: paid }],
-        amount: effective,
-        cashPaid: paid,
-        grossAmount: paid + discount,
-        itemDiscounts: 0,
-        bulkDiscount: discount,
-        method,
-        notes,
-        date: new Date().toISOString()
-    };
-
-    students[idx].feePayments.push(payment);
-    localStorage.setItem('edu_students', JSON.stringify(students));
-
-    showFeeSuccessToast(`Rs. ${paid.toLocaleString()} recorded for ${students[idx].fullName}`);
-
+    showFeeSuccessToast(`Payment of Rs. ${paid} recorded successfully`);
     closeAddFeesModal();
-
-    // Refresh table
-    const classTitle = document.getElementById('selected-class-title');
-    if (classTitle) {
-        const className = classTitle.innerText.replace('Fee Records: ', '');
-        renderFees(className);
-    }
+    const className = document.getElementById('selected-class-title').innerText.replace('Fee Records: ', '');
+    renderFees(className);
 }
 
 function closeAddFeesModal() {
@@ -2094,50 +2005,91 @@ function initTeachingSalaryPage() {
     renderTeachingSalaries();
 }
 
-function renderTeachingSalaries(filterText = '') {
+async function renderTeachingSalaries(filterText = '') {
     const tbody = document.getElementById('teaching-salary-tbody');
-    const db = getGlobalData();
-    const teachingStaff = db.staff.Teaching || [];
-    const currentMonthKey = getCurrentMonthKey();
+    const monthKey = getCurrentMonthKey(); // e.g., "2024-03"
+    
+    // Show loading state
+    tbody.innerHTML = '<tr><td colspan="7" class="empty-row"><i class="fas fa-spinner fa-spin"></i> Loading Teaching Staff...</td></tr>';
 
-    const filtered = teachingStaff.filter(t =>
-        t.name.toLowerCase().includes(filterText.toLowerCase()) ||
-        t.id.toLowerCase().includes(filterText.toLowerCase())
-    );
+    try {
+        // 1. Fetch all staff from the backend StaffController
+        const staffResponse = await fetch("http://localhost:8080/api/staff");
+        if (!staffResponse.ok) throw new Error("Failed to fetch staff");
+        const allStaff = await staffResponse.json();
 
-    if (filtered.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="6" class="empty-row">No matching teaching staff found.</td></tr>';
-        return;
+        // 2. Fetch all salary records for the current month to check payment status
+        // We assume you might add a "GET all for month" endpoint, 
+        // or we can fetch them individually. For now, let's fetch the staff 
+        // and filter for the 'Teaching' category.
+        const teachingStaff = allStaff.filter(t => 
+            t.category === 'Teaching' && 
+            (t.name.toLowerCase().includes(filterText.toLowerCase()) || 
+             t.id.toLowerCase().includes(filterText.toLowerCase()))
+        );
+
+        if (teachingStaff.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="7" class="empty-row">No teaching staff found.</td></tr>';
+            return;
+        }
+
+        // 3. Generate HTML rows
+        let rowsHtml = "";
+
+        for (const t of teachingStaff) {
+            // Check status: We call an endpoint to see if this staff is paid for this month
+            // If you haven't built this endpoint yet, it will default to 'Pending'
+            let isPaid = false;
+            try {
+                const statusRes = await fetch(`http://localhost:8080/api/finance/salary/status/${t.id}/${monthKey}`);
+                if (statusRes.ok) {
+                    const statusData = await statusRes.json();
+                    isPaid = statusData.paid; // Expecting { paid: true/false }
+                }
+            } catch (e) {
+                isPaid = false; // Fallback if endpoint doesn't exist
+            }
+
+            const absenceFine = Number(t.fines) || 0;
+            const basicSalary = Number(t.salary) || 0;
+            
+            // Note: Advances are now handled in the backend, 
+            // you might want to add a field 'totalAdvance' to your Staff model
+            const advance = 0; 
+
+            rowsHtml += `
+                <tr class="salary-row-clickable" onclick="showSalaryBreakdown('${t.id}', 'Teaching')" title="Click to view salary breakdown">
+                    <td class="teacher-id-cell">${t.id}</td>
+                    <td>
+                        <div style="font-weight:600;">${t.name}</div>
+                        <div style="font-size:11px; color:var(--text-secondary);">${t.phone || 'No Phone'}</div>
+                    </td>
+                    <td>${t.role || 'Teacher'}</td>
+                    <td><strong>RS ${basicSalary.toLocaleString()}</strong></td>
+                    <td>
+                        <span style="color:#ef4444; font-weight:600;">
+                            ${absenceFine > 0 ? '− RS ' + absenceFine.toLocaleString() : 'None'}
+                        </span>
+                    </td>
+                    <td>
+                        <strong style="color:#eab308;">RS ${advance.toLocaleString()}</strong>
+                    </td>
+                    <td>
+                        <span class="status-badge ${isPaid ? 'status-paid' : 'status-pending'}">
+                            <i class="fas ${isPaid ? 'fa-check-circle' : 'fa-clock'}"></i>
+                            ${isPaid ? 'Paid' : 'Pending'}
+                        </span>
+                    </td>
+                </tr>
+            `;
+        }
+
+        tbody.innerHTML = rowsHtml;
+
+    } catch (err) {
+        console.error("Fetch Error:", err);
+        tbody.innerHTML = '<tr><td colspan="7" class="empty-row" style="color:red;">Error connecting to backend server.</td></tr>';
     }
-
-    tbody.innerHTML = filtered.map(t => {
-        const isPaid = (t.salaryHistory || []).some(h => h.monthKey === currentMonthKey);
-        const advance = getTotalAdvance(t.id);
-        const absenceFine = Number(t.fines) || 0;
-        const absentDays  = Number(t.absentDaysThisMonth) || 0;
-        const fineLabel   = absenceFine > 0
-            ? `<span style="color:#ef4444;font-weight:600;">− RS ${absenceFine.toLocaleString()}</span><span style="font-size:10px;color:var(--text-secondary);display:block;">${absentDays}d absent</span>`
-            : `<span style="color:var(--text-secondary);font-size:12px;">None</span>`;
-        return `
-            <tr class="salary-row-clickable" onclick="showSalaryBreakdown('${t.id}', 'Teaching')" title="Click to view salary breakdown">
-                <td class="teacher-id-cell">${t.id}</td>
-                <td>
-                    <div style="font-weight:600;">${t.name}</div>
-                    <div style="font-size:11px; color:var(--text-secondary);">${t.email || ''}</div>
-                </td>
-                <td>${t.subjects || 'General Teacher'}</td>
-                <td><strong>RS ${(Number(t.salary) || 0).toLocaleString()}</strong></td>
-                <td>${fineLabel}</td>
-                <td><strong style="color:#eab308;">RS ${advance.toLocaleString()}</strong></td>
-                <td>
-                    <span class="status-badge ${isPaid ? 'status-paid' : 'status-pending'}">
-                        <i class="fas ${isPaid ? 'fa-check-circle' : 'fa-clock'}"></i>
-                        ${isPaid ? 'Paid' : 'Pending'}
-                    </span>
-                </td>
-            </tr>
-        `;
-    }).join('');
 }
 
 function filterTeachingSalaries() {
@@ -2307,17 +2259,45 @@ function closeSalaryBreakdown() {
     document.body.style.overflow = '';
 }
 
-function payCurrentSalary() {
+async function payCurrentSalary() {
     const panel = document.getElementById('salary-breakdown-panel');
-    const staffId  = panel && panel.dataset.teacherId;
+    const staffId = panel && panel.dataset.teacherId;
     const category = (panel && panel.dataset.category) || 'Teaching';
+
     if (!staffId) return;
-    if (isStaffPaidThisMonth(staffId, category)) {
-        alert('Salary for this month has already been paid. No further actions can be performed until next month.');
-        return;
+
+    // 1. Get values from the UI fields
+    // We remove "RS " and commas to get a clean number for the backend
+    const bonus = parseFloat(document.getElementById('sbp-bonus').value.replace(/[^0-9.]/g, '')) || 0;
+    const manualFine = parseFloat(document.getElementById('sbp-fine').value.replace(/[^0-9.]/g, '')) || 0;
+    const monthKey = getCurrentMonthKey();
+
+    if (!confirm(`Confirm salary payment for ${document.getElementById('sbp-teacher-name').textContent}?`)) return;
+
+    try {
+        // 2. Call the Spring Boot Backend
+        const response = await apiCall("/salary/pay", "POST", {
+            staffId: staffId,
+            monthKey: monthKey,
+            bonus: bonus,
+            fine: manualFine
+        });
+
+        // 3. Success UI updates
+        alert("Salary processed and recorded in database!");
+        
+        // Refresh the table to show "Paid" status
+        if (category === 'Teaching') {
+            renderTeachingSalaries();
+        } else {
+            renderNonTeachingSalaries();
+        }
+        
+        closeSalaryBreakdown();
+    } catch (err) {
+        console.error(err);
+        alert("Error: " + err.message);
     }
-    processSalaryPayment(staffId, category);
-    closeSalaryBreakdown();
 }
 
 function processSalaryPayment(staffId, category = 'Teaching') {
@@ -2437,43 +2417,35 @@ function toggleAdvancePay() {
     }
 }
 
-function payAdvanceSalary() {
+async function payAdvanceSalary() {
     const panel = document.getElementById('salary-breakdown-panel');
-    const staffId  = panel && panel.dataset.teacherId;
-    const category = (panel && panel.dataset.category) || 'Teaching';
+    const staffId = panel && panel.dataset.teacherId;
     if (!staffId) return;
-
-    if (isStaffPaidThisMonth(staffId, category)) {
-        alert('Salary for this month has already been paid. No further actions can be performed until next month.');
-        return;
-    }
 
     const amtEl = document.getElementById('sbp-advance-amount');
     const amount = Number(amtEl && amtEl.value);
+    const monthKey = getCurrentMonthKey();
+
     if (!amount || amount <= 0) {
         alert('Please enter a valid advance amount.');
         return;
     }
 
-    const list = getAdvanceRecords();
-    list.push({
-        staffId,
-        category,
-        amount,
-        date: new Date().toISOString(),
-        monthKey: getCurrentMonthKey()
-    });
-    saveAdvanceRecords(list);
+    try {
+        // Call the Spring Boot Backend
+        await apiCall("/salary/advance", "POST", {
+            staffId: staffId,
+            amount: amount,
+            monthKey: monthKey
+        });
 
-    alert(`Advance of RS ${amount.toLocaleString()} recorded.`);
-
-    // Refresh the breakdown panel + the underlying table
-    showSalaryBreakdown(staffId, category);
-    if (category === 'Teaching') {
-        renderTeachingSalaries(document.getElementById('teacher-salary-search').value);
-    } else {
-        const sEl = document.getElementById('worker-salary-search');
-        renderNonTeachingSalaries(sEl ? sEl.value : '');
+        alert(`Advance of RS ${amount.toLocaleString()} recorded in database.`);
+        
+        // Clear input and refresh panel
+        amtEl.value = '';
+        showSalaryBreakdown(staffId, panel.dataset.category); 
+    } catch (err) {
+        alert("Failed to record advance: " + err.message);
     }
 }
 
@@ -2759,6 +2731,285 @@ function ievSave() {
     viewVoucher(studentId, fullName);
 }
 
+/**
+ * Processes a comma-separated string of reasons.
+ * - If one reason appears more than once, show that reason.
+ * - If all reasons are unique, show them inside [reason1, reason2].
+ */
+function getSmartFineReason(reasonString) {
+    if (!reasonString) return "N/A";
+    
+    // Split into array and clean up
+    const reasons = reasonString.split(',').map(r => r.trim()).filter(r => r !== "");
+    if (reasons.length === 0) return "N/A";
+
+    const frequencyMap = {};
+    reasons.forEach(r => frequencyMap[r] = (frequencyMap[r] || 0) + 1);
+
+    let mostFrequentReason = "";
+    let maxCount = 0;
+    let hasDuplicate = false;
+
+    for (const reason in frequencyMap) {
+        if (frequencyMap[reason] > maxCount) {
+            maxCount = frequencyMap[reason];
+            mostFrequentReason = reason;
+        }
+        if (frequencyMap[reason] > 1) hasDuplicate = true;
+    }
+
+    // Requirement: If more than one time means he gets more fine for one reason
+    if (hasDuplicate) {
+        return `${mostFrequentReason} <small>(Frequent)</small>`;
+    } else {
+        // Show all unique reasons inside square brackets
+        return `<span style="font-size: 0.75rem;">[${reasons.join(', ')}]</span>`;
+    }
+}
+
+async function showFineDetails(regNo, monthKey) {
+    const page = document.getElementById('fine-full-record-page');
+    page.classList.remove('d-none');
+    document.body.style.overflow = 'hidden';
+
+    // Make sure the header-transparency scroll effect is bound, and start fresh (header transparent at top)
+    initLedgerScrollEffect();
+    const ledgerContainer = document.querySelector('.ledger-container');
+    if (ledgerContainer) {
+        ledgerContainer.scrollTop = 0;
+        ledgerContainer.classList.remove('is-scrolled');
+    }
+
+    try {
+        const summary = await apiCall(`/status/${regNo}/${monthKey}`);
+        currentDetailedFines = await apiCall(`/fine-details/${regNo}/${monthKey}`);
+
+        // 1. Calculate Quick Stats
+        const totalPending = currentDetailedFines.filter(f => f.status !== "Paid").reduce((s, f) => s + f.amount, 0);
+        const totalPaid = currentDetailedFines.filter(f => f.status === "Paid").reduce((s, f) => s + f.amount, 0);
+
+        // 2. Render Banner
+        document.getElementById('full-fine-banner').innerHTML = `
+            <div class="portfolio-student-info">
+                <label style="color: #10b981; font-weight: 800; font-size: 0.75rem; letter-spacing: 2px; text-transform: uppercase;">Financial Integrity Portfolio</label>
+                <h1>${summary.studentName}</h1>
+                <div class="portfolio-meta">
+                    <span><i class="fas fa-user-shield"></i> Guardian: <b>${summary.guardianName}</b></span>
+                    <span><i class="fas fa-fingerprint"></i> ID: <b>${summary.regNo}</b></span>
+                    <span><i class="fas fa-layer-group"></i> <b>${summary.studentClass} - ${summary.section}</b></span>
+                </div>
+            </div>
+            <div class="portfolio-stats">
+                <div class="stat-pill" style="border-color: rgba(239, 68, 68, 0.3);">
+                    <label>Unpaid Balance</label>
+                    <span style="color: #ef4444;">Rs. ${totalPending.toLocaleString()}</span>
+                </div>
+                <div class="stat-pill" style="border-color: rgba(16, 185, 129, 0.3);">
+                    <label>Settled Fines</label>
+                    <span style="color: #10b981;">Rs. ${totalPaid.toLocaleString()}</span>
+                </div>
+            </div>
+        `;
+
+        applyHistoryFilters(); // Initial Render
+
+    } catch (err) {
+        console.error("Dashboard error:", err);
+    }
+}
+
+function renderFineRows(data) {
+    const tbody = document.getElementById('full-fine-history-tbody');
+    
+    // Sort all matching data by time (newest first)
+    data.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+    if (data.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; padding:80px; opacity:0.6;">No matching records found.</td></tr>`;
+        return;
+    }
+    
+    // Use .map and .join to ensure the entire array is converted to HTML
+    tbody.innerHTML = data.map(d => {
+        const isPaid = d.status === "Paid";
+        return `
+        <tr>
+            <td><span class="tx-id">#FT-${d.id}</span></td>
+            <td>
+                <div style="font-weight: 600;">${d.applyDate}</div>
+                <div style="font-size: 0.7rem; color: var(--text-muted);">${d.applyTime}</div>
+            </td>
+            <td><div style="font-weight: 600; font-size: 0.9rem;">${d.reason}</div></td>
+            <td><b style="font-size: 1.1rem; color: ${isPaid ? 'var(--text-primary)' : '#ef4444'};">Rs. ${d.amount.toLocaleString()}</b></td>
+            <td>
+                <span class="fee-status-badge ${isPaid ? 'fee-paid' : 'fee-overdue'}">
+                    <i class="fas ${isPaid ? 'fa-check-circle' : 'fa-clock'}"></i> ${isPaid ? 'Settled' : 'Pending'}
+                </span>
+            </td>
+            <td>
+                ${isPaid ? `
+                    <div style="font-weight: 600; color: #10b981;">${d.payDate}</div>
+                    <div style="font-size: 0.7rem; color: var(--text-muted);">${d.payTime}</div>
+                ` : '<span style="opacity:0.2">—</span>'}
+            </td>
+            <td class="text-center">
+                <button class="btn-settle" ${isPaid ? 'disabled' : ''} onclick="processIndividualPay(${d.id})">
+                    ${isPaid ? 'Completed' : 'Pay Now'}
+                </button>
+            </td>
+        </tr>`;
+    }).join('');
+}
+
+async function processIndividualPay(fineId) {
+    if(!confirm("Proceed to settle this specific transaction?")) return;
+
+    try {
+        const updated = await apiCall(`/pay-fine/${fineId}`, 'POST');
+        
+        // 1. Update local cache for the Full Record Page
+        const idx = currentDetailedFines.findIndex(f => f.id === fineId);
+        if (idx !== -1) currentDetailedFines[idx] = updated;
+
+        // 2. REFRESH MAIN FEE TABLE
+        // This is the key: it re-fetches the backend status for the student
+        const classTitleEl = document.getElementById('selected-class-title');
+        if (classTitleEl && classTitleEl.innerText.includes(':')) {
+            const className = classTitleEl.innerText.split(': ')[1];
+            renderFees(className); 
+        }
+
+        showFeeSuccessToast("Fine Settled Successfully");
+        applyHistoryFilters(); // Refresh the current Ledger UI
+
+    } catch (err) {
+        alert("Transaction failed: " + err.message);
+    }
+}
+
+function closeFullFineRecord() {
+    document.getElementById('fine-full-record-page').classList.add('d-none');
+    document.body.style.overflow = 'auto';
+}
+
+function filterFines(timeframe, btn) {
+    // 1. UI Switch
+    document.querySelectorAll('.sorting-group .category-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+
+    // 2. Logic
+    const now = new Date();
+    let filtered = [];
+
+    if (timeframe === 'all') {
+        filtered = currentDetailedFines;
+    } else {
+        filtered = currentDetailedFines.filter(item => {
+            // Convert "12 Jan 2025" back to Date object for logic
+            const itemDate = new Date(item.applyDate);
+            
+            if (timeframe === 'today') {
+                return itemDate.toDateString() === now.toDateString();
+            }
+            if (timeframe === 'week') {
+                const diffTime = Math.abs(now - itemDate);
+                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                return diffDays <= 7;
+            }
+            if (timeframe === '3months') {
+                const threeMonthsAgo = new Date();
+                threeMonthsAgo.setMonth(now.getMonth() - 3);
+                return itemDate >= threeMonthsAgo;
+            }
+        });
+    }
+    renderFineRows(filtered);
+}
+
+let currentActiveTimeframe = null; // To track buttons
+
+function resetHistoryFilters() {
+    document.getElementById('fine-history-search').value = "";
+    document.getElementById('fine-history-date-filter').value = "";
+    document.querySelectorAll('.seg-btn').forEach(b => b.classList.remove('active'));
+    currentActiveTimeframe = null;
+    applyHistoryFilters();
+}
+
+function setTimeframeFilter(timeframe, btn) {
+    if (currentActiveTimeframe === timeframe) {
+        currentActiveTimeframe = null;
+        btn.classList.remove('active');
+    } else {
+        // Fix: Use correct selector .seg-btn
+        document.querySelectorAll('.segemented-control .seg-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        currentActiveTimeframe = timeframe;
+    }
+    applyHistoryFilters();
+}
+
+/**
+ * Unified Filter Engine
+ */
+function applyHistoryFilters() {
+    const searchText = document.getElementById('fine-history-search').value.toLowerCase().trim();
+    const datePickerValue = document.getElementById('fine-history-date-filter').value; // Returns YYYY-MM-DD
+    
+    const now = new Date();
+    // Start of today (00:00:00)
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+    // Use .filter() to find ALL matching items
+    const filteredResults = currentDetailedFines.filter(item => {
+        const itemDate = new Date(item.createdAt);
+        const itemDayOnly = new Date(itemDate.getFullYear(), itemDate.getMonth(), itemDate.getDate());
+
+        // --- 1. Text Search (Reason or Amount) ---
+        const matchesText = !searchText || 
+            item.reason.toLowerCase().includes(searchText) || 
+            item.amount.toString().includes(searchText);
+
+        // --- 2. Date Picker Logic (Matches exact day selected) ---
+        let matchesDate = true;
+        if (datePickerValue) {
+            // datePickerValue is "2026-07-28", we extract components
+            const [y, m, d] = datePickerValue.split('-').map(Number);
+            matchesDate = (
+                itemDate.getFullYear() === y &&
+                itemDate.getMonth() === (m - 1) &&
+                itemDate.getDate() === d
+            );
+        }
+
+        // --- 3. Timeframe Buttons Logic ---
+        let matchesTimeframe = true;
+        if (currentActiveTimeframe) {
+            // Calculate day difference
+            const diffInMs = todayStart - itemDayOnly;
+            const diffInDays = diffInMs / (1000 * 60 * 60 * 24);
+
+            if (currentActiveTimeframe === 'today') {
+                matchesTimeframe = (itemDate.toDateString() === now.toDateString());
+            } 
+            else if (currentActiveTimeframe === 'week') {
+                matchesTimeframe = (diffInDays >= 0 && diffInDays < 7);
+            } 
+            else if (currentActiveTimeframe === 'month') {
+                matchesTimeframe = (itemDate.getMonth() === now.getMonth() && itemDate.getFullYear() === now.getFullYear());
+            } 
+            else if (currentActiveTimeframe === '3months') {
+                matchesTimeframe = (diffInDays >= 0 && diffInDays < 90);
+            }
+        }
+
+        // Must satisfy ALL active filters
+        return matchesText && matchesDate && matchesTimeframe;
+    });
+
+    renderFineRows(filteredResults);
+}
+
 window.openInlineVoucherEditor = openInlineVoucherEditor;
 window.closeInlineVoucherEditor = closeInlineVoucherEditor;
 window.ievAddRow    = ievAddRow;
@@ -2766,4 +3017,3 @@ window.ievDeleteRow = ievDeleteRow;
 window.ievUpdateRow = ievUpdateRow;
 window.ievUpdateArrears = ievUpdateArrears;
 window.ievSave = ievSave;
-
