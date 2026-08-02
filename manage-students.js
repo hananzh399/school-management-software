@@ -49,6 +49,8 @@
  * ============================================================================
  */
 
+let API_STUDENTS = [];
+
 "use strict";
 
 // ============================================================================
@@ -121,6 +123,10 @@ const ANNUAL_FUND_AMOUNT = getAnnualFundForClass();
 const DB_KEY        = 'edu_students';
 const SIBLING_PREFIX = '00';       // prefix for sibling-group IDs
 
+// ── BACKEND API CONFIG ──────────────────────────────────────────────────
+// Spring Boot backend — StudentController.java exposes CRUD under this base.
+const API_BASE = 'http://localhost:8080/api/students';
+
 /**
  * Derive a short registration prefix from the logged-in school's name.
  * e.g. school prefix "PSC" set in Super Admin → "PSC_"  (so IDs read PSC_1, PSC_2, PSC_3 …)
@@ -161,6 +167,15 @@ function escapeRegExp(str) {
 // ============================================================================
 // INITIALIZATION
 // ============================================================================
+
+// Orphan filter state — declared at top-level (script) scope, NOT inside the
+// DOMContentLoaded closure below, because toggleUpdOrphanFilter/toggleVoOrphanFilter
+// are defined later in this file OUTSIDE that closure and need to read/write
+// these same bindings. Declaring them inside the closure caused
+// "ReferenceError: voOrphanFilterActive is not defined" when the buttons were clicked.
+let updOrphanFilterActive = false;
+let voOrphanFilterActive = false;
+
 document.addEventListener('DOMContentLoaded', () => {
 
     // UI References: Navigation & Layout
@@ -175,6 +190,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const studentPhotoInput= document.getElementById('student-photo');
     const certUploadInput  = document.getElementById('cert-upload');
     const certDataHidden   = document.getElementById('cert-data');
+    const studentPhotoError= document.getElementById('student-photo-error');
+    const certUploadError  = document.getElementById('cert-upload-error');
 
     // UI References: Form Inputs for Calculation
     const dobInput         = document.getElementById('student-dob');
@@ -219,10 +236,28 @@ document.addEventListener('DOMContentLoaded', () => {
     const annualFundPanel   = document.getElementById('annual-fund-panel');
     const annualFundAmount  = document.getElementById('annual-fund-amount');
 
+    // (Orphan filter state now declared at top-level scope — see above)
+
     // ── 1. CORE SYSTEM INITIALIZATION ───────────────────────────────────────
+
+    // Ensure orphan-filter buttons always start in a known, inactive visual
+    // state on page load, regardless of any leftover markup/classes.
+    updOrphanFilterActive = false;
+    voOrphanFilterActive = false;
+    ['upd-orphan-filter-btn', 'vo-orphan-filter-btn'].forEach(id => {
+        const btn = document.getElementById(id);
+        if (!btn) return;
+        btn.classList.remove('active-filter');
+        btn.setAttribute('aria-pressed', 'false');
+        btn.innerHTML = '<i class="fas fa-child"></i> Show Orphans Only';
+    });
 
     if (admissionDateInput) admissionDateInput.valueAsDate = new Date();
     updateDashboardStats();
+
+    // Pull the live roster from MySQL as soon as the page loads, so the
+    // tables/dashboard reflect the database instead of a stale local cache.
+    syncWithBackend();
 
     // ── THEME TOGGLE ─────────────────────────────────────────────────────────
     (function initTheme() {
@@ -280,7 +315,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!isEdit) {
                 admissionForm.reset();
                 editIdHidden.value = "";
-                previewImg.src = "https://via.placeholder.com/150?text=Select+Photo";
+                previewImg.src = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAJQAAACUCAYAAAB1Va3RAAAACXBIWXMAAAsTAAALEwEAmpwYAAADu0lEQVR4nO3dy0pUYRSG4f9mZpYjSclS0DSIIAsZonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXf6S/8AvW7ZicAAAAASUVORK5CYII=";
                 document.getElementById('form-modal-title').innerHTML =
                     '<i class="fas fa-user-plus"></i> Student Admission Entry';
                 document.getElementById('form-submit-btn').innerText = 'Finalize Admission';
@@ -320,6 +355,13 @@ document.addEventListener('DOMContentLoaded', () => {
             // Always re-open on the class-cards stage
             updActiveClass = null;
             updActiveSection = null;
+            updOrphanFilterActive = false;
+            const updOrphanBtn = document.getElementById('upd-orphan-filter-btn');
+            if (updOrphanBtn) {
+                updOrphanBtn.classList.remove('active-filter');
+                updOrphanBtn.setAttribute('aria-pressed', 'false');
+                updOrphanBtn.innerHTML = '<i class="fas fa-child"></i> Show Orphans Only';
+            }
             updRenderClassCards();
             updShowStage('classes');
         }
@@ -330,6 +372,13 @@ document.addEventListener('DOMContentLoaded', () => {
             // Always re-open on the class-cards stage
             voActiveClass = null;
             voActiveSection = null;
+            voOrphanFilterActive = false;
+            const voOrphanBtn = document.getElementById('vo-orphan-filter-btn');
+            if (voOrphanBtn) {
+                voOrphanBtn.classList.remove('active-filter');
+                voOrphanBtn.setAttribute('aria-pressed', 'false');
+                voOrphanBtn.innerHTML = '<i class="fas fa-child"></i> Show Orphans Only';
+            }
             voRenderClassCards();
             voShowStage('classes');
         }
@@ -575,30 +624,84 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // ── 5. MEDIA & FILE HANDLING ─────────────────────────────────────────────
 
-    if (studentPhotoInput) {
-        studentPhotoInput.addEventListener('change', function() {
-            const file = this.files[0];
-            if (file) {
-                const reader = new FileReader();
-                reader.onload = (e) => { previewImg.src = e.target.result; };
-                reader.readAsDataURL(file);
-            }
-        });
+    const MAX_UPLOAD_SIZE_BYTES = 200 * 1024; // 200KB
+    const MAX_UPLOAD_SIZE_LABEL = "200KB";
+
+    /** Hide/reset a field's inline error message. */
+    function clearUploadError(errorEl) {
+        if (!errorEl) return;
+        errorEl.classList.remove('show');
+        const span = errorEl.querySelector('span');
+        if (span) span.textContent = '';
     }
 
-    if (certUploadInput) {
-        certUploadInput.addEventListener('change', function() {
-            const file = this.files[0];
-            if (file) {
-                const reader = new FileReader();
-                reader.onload = (e) => {
-                    certDataHidden.value = e.target.result;
-                    showToast("File Ready", "Document processed and attached to record.", "success");
-                };
-                reader.readAsDataURL(file);
-            }
-        });
+    /** Show a field's inline error message (red, fade-in via CSS). */
+    function showUploadError(errorEl, message) {
+        if (!errorEl) return;
+        const span = errorEl.querySelector('span');
+        if (span) span.textContent = message;
+        else errorEl.textContent = message;
+        // Restart the fade-in animation even if it's already visible
+        errorEl.classList.remove('show');
+        void errorEl.offsetWidth; // force reflow to re-trigger CSS animation
+        errorEl.classList.add('show');
     }
+
+    /**
+     * Validates a file's size against the 200KB limit.
+     * On failure: clears the input, shows the red error message, and returns false.
+     * On success: clears any prior error message and returns true.
+     */
+    function validateUploadSize(inputEl, file, errorEl) {
+        if (file.size > MAX_UPLOAD_SIZE_BYTES) {
+            inputEl.value = ''; // clear the input so the rejected file isn't submitted
+            showUploadError(errorEl, `File exceeds ${MAX_UPLOAD_SIZE_LABEL}. Choose a smaller file.`);
+            showToast("File Too Large", `File exceeds ${MAX_UPLOAD_SIZE_LABEL}. Choose a smaller file.`, "danger");
+            return false;
+        }
+        clearUploadError(errorEl);
+        return true;
+    }
+
+    if (studentPhotoInput) {
+    studentPhotoInput.addEventListener('change', async function() {
+        const file = this.files[0];
+        if (file) {
+            if (!validateUploadSize(this, file, studentPhotoError)) {
+                return;
+            }
+            showToast("Processing", "Optimizing photo...", "info");
+            // Face photo: 500px width is plenty
+            const compressedBase64 = await compressImage(file, 500, 0.8);
+            previewImg.src = compressedBase64;
+        }
+    });
+}
+
+// --- UPDATED B-FORM HANDLER ---
+if (certUploadInput) {
+    certUploadInput.addEventListener('change', async function() {
+        const file = this.files[0];
+        if (file) {
+            if (!validateUploadSize(this, file, certUploadError)) {
+                return;
+            }
+            showToast("Processing", "Optimizing document...", "info");
+            
+            // If it's a PDF, we can't compress via Canvas, just read as is
+            if (file.type === 'application/pdf') {
+                const reader = new FileReader();
+                reader.onload = (e) => { certDataHidden.value = e.target.result; };
+                reader.readAsDataURL(file);
+            } else {
+                // For B-Form images: 1600px width ensures text remains sharp
+                const compressedBase64 = await compressImage(file, 1600, 0.7);
+                certDataHidden.value = compressedBase64;
+            }
+            showToast("File Ready", "Document optimized and attached.", "success");
+        }
+    });
+}
 
     // ── 6. DATA PERSISTENCE (CRUD) ───────────────────────────────────────────
 
@@ -617,14 +720,19 @@ document.addEventListener('DOMContentLoaded', () => {
         let maxSeq = 0;
         const prefixRegex = new RegExp('^' + escapeRegExp(SYSTEM_PREFIX) + '(\\d+)$');
         db.forEach(s => {
-            // Check both regNo and id fields so we never collide
-            [s.regNo, s.id].forEach(val => {
-                if (val) {
-                    const match = val.match(prefixRegex);
-                    if (match) maxSeq = Math.max(maxSeq, parseInt(match[1], 10));
-                }
-            });
-        });
+    // Check both regNo and id fields so we never collide
+    [s.regNo, s.id].forEach(val => {
+        if (val !== undefined && val !== null) {
+            // Force val to a string to prevent .match is not a function error
+            const strVal = String(val); 
+            const match = strVal.match(prefixRegex);
+            if (match) {
+                const seq = parseInt(match[1], 10);
+                if (!isNaN(seq)) maxSeq = Math.max(maxSeq, seq);
+            }
+        }
+    });
+});
         // next number — no leading zeros, starts at 1
         return `${SYSTEM_PREFIX}${maxSeq + 1}`;
     }
@@ -743,13 +851,14 @@ document.addEventListener('DOMContentLoaded', () => {
      * student ID and guardian name.
      */
     function studentMatchesSearch(s, rawQuery) {
-        const query = (rawQuery || '').toLowerCase().trim();
-        if (!query) return true;
+         const query = (rawQuery || '').toLowerCase().trim();
+    if (!query) return true;
 
-        const name     = (s.fullName || '').toLowerCase();
-        const guardian = (s.guardianName || '').toLowerCase();
-        const regNo    = (s.regNo || '').toLowerCase();
-        const id       = (s.id || '').toLowerCase();
+       const name     = (s.fullName || '').toLowerCase();
+    const guardian = (s.guardianName || '').toLowerCase();
+    // FIX: Force to string before calling toLowerCase
+    const regNo    = String(s.regNo || '').toLowerCase(); 
+    const id       = String(s.id || '').toLowerCase();
 
         if (query.includes('~')) {
             const [namePartRaw, fatherPartRaw] = query.split('~');
@@ -776,8 +885,18 @@ document.addEventListener('DOMContentLoaded', () => {
         ) || null;
     }
 
-    function getDatabase()    { return JSON.parse(localStorage.getItem(DB_KEY) || '[]'); }
-    function saveDatabase(d)  { localStorage.setItem(DB_KEY, JSON.stringify(d)); }
+    function getDatabase() {
+        try {
+            return JSON.parse(localStorage.getItem(DB_KEY) || '[]');
+        } catch (e) {
+            console.error('Failed to read student database from localStorage', e);
+            return [];
+        }
+    }
+    function saveDatabase(d)  {
+        localStorage.setItem(DB_KEY, JSON.stringify(d));
+        API_STUDENTS = d; // keep the in-memory mirror in sync too
+    }
 
     // ── ARCHIVE HELPERS ──────────────────────────────────────────────────────
     // A student with no `status` (or status "active") is on the live roster.
@@ -785,80 +904,178 @@ document.addEventListener('DOMContentLoaded', () => {
     // (dashboard counters, class cards, roll numbers, search tables) and only
     // surface inside the Archive Center.
     function isActiveStudent(s)     { return !s.status || s.status === 'active'; }
-    function getActiveDatabase()    { return getDatabase().filter(isActiveStudent); }
+    function getActiveDatabase() {
+        return getDatabase().filter(s => !s.status || s.status === 'active');
+    }
     function getGraduatedStudents() { return getDatabase().filter(s => s.status === 'graduated'); }
     function getDroppedStudents()   { return getDatabase().filter(s => s.status === 'dropped'); }
+
+    // ── BACKEND SYNC HELPERS ─────────────────────────────────────────────────
+    // Fields on the Java Student entity typed as Double. Form inputs / FormData
+    // hand everything back as strings, so these need coercing before they're
+    // sent to Spring, or Jackson throws a 400 (can't map "4500" (String) -> Double).
+    const NUMERIC_FIELDS = [
+        'standardFee', 'admissionFee', 'tuitionDiscount',
+        'transportDiscount', 'siblingDiscount', 'transportFee', 'netPayable'
+    ];
+
+    /**
+     * Build a payload safe to POST to the Spring Boot API.
+     * - Drops the frontend's `id` field. In the browser `id` is a regNo/sibling
+     *   group string (e.g. "PSC_1" or "003") used for local lookups, but the
+     *   Java Student entity's `id` is an auto-generated Long primary key —
+     *   sending the string would fail deserialization. The backend already
+     *   re-associates the correct row using `regNo` (see StudentController).
+     * - Coerces numeric-looking strings into real numbers for the Double fields.
+     */
+    function toApiPayload(studentData) {
+        const payload = Object.assign({}, studentData);
+        delete payload.id;
+        NUMERIC_FIELDS.forEach(f => {
+            if (payload[f] !== undefined && payload[f] !== null && payload[f] !== '') {
+                const n = parseFloat(payload[f]);
+                payload[f] = isNaN(n) ? 0 : n;
+            }
+        });
+        return payload;
+    }
+
+    /** Thin fetch() wrapper that throws a readable error on non-2xx responses. */
+    async function apiRequest(method, url, body) {
+        const res = await fetch(url, {
+            method,
+            headers: { 'Content-Type': 'application/json' },
+            body: body !== undefined ? JSON.stringify(body) : undefined
+        });
+        if (!res.ok) {
+            const text = await res.text().catch(() => '');
+            throw new Error(`${method} ${url} -> ${res.status} ${text}`);
+        }
+        const contentType = res.headers.get('content-type') || '';
+        return contentType.includes('application/json') ? res.json() : null;
+    }
+
+    /** Save (create or update) a student in MySQL. Returns the row Spring saved. */
+    function apiSaveStudent(studentData) {
+        return apiRequest('POST', API_BASE, toApiPayload(studentData));
+    }
+
+    /** Remove a student on the backend (StudentController does a soft delete — status -> "dropped"). */
+    function apiDeleteStudent(regNo) {
+        return apiRequest('DELETE', `${API_BASE}/${encodeURIComponent(regNo)}`);
+    }
+
+    /**
+     * Pull the current roster from MySQL on page load and refresh localStorage
+     * so every view (dashboard counters, tables, archive) reflects the database
+     * instead of whatever was last cached in the browser.
+     *
+     * Server rows are merged ON TOP OF the local cache (matched by regNo) so
+     * frontend-only bookkeeping the Student entity doesn't persist yet
+     * (isSibling / siblingGroupId / hasSiblings / booksFee / booksDiscount /
+     * annualFundEnabled) isn't wiped out every time this runs. If you want
+     * those to be fully server-backed too, add matching columns to Student.java.
+     */
+    async function syncWithBackend() {
+        try {
+            const serverStudents = await apiRequest('GET', API_BASE);
+            if (!Array.isArray(serverStudents)) return;
+
+            const local        = getDatabase();
+            const localByRegNo = new Map(local.map(s => [s.regNo, s]));
+            const merged        = serverStudents.map(srv =>
+                Object.assign({}, localByRegNo.get(srv.regNo) || {}, srv)
+            );
+
+            saveDatabase(merged);
+            updateDashboardStats();
+            if (typeof renderStudentTable === 'function') renderStudentTable();
+            if (typeof renderViewOnlyTable === 'function') renderViewOnlyTable();
+        } catch (err) {
+            // Backend not reachable (e.g. Spring Boot not running) — keep working
+            // off the local cache instead of breaking the page.
+            console.warn('syncWithBackend: could not reach the server, using local cache.', err.message);
+        }
+    }
 
     // ── FORM SUBMISSION ──────────────────────────────────────────────────────
 
     if (admissionForm) {
-        admissionForm.onsubmit = function(e) {
-            e.preventDefault();
+    admissionForm.onsubmit = async function(e) {
+        e.preventDefault();
 
-            const db         = getDatabase();
-            const formData   = new FormData(admissionForm);
-            const studentData= Object.fromEntries(formData);
+        const db         = getDatabase();
+        const formData   = new FormData(admissionForm);
+        const studentData= Object.fromEntries(formData);
 
-            // Strip the hidden _editRegNo field — it is a UI-only sentinel
-            // and must never appear as a data field in the student record
-            delete studentData['_editRegNo'];
-
-            studentData.photo      = previewImg.src;
-            studentData.age        = ageInput.value;
-            studentData.netPayable = netTotalInput.value;
-            studentData.rollNo     = rollNoInput.value;
-
-            const existingId = editIdHidden.value.trim();
-
-            if (existingId) {
-    // ── UPDATE MODE ──────────────────────────────────────────────
-    const index = db.findIndex(s => s.regNo === existingId);
-    
-    if (index !== -1) {
-        // Preserve system fields that aren't in the form
-        const originalData = db[index];
+        // Standardize properties
+        delete studentData['_editRegNo'];
+        studentData.photo      = previewImg.src;
+        studentData.age        = ageInput.value;
+        studentData.netPayable = netTotalInput.value;
+        studentData.rollNo     = rollNoInput.value;
         
-        // Merge new data over old data
-        db[index] = { 
-            ...originalData, 
-            ...studentData,
-            regNo: originalData.regNo, // Ensure ID never changes
-            id: originalData.id,       // Ensure Group ID is preserved
-            siblingGroupId: originalData.siblingGroupId 
-        };
-
-        // If they are a sibling, refresh the text labels for the whole family
-        if (db[index].siblingGroupId) {
-            refreshSiblingOfStrings(db, db[index].siblingGroupId);
+        // CRITICAL FIX: Ensure new students are marked as active
+        if (!studentData.status) {
+            studentData.status = 'active';
         }
 
-        saveDatabase(db);
-        showToast("Update Successful", `Record for ${studentData.fullName} updated.`, "info");
-        closeModal('student-modal');
-        updateDashboardStats();
-        renderStudentTable();
-    }
-       } else {
-                // ── CREATE MODE ──────────────────────────────────────────────
-                const guardianMatch = findGuardianMatch(studentData, db);
+        const existingId = editIdHidden.value.trim();
 
-                if (guardianMatch) {
-                    showSiblingDialog(guardianMatch.fullName, studentData, db, guardianMatch);
-                } else {
-                    // Independent student — regNo = id = PREFIX_X
-                    const regNo       = resolveFreshRegNo(db, admissionForm.dataset.pendingRegNo);
-                    studentData.regNo = regNo;
-                    studentData.id    = regNo;
-                    db.push(studentData);
-                    saveDatabase(db);
-                    showToast("Admission Complete", `${studentData.fullName} registered successfully.`, "success");
-                    closeModal('student-modal');
-                    updateDashboardStats();
-                    renderStudentTable();
+        if (existingId) {
+            // UPDATING
+            const index = db.findIndex(s => s.regNo === existingId || s.id === existingId);
+            if (index === -1) {
+                showToast("Error", "Could not find student.", "danger");
+                return;
+            }
+            db[index] = Object.assign({}, db[index], studentData);
+            saveDatabase(db);
+            showToast("Updated", "Record updated successfully", "info");
+            closeModal('student-modal');
+
+            // Push the update to MySQL. StudentController matches on regNo and
+            // reuses the existing row's primary key, so this is a true UPDATE
+            // rather than a duplicate insert.
+            try {
+                const saved = await apiSaveStudent(db[index]);
+                if (saved) db[index] = Object.assign({}, db[index], saved, { id: db[index].id });
+                saveDatabase(db);
+            } catch (err) {
+                console.error('Backend sync failed (update):', err);
+                showToast("Offline", "Saved locally — couldn't reach the server.", "danger");
+            }
+        } else {
+            // NEW ADMISSION
+            const matchedStudent = findGuardianMatch(studentData, db);
+            if (matchedStudent) {
+                showSiblingDialog(matchedStudent.fullName, studentData, db, matchedStudent);
+            } else {
+                const regNo = resolveFreshRegNo(db, admissionForm.dataset.pendingRegNo);
+                studentData.regNo = regNo;
+                studentData.id    = regNo;
+                
+                db.push(studentData);
+                saveDatabase(db);
+                showToast("Admission Complete", `${studentData.fullName} registered.`, "success");
+                closeModal('student-modal');
+                showAdmissionPrintPrompt(studentData);
+
+                try {
+                    await apiSaveStudent(studentData);
+                } catch (err) {
+                    console.error('Backend sync failed (new admission):', err);
+                    showToast("Offline", "Saved locally — couldn't reach the server.", "danger");
                 }
             }
-        };
-    }
+        }
+        
+        // REFRESH ALL VIEWS
+        updateDashboardStats();
+        if (typeof renderStudentTable === 'function') renderStudentTable();
+        if (typeof renderViewOnlyTable === 'function') renderViewOnlyTable();
+    };
+}
 
     /**
      * Sibling confirmation dialog
@@ -899,7 +1116,7 @@ document.addEventListener('DOMContentLoaded', () => {
         document.body.appendChild(overlay);
 
         // ── YES: register as sibling ─────────────────────────────────────────
-        document.getElementById('sibling-yes-btn').addEventListener('click', () => {
+        document.getElementById('sibling-yes-btn').addEventListener('click', async () => {
 
             // 1. Get or create the shared sibling-group id (00X)
             const groupId = getOrCreateSiblingGroupId(matchedStudent);
@@ -947,12 +1164,20 @@ document.addEventListener('DOMContentLoaded', () => {
             overlay.remove();
             showToast("Sibling Registered", `${studentData.fullName} linked as sibling. Group ID: ${groupId}`, "success");
             closeModal('student-modal');
+            showAdmissionPrintPrompt(studentData);
             updateDashboardStats();
             renderStudentTable();
+
+            try {
+                await apiSaveStudent(studentData);
+            } catch (err) {
+                console.error('Backend sync failed (sibling registration):', err);
+                showToast("Offline", "Saved locally — couldn't reach the server.", "danger");
+            }
         });
 
         // ── NO: register independently ───────────────────────────────────────
-        document.getElementById('sibling-no-btn').addEventListener('click', () => {
+        document.getElementById('sibling-no-btn').addEventListener('click', async () => {
             const regNo       = resolveFreshRegNo(db, admissionForm.dataset.pendingRegNo);
             studentData.regNo = regNo;
             studentData.id    = regNo;
@@ -961,10 +1186,251 @@ document.addEventListener('DOMContentLoaded', () => {
             overlay.remove();
             showToast("Admission Complete", `${studentData.fullName} registered independently.`, "success");
             closeModal('student-modal');
+            showAdmissionPrintPrompt(studentData);
             updateDashboardStats();
             renderStudentTable();
+
+            try {
+                await apiSaveStudent(studentData);
+            } catch (err) {
+                console.error('Backend sync failed (independent registration):', err);
+                showToast("Offline", "Saved locally — couldn't reach the server.", "danger");
+            }
         });
     }
+
+    /**
+     * "Finalize Admission" follow-up — ask whether to print the Admission Form.
+     * Shown right after a NEW student is successfully registered.
+     */
+    function showAdmissionPrintPrompt(studentData) {
+        const existing = document.getElementById('admission-print-dialog-overlay');
+        if (existing) existing.remove();
+
+        const overlay = document.createElement('div');
+        overlay.id = 'admission-print-dialog-overlay';
+        overlay.innerHTML = `
+            <div class="admission-print-dialog-box">
+                <div class="admission-print-dialog-icon">
+                    <i class="fas fa-print"></i>
+                </div>
+                <h3 class="admission-print-dialog-title">Admission Finalized</h3>
+                <p class="admission-print-dialog-body">
+                    Would you like to print the Admission Form for
+                    <strong>${escapeHtmlForPrint(studentData.fullName || 'this student')}</strong>?
+                </p>
+                <div class="admission-print-dialog-actions">
+                    <button id="admission-print-yes-btn" class="admission-print-btn-yes">
+                        <i class="fas fa-print"></i> Print Admission Form
+                    </button>
+                    <button id="admission-print-no-btn" class="admission-print-btn-no">
+                        <i class="fas fa-times"></i> Close / Not Now
+                    </button>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(overlay);
+
+        document.getElementById('admission-print-yes-btn').addEventListener('click', () => {
+            printAdmissionForm(studentData);
+            overlay.remove();
+        });
+
+        document.getElementById('admission-print-no-btn').addEventListener('click', () => {
+            overlay.remove();
+        });
+
+        // Allow closing by clicking the dark backdrop
+        overlay.addEventListener('click', (e) => {
+            if (e.target === overlay) overlay.remove();
+        });
+    }
+
+    /** Minimal HTML-escaping helper used when injecting student data into markup. */
+    function escapeHtmlForPrint(value) {
+        return String(value == null ? '' : value)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    }
+
+    /**
+     * Build and open a print-ready Admission Form for the freshly-registered student.
+     * Includes all text fields captured during admission + the student's photo.
+     * Deliberately EXCLUDES the uploaded certificate / B-Form document image.
+     */
+    function printAdmissionForm(studentData) {
+    const esc = escapeHtmlForPrint;
+
+    // System Data
+    const schoolEl = document.querySelector('.school-name');
+    const schoolName = schoolEl ? schoolEl.textContent.trim() : 'ST. LAWRENCE INTERNATIONAL SCHOOL';
+    const academicSession = getCurrentAcademicSession(); // Uses the helper in your JS
+    const printedOn = new Date().toLocaleDateString('en-US', {
+        day: '2-digit', month: 'short', year: 'numeric'
+    }) + '  ·  ' + new Date().toLocaleTimeString('en-US', {
+        hour: '2-digit', minute: '2-digit', hour12: true
+    });
+
+    // Student Data Mapping
+    const photoSrc = (studentData.photo && !/placeholder\.com/i.test(studentData.photo)) ? studentData.photo : '';
+    const registrationNo = studentData.regNo || studentData.id || '—';
+    const dobISO = studentData.dob || '';
+    const dateOfBirth = studentData.dob ? new Date(studentData.dob).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
+    const admissionDate = studentData.admissionDate ? new Date(studentData.admissionDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
+
+    const printWin = window.open('', '_blank', 'width=1000,height=1000');
+    
+    printWin.document.write(`
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Admission Form — ${esc(studentData.fullName)}</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Roboto+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --ink-900:#0f172a; --ink-700:#1e293b; --ink-500:#475569; --ink-400:#64748b;
+            --line:#e2e8f0; --line-strong:#cbd5e1; --surface:#ffffff; --surface-tint:#f8fafc;
+            --accent:#1e3a5f; --gold:#a97c1f;
+        }
+        * { box-sizing:border-box; margin:0; padding:0; }
+        body { font-family:'Inter', sans-serif; color:var(--ink-700); background: #fff; }
+        .page { width:210mm; min-height:297mm; padding:11mm 12mm; position:relative; margin: auto; }
+        .doc-header { display:flex; align-items:flex-start; justify-content:space-between; padding-bottom:6px; }
+        .crest { width:44px; height:44px; border-radius:50%; border:1.6px solid var(--gold); display:flex; align-items:center; justify-content:center; color:var(--gold); font-size:9px; font-weight:600; background:radial-gradient(circle at 35% 30%, #fffdf6, #f3ede0 70%); }
+        .school-name-title { font-size:19px; font-weight:800; color:var(--ink-900); }
+        .school-sub { font-size:9px; color:var(--ink-400); text-transform:uppercase; margin-top:2px; }
+        .meta-badge { text-align:right; border:1px solid var(--line); padding:5px 10px; border-radius:4px; background:var(--surface-tint); }
+        .meta-label { font-size:7.5px; text-transform:uppercase; color:var(--ink-400); font-weight:600; display:block; }
+        .meta-value { font-family:'Roboto Mono', monospace; font-size:10px; }
+        .title-bar { margin-top:10px; padding:9px 0; border-top:2px solid var(--ink-900); border-bottom:1px solid var(--line-strong); text-align:center; }
+        .title-bar h1 { font-size:16px; letter-spacing:2.5px; font-weight:800; text-transform:uppercase; }
+        .section { margin-top:13px; }
+        .section-label { display:flex; align-items:center; gap:8px; margin-bottom:7px; }
+        .section-label .num { width:17px; height:17px; border-radius:3px; background:var(--ink-900); color:#fff; font-size:9.5px; font-weight:700; display:flex; align-items:center; justify-content:center; }
+        .section-label .txt { font-size:10px; font-weight:700; letter-spacing:1.2px; text-transform:uppercase; }
+        .section-label::after { content:""; flex:1; height:1px; background:var(--line); }
+        .profile-grid { display:grid; grid-template-columns:1fr 120px; gap:16px; }
+        .field-grid { display:grid; grid-template-columns:1fr 1fr 1fr; column-gap:16px; row-gap:9px; }
+        .field { display:flex; align-items:baseline; gap:5px; border-bottom:1px solid var(--line-strong); padding-bottom:2.5px; }
+        .f-label { font-size:7.3px; text-transform:uppercase; color:var(--ink-400); font-weight:700; white-space:nowrap; }
+        .f-value { font-size:10.5px; font-weight:500; color:var(--ink-900); }
+        .photo-box { width:120px; height:152px; border:1.4px dashed var(--line-strong); border-radius:3px; background:var(--surface-tint); display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; color:var(--ink-400); }
+        .panel { border:1px solid var(--line); border-radius:4px; padding:10px 14px; background: #fff; }
+        .panel-title { font-size:8.3px; font-weight:700; color:var(--accent); margin-bottom:8px; text-transform:uppercase; }
+        .row-3 { display:grid; grid-template-columns:repeat(3, 1fr); gap:16px; background:var(--surface-tint); border:1px solid var(--line); padding:9px 14px; border-radius:4px; }
+        .declaration { margin-top:14px; padding:12px 15px; border-left:3px solid var(--accent); background:var(--surface-tint); font-size:9px; font-style:italic; }
+        .doc-footer { margin-top:auto; padding-top:20px; }
+        .sign-row { display:grid; grid-template-columns:1fr 1fr; gap:40px; margin-top:30px; }
+        .sign-block { text-align:center; }
+        .sign-line { border-bottom:1.4px dotted var(--ink-400); height:30px; }
+        .sign-label { font-size:8.5px; font-weight:600; text-transform:uppercase; margin-top:5px; }
+        @media print { .page { width:100%; min-height:0; padding:0; margin:0; } }
+    </style>
+</head>
+<body>
+    <div class="page">
+        <header class="doc-header">
+            <div style="display:flex; gap:10px; align-items:center;">
+                <div class="crest">CREST</div>
+                <div>
+                    <div class="school-name-title">${esc(schoolName)}</div>
+                    <div class="school-sub">Official Admission Record</div>
+                </div>
+            </div>
+            <div class="meta-badge">
+                <span class="meta-label">Printed On</span>
+                <span class="meta-value">${printedOn}</span>
+            </div>
+        </header>
+
+        <div class="title-bar">
+            <h1>Official Admission Form</h1>
+            <div style="font-size:8.5px; text-transform:uppercase; color:var(--ink-400);">Academic Session ${academicSession}</div>
+        </div>
+
+        <section class="section">
+            <div class="section-label"><span class="num">1</span><span class="txt">Student Profile</span></div>
+            <div class="profile-grid">
+                <div class="field-grid">
+                    <div class="field" style="grid-column: span 3;">
+                        <span class="f-label">Full Name:</span>
+                        <span class="f-value">${esc(studentData.fullName)}</span>
+                    </div>
+                    <div class="field" style="grid-column: span 2;">
+                        <span class="f-label">Reg No / B-Form:</span>
+                        <span class="f-value" style="font-family:monospace;">${esc(registrationNo)} | ${esc(studentData.studentBform)}</span>
+                    </div>
+                    <div class="field">
+                        <span class="f-label">Gender:</span>
+                        <span class="f-value">${esc(studentData.gender)}</span>
+                    </div>
+                    <div class="field">
+                        <span class="f-label">Class / Section:</span>
+                        <span class="f-value">${esc(studentData.studentClass)} - ${esc(studentData.section || 'N/A')}</span>
+                    </div>
+                    <div class="field">
+                        <span class="f-label">Admission Date:</span>
+                        <span class="f-value">${admissionDate}</span>
+                    </div>
+                    <div class="field">
+                        <span class="f-label">DOB / Age:</span>
+                        <span class="f-value">${dateOfBirth} | ${esc(studentData.age)}</span>
+                    </div>
+                </div>
+                <div class="photo-box">
+                    ${photoSrc ? `<img src="${photoSrc}" style="width:100%; height:100%; object-fit:cover;">` : '<div style="font-size:8px;">AFFIX PHOTO</div>'}
+                </div>
+            </div>
+        </section>
+
+        <section class="section">
+            <div class="section-label"><span class="num">2</span><span class="txt">Academic History</span></div>
+            <div class="row-3">
+                <div class="field"><span class="f-label">Previous School:</span><span class="f-value">${esc(studentData.previousSchool || 'None')}</span></div>
+                <div class="field"><span class="f-label">Last Class:</span><span class="f-value">${esc(studentData.previousClass || 'N/A')}</span></div>
+                <div class="field"><span class="f-label">Roll No:</span><span class="f-value">${esc(studentData.rollNo)}</span></div>
+            </div>
+        </section>
+
+        <section class="section">
+            <div class="section-label"><span class="num">3</span><span class="txt">Guardian & Contact</span></div>
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px;">
+                <div class="panel">
+                    <div class="panel-title">Guardian Details</div>
+                    <div class="field" style="margin-bottom:8px;"><span class="f-label">Name:</span><span class="f-value">${esc(studentData.guardianName)}</span></div>
+                    <div class="field" style="margin-bottom:8px;"><span class="f-label">Relation:</span><span class="f-value">${esc(studentData.guardianRole)}</span></div>
+                    <div class="field"><span class="f-label">CNIC:</span><span class="f-value">${esc(studentData.guardianCnic)}</span></div>
+                </div>
+                <div class="panel">
+                    <div class="panel-title">Contact Information</div>
+                    <div class="field" style="margin-bottom:8px;"><span class="f-label">Phones:</span><span class="f-value">${esc(studentData.phone1)} / ${esc(studentData.phone2)}</span></div>
+                    <div class="field" style="margin-bottom:8px;"><span class="f-label">Address:</span><span class="f-value" style="font-size:9px;">${esc(studentData.permanentAddress)}</span></div>
+                </div>
+            </div>
+        </section>
+
+        <section class="declaration">
+            <div style="font-weight:700; color:var(--accent); text-transform:uppercase; margin-bottom:5px; font-size:8.3px;">Guardian Declaration</div>
+            I, ${esc(studentData.guardianName)}, do hereby declare that the information provided is correct. I agree to abide by all school rules and regulations.
+        </section>
+
+        <footer class="doc-footer">
+            <div class="sign-row">
+                <div class="sign-block"><div class="sign-line"></div><div class="sign-label">Guardian Signature</div></div>
+                <div class="sign-block"><div class="sign-line"></div><div class="sign-label">Principal Stamp</div></div>
+            </div>
+        </footer>
+    </div>
+</body>
+</html>`);
+    printWin.document.close();
+    printWin.focus();
+    setTimeout(() => { printWin.print(); printWin.close(); }, 800);
+}
 
     // ── 7. TABLE RENDERING ───────────────────────────────────────────────────
 
@@ -1233,126 +1699,122 @@ document.addEventListener('DOMContentLoaded', () => {
 
     /** Back button: sections -> classes */
     window.updBackToClasses = function() {
-        updActiveClass   = null;
-        updActiveSection = null;
-        updRenderClassCards();
-        updShowStage('classes');
-    };
+    updActiveClass = null;
+    updActiveSection = null;
+    updOrphanFilterActive = false; // Reset filter
+    const updOrphanBtn = document.getElementById('upd-orphan-filter-btn');
+    if (updOrphanBtn) {
+        updOrphanBtn.classList.remove('active-filter');
+        updOrphanBtn.setAttribute('aria-pressed', 'false');
+        updOrphanBtn.innerHTML = '<i class="fas fa-child"></i> Show Orphans Only';
+    }
+    updRenderClassCards();
+    updShowStage('classes');
+};
 
     window.renderStudentTable = function() {
-        const db    = getActiveDatabase();
-        const tbody = document.getElementById('student-list-tbody');
-        if (!tbody) return;
+    const db = getActiveDatabase(); 
+    const tbody = document.getElementById('student-list-tbody');
+    if (!tbody) return;
 
-        tbody.innerHTML = "";
+    tbody.innerHTML = "";
 
-        // Card flow sets updActiveClass to a real class name, or to ALL_STUDENTS_KEY
-        // for the "All Students" master card (which applies no class filter).
-        const useTabFilter = (updActiveClass !== null && updActiveClass !== ALL_STUDENTS_KEY);
+    // Determine filter context
+    const useTabFilter = (updActiveClass !== null && updActiveClass !== ALL_STUDENTS_KEY);
+    const qUnified = (document.getElementById('upd-search-input') ? document.getElementById('upd-search-input').value : '').toLowerCase().trim();
 
-        // Unified search bar (new)
-        const qUnified = (document.getElementById('upd-search-input')
-            ? document.getElementById('upd-search-input').value : '').toLowerCase().trim();
+    let filtered = db;
 
-        // Legacy hidden inputs (kept for backward compat, now unused in normal flow)
-        const qName   = useTabFilter ? '' : (document.getElementById('search-name')   ? document.getElementById('search-name').value   : '').toLowerCase().trim();
-        const qFather = useTabFilter ? '' : (document.getElementById('search-father') ? document.getElementById('search-father').value : '').toLowerCase().trim();
-        const qClass  = useTabFilter ? '' : (document.getElementById('search-class')  ? document.getElementById('search-class').value  : '').toLowerCase().trim();
-        const qId     = useTabFilter ? '' : (document.getElementById('search-id')     ? document.getElementById('search-id').value     : '').toLowerCase().trim();
+    // 1. Filter by Class
+    if (useTabFilter && updActiveClass) {
+        filtered = filtered.filter(s => s.studentClass === updActiveClass);
+    }
 
-        let filtered = db;
+    // 2. Filter by Section
+    if (useTabFilter && updActiveSection && updActiveSection !== 'ALL') {
+        filtered = filtered.filter(s => s.section === updActiveSection);
+    }
 
-        // Apply class filter (skipped entirely for "All Students")
-        if (useTabFilter && updActiveClass) {
-            filtered = filtered.filter(s => s.studentClass === updActiveClass);
-        }
+    // 3. Filter by Orphan Status (New Feature)
+    if (updOrphanFilterActive) {
+        filtered = filtered.filter(s => s.orphanStatus === 'Orphan');
+    }
 
-        // Apply section filter
-        if (useTabFilter && updActiveSection && updActiveSection !== 'ALL') {
-            filtered = filtered.filter(s => s.section === updActiveSection);
-        }
+    // 4. Filter by Search Query (Name, ID, Guardian)
+    if (qUnified) {
+        filtered = filtered.filter(s => studentMatchesSearch(s, qUnified));
+    }
 
-        // Apply legacy search filters
-        if (!useTabFilter) {
-            filtered = filtered.filter(s => {
-                const matchName   = !qName   || (s.fullName     || "").toLowerCase().includes(qName);
-                const matchFather = !qFather || (s.guardianName || "").toLowerCase().includes(qFather);
-                const matchClass  = !qClass  || (s.studentClass || "").toLowerCase().includes(qClass);
-                const matchId     = !qId     || (s.regNo || "").toLowerCase().includes(qId) || (s.id || "").toLowerCase().includes(qId);
-                return matchName && matchFather && matchClass && matchId;
-            });
-        }
+    // 5. Sort by Roll Number
+    filtered.sort((a, b) => (parseInt(a.rollNo) || 0) - (parseInt(b.rollNo) || 0));
 
-        // Apply unified search (name, ID, guardian — supports "Name~Father" tilde search)
-        if (qUnified) {
-            filtered = filtered.filter(s => studentMatchesSearch(s, qUnified));
-        }
+    // UI Adjustments for Headers
+    const showClassCol = (updActiveClass === ALL_STUDENTS_KEY);
+    const updClassColHeader = document.getElementById('upd-class-col-header');
+    if (updClassColHeader) updClassColHeader.textContent = showClassCol ? 'Class' : 'Section';
 
-        // Sort by roll number
-        filtered.sort((a, b) => (parseInt(a.rollNo) || 0) - (parseInt(b.rollNo) || 0));
+    const promoteMode = document.body.classList.contains('promote-mode-active');
 
-        // "All Students" card: the class isn't obvious from context anymore, so swap the
-        // Section column for a combined Class + Section value (e.g. "Grade 10 A") instead.
-        // Any specific class/section view already shows the class in the page title, so it
-        // keeps the plain Section column as before.
-        const showClassCol = (updActiveClass === ALL_STUDENTS_KEY);
-        const updClassColHeader = document.getElementById('upd-class-col-header');
-        if (updClassColHeader) updClassColHeader.textContent = showClassCol ? 'Class' : 'Section';
+    // Handle Empty State
+    if (filtered.length === 0) {
+        const colCount = promoteMode ? 11 : 10;
+        const emptyMsg = updOrphanFilterActive
+            ? '<i class="fas fa-child" style="font-size:22px;display:block;margin-bottom:10px;opacity:0.6;"></i>No orphan records found.'
+            : 'No matching records found.';
+        tbody.innerHTML = `<tr><td colspan="${colCount}" style="text-align:center;padding:50px;color:#94a3b8;">${emptyMsg}</td></tr>`;
+        return;
+    }
 
-        const promoteMode = document.body.classList.contains('promote-mode-active');
+    // Render Rows
+    filtered.forEach((s, idx) => {
+        const displayId = s.regNo || s.id;
+        const siblingTag = (s.isSibling && s.siblingOf)
+            ? `<br><span class="sibling-tag"><i class="fas fa-user-friends"></i> Sibling of ${s.siblingOf}</span>`
+            : '';
 
-        if (filtered.length === 0) {
-            const colCount = promoteMode ? 11 : 10;
-            tbody.innerHTML = `<tr><td colspan="${colCount}" style="text-align:center;padding:50px;color:#94a3b8;">No matching records found in this class/section.</td></tr>`;
-            return;
-        }
+        // Checkbox for Promotion Mode
+        const checkboxCell = promoteMode
+            ? `<td><input type="checkbox" class="promote-checkbox" data-regno="${s.regNo}" ${s.promoted ? '' : 'checked'} style="width:18px;height:18px;"></td>`
+            : '';
 
-        filtered.forEach((s, idx) => {
-            // ── MAIN TABLE always shows PREFIX_X number ──
-            const displayId = s.regNo || s.id;
+        // Status Badge for Promotion Mode
+        const statusCell = promoteMode
+            ? `<td>${s.promoted
+                    ? '<span class="promotion-status-badge promoted"><i class="fas fa-check-circle"></i> Promoted</span>'
+                    : '<span class="promotion-status-badge pending"><i class="fas fa-hourglass-half"></i> Not Promoted</span>'}</td>`
+            : '';
 
-            // ── "Sibling of …" tag under the name ──
-            const siblingTag = (s.isSibling && s.siblingOf)
-                ? `<br><span class="sibling-tag"><i class="fas fa-user-friends"></i> Sibling of ${s.siblingOf}</span>`
-                : '';
+        const classSectionCell = showClassCol
+            ? `${s.studentClass || '—'}${s.section ? ' ' + s.section : ''}`
+            : (s.section || '—');
 
-            const checkboxCell = promoteMode
-                ? `<td><input type="checkbox" class="promote-checkbox" data-regno="${s.regNo}" ${s.promoted ? '' : 'checked'} style="width:18px;height:18px;"></td>`
-                : '';
-
-            const statusCell = promoteMode
-                ? `<td>${s.promoted
-                        ? '<span class="promotion-status-badge promoted"><i class="fas fa-check-circle"></i> Promoted</span>'
-                        : '<span class="promotion-status-badge pending"><i class="fas fa-hourglass-half"></i> Not Promoted</span>'}</td>`
-                : '';
-
-            const classSectionCell = showClassCol
-                ? `${s.studentClass || '—'}${s.section ? ' ' + s.section : ''}`
-                : (s.section || '—');
-
-            const row = `
-                <tr>
-                    ${checkboxCell}
-                    <td class="msc-sr-cell">${idx + 1}</td>
-                    <td><span class="hrk-id-badge">${displayId}</span></td>
-                    <td>${s.rollNo || '—'}</td>
-                    <td><strong>${s.fullName}</strong>${siblingTag}</td>
-                    <td>${s.guardianName}</td>
-                    <td><span class="class-chip">${classSectionCell}</span></td>
-                    <td>${s.gender}</td>
-                    ${statusCell}
-                    <td>
-                        <div class="action-btn-group">
-                            <button class="btn-icon view"   onclick="viewFullProfile('${s.regNo}')" title="View Profile"><i class="fas fa-eye"></i></button>
-                            <button class="btn-icon edit"   onclick="editStudentInfo('${s.regNo}')" title="Edit Record"><i class="fas fa-user-edit"></i></button>
-                            <button class="btn-icon delete" onclick="deleteRecord('${s.regNo}')" title="Delete"><i class="fas fa-trash-alt"></i></button>
-                        </div>
-                    </td>
-                </tr>
-            `;
-            tbody.innerHTML += row;
-        });
-    };
+        const row = `
+            <tr class="${s.orphanStatus === 'Orphan' ? 'orphan-highlight' : ''}">
+                ${checkboxCell}
+                <td class="msc-sr-cell">${idx + 1}</td>
+                <td><span class="hrk-id-badge">${displayId}</span></td>
+                <td>${s.rollNo || '—'}</td>
+                <td>
+                    <strong>${s.fullName}</strong>
+                    ${s.orphanStatus === 'Orphan' ? ' <i class="fas fa-heart" style="color:#ef4444; font-size:10px;" title="Orphan"></i>' : ''}
+                    ${siblingTag}
+                </td>
+                <td>${s.guardianName}</td>
+                <td><span class="class-chip">${classSectionCell}</span></td>
+                <td>${s.gender}</td>
+                ${statusCell}
+                <td>
+                    <div class="action-btn-group">
+                        <button class="btn-icon view" onclick="viewFullProfile('${s.regNo}')" title="View Profile"><i class="fas fa-eye"></i></button>
+                        <button class="btn-icon edit" onclick="editStudentInfo('${s.regNo}')" title="Edit Record"><i class="fas fa-user-edit"></i></button>
+                        <button class="btn-icon delete" onclick="deleteRecord('${s.regNo}')" title="Delete"><i class="fas fa-trash-alt"></i></button>
+                    </div>
+                </td>
+            </tr>
+        `;
+        tbody.innerHTML += row;
+    });
+};
 
 
     // ── VIEW-ONLY TABLE (read-only directory with class/section tabs) ─────────
@@ -1501,81 +1963,102 @@ document.addEventListener('DOMContentLoaded', () => {
 
     /** Back button: sections -> classes */
     window.voBackToClasses = function() {
-        voActiveClass   = null;
-        voActiveSection = null;
-        voRenderClassCards();
-        voShowStage('classes');
-    };
+    voActiveClass = null;
+    voActiveSection = null;
+    voOrphanFilterActive = false; // Reset filter
+    const voOrphanBtn = document.getElementById('vo-orphan-filter-btn');
+    if (voOrphanBtn) {
+        voOrphanBtn.classList.remove('active-filter');
+        voOrphanBtn.setAttribute('aria-pressed', 'false');
+        voOrphanBtn.innerHTML = '<i class="fas fa-child"></i> Show Orphans Only';
+    }
+    voRenderClassCards();
+    voShowStage('classes');
+};
 
     window.renderViewOnlyTable = function() {
-        try { voRefreshTeacherBadge(); } catch(e) {}
-        const db    = getActiveDatabase();
-        const tbody = document.getElementById('vo-student-tbody');
-        if (!tbody) return;
+    // Refresh the teacher badge if logic exists
+    try { if(typeof voRefreshTeacherBadge === 'function') voRefreshTeacherBadge(); } catch(e) {}
+    
+    const db = getActiveDatabase();
+    const tbody = document.getElementById('vo-student-tbody');
+    if (!tbody) return;
 
-        tbody.innerHTML = '';
+    tbody.innerHTML = '';
 
-        const qName = (document.getElementById('vo-search-name') ? document.getElementById('vo-search-name').value : '').toLowerCase().trim();
+    const qName = (document.getElementById('vo-search-name') ? document.getElementById('vo-search-name').value : '').toLowerCase().trim();
 
-        // "All Students" master card applies no class filter at all
-        let filtered = db;
-        if (voActiveClass && voActiveClass !== ALL_STUDENTS_KEY) {
-            filtered = filtered.filter(s => s.studentClass === voActiveClass);
+    let filtered = db;
 
-            // Then by active section (unless ALL)
-            if (voActiveSection && voActiveSection !== 'ALL') {
-                filtered = filtered.filter(s => s.section === voActiveSection);
-            }
+    // 1. Filter by Class
+    if (voActiveClass && voActiveClass !== ALL_STUDENTS_KEY) {
+        filtered = filtered.filter(s => s.studentClass === voActiveClass);
+
+        // 2. Filter by Section
+        if (voActiveSection && voActiveSection !== 'ALL') {
+            filtered = filtered.filter(s => s.section === voActiveSection);
         }
+    }
 
-        // Then by search query (name, reg no, guardian — supports "Name~Father" tilde search)
-        if (qName) {
-            filtered = filtered.filter(s => studentMatchesSearch(s, qName));
-        }
+    // 3. Filter by Orphan Status (New Feature)
+    if (voOrphanFilterActive) {
+        filtered = filtered.filter(s => s.orphanStatus === 'Orphan');
+    }
 
-        if (filtered.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:50px;color:#94a3b8;">No students found in this class/section.</td></tr>';
-            return;
-        }
+    // 4. Filter by Search Query
+    if (qName) {
+        filtered = filtered.filter(s => studentMatchesSearch(s, qName));
+    }
 
-        // Sort by roll number
-        filtered.sort((a, b) => (parseInt(a.rollNo) || 0) - (parseInt(b.rollNo) || 0));
+    // Handle Empty State
+    if (filtered.length === 0) {
+        const emptyMsg = voOrphanFilterActive
+            ? '<i class="fas fa-child" style="font-size:22px;display:block;margin-bottom:10px;opacity:0.6;"></i>No orphan records found.'
+            : 'No matching records found.';
+        tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;padding:50px;color:#94a3b8;">${emptyMsg}</td></tr>`;
+        return;
+    }
 
-        // "All Students" card: swap the Section column for a combined Class + Section value
-        // (e.g. "Grade 10 A") since the class isn't obvious from context there. Specific
-        // class/section views already show the class in the page title, so those keep the
-        // plain Section column as before.
-        const showClassCol = (voActiveClass === ALL_STUDENTS_KEY);
-        const voClassColHeader = document.getElementById('vo-class-col-header');
-        if (voClassColHeader) voClassColHeader.textContent = showClassCol ? 'Class' : 'Section';
+    // 5. Sort by Roll Number
+    filtered.sort((a, b) => (parseInt(a.rollNo) || 0) - (parseInt(b.rollNo) || 0));
 
-        filtered.forEach((s, idx) => {
-            const displayId  = s.regNo || s.id;
-            const siblingTag = (s.isSibling && s.siblingOf)
-                ? `<br><span class="sibling-tag"><i class="fas fa-user-friends"></i> Sibling of ${s.siblingOf}</span>`
-                : '';
-            const classSectionCell = showClassCol
-                ? `${s.studentClass || '—'}${s.section ? ' ' + s.section : ''}`
-                : (s.section || '—');
+    // UI Adjustments for Headers
+    const showClassCol = (voActiveClass === ALL_STUDENTS_KEY);
+    const voClassColHeader = document.getElementById('vo-class-col-header');
+    if (voClassColHeader) voClassColHeader.textContent = showClassCol ? 'Class' : 'Section';
 
-            tbody.innerHTML += `
-                <tr>
-                    <td class="msc-sr-cell">${idx + 1}</td>
-                    <td><span class="hrk-id-badge">${displayId}</span></td>
-                    <td>${s.rollNo || '—'}</td>
-                    <td><strong>${s.fullName}</strong>${siblingTag}</td>
-                    <td>${s.guardianName}</td>
-                    <td><span class="class-chip">${classSectionCell}</span></td>
-                    <td>${s.gender}</td>
-                    <td style="text-align:center;">
-                        <button class="btn-icon view" onclick="viewFullProfile('${s.regNo}')" title="View Profile">
-                            <i class="fas fa-eye"></i>
-                        </button>
-                    </td>
-                </tr>`;
-        });
-    };
+    // Render Rows
+    filtered.forEach((s, idx) => {
+        const displayId = s.regNo || s.id;
+        const siblingTag = (s.isSibling && s.siblingOf)
+            ? `<br><span class="sibling-tag"><i class="fas fa-user-friends"></i> Sibling of ${s.siblingOf}</span>`
+            : '';
+        
+        const classSectionCell = showClassCol
+            ? `${s.studentClass || '—'}${s.section ? ' ' + s.section : ''}`
+            : (s.section || '—');
 
+        tbody.innerHTML += `
+            <tr class="${s.orphanStatus === 'Orphan' ? 'orphan-highlight' : ''}">
+                <td class="msc-sr-cell">${idx + 1}</td>
+                <td><span class="hrk-id-badge">${displayId}</span></td>
+                <td>${s.rollNo || '—'}</td>
+                <td>
+                    <strong>${s.fullName}</strong>
+                    ${s.orphanStatus === 'Orphan' ? ' <i class="fas fa-heart" style="color:#ef4444; font-size:10px;" title="Orphan"></i>' : ''}
+                    ${siblingTag}
+                </td>
+                <td>${s.guardianName}</td>
+                <td><span class="class-chip">${classSectionCell}</span></td>
+                <td>${s.gender}</td>
+                <td style="text-align:center;">
+                    <button class="btn-icon view" onclick="viewFullProfile('${s.regNo}')" title="View Profile">
+                        <i class="fas fa-eye"></i>
+                    </button>
+                </td>
+            </tr>`;
+    });
+};
     // Wire view-only search to re-render
     const voSearchEl = document.getElementById('vo-search-name');
     if (voSearchEl) voSearchEl.addEventListener('input', renderViewOnlyTable);
@@ -1909,11 +2392,24 @@ document.addEventListener('DOMContentLoaded', () => {
         if (input) {
             if (input.type === 'checkbox') {
                 input.checked = (student[key] === 'on' || student[key] === true);
+            } else if (input.type === 'radio') {
+                // Radio groups share a name, so find the specific option that
+                // matches the stored value rather than setting .value on the
+                // first radio the querySelector happens to find.
+                const radios = admissionForm.querySelectorAll(`[name="${key}"]`);
+                radios.forEach(r => { r.checked = (r.value === student[key]); });
             } else {
                 input.value = student[key] ?? '';
             }
         }
     });
+
+    // Orphan Status defaults to "Not Orphan" for legacy records saved before
+    // this field existed (student.orphanStatus will be undefined for those).
+    if (!student.orphanStatus) {
+        const defaultOrphanRadio = admissionForm.querySelector('[name="orphanStatus"][value="Not Orphan"]');
+        if (defaultOrphanRadio) defaultOrphanRadio.checked = true;
+    }
 
     previewImg.src = student.photo || "https://via.placeholder.com/150?text=No+Photo";
     displayRegBadge.innerText = student.regNo;
@@ -1967,28 +2463,38 @@ document.addEventListener('DOMContentLoaded', () => {
 };
     // ── 9. DELETE STUDENT ────────────────────────────────────────────────────
 
-    window.deleteRecord = function(studentId) {
-        if (!confirm(`Remove this student from the active roster?\n\nThey will NOT be permanently deleted — the record moves to the "Dropped Out" archive in the Archive Center, where it can still be viewed anytime.`)) return;
+    window.deleteRecord = async function(studentId) {
+        if (!confirm("Are you sure you want to remove this student from the Database?")) return;
 
-        const db = getDatabase();
-        // Match against the ACTIVE roster first. This button only ever appears next to an
-        // active student's row, so if a duplicate regNo happens to exist on an already-dropped
-        // or graduated record, that stale duplicate must never be picked up instead of the
-        // real active student (this was causing the wrong name to show / wrong record to move).
-        let student = db.find(s => (s.regNo || s.id) === studentId && isActiveStudent(s));
-        if (!student) student = db.find(s => (s.regNo || s.id) === studentId); // fallback, shouldn't normally be needed
-        if (!student) return;
-
-        // Soft-delete: keep the record, just mark it dropped so it disappears
-        // from every active list and instead surfaces in the Archive Center.
-        student.status      = 'dropped';
-        student.droppedDate = new Date().toISOString().slice(0, 10);
-        student.droppedYear = new Date().getFullYear();
-
+        const db    = getDatabase();
+        const index = db.findIndex(s => s.regNo === studentId || s.id === studentId);
+        if (index === -1) {
+            showToast("Error", "Could not find that student to delete.", "danger");
+            return;
+        }
+        const regNo = db[index].regNo;
+        db.splice(index, 1);
         saveDatabase(db);
-        showToast("Student Archived", `${student.fullName} has been moved to the Dropped Out archive.`, "danger");
+
+        showToast("Success", "Student removed from the database", "success");
+        closeModal('student-modal');
         updateDashboardStats();
         renderStudentTable();
+        if (typeof renderViewOnlyTable === 'function') renderViewOnlyTable();
+
+        // NOTE: StudentController's DELETE endpoint is a SOFT delete — it sets
+        // status = "dropped" rather than removing the MySQL row. That's fine for
+        // the Archive Center's "dropped" list, but it means this record will
+        // still be pulled back down by syncWithBackend() (as status "dropped"),
+        // not truly erased from the database. If you want this button to
+        // permanently delete the row, add a hard-delete repository method and
+        // call studentRepository.delete(s) instead of s.setStatus("dropped").
+        try {
+            if (regNo) await apiDeleteStudent(regNo);
+        } catch (err) {
+            console.error('Backend delete failed:', err);
+            showToast("Offline", "Removed locally — couldn't reach the server.", "danger");
+        }
     };
 
     // ── 10. FULL PROFILE VIEW ────────────────────────────────────────────────
@@ -2036,41 +2542,52 @@ document.addEventListener('DOMContentLoaded', () => {
             : '';
 
         // ── Certificate viewer (B-Form / School Certificate uploaded in admission form) ──
+        // IMPORTANT: only the student's regNo/id is passed into these onclick handlers — never
+        // the raw base64 certData. viewCertificate()/downloadCertificate() resolve the record and
+        // turn certData into a short-lived Blob URL under the hood. This is the fix for the
+        // View/Download bug: modern Chrome silently blocks window.open()/top-frame navigation to
+        // data: URIs, and Safari's <a download> support for data: URIs is unreliable — Blob URLs
+        // work consistently across all of them.
         let certViewer = '';
         let bformActionBtn = '';
         if (s.certData) {
-            // A clear, always-visible action at the end of the profile to open the uploaded B-Form
+            const certRegNo = s.regNo || s.id;
             const isPdf = s.certData.startsWith('data:application/pdf');
+
             bformActionBtn = `
                 <div class="profile-section-title"><i class="fas fa-id-card"></i> B-Form / School Certificate (from Admission Form)</div>
                 <div style="padding:18px 25px;display:flex;flex-wrap:wrap;gap:10px;align-items:center;">
-                    <button type="button" class="btn-primary-submit" onclick="window.open('${s.certData}','_blank')"
+                    <button type="button" class="btn-primary-submit" onclick="viewCertificate('${certRegNo}')"
                         style="display:inline-flex;align-items:center;gap:8px;padding:10px 18px;border-radius:8px;border:none;cursor:pointer;">
                         <i class="fas fa-eye"></i> View B-Form
                     </button>
-                    <a href="${s.certData}" download="bform_${s.regNo || s.id}${isPdf ? '.pdf' : '.png'}"
-                        class="btn-secondary" style="display:inline-flex;align-items:center;gap:8px;padding:10px 18px;border-radius:8px;text-decoration:none;">
+                    <button type="button" onclick="downloadCertificate('${certRegNo}')"
+                        class="btn-secondary" style="display:inline-flex;align-items:center;gap:8px;padding:10px 18px;border-radius:8px;border:none;cursor:pointer;">
                         <i class="fas fa-download"></i> Download B-Form
-                    </a>
+                    </button>
                 </div>`;
+
             if (s.certData.startsWith('data:image')) {
                 certViewer = `
                     <div class="profile-section-title"><i class="fas fa-certificate"></i> School Certificate / B-Form</div>
                     <div style="padding:20px 25px;">
                         <img src="${s.certData}" alt="Certificate" class="cert-preview-img"
-                             onclick="window.open(this.src,'_blank')" title="Click to enlarge">
+                             onclick="viewCertificate('${certRegNo}')" title="Click to view full page">
                         <p style="font-size:0.75rem;color:var(--text-muted);margin-top:8px;">
                             <i class="fas fa-search-plus"></i> Click to open full size
                         </p>
                     </div>`;
-            } else if (s.certData.startsWith('data:application/pdf')) {
+            } else if (isPdf) {
                 certViewer = `
                     <div class="profile-section-title"><i class="fas fa-certificate"></i> School Certificate / B-Form</div>
                     <div style="padding:20px 25px;">
-                        <a href="${s.certData}" download="certificate_${s.regNo}.pdf"
-                           class="btn-primary-submit" style="display:inline-flex;align-items:center;gap:8px;text-decoration:none;padding:10px 20px;border-radius:8px;">
-                            <i class="fas fa-file-pdf"></i> Download Certificate PDF
-                        </a>
+                        <div class="cert-pdf-card" onclick="viewCertificate('${certRegNo}')" title="Click to view full page">
+                            <i class="fas fa-file-pdf"></i>
+                            <div>
+                                <strong>PDF Document Attached</strong>
+                                <p>Click to open the full-page viewer</p>
+                            </div>
+                        </div>
                     </div>`;
             }
         }
@@ -2135,6 +2652,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 <div class="detail-item"><label>Computed Age</label><span>${safeVal(s.age)}</span></div>
                 <div class="detail-item"><label>B-Form / CNIC</label><span>${safeVal(s.studentBform)}</span></div>
                 <div class="detail-item full-width-detail"><label>Medical Conditions</label><span>${safeVal(s.medicalIssues)}</span></div>
+                <div class="detail-item"><label>Orphan Status</label><span>${safeVal(s.orphanStatus)}</span></div>
+                <div class="detail-item"><label>Previous School Attended</label><span>${safeVal(s.previousSchool)}</span></div>
+                <div class="detail-item"><label>Previous Class</label><span>${safeVal(s.previousClass)}</span></div>
             </div>
 
             <div class="profile-section-title">Guardian & Contact</div>
@@ -2175,6 +2695,150 @@ document.addEventListener('DOMContentLoaded', () => {
         const profileModal = document.getElementById('profile-modal');
         profileModal.dataset.currentRegNo = s.regNo || s.id;
         profileModal.style.display = 'block';
+    };
+
+    // ── CERTIFICATE / B-FORM VIEWER & DOWNLOAD ENGINE ────────────────────────
+    //
+    // WHY THIS EXISTS:
+    // certData is stored as a base64 "data:" URI. Feeding that raw string straight into
+    // window.open(...) or an <a href="data:..."> is what was breaking View/Download:
+    //   • Chrome (and most Chromium browsers) silently block top-frame navigation to
+    //     data: URIs — window.open('data:...') just opens a blank tab, no error shown to
+    //     the user, only a console warning ("Not allowed to navigate top frame to data URL").
+    //   • Safari's handling of <a download href="data:...."> for large payloads is
+    //     inconsistent — it will often just navigate/preview instead of saving the file.
+    // The fix: decode the base64 payload into a real Blob and hand out a short-lived
+    // blob: Object URL instead. Blob URLs are same-origin, are not subject to the data:
+    // navigation block, and are supported identically across Chrome, Edge, Firefox and Safari.
+
+    let _certViewerBlobUrl  = null; // currently active blob: URL shown in the full-page viewer
+    let _certViewerFilename = null; // filename to use if the user downloads straight from the viewer
+
+    /** Decode a "data:<mime>;base64,xxxx" string into a real Blob object. */
+    function certDataUrlToBlob(dataUrl) {
+        const commaIdx = dataUrl.indexOf(',');
+        const header   = dataUrl.slice(0, commaIdx);
+        const base64   = dataUrl.slice(commaIdx + 1);
+        const mimeMatch = header.match(/data:(.*?);base64/);
+        const mime = mimeMatch ? mimeMatch[1] : 'application/octet-stream';
+
+        const binary = atob(base64);
+        const len    = binary.length;
+        const bytes  = new Uint8Array(len);
+        for (let i = 0; i < len; i++) bytes[i] = binary.charCodeAt(i);
+        return new Blob([bytes], { type: mime });
+    }
+
+    /** Look up a student by regNo (falls back to id) and build a {blob, isPdf, filename} bundle for their certData. */
+    function resolveCertForStudent(regNo) {
+        const db = getDatabase();
+        const s = db.find(x => x.regNo === regNo) || db.find(x => x.id === regNo);
+        if (!s || !s.certData) return null;
+
+        const isPdf    = s.certData.startsWith('data:application/pdf');
+        const blob     = certDataUrlToBlob(s.certData);
+        const filename = `bform_${s.regNo || s.id}${isPdf ? '.pdf' : '.png'}`;
+        return { blob, isPdf, filename };
+    }
+
+    /** Open the student's certificate / B-Form in the in-page, full-screen viewer. Works for both images and PDFs. */
+    window.viewCertificate = function(regNo) {
+        const cert = resolveCertForStudent(regNo);
+        if (!cert) { showToast("No File", "No certificate / B-Form is attached for this student.", "danger"); return; }
+
+        // Free the previous blob before creating a new one, so repeated opens don't leak memory
+        if (_certViewerBlobUrl) { URL.revokeObjectURL(_certViewerBlobUrl); _certViewerBlobUrl = null; }
+
+        _certViewerBlobUrl  = URL.createObjectURL(cert.blob);
+        _certViewerFilename = cert.filename;
+
+        const overlay = document.getElementById('cert-viewer-overlay');
+        const imgEl   = document.getElementById('cert-viewer-image');
+        const pdfEl   = document.getElementById('cert-viewer-pdf');
+        const nameEl  = document.getElementById('cert-viewer-filename');
+        if (!overlay || !imgEl || !pdfEl) return;
+
+        if (cert.isPdf) {
+            pdfEl.src = _certViewerBlobUrl;
+            pdfEl.style.display = 'block';
+            imgEl.style.display = 'none';
+            imgEl.removeAttribute('src');
+        } else {
+            imgEl.src = _certViewerBlobUrl;
+            imgEl.style.display = 'block';
+            pdfEl.style.display = 'none';
+            pdfEl.removeAttribute('src');
+        }
+
+        if (nameEl) nameEl.textContent = cert.filename;
+
+        overlay.classList.add('active');
+        overlay.style.display = 'flex';
+        document.body.style.overflow = 'hidden';
+    };
+
+    /** Close the full-page certificate viewer and release its Blob URL. */
+    window.closeCertViewer = function() {
+        const overlay = document.getElementById('cert-viewer-overlay');
+        if (overlay) {
+            overlay.classList.remove('active');
+            overlay.style.display = 'none';
+        }
+
+        // The viewer is opened FROM WITHIN another modal (e.g. "View Student").
+        // Only unlock body scroll if no other modal is still open behind it —
+        // otherwise the page behind the still-open modal would start scrolling.
+        const anyModalStillOpen = Array.from(document.querySelectorAll('.modal-overlay'))
+            .some(m => m.style.display === 'block' || m.style.display === 'flex');
+        document.body.style.overflow = anyModalStillOpen ? 'hidden' : 'auto';
+
+        if (_certViewerBlobUrl) { URL.revokeObjectURL(_certViewerBlobUrl); _certViewerBlobUrl = null; }
+        _certViewerFilename = null;
+
+        const imgEl = document.getElementById('cert-viewer-image');
+        const pdfEl = document.getElementById('cert-viewer-pdf');
+        if (imgEl) imgEl.removeAttribute('src');
+        if (pdfEl) pdfEl.removeAttribute('src');
+    };
+
+    // Close the viewer with the Escape key, same as the other modals in this app
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') {
+            const overlay = document.getElementById('cert-viewer-overlay');
+            if (overlay && overlay.classList.contains('active')) window.closeCertViewer();
+        }
+    });
+
+    /**
+     * Download a student's certificate / B-Form as a real file save.
+     * Builds (or re-uses, if the viewer already has this exact file open) a blob: Object URL
+     * and clicks a temporary, invisible <a download> against it — the only download method that
+     * behaves consistently across Chrome, Edge, Firefox and Safari for locally-generated files.
+     */
+    window.downloadCertificate = function(regNo) {
+        let blobUrl  = _certViewerBlobUrl;
+        let filename = _certViewerFilename;
+        let isReusedUrl = !!blobUrl;
+
+        if (!blobUrl) {
+            const cert = resolveCertForStudent(regNo);
+            if (!cert) { showToast("No File", "No certificate / B-Form is attached for this student.", "danger"); return; }
+            blobUrl  = URL.createObjectURL(cert.blob);
+            filename = cert.filename;
+        }
+
+        const a = document.createElement('a');
+        a.href = blobUrl;
+        a.download = filename;
+        a.style.display = 'none';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+
+        // Only revoke a URL we created just for this call — the viewer owns and revokes its own
+        if (!isReusedUrl) setTimeout(() => URL.revokeObjectURL(blobUrl), 4000);
+
+        showToast("Downloading", `${filename} is downloading…`, "success");
     };
 
     // ── FOOTER SHARE BUTTON HANDLER ──────────────────────────────────────────
@@ -2378,20 +3042,22 @@ function slcSearchStudents() {
         const namePart     = (namePartRaw || '').trim();
         const guardianPart = (guardianPartRaw || '').trim();
         matches = students.filter(s => {
-            const name     = (s.name || s.fullName || '').toLowerCase();
-            const guardian = (s.fatherName || s.guardianName || '').toLowerCase();
-            const nameOk     = !namePart || name.includes(namePart);
-            const guardianOk = !guardianPart || guardian.includes(guardianPart);
-            return nameOk && guardianOk;
-        }).slice(0, 8);
+    const name     = (s.name || s.fullName || '').toLowerCase();
+    const guardian = (s.fatherName || s.guardianName || '').toLowerCase();
+    // FIX: Force to string
+    const regNo    = String(s.regNo || '').toLowerCase();
+    const id       = String(s.id || '').toLowerCase();
+    return name.includes(query) || guardian.includes(query) || regNo.includes(query) || id.includes(query);
+}).slice(0, 8);
     } else {
         matches = students.filter(s => {
-            const name     = (s.name || s.fullName || '').toLowerCase();
-            const guardian = (s.fatherName || s.guardianName || '').toLowerCase();
-            const regNo    = (s.regNo || '').toLowerCase();
-            const id       = (s.id || '').toLowerCase();
-            return name.includes(query) || guardian.includes(query) || regNo.includes(query) || id.includes(query);
-        }).slice(0, 8);
+    const name     = (s.name || s.fullName || '').toLowerCase();
+    const guardian = (s.fatherName || s.guardianName || '').toLowerCase();
+    // FIX: Force to string
+    const regNo    = String(s.regNo || '').toLowerCase();
+    const id       = String(s.id || '').toLowerCase();
+    return name.includes(query) || guardian.includes(query) || regNo.includes(query) || id.includes(query);
+}).slice(0, 8);
     }
 
     if (!matches.length) {
@@ -2695,8 +3361,11 @@ function charSearchStudents() {
         matches = students.filter(s => {
             const name     = (s.name || s.fullName || '').toLowerCase();
             const guardian = (s.fatherName || s.guardianName || '').toLowerCase();
-            const regNo    = (s.regNo || '').toLowerCase();
-            const id       = (s.id || '').toLowerCase();
+            
+            // FIX APPLIED HERE: Force numeric IDs to String
+            const regNo    = String(s.regNo || '').toLowerCase();
+            const id       = String(s.id || '').toLowerCase();
+            
             return name.includes(query) || guardian.includes(query) || regNo.includes(query) || id.includes(query);
         }).slice(0, 8);
     }
@@ -3234,6 +3903,7 @@ function exportStudentsToExcel() {
             'Guardian CNIC', 'Gender', 'Date of Birth', 'Age', 'Class', 'Section', 'Roll No',
             'Admission Date', 'Phone 1', 'Phone 2', 'Permanent Address', 'Mailing Address',
             'Student B-Form No.', 'Medical Issues',
+            'Orphan Status', 'Previous School Attended', 'Previous Class',
             'Transport Mode', 'Transport Type', 'Transport Fee (PKR)',
             'Monthly Tuition Fee (PKR)', 'Annual Fund (PKR)', 'Annual Fund Month',
             'Tuition Discount (PKR)', 'Transport Discount (PKR)', 'Sibling Discount (PKR)',
@@ -3287,6 +3957,9 @@ function exportStudentsToExcel() {
                 s.mailingAddress                || '',
                 s.studentBform                  || '',
                 s.medicalIssues                 || '',
+                s.orphanStatus                  || '',
+                s.previousSchool                || '',
+                s.previousClass                 || '',
                 s.transportMode                 || '',
                 s.transportType                 || '',
                 s.transportFee != null && s.transportFee !== '' ? Number(s.transportFee) : 0,
@@ -3314,6 +3987,7 @@ function exportStudentsToExcel() {
             { wch: 18 }, { wch: 10 }, { wch: 14 }, { wch: 7  }, { wch: 14 },
             { wch: 10 }, { wch: 10 }, { wch: 16 }, { wch: 16 }, { wch: 16 },
             { wch: 30 }, { wch: 30 }, { wch: 20 }, { wch: 22 },
+            { wch: 16 }, { wch: 26 }, { wch: 16 },
             { wch: 16 }, { wch: 14 }, { wch: 18 },
             { wch: 22 }, { wch: 18 }, { wch: 20 },
             { wch: 22 }, { wch: 24 }, { wch: 22 },
@@ -3609,6 +4283,9 @@ function importStudentsFromExcel(event) {
                 'Mailing Address'               : 'mailingAddress',
                 'Student B-Form No.'           : 'studentBform',
                 'Medical Issues'               : 'medicalIssues',
+                'Orphan Status'                : 'orphanStatus',
+                'Previous School Attended'     : 'previousSchool',
+                'Previous Class'               : 'previousClass',
                 'Transport Mode'               : 'transportMode',
                 'Transport Type'               : 'transportType',
                 'Transport Fee (PKR)'          : 'transportFee',
@@ -3707,3 +4384,67 @@ function importStudentsFromExcel(event) {
     };
     reader.readAsArrayBuffer(file);
 }
+
+async function compressImage(file, maxWidth, quality = 0.7) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.readAsDataURL(file);
+        reader.onload = (event) => {
+            const img = new Image();
+            img.src = event.target.result;
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                const scaleFactor = maxWidth / img.width;
+                
+                // Only resize if the image is wider than maxWidth
+                if (img.width > maxWidth) {
+                    canvas.width = maxWidth;
+                    canvas.height = img.height * scaleFactor;
+                } else {
+                    canvas.width = img.width;
+                    canvas.height = img.height;
+                }
+
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                
+                // Convert to Base64 (JPEG format is best for compression)
+                const base64 = canvas.toDataURL('image/jpeg', quality);
+                resolve(base64);
+            };
+        };
+        reader.onerror = error => reject(error);
+    });
+}
+
+window.toggleUpdOrphanFilter = function() {
+    updOrphanFilterActive = !updOrphanFilterActive;
+    const btn = document.getElementById('upd-orphan-filter-btn');
+    if (updOrphanFilterActive) {
+        btn.classList.add('active-filter');
+        btn.setAttribute('aria-pressed', 'true');
+        btn.innerHTML = '<i class="fas fa-check"></i> Showing Orphans';
+    } else {
+        btn.classList.remove('active-filter');
+        btn.setAttribute('aria-pressed', 'false');
+        btn.innerHTML = '<i class="fas fa-child"></i> Show Orphans Only';
+    }
+    renderStudentTable();
+};
+
+// Toggle for View Directory Modal
+window.toggleVoOrphanFilter = function() {
+    voOrphanFilterActive = !voOrphanFilterActive;
+    const btn = document.getElementById('vo-orphan-filter-btn');
+
+    if (voOrphanFilterActive) {
+        btn.classList.add('active-filter');
+        btn.setAttribute('aria-pressed', 'true');
+        btn.innerHTML = '<i class="fas fa-check"></i> Showing Orphans';
+    } else {
+        btn.classList.remove('active-filter');
+        btn.setAttribute('aria-pressed', 'false');
+        btn.innerHTML = '<i class="fas fa-child"></i> Show Orphans Only';
+    }
+    renderViewOnlyTable();
+};
