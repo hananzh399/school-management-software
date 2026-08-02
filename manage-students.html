@@ -12,13 +12,12 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script src="shared-data.js"></script>
-    <script src="access-control.js"></script>
 </head>
 <body>
     <aside id="sidebar" class="sidebar">
         <div class="sidebar-header">
             <div class="brand">
-                <img src="logo-icon.png" alt="SoftSchool Logo" class="brand-logo">
+                <!-- <img src="logo-icon.png" alt="SoftSchool Logo" class="brand-logo"> -->
                 <span class="brand-name">Soft<strong>School</strong></span>
             </div>
             <button id="close-sidebar" class="close-btn" aria-label="Close sidebar">
@@ -52,10 +51,6 @@
             <a href="manage-finance.html" class="nav-link">
                 <i class="fas fa-file-invoice-dollar"></i>
                 <span>Fees &amp; Finance</span>
-            </a>
-            <a href="reports.html" class="nav-link">
-                <i class="fas fa-chart-pie"></i>
-                <span>Reports &amp; Analytics</span>
             </a>
             <a href="settings.html" class="nav-link">
                 <i class="fas fa-cog"></i>
@@ -422,6 +417,7 @@
                     <p class="upload-hint">Registration Number (System ID)</p>
                     <div id="edit-sibling-badge" class="sibling-tag" style="display:none;margin-top:6px;"></div>
                     <p class="upload-hint" style="color:var(--text-muted);font-size:0.78rem;">Official Student Photograph</p>
+                    <p id="student-photo-error" class="upload-error-msg" role="alert"><i class="fas fa-circle-exclamation"></i> <span></span></p>
                 </div>
 
                 <!-- SECTION 1: ACADEMIC RECORD -->
@@ -496,6 +492,27 @@
                         <label>Medical Issues / Allergies</label>
                         <input type="text" name="medicalIssues" placeholder="Enter 'None' if healthy">
                     </div>
+                    <div class="form-input-group full-span">
+                        <label>Orphan Status *</label>
+                        <div class="form-radio-group">
+                            <label class="form-radio-option">
+                                <input type="radio" name="orphanStatus" value="Orphan" required>
+                                <span>Orphan</span>
+                            </label>
+                            <label class="form-radio-option">
+                                <input type="radio" name="orphanStatus" value="Not Orphan" checked required>
+                                <span>Not Orphan</span>
+                            </label>
+                        </div>
+                    </div>
+                    <div class="form-input-group">
+                        <label>Previous School Attended</label>
+                        <input type="text" name="previousSchool" placeholder="Enter previous school name (if any)">
+                    </div>
+                    <div class="form-input-group">
+                        <label>Previous Class</label>
+                        <input type="text" name="previousClass" placeholder="Last class attended (if any)">
+                    </div>
                 </div>
 
                 <!-- SECTION 3: GUARDIAN INFORMATION -->
@@ -555,6 +572,7 @@
                             <p>Click to upload student certificate (PDF or Image)</p>
                             <input type="file" id="cert-upload" accept="image/*,application/pdf">
                             <input type="hidden" name="certData" id="cert-data">
+                            <p id="cert-upload-error" class="upload-error-msg" role="alert"><i class="fas fa-circle-exclamation"></i> <span></span></p>
                         </div>
                     </div>
                 </div>
@@ -736,6 +754,9 @@
                             <input type="text" id="vo-search-name" placeholder="Search by name, ID or guardian… (use ~ for Name~Father)">
                         </div>
                         <span class="upd-search-hint" title="Tip: separate student name and father/guardian name with a tilde to search both at once."><i class="fas fa-info-circle"></i> Use <strong>~</strong> to search Name~Father, e.g. <em>Ali~Khan</em></span>
+                        <button id="vo-orphan-filter-btn" class="btn-secondary btn-sm-upd" onclick="toggleVoOrphanFilter()" aria-pressed="false" title="Show only students with orphan status">
+        <i class="fas fa-child"></i> Show Orphans Only
+    </button>
                     </div>
 
                     <!-- STUDENT TABLE -->
@@ -827,6 +848,9 @@
                             <i class="fas fa-search"></i>
                             <input type="text" id="upd-search-input" placeholder="Search by name, ID or guardian… (use ~ for Name~Father)">
                         </div>
+                        <button id="upd-orphan-filter-btn" class="btn-secondary btn-sm-upd" onclick="toggleUpdOrphanFilter()" aria-pressed="false" title="Show only students with orphan status">
+        <i class="fas fa-child"></i> Show Orphans Only
+    </button>
                         <span class="upd-search-hint" title="Tip: separate student name and father/guardian name with a tilde to search both at once."><i class="fas fa-info-circle"></i> Use <strong>~</strong> to search Name~Father, e.g. <em>Ali~Khan</em></span>
                         <div id="promote-actions-bar" style="display:none; align-items:center; gap:10px;">
                             <button onclick="togglePromoteMode()" class="btn-ghost"><i class="fas fa-times"></i> Cancel</button>
@@ -1210,6 +1234,25 @@
                 <button class="btn-primary-submit" id="char-share-btn" onclick="shareCharCert()" style="display:none;background:#10b981;"><i class="fab fa-whatsapp"></i> Share</button>
                 <button class="btn-primary-submit" id="char-print-btn" onclick="printCharCert()" style="display:none;"><i class="fas fa-print"></i> Print Certificate</button>
             </div>
+        </div>
+    </div>
+
+    <!-- CERTIFICATE / B-FORM FULL-PAGE VIEWER -->
+    <div id="cert-viewer-overlay" class="cert-viewer-overlay" onclick="if(event.target===this) closeCertViewer()">
+        <div class="cert-viewer-toolbar">
+            <span class="cert-viewer-filename" id="cert-viewer-filename"><i class="fas fa-id-card"></i> Certificate</span>
+            <div class="cert-viewer-actions">
+                <button type="button" class="cert-viewer-btn cert-viewer-btn-primary" onclick="downloadCertificate(null)">
+                    <i class="fas fa-download"></i> <span>Download</span>
+                </button>
+                <button type="button" class="cert-viewer-btn cert-viewer-close" onclick="closeCertViewer()" aria-label="Close viewer">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+        </div>
+        <div class="cert-viewer-body">
+            <img id="cert-viewer-image" class="cert-viewer-image" alt="Certificate / B-Form" style="display:none;">
+            <iframe id="cert-viewer-pdf" class="cert-viewer-pdf" style="display:none;" title="Certificate / B-Form PDF"></iframe>
         </div>
     </div>
 
