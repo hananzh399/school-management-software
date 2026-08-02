@@ -1183,6 +1183,41 @@ body {
     margin-top: 4px;
 }
 
+/* ── File Size / Upload Error Messages ───────────────────────────────── */
+@keyframes fadeInError {
+    from { opacity: 0; transform: translateY(-4px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+.upload-error-msg {
+    display: none;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    color: #e74c3c;
+    background: rgba(231, 76, 60, 0.08);
+    border: 1px solid rgba(231, 76, 60, 0.25);
+    border-radius: 6px;
+    padding: 6px 10px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    margin-top: 8px;
+    animation: fadeInError 0.25s ease-out;
+}
+
+.upload-error-msg.show {
+    display: flex;
+}
+
+.upload-error-msg i {
+    font-size: 0.85rem;
+}
+
+.certificate-upload-zone .upload-error-msg {
+    justify-content: flex-start;
+    text-align: left;
+}
+
 .form-input-grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -1246,6 +1281,62 @@ select option {
 
 [data-theme="light"] .input-readonly {
     background: #f1f5f9 !important;
+}
+
+/* ── ORPHAN STATUS RADIO GROUP ─────────────────────────────────────────── */
+.form-radio-group {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.form-radio-option {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    flex: 1;
+    min-width: 140px;
+    padding: 11px 16px;
+    background: var(--bg-primary);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: all var(--transition);
+}
+
+[data-theme="light"] .form-radio-option {
+    background: #f8fafc;
+}
+
+.form-radio-option input[type="radio"] {
+    width: 16px;
+    height: 16px;
+    margin: 0;
+    padding: 0;
+    accent-color: var(--accent-primary);
+    cursor: pointer;
+    flex-shrink: 0;
+}
+
+.form-radio-option span {
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: var(--text-secondary);
+    user-select: none;
+}
+
+.form-radio-option:hover {
+    border-color: var(--accent-primary);
+}
+
+.form-radio-option:has(input:checked) {
+    border-color: var(--accent-primary);
+    background: var(--accent-primary-glow);
+}
+
+.form-radio-option:has(input:checked) span {
+    color: var(--accent-primary-light);
+    font-weight: 600;
 }
 
 .net-total-field {
@@ -1369,6 +1460,29 @@ select option {
 .btn-secondary:hover {
     background: rgba(59, 130, 246, 0.18);
     transform: translateY(-1px);
+}
+
+/* Orphan filter toggle — active state */
+.btn-secondary.active-filter {
+    background: var(--accent-warning);
+    border-color: var(--accent-warning);
+    color: #ffffff;
+    box-shadow: 0 2px 10px rgba(245, 158, 11, 0.35);
+}
+
+.btn-secondary.active-filter:hover {
+    background: var(--accent-warning);
+    filter: brightness(1.08);
+    transform: translateY(-1px);
+}
+
+/* Subtle row highlight so orphan records stand out in results */
+.student-table tbody tr.orphan-highlight {
+    background: rgba(245, 158, 11, 0.07);
+}
+
+.student-table tbody tr.orphan-highlight:hover {
+    background: rgba(245, 158, 11, 0.14);
 }
 
 
@@ -1800,6 +1914,171 @@ select option {
     transform: scale(1.01);
 }
 
+/* PDF placeholder card shown inside the profile when the attached B-Form is a PDF */
+.cert-pdf-card {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 18px 20px;
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-lg);
+    background: var(--bg-primary);
+    cursor: pointer;
+    transition: all var(--transition);
+}
+
+.cert-pdf-card:hover {
+    box-shadow: var(--shadow-card);
+    transform: translateY(-1px);
+    border-color: var(--accent-primary);
+}
+
+.cert-pdf-card i {
+    font-size: 34px;
+    color: #ef4444;
+    flex-shrink: 0;
+}
+
+.cert-pdf-card strong {
+    display: block;
+    color: var(--text-primary);
+    font-size: 14px;
+    margin-bottom: 2px;
+}
+
+.cert-pdf-card p {
+    margin: 0;
+    font-size: 12px;
+    color: var(--text-muted);
+}
+
+/* ============================================
+   CERTIFICATE / B-FORM FULL-PAGE VIEWER
+   ============================================ */
+.cert-viewer-overlay {
+    display: none;
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    background: rgba(0, 0, 0, 0.88);
+    backdrop-filter: blur(8px);
+    /* Must stack above the profile/slc/character modals (inline z-index: 5000 in the HTML),
+       since the B-Form/Certificate viewer is opened FROM WITHIN those modals and needs to
+       sit on top of them. Kept below the toast (9999) and sibling dialog (9998) so those
+       system-level notices can still appear above everything, including this viewer. */
+    z-index: 6000;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+}
+
+.cert-viewer-overlay.active {
+    opacity: 1;
+}
+
+.cert-viewer-toolbar {
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 24px;
+    background: linear-gradient(180deg, rgba(0,0,0,0.65), rgba(0,0,0,0));
+    z-index: 2;
+}
+
+.cert-viewer-filename {
+    color: #fff;
+    font-size: 14px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    opacity: 0.9;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 60vw;
+}
+
+.cert-viewer-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.cert-viewer-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 16px;
+    border-radius: var(--radius-sm, 8px);
+    border: 1px solid rgba(255,255,255,0.2);
+    background: rgba(255,255,255,0.1);
+    color: #fff;
+    font-family: 'Inter', sans-serif;
+    font-weight: 600;
+    font-size: 13px;
+    cursor: pointer;
+    transition: all var(--transition);
+}
+
+.cert-viewer-btn:hover {
+    background: rgba(255,255,255,0.22);
+}
+
+.cert-viewer-btn-primary {
+    background: var(--accent-primary, #3b82f6);
+    border-color: var(--accent-primary, #3b82f6);
+}
+
+.cert-viewer-btn-primary:hover {
+    filter: brightness(1.1);
+}
+
+.cert-viewer-close {
+    padding: 10px 14px;
+}
+
+.cert-viewer-body {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 90px 24px 24px;
+    box-sizing: border-box;
+}
+
+.cert-viewer-image {
+    max-width: 100%;
+    max-height: 100%;
+    border-radius: 10px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+    object-fit: contain;
+    background: #fff;
+}
+
+.cert-viewer-pdf {
+    width: 100%;
+    height: 100%;
+    max-width: 1000px;
+    border: none;
+    border-radius: 10px;
+    background: #fff;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+}
+
+@media (max-width: 640px) {
+    .cert-viewer-toolbar { padding: 12px 14px; }
+    .cert-viewer-filename { font-size: 12px; max-width: 45vw; }
+    .cert-viewer-btn span { display: none; }
+    .cert-viewer-btn { padding: 10px 12px; }
+    .cert-viewer-body { padding: 70px 10px 14px; }
+}
+
 
 /* ============================================
    TOAST NOTIFICATIONS
@@ -1997,6 +2276,111 @@ select option {
     background: rgba(239, 68, 68, 0.08);
     border-color: rgba(239, 68, 68, 0.2);
     color: #f87171;
+}
+
+
+/* ============================================
+   ADMISSION PRINT PROMPT (post-Finalize Admission)
+   ============================================ */
+#admission-print-dialog-overlay {
+    position: fixed;
+    top: 0; left: 0; width: 100%; height: 100%;
+    background: rgba(0, 0, 0, 0.7);
+    backdrop-filter: blur(6px);
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    animation: fadeInOverlay 0.25s ease-out;
+}
+
+.admission-print-dialog-box {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-lg);
+    padding: 40px 35px;
+    max-width: 460px;
+    width: 92%;
+    text-align: center;
+    box-shadow: var(--shadow-card);
+    animation: dialogSlideUp 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+    border-top: 4px solid var(--accent-primary);
+}
+
+.admission-print-dialog-icon {
+    width: 70px; height: 70px;
+    background: var(--accent-primary-glow);
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.8rem;
+    color: var(--accent-primary-light);
+    margin: 0 auto 20px;
+    box-shadow: 0 4px 12px var(--accent-primary-glow);
+}
+
+.admission-print-dialog-title {
+    font-size: 1.3rem;
+    font-weight: 800;
+    color: var(--text-primary);
+    margin-bottom: 10px;
+}
+
+.admission-print-dialog-body {
+    color: var(--text-secondary);
+    font-size: 0.92rem;
+    margin-bottom: 28px;
+    line-height: 1.6;
+}
+
+.admission-print-dialog-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.admission-print-btn-yes {
+    background: linear-gradient(135deg, var(--accent-primary), var(--accent-primary-light));
+    color: white;
+    border: none;
+    padding: 13px 28px;
+    border-radius: var(--radius-sm);
+    font-weight: 700;
+    font-size: 0.95rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    transition: all var(--transition);
+    font-family: 'Inter', sans-serif;
+    box-shadow: 0 4px 12px var(--accent-primary-glow);
+}
+
+.admission-print-btn-yes:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 18px var(--accent-primary-glow);
+}
+
+.admission-print-btn-no {
+    background: var(--bg-card);
+    color: var(--text-secondary);
+    border: 1px solid var(--border-subtle);
+    padding: 13px 28px;
+    border-radius: var(--radius-sm);
+    font-weight: 600;
+    font-size: 0.9rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    transition: all var(--transition);
+    font-family: 'Inter', sans-serif;
+}
+
+.admission-print-btn-no:hover {
+    background: rgba(148, 163, 184, 0.1);
+    border-color: var(--border-hover);
 }
 
 
