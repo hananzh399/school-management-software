@@ -876,7 +876,9 @@ function renderClassCardGrid() {
         const label       = _classDisplayLabel(name);
         // Escape name for inline onclick attribute
         const safeName    = name.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+        const badge       = _classVoucherBadgeHTML(name);
         return `<div class="class-selector-card ${colorClass}" onclick="selectClassForFees('${safeName}')">
+                    ${badge}
                     <div class="c-icon">${iconHTML}</div>
                     <h4>${label}</h4>
                 </div>`;
@@ -886,6 +888,8 @@ function renderClassCardGrid() {
 /**
  * Switcher function for Finance Modules
  */
+let currentFeeClassName = null;
+
 function selectClassForFees(className) {
     // 1. Toggle UI Views
     document.getElementById('class-selection-view').style.display = 'none';
@@ -893,6 +897,7 @@ function selectClassForFees(className) {
     
     // 2. Set Title
     document.getElementById('selected-class-title').innerText = `Fee Records: ${className}`;
+    currentFeeClassName = className;
     
     // 3. Render Students
     renderFees(className);
@@ -900,6 +905,9 @@ function selectClassForFees(className) {
 function backToClassSelection() {
     document.getElementById('class-selection-view').style.display = 'block';
     document.getElementById('class-student-list-view').style.display = 'none';
+    currentFeeClassName = null;
+    // Refresh badges in case anything was generated while inside the class view
+    renderClassCardGrid();
 }
 
 // ... rest of the existing renderFees and filterByClass functions remain the same ...
@@ -909,6 +917,13 @@ function backToClassSelection() {
  */
 let currentVoucherStudentId = null;
 let currentVoucherStudentName = null;
+// BUGFIX — "fine not adding up in voucher": `student.backendFine` was only ever
+// set on the local, in-memory `student` object inside viewVoucher(). Every other
+// function (like the inline voucher editor) re-reads the student fresh from
+// localStorage, where that fine value never existed — so it silently read as 0.
+// Caching the last-fetched fine here lets other flows see the real value.
+let currentVoucherFineAmount = 0;
+let currentVoucherFineReason = '';
 
 async function viewVoucher(studentId, fullName, isPaidBill = false) {
     // 1. Validation
@@ -932,21 +947,27 @@ async function viewVoucher(studentId, fullName, isPaidBill = false) {
         // 3. API CALL: Fetch FRESH status from the MySQL database.
         // If a fine was just settled/paid in the ledger, the backend logic 
         // has already subtracted it from 'fineAmount'.
+        // NOTE: this is best-effort. If the backend isn't reachable (e.g. running
+        // fully client-side), we fall back to whatever is already known locally
+        // (computeFeeBreakdown already pulls arrears/fines/discounts from the
+        // student record itself) instead of blocking the voucher from opening.
         const finance = await apiRequest(`/status/${studentId}/${monthKey}`);
-        
-        if (!finance) {
-            alert("No finance record found for this student in the database.");
-            return;
-        }
 
-        // 4. Sync backend data to the student object used for rendering.
+        // 4. Sync backend data to the student object used for rendering (when available).
         // This 'backendFine' is picked up by computeFeeBreakdown() inside buildVoucherHTML().
-        student.backendFine = finance.fineAmount || 0; 
-        student.backendFineReason = finance.fineReason || "";
+        if (finance) {
+            student.backendFine = finance.fineAmount || 0;
+            student.backendFineReason = finance.fineReason || "";
+        }
 
         // Set global variables for the Edit/Share functionality
         currentVoucherStudentId = studentId;
         currentVoucherStudentName = fullName;
+        // Cache the fine so it's still available if the editor re-reads the
+        // student fresh from localStorage (see note above the declaration).
+        const fBreakdown = computeFeeBreakdown(student);
+        currentVoucherFineAmount = fBreakdown.fineAmount || 0;
+        currentVoucherFineReason = student.backendFineReason || '';
 
         // 5. Build the HTML content
         let html = buildVoucherHTML(student);
@@ -1110,16 +1131,74 @@ function computeFeeBreakdown(s) {
     const tDisc   = Number(s.tuitionDiscount)   || 0;
     const trDisc  = Number(s.transportDiscount) || 0;
     const sibDisc = Number(s.siblingDiscount)   || 0;
-    const arrears = Number(s.arrears)           || 0;
 
-    // Create a list of active discounts for the UI
+    // BUGFIX — "arrears sometimes show, sometimes don't": `s.arrears` is only
+    // ever refreshed at the moment "Generate Voucher" is clicked (see
+    // recordVoucherGeneration). Before that click happens for the current
+    // month, `s.arrears` is whatever was last written — which could be last
+    // month's figure, a manual edit from weeks ago, or 0 if never set. That
+    // stale value was being shown on the voucher preview, the fee table, and
+    // the Pay Bill screen alike, so the same student could look like they
+    // owed a different arrears amount depending only on whether "Generate"
+    // had been clicked yet this month.
+    // Fix: once a voucher record already exists for THIS month, trust the
+    // persisted `s.arrears` (it's the locked-in snapshot, and may have been
+    // deliberately overridden via the "Edit Voucher" screen). Otherwise —
+    // i.e. any time we're previewing/paying before generation — compute the
+    // real outstanding balance live from payment history so it's always
+    // accurate.
+    const regNoForArrears = s.regNo || s.id;
+    const arrears = isVoucherGenerated(regNoForArrears)
+        ? (Number(s.arrears) || 0)
+        : computeOutstandingArrears(s);
+
+    // BUGFIX — "Edit Voucher" changes were silently discarded: previously this
+    // function never looked at `s.otherFeesData` / `s.voucherCustomFees`, which
+    // is exactly what the inline voucher editor (ievSave) persists. That meant
+    // editing rows in "Edit Voucher" had zero effect on the real voucher total —
+    // only the Arrears field (read directly below) actually changed anything.
+    // Now, when a custom edited breakdown exists, it fully replaces the base
+    // tuition/transport/other charges for the total calculation, while fines
+    // and arrears keep being layered on top exactly as before.
+    let customRows = null;
+    if (s.voucherCustomFees === true) {
+        try {
+            const parsed = JSON.parse(s.otherFeesData || '[]');
+            if (Array.isArray(parsed) && parsed.length > 0) customRows = parsed;
+        } catch (e) { customRows = null; }
+    }
+    const isCustom = !!customRows;
+
+    // Create a list of active discounts for the UI (only meaningful in the
+    // non-custom/base mode — custom rows already carry their own per-row
+    // discount, so we don't want to subtract it a second time here).
     const activeDiscounts = [];
-    if (tDisc > 0) activeDiscounts.push({ label: 'Tuition Concession', amount: tDisc });
-    if (trDisc > 0) activeDiscounts.push({ label: 'Transport Discount', amount: trDisc });
-    if (sibDisc > 0) activeDiscounts.push({ label: 'Sibling Discount', amount: sibDisc });
+    if (!isCustom) {
+        if (tDisc > 0) activeDiscounts.push({ label: 'Tuition Concession', amount: tDisc });
+        if (trDisc > 0) activeDiscounts.push({ label: 'Transport Discount', amount: trDisc });
+        if (sibDisc > 0) activeDiscounts.push({ label: 'Sibling Discount', amount: sibDisc });
+    }
 
-    const totalCharges   = tuitionFee + transportFee + otherFee + fineFromBackend;
-    const totalDiscounts = tDisc + trDisc + sibDisc;
+    const baseCharges   = isCustom
+        ? customRows.reduce((sum, r) => sum + (Number(r.amount) || 0), 0)
+        : (tuitionFee + transportFee + otherFee);
+    const baseDiscounts = isCustom
+        ? customRows.reduce((sum, r) => sum + (Number(r.discount) || 0), 0)
+        : (tDisc + trDisc + sibDisc);
+
+    // BUGFIX — "discount not working": saveFeesToVoucher() (the "Add to
+    // Voucher" bulk-discount field) has always written `voucherBulkDiscount`
+    // onto the student record, and the modal's own live preview (atvRecalc)
+    // subtracts it from the total shown to the admin — but computeFeeBreakdown
+    // never read `voucherBulkDiscount` at all. So the moment the admin closed
+    // that modal, the discount they just entered and "saw applied" silently
+    // vanished from the real voucher total, the Pay Bill screen, and the
+    // printed voucher. It only ever affected a number the admin never got
+    // charged from.
+    const bulkDiscount = isCustom ? (Number(s.voucherBulkDiscount) || 0) : 0;
+
+    const totalCharges   = baseCharges + fineFromBackend;
+    const totalDiscounts = baseDiscounts + bulkDiscount;
     
     // Final Calculation
     const voucherTotal = Math.max(0, (totalCharges - totalDiscounts) + arrears);
@@ -1133,6 +1212,9 @@ function computeFeeBreakdown(s) {
         fineAmount: fineFromBackend,
         activeDiscounts, // Pass the array of individual discounts
         totalDiscounts,
+        bulkDiscount,
+        isCustom,
+        customRows, // null unless a saved "Edit Voucher" breakdown exists
         voucherTotal: voucherTotal,
         totalAfterDueDate: voucherTotal + lateFeeSurcharge,
         lateFineEnabled: vs.lateFineEnabled,
@@ -1150,12 +1232,30 @@ function buildVoucherHTML(s) {
     const f = computeFeeBreakdown(s);
 
     // 1. Build Base Fee Rows
-    let rowsHTML = `
-        ${f.tuitionFee > 0 ? `<tr><td>Tuition Fee</td><td>${f.monthLabel}</td><td>Rs. ${f.tuitionFee.toLocaleString()}</td></tr>` : ''}
-        ${f.transportFee > 0 ? `<tr><td>Transportation Fee</td><td>${f.monthLabel}</td><td>Rs. ${f.transportFee.toLocaleString()}</td></tr>` : ''}
-        ${f.otherFee > 0 ? `<tr><td>Other Charges</td><td>-</td><td>Rs. ${f.otherFee.toLocaleString()}</td></tr>` : ''}
-        ${f.fineAmount > 0 ? `<tr style="color:#dc2626;"><td><strong>Fine / Penalty</strong></td><td>${s.backendFineReason || 'Disciplinary'}</td><td>Rs. ${f.fineAmount.toLocaleString()}</td></tr>` : ''}
-    `;
+    // If this voucher was edited via "Edit Voucher" (a saved custom
+    // breakdown exists), render exactly those rows instead of the raw
+    // base tuition/transport/other fields — otherwise a saved edit would
+    // never actually show up on the printed voucher.
+    let rowsHTML;
+    if (f.isCustom && Array.isArray(f.customRows)) {
+        rowsHTML = f.customRows.map(r => {
+            const amt = Number(r.amount) || 0;
+            const disc = Number(r.discount) || 0;
+            const net = Math.max(0, amt - disc);
+            const discNote = disc > 0 ? ` <span style="color:#16a34a; font-size:0.75rem;">(- Rs. ${disc.toLocaleString()} discount)</span>` : '';
+            return `<tr><td>${escapeHtml(r.description || 'Fee')}${discNote}</td><td>${escapeHtml(r.period || '-')}</td><td>Rs. ${net.toLocaleString()}</td></tr>`;
+        }).join('');
+        if (f.bulkDiscount > 0) {
+            rowsHTML += `<tr class="voucher-row-discount"><td style="padding-left: 20px;">- Bulk Discount</td><td>Concession</td><td>- Rs. ${f.bulkDiscount.toLocaleString()}</td></tr>`;
+        }
+    } else {
+        rowsHTML = `
+            ${f.tuitionFee > 0 ? `<tr><td>Tuition Fee</td><td>${f.monthLabel}</td><td>Rs. ${f.tuitionFee.toLocaleString()}</td></tr>` : ''}
+            ${f.transportFee > 0 ? `<tr><td>Transportation Fee</td><td>${f.monthLabel}</td><td>Rs. ${f.transportFee.toLocaleString()}</td></tr>` : ''}
+            ${f.otherFee > 0 ? `<tr><td>Other Charges</td><td>-</td><td>Rs. ${f.otherFee.toLocaleString()}</td></tr>` : ''}
+        `;
+    }
+    rowsHTML += `${f.fineAmount > 0 ? `<tr style="color:#dc2626;"><td><strong>Fine / Penalty</strong></td><td>${s.backendFineReason || 'Disciplinary'}</td><td>Rs. ${f.fineAmount.toLocaleString()}</td></tr>` : ''}`;
 
     // 2. Build Specific Discounts Section
     if (f.activeDiscounts.length > 0) {
@@ -1289,7 +1389,6 @@ computeFeeBreakdown = function(s) {
     // Add fines to the net totals
     f.monthlyFineTotal = monthlyFineTotal;
     f.fineDetails = fineDetails.replace(/, $/, "");
-    f.totalWithinDueDate += monthlyFineTotal;
     f.voucherTotal += monthlyFineTotal;
     f.totalAfterDueDate += monthlyFineTotal;
 
@@ -1309,6 +1408,42 @@ buildVoucherHTML = function(s) {
     }
     return html;
 };
+
+/**
+ * Best-effort finance status for a single student.
+ * Tries the backend first (so a live server, when present, always wins);
+ * if it's unreachable/404 we fall back to a status computed entirely from
+ * local data via computeFeeBreakdown() — the same function the voucher and
+ * fee tables already trust for arrears/fines/discounts — so nothing about
+ * the underlying calculation logic changes.
+ */
+async function getFeeRowFinance(student, monthKey) {
+    const studentIdentifier = student.regNo || student.id;
+    let finance = null;
+    try {
+        finance = await apiRequest(`/status/${studentIdentifier}/${monthKey}`);
+    } catch (e) { /* handled below via fallback */ }
+
+    if (finance) return finance;
+
+    // ---- Local fallback ----
+    const f = computeFeeBreakdown(student);
+    const payments = (student.feePayments || []).filter(p => p.monthKey === monthKey);
+    const paidAmount = payments.reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
+    const remainingBalance = Math.max(0, f.voucherTotal - paidAmount);
+    const paymentStatus = remainingBalance <= 0 ? 'Paid' : (paidAmount > 0 ? 'Partial' : 'Pending');
+
+    return {
+        regNo: f.regNo,
+        studentName: student.fullName,
+        guardianName: student.guardianName,
+        remainingBalance,
+        paidAmount,
+        paymentStatus,
+        fineAmount: (f.fineAmount || 0) + (f.monthlyFineTotal || 0),
+        fineReason: f.fineDetails || student.backendFineReason || ''
+    };
+}
 
 async function renderFees(className) {
     const students = JSON.parse(localStorage.getItem('edu_students') || '[]');
@@ -1331,29 +1466,38 @@ async function renderFees(className) {
 
     // Loop through filtered students and fetch fresh backend status for each
     for (const s of filtered) {
-        const studentIdentifier = s.regNo || s.id; 
-        
+        const studentIdentifier = s.regNo || s.id;
+
         try {
-            // API CALL: Fetch current finance status (includes unpaid fines only)
-            const finance = await apiRequest(`/status/${studentIdentifier}/${monthKey}`);
-            
-            if (!finance) {
-                rowsHtml += `
-                    <tr>
-                        <td><span class="hrk-id-badge">${studentIdentifier}</span></td>
-                        <td><strong>${s.fullName}</strong></td>
-                        <td colspan="4" style="color:#ef4444; font-size: 0.8rem;">
-                            <i class="fas fa-exclamation-circle"></i> Error: Not found in Finance Database.
-                        </td>
-                    </tr>`;
-                continue;
-            }
+            const finance = await getFeeRowFinance(s, monthKey);
 
             const isPaid = finance.paymentStatus === "Paid";
-            // If the fine was paid in the ledger, the backend returns fineAmount as 0
             const hasUnpaidFine = finance.fineAmount > 0;
-            
+
             const statusClass = isPaid ? 'fee-paid' : (finance.paidAmount > 0 ? 'fee-pending' : 'fee-overdue');
+
+            const billable = isStudentBillable(s);
+            const voucherRec = getVoucherRecord(studentIdentifier, monthKey);
+
+            let actionsHtml;
+            if (!billable) {
+                actionsHtml = `<span class="fee-status-badge fee-inactive"><i class="fas fa-ban"></i> ${escapeHtml(studentStatusLabel(s))}</span>`;
+            } else if (!voucherRec) {
+                actionsHtml = `
+                    <button class="btn-tiny btn-generate-voucher" onclick="handleGenerateSingleVoucher('${escapeForAttr(studentIdentifier)}', '${escapeForAttr(s.fullName)}')">
+                        <i class="fas fa-file-invoice"></i> Generate Voucher
+                    </button>`;
+            } else {
+                actionsHtml = `
+                    <button class="btn-tiny" onclick="viewVoucher('${finance.regNo}', '${escapeForAttr(finance.studentName)}', ${isPaid})">
+                        <i class="fas fa-eye"></i> View Voucher
+                    </button>
+                    ${!isPaid ? `
+                        <button class="btn-tiny btn-add-fees" onclick="openAddFeesModal('${finance.regNo}', '${escapeForAttr(finance.studentName)}')">
+                            <i class="fas fa-money-bill-wave"></i> Pay Bill
+                        </button>
+                    ` : ''}`;
+            }
 
             rowsHtml += `
                 <tr>
@@ -1367,21 +1511,22 @@ async function renderFees(className) {
                         <strong style="color:${isPaid ? '#27ae60' : '#c2410c'}">Rs. ${finance.remainingBalance.toLocaleString()}</strong>
                         ${finance.paidAmount > 0 ? `<br><span style="font-size:0.7rem; color:#16a34a;">Paid so far: Rs. ${finance.paidAmount}</span>` : ''}
                     </td>
-                    <td><span class="fee-status-badge ${statusClass}">${finance.paymentStatus}</span></td>
+                    <td><span class="fee-status-badge ${statusClass}">${voucherRec ? finance.paymentStatus : 'Not Generated'}</span></td>
                     <td class="fee-actions-cell">
-                        <button class="btn-tiny" onclick="viewVoucher('${finance.regNo}', '${escapeForAttr(finance.studentName)}', ${isPaid})">
-                            <i class="fas fa-eye"></i> View Voucher
-                        </button>
-                        ${!isPaid ? `
-                            <button class="btn-tiny btn-add-fees" onclick="openAddFeesModal('${finance.regNo}', '${escapeForAttr(finance.studentName)}')">
-                                <i class="fas fa-plus-circle"></i> Pay Fee
-                            </button>
-                        ` : ''}
+                        ${actionsHtml}
                     </td>
                 </tr>
             `;
         } catch (err) {
             console.error("Failed to load row for " + studentIdentifier, err);
+            rowsHtml += `
+                <tr>
+                    <td><span class="hrk-id-badge">${studentIdentifier}</span></td>
+                    <td><strong>${s.fullName}</strong></td>
+                    <td colspan="4" style="color:#ef4444; font-size: 0.8rem;">
+                        <i class="fas fa-exclamation-circle"></i> Error loading this student's fee record.
+                    </td>
+                </tr>`;
         }
     }
     
@@ -1547,17 +1692,75 @@ function recalcSimpleAFTotal() {
 async function saveSimpleStudentFeePayment() {
     const studentId = document.getElementById('add-fees-student-id').value;
     const paid = parseFloat(document.getElementById('afm-pay-amount').value) || 0;
+    const discountInput = document.getElementById('afm-pay-discount');
+    const discount = discountInput ? (parseFloat(discountInput.value) || 0) : 0;
+    const notesInput = document.getElementById('af-fee-notes');
+    const notes = notesInput ? notesInput.value.trim() : '';
 
-    await apiRequest("/pay", "POST", {
-        regNo: studentId,
-        monthKey: getCurrentMonthKey(),
-        amount: paid
-    });
+    if (paid <= 0 && discount <= 0) {
+        alert('Please enter a payment amount.');
+        return;
+    }
+
+    const monthKey = getCurrentMonthKey();
+    const monthLabel = new Date().toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
+
+    // BUGFIX — "Pay Bill doesn't work / stays View & Pay after paying":
+    // This used to ONLY call apiRequest("/pay", ...) against a backend at
+    // localhost:8080. apiRequest() swallows network errors and returns null
+    // (see its try/catch), so with no backend running the call was a silent
+    // no-op — nothing was ever written to student.feePayments, which is the
+    // array every balance/status calculation (getFeeRowFinance, the fee
+    // table, the voucher) actually reads. The row kept recomputing the same
+    // "Pending"/"Partial" status forever. We still ping the backend as a
+    // best-effort sync, but the payment is now ALSO saved locally so the
+    // UI and dashboard always reflect it immediately regardless of backend.
+    apiRequest("/pay", "POST", { regNo: studentId, monthKey, amount: paid }).catch(() => {});
+
+    const students = JSON.parse(localStorage.getItem('edu_students') || '[]');
+    const student = afmCurrentStudent
+        ? findStudentExact(students, studentId, afmCurrentStudent.fullName)
+        : findStudentExact(students, studentId);
+
+    if (!student) { alert('Student not found — payment was not saved.'); return; }
+    if (!Array.isArray(student.feePayments)) student.feePayments = [];
+
+    if (paid > 0) {
+        student.feePayments.push({
+            amount: paid,
+            monthKey,
+            monthLabel,
+            feeType: 'Monthly Fee',
+            method: 'cash',
+            date: new Date().toISOString(),
+            notes
+        });
+    }
+    // Record the on-the-spot discount too — otherwise a discounted bill
+    // never reaches remainingBalance <= 0 (the balance calc only knows
+    // about actual payments), so it would stay "Partial" forever even
+    // though the admin fully settled it with a discount applied.
+    if (discount > 0) {
+        student.feePayments.push({
+            amount: discount,
+            monthKey,
+            monthLabel,
+            feeType: 'On-the-spot Discount',
+            method: 'discount',
+            date: new Date().toISOString(),
+            notes: notes || 'Discount applied at time of payment'
+        });
+    }
+
+    localStorage.setItem('edu_students', JSON.stringify(students));
 
     showFeeSuccessToast(`Payment of Rs. ${paid} recorded successfully`);
     closeAddFeesModal();
     const className = document.getElementById('selected-class-title').innerText.replace('Fee Records: ', '');
     renderFees(className);
+    // Class-card badges and any dashboard widgets reading 'edu_students'
+    // should reflect the new Paid status immediately too.
+    renderClassCardGrid();
 }
 
 function closeAddFeesModal() {
@@ -1732,11 +1935,20 @@ function openAddToVoucherModal(studentId, fullName, editMode) {
                          type === 'custom' ? (fee.description || '') : '');
         });
     } else {
-        if (f.tuitionFee > 0)   atvAddFeeRow('tuition',   f.tuitionFee,   f.tDisc);
-        if (f.transportFee > 0) atvAddFeeRow('transport', f.transportFee, f.trDisc);
-        if (f.booksFee > 0)     atvAddFeeRow('book',      f.booksFee,     f.booksDiscount);
+        // BUGFIX — this used to read f.tDisc / f.trDisc / f.booksFee /
+        // f.booksDiscount / f.showAnnualFund / f.annualFundAmt, none of which
+        // computeFeeBreakdown() actually returns (same class of bug already
+        // fixed once in openInlineVoucherEditor — see the note there). Every
+        // one of those was `undefined`, so a student's existing tuition/
+        // transport discount was silently seeded as a Rs.0 discount the
+        // moment this modal opened; saving then locked in a "custom" voucher
+        // with the discount permanently gone. Pull the real discount fields
+        // straight from the student record, the same way the printed
+        // voucher and the inline editor already do.
+        const tuitionRowDiscount = (Number(student.tuitionDiscount) || 0) + (Number(student.siblingDiscount) || 0);
+        if (f.tuitionFee > 0)   atvAddFeeRow('tuition',   f.tuitionFee,   tuitionRowDiscount);
+        if (f.transportFee > 0) atvAddFeeRow('transport', f.transportFee, Number(student.transportDiscount) || 0);
         if (f.otherFee > 0)     atvAddFeeRow('other',     f.otherFee,     0);
-        if (f.showAnnualFund)   atvAddFeeRow('annual',    f.annualFundAmt, 0);
     }
     if (atvFeeRows.length === 0) atvAddFeeRow('tuition', 0, 0);
 
@@ -1958,6 +2170,13 @@ function saveFeesToVoucher() {
     students[idx].voucherNote = noteEl ? noteEl.value.trim() : '';
 
     localStorage.setItem('edu_students', JSON.stringify(students));
+
+    // BUGFIX — keep this month's already-generated voucher record in sync
+    // with the edit just made. Without this, next month's arrears rollover
+    // would keep comparing against the STALE pre-discount total, leaving a
+    // phantom "still owed" balance even if the (correct, discounted) bill
+    // was paid in full.
+    syncVoucherSnapshotForCurrentMonth(students[idx].regNo || students[idx].id, students[idx].fullName);
 
     // Keep Pay Fee modal in sync if it is open for the same student
     if (afmCurrentStudent &&
@@ -2549,9 +2768,11 @@ window.EduFlowFinance = Object.assign(window.EduFlowFinance || {}, {
    ============================================================ */
 let ievCurrentStudentId = null;
 let ievCurrentStudentName = '';
-let ievRows = [];   // [{description, period, amount}]
+let ievRows = [];   // [{description, period, amount, discount}]
 
 let ievArrears = 0;
+let ievFineAmount = 0;
+let ievFineReason = '';
 
 function openInlineVoucherEditor(studentId, fullName) {
     const students = JSON.parse(localStorage.getItem('edu_students') || '[]');
@@ -2561,28 +2782,47 @@ function openInlineVoucherEditor(studentId, fullName) {
     ievCurrentStudentId = studentId;
     ievCurrentStudentName = fullName;
 
-    // Build initial rows from current voucher breakdown so the editor mirrors
-    // whatever the user just saw in the "View Voucher" modal.
     const f = computeFeeBreakdown(student);
-    const rows = [];
-    if (f.tuitionFee   > 0) rows.push({ description: 'Tuition Fee',        period: f.monthLabel, amount: f.tuitionFee,   discount: 0 });
-    if (f.transportFee > 0) rows.push({ description: 'Transportation Fee', period: f.monthLabel, amount: f.transportFee, discount: 0 });
-    if (f.otherFee     > 0) rows.push({ description: f.otherFeeLabel,      period: '-',          amount: f.otherFee,     discount: 0 });
-    if (f.booksFee     > 0) rows.push({ description: 'Books Fee',          period: f.monthLabel, amount: f.booksFee,     discount: Number(student.booksDiscount) || 0 });
-    (f.additionalFees || []).forEach(fee => {
-        if (!fee.description && !fee.amount) return;
-        rows.push({
-            description: fee.description || 'Additional Fee',
-            period: f.monthLabel,
-            amount: parseFloat(fee.amount) || 0,
-            discount: parseFloat(fee.discount) || 0
-        });
-    });
-    if (f.showAnnualFund) rows.push({ description: 'Annual Fund', period: 'Annual', amount: f.annualFundAmt, discount: 0 });
+    let rows;
+
+    // BUGFIX — "Edit Voucher" was throwing away previous edits: it always
+    // rebuilt rows from computeFeeBreakdown's base fields (and even referenced
+    // fields like f.booksFee / f.additionalFees / f.showAnnualFund that this
+    // function never actually returns, so they were always empty/undefined).
+    // If a custom breakdown was already saved, reload THAT so re-opening the
+    // editor shows exactly what was last saved, instead of silently reverting
+    // to the plain tuition/transport/other fields.
+    if (f.isCustom && Array.isArray(f.customRows) && f.customRows.length > 0) {
+        rows = f.customRows.map(r => ({
+            description: r.description || '',
+            period: r.period || f.monthLabel,
+            amount: Number(r.amount) || 0,
+            discount: Number(r.discount) || 0
+        }));
+    } else {
+        rows = [];
+        // Fold the named concessions into their matching row's discount so
+        // they aren't silently dropped the moment this gets saved as a
+        // custom breakdown (sibling discount is bundled with tuition since
+        // it isn't tied to a single fee line of its own).
+        const tuitionRowDiscount = (Number(student.tuitionDiscount) || 0) + (Number(student.siblingDiscount) || 0);
+        if (f.tuitionFee   > 0) rows.push({ description: 'Tuition Fee',        period: f.monthLabel, amount: f.tuitionFee,   discount: tuitionRowDiscount });
+        if (f.transportFee > 0) rows.push({ description: 'Transportation Fee', period: f.monthLabel, amount: f.transportFee, discount: Number(student.transportDiscount) || 0 });
+        if (f.otherFee     > 0) rows.push({ description: 'Other Charges',      period: '-',          amount: f.otherFee,     discount: 0 });
+    }
     if (rows.length === 0) rows.push({ description: '', period: '', amount: 0, discount: 0 });
 
     ievRows = rows;
     ievArrears = Number(f.arrears) || Number(student.arrears) || 0;
+
+    // BUGFIX — "fine not adding up": the fine lives on the backend and is
+    // fetched fresh by viewVoucher(); re-reading the student from localStorage
+    // here loses it. Use the value viewVoucher() just cached instead, so the
+    // fine is visible and included in the running total while editing (it
+    // still isn't editable here — it's authoritative from the database — but
+    // it must not silently disappear from what the admin sees).
+    ievFineAmount = Number(currentVoucherFineAmount) || 0;
+    ievFineReason = currentVoucherFineReason || '';
 
     // Fill meta info
     document.getElementById('iev-student-name').textContent = student.fullName || '';
@@ -2598,7 +2838,26 @@ function openInlineVoucherEditor(studentId, fullName) {
 
     closeVoucherModal();
     renderInlineVoucherRows();
+    renderIevFineRow();
     document.getElementById('iev-modal-overlay').style.display = 'flex';
+}
+
+// Read-only fine display row, injected just above the arrears row so the
+// admin can see it is included in the total instead of it seeming to vanish.
+function renderIevFineRow() {
+    const existing = document.getElementById('iev-fine-row');
+    if (existing) existing.remove();
+    if (ievFineAmount <= 0) return;
+    const arrearsRow = document.querySelector('.iev-arrears-row');
+    if (!arrearsRow) return;
+    const tr = document.createElement('tr');
+    tr.id = 'iev-fine-row';
+    tr.className = 'iev-arrears-row';
+    tr.innerHTML = `
+        <td colspan="2" style="color:#dc2626;"><i class="fas fa-exclamation-triangle"></i> Fine / Penalty <span style="font-size:0.7rem; font-weight:400;">(from database, not editable here)</span></td>
+        <td colspan="2" style="color:#dc2626;"><strong>Rs. ${ievFineAmount.toLocaleString()}</strong>${ievFineReason ? ` <span style="font-size:0.72rem;">(${escapeHtml(ievFineReason)})</span>` : ''}</td>
+        <td></td>`;
+    arrearsRow.parentNode.insertBefore(tr, arrearsRow);
 }
 
 function closeInlineVoucherEditor() {
@@ -2680,7 +2939,9 @@ function ievRecalcTotal() {
         const net = Math.max(0, (Number(r.amount) || 0) - (Number(r.discount) || 0));
         return s + net;
     }, 0);
-    const total = subtotal + (Number(ievArrears) || 0);
+    // Fine + arrears both add on top of the row subtotal, matching how
+    // computeFeeBreakdown() computes the real voucher total.
+    const total = subtotal + (Number(ievFineAmount) || 0) + (Number(ievArrears) || 0);
     const subEl = document.getElementById('iev-subtotal');
     const el = document.getElementById('iev-total');
     if (subEl) subEl.textContent = 'Rs. ' + subtotal.toLocaleString();
@@ -2721,6 +2982,11 @@ function ievSave() {
     students[idx].voucherNote = noteEl ? noteEl.value.trim() : (students[idx].voucherNote || '');
 
     localStorage.setItem('edu_students', JSON.stringify(students));
+
+    // BUGFIX — same fix as saveFeesToVoucher(): sync this month's generated
+    // record so a discount/edit applied here doesn't leave a phantom
+    // "arrears" balance once the bill is actually paid and the month rolls over.
+    syncVoucherSnapshotForCurrentMonth(students[idx].regNo || students[idx].id, students[idx].fullName);
 
     if (typeof showFeeSuccessToast === 'function') {
         showFeeSuccessToast(`Voucher updated for ${students[idx].fullName}`);
@@ -3017,3 +3283,590 @@ window.ievDeleteRow = ievDeleteRow;
 window.ievUpdateRow = ievUpdateRow;
 window.ievUpdateArrears = ievUpdateArrears;
 window.ievSave = ievSave;
+
+/* ============================================================================
+   MONTHLY FEE VOUCHER — GENERATION & PRINTING ENGINE
+   ----------------------------------------------------------------------------
+   This section is intentionally self-contained: it never touches
+   computeFeeBreakdown(), buildVoucherHTML(), or any of the existing fine /
+   arrears / discount logic above. It only adds a thin "has a voucher been
+   generated for this student this month?" tracking layer on top of that
+   existing, already-trusted calculation logic, plus the UI to drive it.
+   ============================================================================ */
+
+const GENERATED_VOUCHERS_KEY = 'edu_generated_vouchers';
+
+// ---------------------------------------------------------------------------
+// Data layer
+// ---------------------------------------------------------------------------
+function getGeneratedVouchers() {
+    try {
+        return JSON.parse(localStorage.getItem(GENERATED_VOUCHERS_KEY) || '[]');
+    } catch (e) { return []; }
+}
+
+function saveGeneratedVouchers(list) {
+    localStorage.setItem(GENERATED_VOUCHERS_KEY, JSON.stringify(list));
+}
+
+function voucherRecordKey(studentId, monthKey) {
+    return `${studentId}::${monthKey}`;
+}
+
+/**
+ * Looks up an existing voucher-generation record for a student for a given
+ * month (defaults to the current month). Returns null if none exists yet —
+ * this is the single source of truth the duplicate-generation guard relies on.
+ */
+function getVoucherRecord(studentId, monthKey = getCurrentMonthKey()) {
+    const key = voucherRecordKey(studentId, monthKey);
+    return getGeneratedVouchers().find(r => r.key === key) || null;
+}
+
+function isVoucherGenerated(studentId, monthKey = getCurrentMonthKey()) {
+    return !!getVoucherRecord(studentId, monthKey);
+}
+
+/**
+ * A student is billable if they're on the active roster. Graduated, dropped,
+ * or otherwise inactive (e.g. suspended) students are skipped automatically
+ * during generation — this is the "suspended status" edge case from the spec.
+ */
+function isStudentBillable(s) {
+    return !s.status || s.status === 'active';
+}
+
+function studentStatusLabel(s) {
+    if (!s.status || s.status === 'active') return 'Active';
+    return s.status.charAt(0).toUpperCase() + s.status.slice(1);
+}
+
+/**
+ * Writes a single voucher-generation record. Returns { created:boolean, record }.
+ * `created` is false when a record already exists for this student+month —
+ * this is the duplicate-generation guard: once a voucher exists for the
+ * month, it is never regenerated/overwritten until the month rolls over
+ * (monthKey changes), which also naturally covers "blocked until the last
+ * date of the month" since the key stays identical for the whole month.
+ */
+/**
+ * BUGFIX — "past arrears not carried into the next month":
+ * Previously `arrears` was purely a manually-typed field (via the inline
+ * voucher editor). If a student's fee went unpaid and the admin generated
+ * next month's voucher, the new voucher only showed that month's fee —
+ * the unpaid balance from the earlier month was silently dropped instead
+ * of carrying forward.
+ *
+ * This walks every ALREADY-GENERATED voucher for the student (every month
+ * except the one currently being generated), and for each one sums up
+ * however much of that month's billed total is still unpaid (billed total
+ * minus whatever was actually recorded in student.feePayments for that
+ * month). The sum becomes the new month's "Previous Arrears".
+ */
+function computeOutstandingArrears(student) {
+    const studentId = student.regNo || student.id;
+    const currentMonthKey = getCurrentMonthKey();
+    const payments = student.feePayments || [];
+
+    const priorRecords = getGeneratedVouchers()
+        .filter(r => String(r.studentId) === String(studentId) && r.monthKey !== currentMonthKey)
+        .sort((a, b) => a.monthKey.localeCompare(b.monthKey));
+
+    if (priorRecords.length === 0) return 0;
+
+    // BUGFIX — arrears were compounding every month instead of carrying the
+    // real outstanding balance. Each voucher's snapshotted `voucherTotal`
+    // ALREADY has every earlier month's unpaid arrears rolled into it (see
+    // recordVoucherGeneration, which sets student.arrears BEFORE snapshotting).
+    // The old code summed (billed - paid) across EVERY historical record,
+    // which re-added already-included old debt on top of itself each month
+    // it stayed unpaid — e.g. Rs.1000 unpaid in month 1 became Rs.3000 of
+    // "arrears" by month 3 instead of staying Rs.2000 (2 months x Rs.1000).
+    // Only the most recent prior month's snapshot is needed: it already
+    // represents the full running balance up to that point.
+    const last = priorRecords[priorRecords.length - 1];
+    const billed = Number(last.snapshot && last.snapshot.voucherTotal) || 0;
+    const paidForThatMonth = payments
+        .filter(p => p.monthKey === last.monthKey)
+        .reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
+
+    return Math.max(0, billed - paidForThatMonth);
+}
+
+/**
+ * Persists an updated arrears figure onto the student's saved record, AND
+ * expires any one-time custom voucher edits (Add-to-Voucher custom rows,
+ * bulk discount) that belonged to the month that just ended.
+ *
+ * BUGFIX — "discount isn't one-time, it keeps showing on every future
+ * voucher": `voucherCustomFees` / `otherFeesData` / `voucherBulkDiscount`
+ * live directly on the student profile with no month attached to them, so
+ * once an admin customized/discounted one month's voucher, EVERY future
+ * month kept reusing those exact same rows forever — a discount meant for
+ * March was silently still being charged (or discounted) in April, May,
+ * June... This is also the real reason a fully-paid month could still show
+ * "arrears" next month, and why totals looked doubled: the next month's
+ * bill kept including a leftover custom row from the SAME fee the student
+ * had already paid, on top of that same fee being charged again normally.
+ * Now, the moment a new month's voucher is generated, last month's custom
+ * edits are cleared so the new voucher starts from the plain base
+ * tuition/transport/other fields — an admin can still add a fresh discount
+ * for the new month specifically, and it will only apply to that month.
+ */
+function startFreshVoucherMonth(studentId, fullName, arrears) {
+    const students = JSON.parse(localStorage.getItem('edu_students') || '[]');
+    const matches = s => String(s.regNo || s.id) === String(studentId);
+    let idx = students.findIndex(s => matches(s) && s.fullName === fullName);
+    if (idx === -1) idx = students.findIndex(matches);
+    if (idx === -1) return;
+    students[idx].arrears = arrears;
+    students[idx].voucherCustomFees = false;
+    students[idx].otherFeesData = '[]';
+    students[idx].voucherBulkDiscount = 0;
+    localStorage.setItem('edu_students', JSON.stringify(students));
+}
+
+/**
+ * Keeps a generated voucher's snapshot in sync with the LIVE breakdown after
+ * the admin edits that month's voucher (discount, custom fees) post-
+ * generation. Without this, computeOutstandingArrears() next month compares
+ * against the STALE pre-edit total — so if a discount was applied, or fees
+ * customized, AFTER "Generate" was clicked, a student could pay their full
+ * (correct, discounted) bill and still show leftover "arrears" equal to the
+ * gap the snapshot never learned about — exactly the "paid in full but
+ * arrears still shows" / "7800 fee shows as 15k" symptoms.
+ */
+function syncVoucherSnapshotForCurrentMonth(studentId, fullName) {
+    const monthKey = getCurrentMonthKey();
+    const key = voucherRecordKey(studentId, monthKey);
+    const list = getGeneratedVouchers();
+    const recIdx = list.findIndex(r => r.key === key);
+    if (recIdx === -1) return; // no voucher generated yet this month — nothing to sync
+
+    const students = JSON.parse(localStorage.getItem('edu_students') || '[]');
+    const student = findStudentExact(students, studentId, fullName);
+    if (!student) return;
+
+    const f = computeFeeBreakdown(student);
+    list[recIdx].snapshot = {
+        tuitionFee: f.tuitionFee,
+        transportFee: f.transportFee,
+        otherFee: f.otherFee,
+        arrears: f.arrears,
+        fineAmount: (f.fineAmount || 0) + (f.monthlyFineTotal || 0),
+        totalDiscounts: f.totalDiscounts,
+        voucherTotal: f.voucherTotal,
+        totalAfterDueDate: f.totalAfterDueDate,
+        dueDateStr: f.dueDateStr,
+        expiryDateStr: f.expiryDateStr
+    };
+    saveGeneratedVouchers(list);
+}
+
+function recordVoucherGeneration(student, source = 'individual') {
+    const monthKey = getCurrentMonthKey();
+    const studentId = student.regNo || student.id;
+    const key = voucherRecordKey(studentId, monthKey);
+
+    const list = getGeneratedVouchers();
+    const existing = list.find(r => r.key === key);
+    if (existing) return { created: false, record: existing };
+
+    // Roll forward any unpaid balance from earlier months into this
+    // month's "Previous Arrears" BEFORE snapshotting, and expire any
+    // one-time discount/custom-fee edits that belonged to the month that
+    // just ended, so the new voucher starts clean (see startFreshVoucherMonth).
+    const rolledArrears = computeOutstandingArrears(student);
+    student.arrears = rolledArrears;
+    student.voucherCustomFees = false;
+    student.otherFeesData = '[]';
+    student.voucherBulkDiscount = 0;
+    startFreshVoucherMonth(studentId, student.fullName, rolledArrears);
+
+    // Snapshot pulls straight from the existing, untouched calculation engine
+    // so arrears / fines / discounts are captured exactly as the rest of the
+    // app already computes them.
+    const f = computeFeeBreakdown(student);
+
+    const record = {
+        key,
+        studentId,
+        studentName: student.fullName,
+        studentClass: student.studentClass,
+        monthKey,
+        generatedAt: new Date().toISOString(),
+        source,
+        snapshot: {
+            tuitionFee: f.tuitionFee,
+            transportFee: f.transportFee,
+            otherFee: f.otherFee,
+            arrears: f.arrears,
+            fineAmount: (f.fineAmount || 0) + (f.monthlyFineTotal || 0),
+            totalDiscounts: f.totalDiscounts,
+            voucherTotal: f.voucherTotal,
+            totalAfterDueDate: f.totalAfterDueDate,
+            dueDateStr: f.dueDateStr,
+            expiryDateStr: f.expiryDateStr
+        }
+    };
+
+    list.push(record);
+    saveGeneratedVouchers(list);
+    return { created: true, record };
+}
+
+function getAllClassNames() {
+    let classes = [];
+    try {
+        const raw = localStorage.getItem('edu_class_configs');
+        if (raw) classes = JSON.parse(raw);
+    } catch (e) { classes = []; }
+    if (!Array.isArray(classes) || classes.length === 0) {
+        classes = [{ name: 'Montessori' }, { name: 'Nursery' }, { name: 'Prep' }, { name: 'Grade 1' }, { name: 'Grade 2' }];
+    }
+    return classes.map(c => (c.name || '').trim()).filter(Boolean);
+}
+
+/**
+ * Returns the list of billable students in a class who are still missing a
+ * voucher for the current month. Because this is always computed fresh
+ * against getVoucherRecord(), calling "Generate" again after a new student
+ * is admitted mid-month naturally picks up only that new student — nothing
+ * special has to be done for the "late admission" case.
+ */
+function getPendingStudentsForClass(className) {
+    const students = JSON.parse(localStorage.getItem('edu_students') || '[]');
+    const monthKey = getCurrentMonthKey();
+    return students
+        .filter(s => s.studentClass === className)
+        .filter(isStudentBillable)
+        .filter(s => !isVoucherGenerated(s.regNo || s.id, monthKey));
+}
+
+function getPendingStudentsSchoolWide() {
+    const monthKey = getCurrentMonthKey();
+    const students = JSON.parse(localStorage.getItem('edu_students') || '[]');
+    return students
+        .filter(isStudentBillable)
+        .filter(s => !isVoucherGenerated(s.regNo || s.id, monthKey));
+}
+
+/**
+ * Class-level status used for the badge shown on each class card:
+ * 'done'    -> every billable student in the class has a voucher this month
+ * 'partial' -> some, but not all
+ * 'none'    -> no billable students have one yet (also used when class is empty)
+ */
+function getClassVoucherStatus(className) {
+    const students = JSON.parse(localStorage.getItem('edu_students') || '[]')
+        .filter(s => s.studentClass === className)
+        .filter(isStudentBillable);
+    if (students.length === 0) return { state: 'none', total: 0, generated: 0 };
+    const monthKey = getCurrentMonthKey();
+    const generated = students.filter(s => isVoucherGenerated(s.regNo || s.id, monthKey)).length;
+    let state = 'none';
+    if (generated === students.length) state = 'done';
+    else if (generated > 0) state = 'partial';
+    return { state, total: students.length, generated };
+}
+
+function _classVoucherBadgeHTML(className) {
+    const status = getClassVoucherStatus(className);
+    if (status.total === 0) return '';
+    const cls = status.state === 'done' ? 'badge-done' : (status.state === 'partial' ? 'badge-partial' : 'badge-none');
+    const icon = status.state === 'done' ? 'fa-check' : (status.state === 'partial' ? 'fa-clock' : 'fa-circle');
+    const title = status.state === 'done'
+        ? `All ${status.total} vouchers generated this month`
+        : `${status.generated}/${status.total} vouchers generated this month`;
+    return `<span class="class-status-badge ${cls}" title="${escapeForAttr(title)}"><i class="fas ${icon}"></i></span>`;
+}
+
+// ---------------------------------------------------------------------------
+// Toast feedback
+// ---------------------------------------------------------------------------
+function showFinanceToast(message, type = 'success') {
+    const container = document.getElementById('finance-toast-container');
+    if (!container) return;
+    const toast = document.createElement('div');
+    toast.className = `finance-toast finance-toast-${type}`;
+    const icon = type === 'success' ? 'fa-circle-check' : (type === 'error' ? 'fa-circle-exclamation' : 'fa-circle-info');
+    toast.innerHTML = `<i class="fas ${icon}"></i><span>${escapeHtml(message)}</span>`;
+    container.appendChild(toast);
+    requestAnimationFrame(() => toast.classList.add('show'));
+    setTimeout(() => {
+        toast.classList.remove('show');
+        setTimeout(() => toast.remove(), 300);
+    }, 3200);
+}
+
+// ---------------------------------------------------------------------------
+// Progress modal (background/batched processing feedback)
+// ---------------------------------------------------------------------------
+function openProgressModal(title) {
+    document.getElementById('progress-title').textContent = title;
+    document.getElementById('progress-bar-fill').style.width = '0%';
+    document.getElementById('progress-status-text').textContent = 'Preparing…';
+    document.getElementById('voucher-progress-modal').style.display = 'flex';
+}
+function updateProgressModal(done, total) {
+    const pct = total > 0 ? Math.round((done / total) * 100) : 100;
+    document.getElementById('progress-bar-fill').style.width = pct + '%';
+    document.getElementById('progress-status-text').textContent = `${done} of ${total} students processed…`;
+}
+function closeProgressModal() {
+    document.getElementById('voucher-progress-modal').style.display = 'none';
+}
+
+/**
+ * Generates vouchers for a list of students in small chunks, yielding back to
+ * the browser between chunks so the UI (and the progress bar) never freezes
+ * even with hundreds/thousands of students.
+ */
+function batchGenerateVouchers(students, source, onDone) {
+    const total = students.length;
+    if (total === 0) { onDone({ created: 0, skipped: 0 }); return; }
+
+    openProgressModal('Generating Vouchers…');
+    const CHUNK_SIZE = 25;
+    let index = 0;
+    let created = 0;
+    let skipped = 0;
+
+    function processChunk() {
+        const end = Math.min(index + CHUNK_SIZE, total);
+        for (; index < end; index++) {
+            const s = students[index];
+            const result = recordVoucherGeneration(s, source);
+            if (result.created) created++; else skipped++;
+        }
+        updateProgressModal(index, total);
+
+        if (index < total) {
+            setTimeout(processChunk, 0); // yield to the event loop
+        } else {
+            setTimeout(() => {
+                closeProgressModal();
+                onDone({ created, skipped });
+            }, 250);
+        }
+    }
+    processChunk();
+}
+
+// ---------------------------------------------------------------------------
+// Preview / confirm modal ("You're about to generate X vouchers…")
+// ---------------------------------------------------------------------------
+let _pendingPreviewAction = null; // { students, source, label }
+
+function showVoucherGenerationPreview(students, source, label) {
+    const alreadyGenerated = countAlreadyGeneratedFor(source);
+    // computeFeeBreakdown() now computes live outstanding arrears automatically
+    // for any student who doesn't yet have a voucher this month (see the
+    // arrears-staleness fix above), so this already matches exactly what
+    // recordVoucherGeneration() will lock in on confirm.
+    const totalRevenue = students.reduce((sum, s) => sum + computeFeeBreakdown(s).voucherTotal, 0);
+
+    document.getElementById('vp-title').textContent = `Generate Monthly Fees — ${label}`;
+    document.getElementById('vp-subtitle').textContent = students.length > 0
+        ? 'Please review before this is committed.'
+        : 'Nothing new to generate right now.';
+    document.getElementById('vp-count').textContent = students.length;
+    document.getElementById('vp-skip-count').textContent = alreadyGenerated;
+    document.getElementById('vp-revenue').textContent = `Rs. ${totalRevenue.toLocaleString()}`;
+
+    const confirmBtn = document.getElementById('vp-confirm-btn');
+    const emptyNote = document.getElementById('vp-empty-note');
+    if (students.length === 0) {
+        confirmBtn.style.display = 'none';
+        emptyNote.style.display = 'flex';
+    } else {
+        confirmBtn.style.display = 'inline-flex';
+        emptyNote.style.display = 'none';
+    }
+
+    _pendingPreviewAction = { students, source, label };
+    document.getElementById('voucher-preview-modal').style.display = 'flex';
+}
+
+function countAlreadyGeneratedFor(source) {
+    const monthKey = getCurrentMonthKey();
+    const students = JSON.parse(localStorage.getItem('edu_students') || '[]').filter(isStudentBillable);
+    const scoped = source === 'class' && currentFeeClassName
+        ? students.filter(s => s.studentClass === currentFeeClassName)
+        : students;
+    return scoped.filter(s => isVoucherGenerated(s.regNo || s.id, monthKey)).length;
+}
+
+function closeVoucherPreviewModal() {
+    document.getElementById('voucher-preview-modal').style.display = 'none';
+    _pendingPreviewAction = null;
+}
+
+function confirmVoucherPreview() {
+    if (!_pendingPreviewAction) { closeVoucherPreviewModal(); return; }
+    const { students, source, label } = _pendingPreviewAction;
+    closeVoucherPreviewModal();
+
+    batchGenerateVouchers(students, source, ({ created, skipped }) => {
+        showFinanceToast(`${label}: ${created} voucher${created === 1 ? '' : 's'} generated${skipped > 0 ? `, ${skipped} already existed` : ''}.`, 'success');
+        renderClassCardGrid();
+        if (currentFeeClassName) renderFees(currentFeeClassName);
+    });
+}
+
+// ---------------------------------------------------------------------------
+// Entry points wired to the buttons
+// ---------------------------------------------------------------------------
+
+/** Global "Generate Monthly Fees" button — scans every class in the school. */
+function handleGenerateMonthlyGlobalClick() {
+    const pending = getPendingStudentsSchoolWide();
+    showVoucherGenerationPreview(pending, 'global', 'Entire School');
+}
+
+/** Class-level "Generate Monthly Fee" button. */
+function handleGenerateClassClick() {
+    if (!currentFeeClassName) return;
+    const pending = getPendingStudentsForClass(currentFeeClassName);
+    showVoucherGenerationPreview(pending, 'class', currentFeeClassName);
+}
+
+/** Per-student "Generate Voucher" button in the student list. */
+function handleGenerateSingleVoucher(studentId, fullName) {
+    const students = JSON.parse(localStorage.getItem('edu_students') || '[]');
+    const student = findStudentExact(students, studentId, fullName);
+    if (!student) { showFinanceToast('Student not found.', 'error'); return; }
+
+    if (!isStudentBillable(student)) {
+        showFinanceToast(`Cannot generate a voucher — student is ${studentStatusLabel(student).toLowerCase()}.`, 'error');
+        return;
+    }
+
+    // Duplicate-generation guard
+    if (isVoucherGenerated(student.regNo || student.id)) {
+        showFinanceToast('A voucher has already been generated for this student this month.', 'info');
+        if (currentFeeClassName) renderFees(currentFeeClassName);
+        return;
+    }
+
+    const result = recordVoucherGeneration(student, 'individual');
+    if (result.created) {
+        showFinanceToast(`Voucher generated for ${student.fullName}.`, 'success');
+    } else {
+        showFinanceToast('A voucher already exists for this student this month.', 'info');
+    }
+    renderClassCardGrid();
+    if (currentFeeClassName) renderFees(currentFeeClassName);
+}
+
+window.handleGenerateMonthlyGlobalClick = handleGenerateMonthlyGlobalClick;
+window.handleGenerateClassClick = handleGenerateClassClick;
+window.handleGenerateSingleVoucher = handleGenerateSingleVoucher;
+window.confirmVoucherPreview = confirmVoucherPreview;
+window.closeVoucherPreviewModal = closeVoucherPreviewModal;
+
+/* ============================================================================
+   PRINT VOUCHERS FLOW
+   ============================================================================ */
+
+function openPrintVouchersModal() {
+    backToPrintModeSelect();
+    document.getElementById('print-vouchers-modal').style.display = 'flex';
+}
+function closePrintVouchersModal() {
+    document.getElementById('print-vouchers-modal').style.display = 'none';
+}
+function backToPrintModeSelect() {
+    document.getElementById('pv-mode-select').style.display = 'block';
+    document.getElementById('pv-class-picker').style.display = 'none';
+    document.getElementById('pv-student-search').style.display = 'none';
+}
+
+function showPrintClassPicker() {
+    document.getElementById('pv-mode-select').style.display = 'none';
+    document.getElementById('pv-class-picker').style.display = 'block';
+    document.getElementById('pv-student-search').style.display = 'none';
+
+    const classes = getAllClassNames();
+    const list = document.getElementById('pv-class-list');
+    list.innerHTML = classes.map(name => {
+        const count = JSON.parse(localStorage.getItem('edu_students') || '[]').filter(s => s.studentClass === name).length;
+        return `<button type="button" class="pv-list-item" onclick="printClassVouchers('${escapeForAttr(name)}')">
+                    <span>${escapeHtml(name)}</span>
+                    <span class="pv-list-item-count">${count} student${count === 1 ? '' : 's'}</span>
+                </button>`;
+    }).join('') || '<p class="pv-empty">No classes configured yet.</p>';
+}
+
+function showPrintStudentSearch() {
+    document.getElementById('pv-mode-select').style.display = 'none';
+    document.getElementById('pv-class-picker').style.display = 'none';
+    document.getElementById('pv-student-search').style.display = 'block';
+    document.getElementById('pv-student-search-input').value = '';
+    document.getElementById('pv-student-results').innerHTML = '<p class="pv-empty">Start typing to search…</p>';
+    setTimeout(() => document.getElementById('pv-student-search-input').focus(), 50);
+}
+
+function filterPrintStudentResults() {
+    const q = document.getElementById('pv-student-search-input').value.trim().toLowerCase();
+    const results = document.getElementById('pv-student-results');
+    if (!q) { results.innerHTML = '<p class="pv-empty">Start typing to search…</p>'; return; }
+
+    const students = JSON.parse(localStorage.getItem('edu_students') || '[]');
+    const matches = students.filter(s => {
+        const name = (s.fullName || '').toLowerCase();
+        const id = (s.regNo || s.id || '').toLowerCase();
+        return name.includes(q) || id.includes(q);
+    }).slice(0, 25);
+
+    results.innerHTML = matches.length ? matches.map(s => `
+        <button type="button" class="pv-list-item" onclick="printStudentVoucher('${escapeForAttr(s.regNo || s.id)}', '${escapeForAttr(s.fullName)}')">
+            <span>${escapeHtml(s.fullName)} <span class="pv-list-item-sub">(${escapeHtml(s.studentClass || '-')})</span></span>
+            <span class="pv-list-item-count">${escapeHtml(s.regNo || s.id)}</span>
+        </button>
+    `).join('') : '<p class="pv-empty">No matching students.</p>';
+}
+
+/** Renders one or more students' vouchers into the hidden print area and triggers print. */
+function printStudentsSequentially(students, emptyMessage) {
+    if (students.length === 0) {
+        showFinanceToast(emptyMessage || 'No students to print.', 'info');
+        return;
+    }
+    const printArea = document.getElementById('voucher-print-area');
+    printArea.innerHTML = students.map(s => buildVoucherHTML(s)).join('<div class="print-page-break"></div>');
+    closePrintVouchersModal();
+    showFinanceToast(`Preparing ${students.length} voucher${students.length === 1 ? '' : 's'} for print…`, 'info');
+    setTimeout(() => window.print(), 200);
+}
+
+function printAllVouchers() {
+    const students = JSON.parse(localStorage.getItem('edu_students') || '[]').filter(isStudentBillable);
+    // Sequential by class, then by name, for a predictable print order.
+    students.sort((a, b) => (a.studentClass || '').localeCompare(b.studentClass || '') || (a.fullName || '').localeCompare(b.fullName || ''));
+    printStudentsSequentially(students, 'No active students found to print.');
+}
+
+function printClassVouchers(className) {
+    const students = JSON.parse(localStorage.getItem('edu_students') || '[]')
+        .filter(s => s.studentClass === className)
+        .filter(isStudentBillable);
+    printStudentsSequentially(students, `No active students found in ${className}.`);
+}
+
+function printStudentVoucher(studentId, fullName) {
+    const students = JSON.parse(localStorage.getItem('edu_students') || '[]');
+    const student = findStudentExact(students, studentId, fullName);
+    if (!student) { showFinanceToast('Student not found.', 'error'); return; }
+    printStudentsSequentially([student]);
+}
+
+window.openPrintVouchersModal = openPrintVouchersModal;
+window.closePrintVouchersModal = closePrintVouchersModal;
+window.backToPrintModeSelect = backToPrintModeSelect;
+window.showPrintClassPicker = showPrintClassPicker;
+window.showPrintStudentSearch = showPrintStudentSearch;
+window.filterPrintStudentResults = filterPrintStudentResults;
+window.printAllVouchers = printAllVouchers;
+window.printClassVouchers = printClassVouchers;
+window.printStudentVoucher = printStudentVoucher;

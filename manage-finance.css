@@ -1158,6 +1158,9 @@
         border: 1.5px dashed #94a3b8;
         page-break-inside: avoid;
     }
+    .print-page-break {
+        page-break-after: always;
+    }
     @page {
         size: A4;
         margin: 10mm;
@@ -4200,3 +4203,281 @@ input[type="date"]::-webkit-calendar-picker-indicator {
     border: 1px solid var(--border-subtle);
     box-shadow: 0 4px 20px rgba(0,0,0,0.1);
 }
+
+/* ============================================================================
+   MONTHLY FEE VOUCHER — GENERATION & PRINTING UI
+   ============================================================================ */
+
+/* ---- Global toolbar (top right, above class list) ---- */
+.fee-global-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 12px;
+    margin: -6px 0 18px;
+}
+.fee-global-toolbar-spacer { flex: 1; }
+.fee-global-actions {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.btn-global-action {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 18px;
+    border-radius: 10px;
+    font-size: 0.85rem;
+    font-weight: 700;
+    cursor: pointer;
+    border: none;
+    transition: all 0.18s ease;
+    white-space: nowrap;
+}
+.btn-global-action.btn-generate-global,
+.btn-global-action.btn-generate-class {
+    background: linear-gradient(135deg, #6366f1, #4f46e5);
+    color: #fff;
+    box-shadow: 0 4px 12px -4px rgba(79,70,229,0.5);
+}
+.btn-global-action.btn-generate-global:hover,
+.btn-global-action.btn-generate-class:hover {
+    background: linear-gradient(135deg, #4f46e5, #4338ca);
+    transform: translateY(-1px);
+    box-shadow: 0 6px 16px -4px rgba(79,70,229,0.6);
+}
+.btn-global-action.btn-print-global {
+    background: transparent;
+    color: var(--text-primary);
+    border: 1.5px solid var(--border-subtle);
+}
+.btn-global-action.btn-print-global:hover {
+    border-color: #6366f1;
+    color: #6366f1;
+    transform: translateY(-1px);
+}
+
+.class-level-title-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+.class-level-title-row h3 { margin: 0; }
+
+@media (max-width: 720px) {
+    .fee-global-toolbar { justify-content: stretch; }
+    .fee-global-toolbar-spacer { display: none; }
+    .fee-global-actions { width: 100%; }
+    .fee-global-actions .btn-global-action { flex: 1; justify-content: center; }
+    .class-level-title-row { flex-direction: column; align-items: stretch; }
+}
+
+/* ---- Class card generation-status badge ---- */
+.class-selector-card { position: relative; }
+.class-status-badge {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.6rem;
+    color: #fff;
+    z-index: 2;
+}
+.class-status-badge.badge-done  { background: #16a34a; box-shadow: 0 0 0 3px rgba(22,163,74,0.15); }
+.class-status-badge.badge-partial { background: #f59e0b; box-shadow: 0 0 0 3px rgba(245,158,11,0.15); }
+.class-status-badge.badge-none  { background: #ef4444; width: 10px; height: 10px; top: 14px; right: 14px; box-shadow: 0 0 0 3px rgba(239,68,68,0.15); }
+.class-status-badge.badge-none i { display: none; }
+
+/* ---- "Generate Voucher" button in the student list ---- */
+.fee-students-table .btn-tiny.btn-generate-voucher {
+    background: linear-gradient(135deg, #6366f1, #4f46e5) !important;
+    color: #fff !important;
+    border: none !important;
+    box-shadow: 0 3px 8px -2px rgba(79,70,229,0.4);
+}
+.fee-students-table .btn-tiny.btn-generate-voucher:hover {
+    background: linear-gradient(135deg, #4f46e5, #4338ca) !important;
+    box-shadow: 0 5px 14px -3px rgba(79,70,229,0.5) !important;
+    transform: translateY(-2px) !important;
+}
+.fee-status-badge.fee-inactive {
+    background: rgba(148,163,184,0.15);
+    color: #64748b;
+}
+
+/* ---- Print Vouchers modal ---- */
+.pv-scroll { padding: 6px 4px; }
+.pv-option-btn {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    width: 100%;
+    padding: 16px;
+    margin-bottom: 12px;
+    border-radius: 14px;
+    border: 1.5px solid var(--border-subtle);
+    background: var(--bg-card);
+    cursor: pointer;
+    text-align: left;
+    transition: all 0.18s ease;
+}
+.pv-option-btn:hover {
+    border-color: #6366f1;
+    background: rgba(99,102,241,0.06);
+    transform: translateY(-1px);
+}
+.pv-option-icon {
+    width: 42px;
+    height: 42px;
+    min-width: 42px;
+    border-radius: 12px;
+    background: rgba(99,102,241,0.12);
+    color: #6366f1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.1rem;
+}
+.pv-option-text { display: flex; flex-direction: column; gap: 2px; flex: 1; }
+.pv-option-text strong { color: var(--text-primary); font-size: 0.95rem; }
+.pv-option-text span { color: var(--text-secondary, #6b7280); font-size: 0.8rem; }
+.pv-option-arrow { color: var(--text-secondary, #6b7280); font-size: 0.85rem; }
+
+.pv-back-btn { margin-bottom: 10px; }
+.pv-step-label {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--text-secondary, #6b7280);
+    margin: 0 0 12px;
+}
+.pv-class-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    max-height: 360px;
+    overflow-y: auto;
+}
+.pv-list-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 14px;
+    border-radius: 10px;
+    border: 1px solid var(--border-subtle);
+    background: var(--bg-card);
+    color: var(--text-primary);
+    cursor: pointer;
+    font-size: 0.88rem;
+    font-weight: 600;
+    transition: all 0.15s ease;
+}
+.pv-list-item:hover { border-color: #6366f1; background: rgba(99,102,241,0.06); }
+.pv-list-item-count { font-size: 0.75rem; font-weight: 700; color: #6366f1; }
+.pv-list-item-sub { font-weight: 400; color: var(--text-secondary, #6b7280); font-size: 0.78rem; }
+.pv-empty { text-align: center; color: var(--text-secondary, #6b7280); padding: 20px; font-size: 0.85rem; }
+#pv-student-search .fee-search-wrap { margin-bottom: 14px; }
+
+/* ---- Generate — preview / confirm modal ---- */
+.vp-summary-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+    margin-bottom: 10px;
+}
+.vp-summary-card {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 16px;
+    border-radius: 12px;
+    border: 1px solid var(--border-subtle);
+    background: var(--bg-card);
+}
+.vp-summary-card span { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-secondary, #6b7280); font-weight: 700; }
+.vp-summary-card strong { font-size: 1.25rem; color: var(--text-primary); }
+.vp-summary-card.vp-card-highlight {
+    border-color: rgba(99,102,241,0.35);
+    background: rgba(99,102,241,0.06);
+}
+.vp-summary-card.vp-card-highlight strong { color: #4f46e5; }
+.vp-empty-note {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 14px 16px;
+    border-radius: 10px;
+    background: rgba(22,163,74,0.08);
+    color: #16a34a;
+    font-weight: 600;
+    font-size: 0.88rem;
+}
+@media (max-width: 560px) {
+    .vp-summary-grid { grid-template-columns: 1fr; }
+}
+
+/* ---- Background/batch progress modal ---- */
+.progress-box { max-width: 420px; }
+.progress-modal-inner {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: 14px;
+    padding: 36px 28px;
+}
+.progress-spinner { font-size: 2rem; color: #6366f1; }
+.progress-modal-inner h3 { margin: 0; color: var(--text-primary); font-size: 1.05rem; }
+.progress-bar-track {
+    width: 100%;
+    height: 10px;
+    border-radius: 6px;
+    background: rgba(99,102,241,0.12);
+    overflow: hidden;
+}
+.progress-bar-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #6366f1, #4f46e5);
+    transition: width 0.2s ease;
+}
+#progress-status-text { margin: 0; font-size: 0.82rem; color: var(--text-secondary, #6b7280); }
+
+/* ---- Toasts ---- */
+.finance-toast-container {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    z-index: 9999;
+}
+.finance-toast {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 13px 18px;
+    border-radius: 10px;
+    background: var(--bg-card);
+    border: 1px solid var(--border-subtle);
+    color: var(--text-primary);
+    font-size: 0.85rem;
+    font-weight: 600;
+    box-shadow: 0 10px 30px -8px rgba(15,23,42,0.25);
+    opacity: 0;
+    transform: translateY(12px);
+    transition: opacity 0.25s ease, transform 0.25s ease;
+    max-width: 340px;
+}
+.finance-toast.show { opacity: 1; transform: translateY(0); }
+.finance-toast-success i { color: #16a34a; }
+.finance-toast-error i { color: #ef4444; }
+.finance-toast-info i { color: #6366f1; }

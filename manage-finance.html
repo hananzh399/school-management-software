@@ -131,6 +131,19 @@
                     <p>Select a grade level to generate or view fee vouchers</p>
                 </div>
 
+                <!-- Global voucher actions — top right, just above the class list -->
+                <div class="fee-global-toolbar">
+                    <div class="fee-global-toolbar-spacer"></div>
+                    <div class="fee-global-actions">
+                        <button type="button" class="btn-global-action btn-generate-global" id="btn-generate-monthly-global" onclick="handleGenerateMonthlyGlobalClick()">
+                            <i class="fas fa-file-invoice"></i> Generate Monthly Fees
+                        </button>
+                        <button type="button" class="btn-global-action btn-print-global" id="btn-print-vouchers-global" onclick="openPrintVouchersModal()">
+                            <i class="fas fa-print"></i> Print Vouchers
+                        </button>
+                    </div>
+                </div>
+
                 <div class="class-card-grid" id="class-card-grid">
                     <!-- Dynamically populated from Admin Settings (edu_class_configs) -->
                 </div>
@@ -141,8 +154,11 @@
                 <button class="btn-ghost" onclick="backToClassSelection()" style="margin-bottom: 5px;">
                     <i class="fas fa-chevron-left"></i> Change Class
                 </button>
-                <div class="section-title">
+                <div class="section-title class-level-title-row">
                     <h3 id="selected-class-title">Class Name</h3>
+                    <button type="button" class="btn-global-action btn-generate-class" id="btn-generate-class" onclick="handleGenerateClassClick()">
+                        <i class="fas fa-file-invoice"></i> Generate Monthly Fee
+                    </button>
                 </div>
                 <div class="fee-table-toolbar">
                     <div class="fee-search-wrap">
@@ -1015,6 +1031,127 @@
                 </div>
             </div>
         </div>
+
+        <!-- ===================== PRINT VOUCHERS MODAL ===================== -->
+        <div id="print-vouchers-modal" class="voucher-modal-overlay" style="display:none;">
+            <div class="voucher-modal-box pv-box">
+                <div class="voucher-modal-header afm-header">
+                    <div class="afm-header-left">
+                        <div class="afm-header-icon"><i class="fas fa-print"></i></div>
+                        <div>
+                            <h3>Print Vouchers</h3>
+                            <p id="pv-subtitle">Choose how you'd like to print vouchers</p>
+                        </div>
+                    </div>
+                    <button class="afm-close-btn" onclick="closePrintVouchersModal()"><i class="fas fa-times"></i></button>
+                </div>
+                <div class="voucher-modal-scroll pv-scroll">
+
+                    <!-- Step 1: choose a mode -->
+                    <div id="pv-mode-select">
+                        <button type="button" class="pv-option-btn" onclick="printAllVouchers()">
+                            <div class="pv-option-icon"><i class="fas fa-school"></i></div>
+                            <div class="pv-option-text">
+                                <strong>Print All Vouchers</strong>
+                                <span>Prints vouchers for the entire school, sequentially by class.</span>
+                            </div>
+                            <i class="fas fa-chevron-right pv-option-arrow"></i>
+                        </button>
+                        <button type="button" class="pv-option-btn" onclick="showPrintClassPicker()">
+                            <div class="pv-option-icon"><i class="fas fa-layer-group"></i></div>
+                            <div class="pv-option-text">
+                                <strong>Print Class Voucher</strong>
+                                <span>Select a specific class and print vouchers for that class.</span>
+                            </div>
+                            <i class="fas fa-chevron-right pv-option-arrow"></i>
+                        </button>
+                        <button type="button" class="pv-option-btn" onclick="showPrintStudentSearch()">
+                            <div class="pv-option-icon"><i class="fas fa-user-graduate"></i></div>
+                            <div class="pv-option-text">
+                                <strong>Print Student Voucher</strong>
+                                <span>Search for an individual student by name or ID and print theirs.</span>
+                            </div>
+                            <i class="fas fa-chevron-right pv-option-arrow"></i>
+                        </button>
+                    </div>
+
+                    <!-- Step 2a: class picker -->
+                    <div id="pv-class-picker" style="display:none;">
+                        <button class="btn-ghost pv-back-btn" onclick="backToPrintModeSelect()"><i class="fas fa-chevron-left"></i> Back</button>
+                        <p class="pv-step-label">Select a class to print</p>
+                        <div class="pv-class-list" id="pv-class-list"></div>
+                    </div>
+
+                    <!-- Step 2b: student search -->
+                    <div id="pv-student-search" style="display:none;">
+                        <button class="btn-ghost pv-back-btn" onclick="backToPrintModeSelect()"><i class="fas fa-chevron-left"></i> Back</button>
+                        <p class="pv-step-label">Search for a student</p>
+                        <div class="fee-search-wrap" style="max-width:none;">
+                            <i class="fas fa-search"></i>
+                            <input type="text" id="pv-student-search-input" placeholder="Search by name or Student ID..." oninput="filterPrintStudentResults()">
+                        </div>
+                        <div class="pv-class-list" id="pv-student-results"></div>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+
+        <!-- ===================== GENERATE VOUCHERS — PREVIEW / CONFIRM MODAL ===================== -->
+        <div id="voucher-preview-modal" class="voucher-modal-overlay" style="display:none;">
+            <div class="voucher-modal-box vp-box">
+                <div class="voucher-modal-header afm-header">
+                    <div class="afm-header-left">
+                        <div class="afm-header-icon"><i class="fas fa-clipboard-check"></i></div>
+                        <div>
+                            <h3 id="vp-title">Confirm Voucher Generation</h3>
+                            <p id="vp-subtitle">Please review before continuing</p>
+                        </div>
+                    </div>
+                    <button class="afm-close-btn" onclick="closeVoucherPreviewModal()"><i class="fas fa-times"></i></button>
+                </div>
+                <div class="voucher-modal-scroll vp-scroll">
+                    <div class="vp-summary-grid">
+                        <div class="vp-summary-card">
+                            <span>Students to Generate</span>
+                            <strong id="vp-count">0</strong>
+                        </div>
+                        <div class="vp-summary-card">
+                            <span>Already Generated</span>
+                            <strong id="vp-skip-count">0</strong>
+                        </div>
+                        <div class="vp-summary-card vp-card-highlight">
+                            <span>Expected Revenue</span>
+                            <strong id="vp-revenue">Rs. 0</strong>
+                        </div>
+                    </div>
+                    <div id="vp-empty-note" class="vp-empty-note" style="display:none;">
+                        <i class="fas fa-circle-check"></i> Every billable student already has a voucher for this month.
+                    </div>
+                </div>
+                <div class="iev-footer">
+                    <button class="action-back-btn" onclick="closeVoucherPreviewModal()"><i class="fas fa-times"></i> Cancel</button>
+                    <button class="btn-primary iev-save-btn" id="vp-confirm-btn" onclick="confirmVoucherPreview()"><i class="fas fa-check"></i> Continue</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- ===================== BACKGROUND GENERATION — PROGRESS MODAL ===================== -->
+        <div id="voucher-progress-modal" class="voucher-modal-overlay" style="display:none;">
+            <div class="voucher-modal-box progress-box">
+                <div class="progress-modal-inner">
+                    <div class="progress-spinner"><i class="fas fa-circle-notch fa-spin"></i></div>
+                    <h3 id="progress-title">Generating Vouchers…</h3>
+                    <div class="progress-bar-track">
+                        <div class="progress-bar-fill" id="progress-bar-fill" style="width:0%;"></div>
+                    </div>
+                    <p id="progress-status-text">Preparing…</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Toast container for success/error feedback -->
+        <div id="finance-toast-container" class="finance-toast-container"></div>
 
         <div id="voucher-print-area" class="print-only"></div>
 
