@@ -1,4 +1,4 @@
-/**
+  /**
  * EUFLOW PRO - FINNCE LOGIC
  */
 
@@ -142,22 +142,23 @@ const ALL_PAGES = [
     'page-main',
     'page-student-fees',
     'page-student-fine',
-    'page-add-student-fine',
-    'page-view-student-fines',
-    'page-staff-hub',
-    'page-staff-bonus',
-    'page-add-staff-bonus',
+    'page-fine-records',
     'page-view-staff-bonus',
-    'page-staff-fine',
-    'page-add-staff-fine',
-    'page-view-staff-fines',
     'page-expense-hub',
     'page-add-expense',
     'page-view-expenses',
     // Salary pages
     'page-salary-hub',
     'page-salary-teaching',
-    'page-salary-non-teaching'
+    'page-salary-non-teaching',
+    'page-salary-records',
+    'page-bonus-hub',
+    'page-bonus-teaching',
+    'page-bonus-non-teaching',
+    'page-custom-fee',
+    'page-custom-fee-generate',
+    'page-custom-fee-records',
+    'page-fee-defaulter'
 ];
 
 function showPage(pageId) {
@@ -169,29 +170,20 @@ function showPage(pageId) {
     if (target) target.classList.remove('d-none');
 
     if (pageId === 'page-student-fees') { renderClassCardGrid(); if (typeof backToClassSelection === 'function') backToClassSelection(); }
-    if (pageId === 'page-add-student-fine') populateStudentDropdown();
-    if (pageId === 'page-add-staff-fine') {
-        selectedStaffCategory = 'Teaching';
-        selectedStaffId = null;
-        document.getElementById('btn-teaching').classList.add('active');
-        document.getElementById('btn-non-teaching').classList.remove('active');
-        const sf = document.getElementById('staff-fine-search'); if (sf) sf.value = '';
-        renderStaffMembersList('Teaching', '');
-    }
-    if (pageId === 'page-add-staff-bonus') {
-        selectedBonusCategory = 'Teaching';
-        selectedBonusStaffId = null;
-        document.getElementById('btn-bonus-teaching').classList.add('active');
-        document.getElementById('btn-bonus-non-teaching').classList.remove('active');
-        const bs = document.getElementById('bonus-search'); if (bs) bs.value = '';
-        renderBonusMembersList('Teaching', '');
-    }
-    if (pageId === 'page-view-student-fines') renderStudentFinesTable();
-    if (pageId === 'page-view-staff-fines') renderStaffFinesTable();
-    if (pageId === 'page-view-staff-bonus') renderStaffBonusTable();
+    if (pageId === 'page-student-fine') initFinesHub();
+    if (pageId === 'page-fine-records') initFineRecordsHub();
+    if (pageId === 'page-view-staff-bonus') initBonusRecordsHub();
     if (pageId === 'page-view-expenses') renderExpensesTable();
     if (pageId === 'page-salary-teaching') initTeachingSalaryPage();
     if (pageId === 'page-salary-non-teaching') initNonTeachingSalaryPage();
+    if (pageId === 'page-salary-records') initSalaryRecordsPage();
+    if (pageId === 'page-expense-hub') initExpenseHub();
+    if (pageId === 'page-bonus-teaching') initBonusPage('teaching');
+    if (pageId === 'page-bonus-non-teaching') initBonusPage('non-teaching');
+    if (pageId === 'page-custom-fee')          initCfWorkspace();
+    if (pageId === 'page-custom-fee-generate') initCustomFeeGeneratePage();
+    if (pageId === 'page-custom-fee-records')  _onShowCustomFeeRecords();
+    if (pageId === 'page-fee-defaulter')       initFeeDefaulterPage();
 }
 
 /* ============================================
@@ -229,105 +221,161 @@ function getRealStudents() {
     return JSON.parse(localStorage.getItem('edu_students') || '[]');
 }
 
-let selectedStudentFineId = null;
+/* ============================================
+   FINES HUB — left switch (Students / Staff)
+   ============================================ */
+let fineTargetTab = 'student';
 
-// Reset the Add-Student-Fine page each time it opens
-function populateStudentDropdown() {
-    selectedStudentFineId = null;
-    selectedStudentFineRegNo = null;
-    const input = document.getElementById('student-fine-search');
-    if (input) input.value = '';
-    renderStudentSearchResults('');
+function initFinesHub() {
+    setFineTargetTab(fineTargetTab || 'student');
+    populateFineClassDropdown();
 }
 
-function studentMatchesQuery(s, query) {
-    const name = (s.fullName || s.name || '').toLowerCase();
-    const guardian = (s.guardianName || '').toLowerCase();
-    const q = (query || '').trim().toLowerCase();
-    if (!q) return true;
-    // "Name~Guardian" => BOTH must match
-    if (q.includes('~')) {
-        const parts = q.split('~');
-        const namePart = (parts[0] || '').trim();
-        const guardianPart = (parts[1] || '').trim();
-        const nameOk = !namePart || name.includes(namePart);
-        const guardianOk = !guardianPart || guardian.includes(guardianPart);
-        return nameOk && guardianOk;
+function setFineTargetTab(tab) {
+    fineTargetTab = tab;
+    const isStudent = tab === 'student';
+    document.getElementById('fine-tab-student').classList.toggle('active', isStudent);
+    document.getElementById('fine-tab-staff').classList.toggle('active', !isStudent);
+    document.getElementById('fine-panel-student').classList.toggle('d-none', !isStudent);
+    document.getElementById('fine-panel-staff').classList.toggle('d-none', isStudent);
+    if (isStudent) {
+        resetStudentFineForm();
+    } else {
+        resetStaffFineForm();
     }
-    // single term => match student name OR guardian name
-    return name.includes(q) || guardian.includes(q);
 }
 
-function searchStudentsForFine() {
-    const q = document.getElementById('student-fine-search').value;
-    renderStudentSearchResults(q);
+function resetStudentFineForm() {
+    sfSelectedRegNo = null;
+    sfSelectedId = null;
+    populateFineClassDropdown();
+    const secSel = document.getElementById('sf-section-select');
+    const stuSel = document.getElementById('sf-student-select');
+    if (secSel) { secSel.innerHTML = '<option value="">-- Select Section --</option>'; secSel.disabled = true; }
+    if (stuSel) { stuSel.innerHTML = '<option value="">-- Select Student --</option>'; stuSel.disabled = true; }
+    const info = document.getElementById('sf-selected-student-info');
+    if (info) { info.classList.add('d-none'); info.innerHTML = ''; }
+    const amt = document.getElementById('student-fine-amount'); if (amt) amt.value = '';
+    const desc = document.getElementById('student-fine-desc'); if (desc) desc.value = '';
 }
 
-function renderStudentSearchResults(query) {
-    const container = document.getElementById('student-fine-results');
-    if (!container) return;
+function resetStaffFineForm() {
+    const amt = document.getElementById('staff-fine-amount'); if (amt) amt.value = '';
+    const desc = document.getElementById('staff-fine-desc'); if (desc) desc.value = '';
+    selectStaffCategory('Teaching');
+}
+
+/* ---- Cascading Class -> Section -> Student dropdowns ---- */
+let sfSelectedRegNo = null;
+let sfSelectedId = null;
+
+function populateFineClassDropdown() {
+    const classSel = document.getElementById('sf-class-select');
+    if (!classSel) return;
     const students = getRealStudents();
+    let classes = [...new Set(students.map(s => s.studentClass || s.className).filter(Boolean))];
+    if (classes.length === 0) classes = getAllClassNames();
+    classSel.innerHTML = '<option value="">-- Select Class --</option>' +
+        classes.map(c => `<option value="${escapeForAttr(c)}">${escapeHtml(c)}</option>`).join('');
+    classSel.value = '';
+}
+
+function onFineClassChange() {
+    const cls = document.getElementById('sf-class-select').value;
+    const secSel = document.getElementById('sf-section-select');
+    const stuSel = document.getElementById('sf-student-select');
+    sfSelectedRegNo = null; sfSelectedId = null;
+    const info = document.getElementById('sf-selected-student-info');
+    if (info) { info.classList.add('d-none'); info.innerHTML = ''; }
+
+    if (!cls) {
+        secSel.innerHTML = '<option value="">-- Select Section --</option>'; secSel.disabled = true;
+        stuSel.innerHTML = '<option value="">-- Select Student --</option>'; stuSel.disabled = true;
+        return;
+    }
+
+    const students = getRealStudents().filter(s => (s.studentClass || s.className) === cls);
+    let sections = [...new Set(students.map(s => s.section).filter(Boolean))];
+    stuSel.innerHTML = '<option value="">-- Select Student --</option>'; stuSel.disabled = true;
+
+    if (sections.length === 0) {
+        // No sections on record for this class — skip straight to students
+        secSel.innerHTML = '<option value="">-- N/A --</option>';
+        secSel.disabled = true;
+        populateFineStudentDropdown(cls, null);
+    } else {
+        secSel.innerHTML = '<option value="">-- Select Section --</option>' +
+            sections.map(sec => `<option value="${escapeForAttr(sec)}">${escapeHtml(sec)}</option>`).join('');
+        secSel.disabled = false;
+    }
+}
+
+function onFineSectionChange() {
+    const cls = document.getElementById('sf-class-select').value;
+    const sec = document.getElementById('sf-section-select').value;
+    sfSelectedRegNo = null; sfSelectedId = null;
+    const info = document.getElementById('sf-selected-student-info');
+    if (info) { info.classList.add('d-none'); info.innerHTML = ''; }
+    populateFineStudentDropdown(cls, sec || null);
+}
+
+function populateFineStudentDropdown(cls, sec) {
+    const stuSel = document.getElementById('sf-student-select');
+    if (!stuSel) return;
+    let students = getRealStudents().filter(s => (s.studentClass || s.className) === cls);
+    if (sec) students = students.filter(s => s.section === sec);
 
     if (students.length === 0) {
-        container.innerHTML = '<p class="search-empty">No students found. Add students from Admissions first.</p>';
+        stuSel.innerHTML = '<option value="">-- No Students Found --</option>';
+        stuSel.disabled = true;
         return;
     }
 
-    const q = (query || '').trim();
-    const matches = q ? students.filter(s => studentMatchesQuery(s, q)) : students;
-
-    if (matches.length === 0) {
-        container.innerHTML = '<p class="search-empty">No students match your search.</p>';
-        return;
-    }
-
-    container.innerHTML = matches.map((s, index) => {
-        // "id" is only a local selection key (used to highlight the picked row).
-        // "regNo" is the REAL identifier that must be sent to the backend —
-        // it must always match what showFineDetails()/StudentFinance use,
-        // otherwise a fine gets saved under an identifier the history view
-        // never queries for, and that record silently disappears.
-        const id = s.id || s.regNo || '';
-        const regNo = s.regNo || s.id || '';
-        const name = s.fullName || s.name || 'Unnamed';
-        const cls = s.studentClass || s.className || '-';
-        const father = s.guardianName || '-';
-        const active = (String(id) === String(selectedStudentFineId)) ? 'selected' : '';
-        return `
-        <div class="staff-member-item ${active}" id="stu-fine-item-${index}" onclick="selectStudentForFine('${id}', '${regNo}', ${index})">
-            <div class="staff-member-info">
-                <span class="staff-member-name">${name}</span>
-                <span class="staff-member-role"><b>ID:</b> ${id} &nbsp;&bull;&nbsp; <b>Class:</b> ${cls} &nbsp;&bull;&nbsp; <b>Father:</b> ${father}</span>
-            </div>
-            <div class="staff-member-check"><i class="fas fa-check"></i></div>
-        </div>`;
-    }).join('');
+    stuSel.innerHTML = '<option value="">-- Select Student --</option>' +
+        students.map(s => {
+            const id = s.id || s.regNo || '';
+            const regNo = s.regNo || s.id || '';
+            const name = s.fullName || s.name || 'Unnamed';
+            return `<option value="${escapeForAttr(id)}" data-regno="${escapeForAttr(regNo)}">${escapeHtml(name)} (${escapeHtml(id)})</option>`;
+        }).join('');
+    stuSel.disabled = false;
 }
 
-let selectedStudentFineRegNo = null;
+function onFineStudentChange() {
+    const stuSel = document.getElementById('sf-student-select');
+    const opt = stuSel.options[stuSel.selectedIndex];
+    const info = document.getElementById('sf-selected-student-info');
+    if (!opt || !opt.value) {
+        sfSelectedId = null; sfSelectedRegNo = null;
+        if (info) { info.classList.add('d-none'); info.innerHTML = ''; }
+        return;
+    }
+    sfSelectedId = opt.value;
+    sfSelectedRegNo = opt.getAttribute('data-regno') || opt.value;
 
-function selectStudentForFine(id, regNo, index) {
-    selectedStudentFineId = id;
-    selectedStudentFineRegNo = regNo;
-    document.querySelectorAll('#student-fine-results .staff-member-item').forEach(el => el.classList.remove('selected'));
-    const item = document.getElementById('stu-fine-item-' + index);
-    if (item) item.classList.add('selected');
+    const students = getRealStudents();
+    const s = students.find(x => String(x.id || x.regNo) === String(sfSelectedId));
+    if (info && s) {
+        const father = s.guardianName || '-';
+        info.classList.remove('d-none');
+        info.innerHTML = `<i class="fas fa-user-check"></i> <b>${escapeHtml(s.fullName || s.name || '')}</b> &nbsp;&bull;&nbsp; ID: ${escapeHtml(sfSelectedId)} &nbsp;&bull;&nbsp; Father: ${escapeHtml(father)}`;
+    }
 }
 
 async function handleAddStudentFine() {
     const amount = document.getElementById('student-fine-amount').value;
     const desc = document.getElementById('student-fine-desc').value.trim();
-    if (!selectedStudentFineId || !amount) return alert("Fill all fields");
+    if (!sfSelectedId || !amount) return alert("Please select a class, section, student and enter a fine amount.");
 
     await apiRequest("/add-fine", "POST", {
-        regNo: selectedStudentFineRegNo || selectedStudentFineId,
+        regNo: sfSelectedRegNo || sfSelectedId,
         monthKey: getCurrentMonthKey(),
         amount: amount,
         reason: desc
     });
 
     alert("Fine added to MySQL Database");
-    showPage('page-student-fine');
+    resetStudentFineForm();
 }
 
 let allStudentFinesCache = [];
@@ -354,7 +402,7 @@ async function renderStudentFinesTable() {
             return;
         }
 
-        renderStudentFinesRows(allStudentFinesCache);
+        filterStudentFinesTable();
     } catch (err) {
         console.error(err);
         tbody.innerHTML = '<tr><td colspan="6" class="empty-row" style="color:red;">Error connecting to MySQL.</td></tr>';
@@ -418,10 +466,98 @@ function studentFineMatchesQuery(f, query) {
 function filterStudentFinesTable() {
     const input = document.getElementById('student-fines-view-search');
     const q = input ? input.value : '';
-    const filtered = q.trim()
-        ? allStudentFinesCache.filter(f => studentFineMatchesQuery(f, q))
-        : allStudentFinesCache;
+    const classFilter = (document.getElementById('fr-student-class-filter') || {}).value || '';
+    const sectionFilter = (document.getElementById('fr-student-section-filter') || {}).value || '';
+
+    let filtered = allStudentFinesCache;
+    if (q.trim())        filtered = filtered.filter(f => studentFineMatchesQuery(f, q));
+    if (classFilter)     filtered = filtered.filter(f => f.studentClass === classFilter);
+    if (sectionFilter)   filtered = filtered.filter(f => (f.section || '') === sectionFilter);
+
     renderStudentFinesRows(filtered);
+}
+
+/* ============================================
+   FINE RECORDS HUB — left switch (Students / Staff)
+   ============================================ */
+let fineRecordsTab = 'student';
+
+/**
+ * Context set when navigating to fine records.
+ * 'student' | 'Teaching' | 'Non-Teaching'
+ */
+let _fineRecordsContext = 'student';
+
+/**
+ * Called by the "View Records" button. Sets context from the active fine tab
+ * and staff category, then navigates to the fine records page.
+ */
+function openFineRecordsWithContext() {
+    if (fineTargetTab === 'student') {
+        _fineRecordsContext = 'student';
+    } else {
+        _fineRecordsContext = selectedStaffCategory; // 'Teaching' or 'Non-Teaching'
+    }
+    showPage('page-fine-records');
+}
+
+function initFineRecordsHub() {
+    const ctx = _fineRecordsContext || 'student';
+    const studentPanel = document.getElementById('fr-panel-student');
+    const staffPanel   = document.getElementById('fr-panel-staff');
+
+    if (ctx === 'student') {
+        if (studentPanel) studentPanel.classList.remove('d-none');
+        if (staffPanel)   staffPanel.classList.add('d-none');
+        populateFrClassFilter();
+        renderStudentFinesTable();
+    } else {
+        if (studentPanel) studentPanel.classList.add('d-none');
+        if (staffPanel)   staffPanel.classList.remove('d-none');
+
+        // Hide the All/Teaching/Non-Teaching toggle — context is already specific
+        const catToggle = staffPanel ? staffPanel.querySelector('.records-category-toggle') : null;
+        if (catToggle) catToggle.style.display = 'none';
+
+        staffFinesCategoryFilter = ctx; // 'Teaching' or 'Non-Teaching'
+        const sInput = document.getElementById('staff-fines-view-search');
+        if (sInput) sInput.value = '';
+        renderStaffFinesTable();
+    }
+}
+
+function setFineRecordsTab(tab) {
+    // Legacy helper — tab buttons have been removed; kept for compatibility.
+    fineRecordsTab = tab;
+    _fineRecordsContext = tab === 'student' ? 'student' : (selectedStaffCategory || 'Teaching');
+    initFineRecordsHub();
+}
+
+function populateFrClassFilter() {
+    const classSel = document.getElementById('fr-student-class-filter');
+    if (!classSel) return;
+    const students = getRealStudents();
+    let classes = [...new Set(students.map(s => s.studentClass || s.className).filter(Boolean))];
+    if (classes.length === 0) classes = getAllClassNames();
+    const current = classSel.value;
+    classSel.innerHTML = '<option value="">-- All Classes --</option>' +
+        classes.map(c => `<option value="${escapeForAttr(c)}">${escapeHtml(c)}</option>`).join('');
+    classSel.value = current || '';
+    onFrStudentFilterChange(true);
+}
+
+function onFrStudentFilterChange(skipRender) {
+    const cls = document.getElementById('fr-student-class-filter').value;
+    const secSel = document.getElementById('fr-student-section-filter');
+    if (secSel) {
+        const students = getRealStudents().filter(s => cls ? (s.studentClass || s.className) === cls : true);
+        const sections = [...new Set(students.map(s => s.section).filter(Boolean))];
+        const current = secSel.value;
+        secSel.innerHTML = '<option value="">-- All Sections --</option>' +
+            sections.map(sec => `<option value="${escapeForAttr(sec)}">${escapeHtml(sec)}</option>`).join('');
+        secSel.value = sections.includes(current) ? current : '';
+    }
+    if (!skipRender) filterStudentFinesTable();
 }
 
 /* ============================================
@@ -529,16 +665,46 @@ function handleAddStaffFine() {
     alert(`Fine of RS ${amount.toLocaleString()} added to ${members[idx].name}.`);
     document.getElementById('staff-fine-amount').value = '';
     document.getElementById('staff-fine-desc').value = '';
-    showPage('page-staff-fine');
+    selectedStaffId = null;
+    renderStaffMembersList(selectedStaffCategory, '');
+    const sf = document.getElementById('staff-fine-search'); if (sf) sf.value = '';
+}
+
+let staffFinesCategoryFilter = 'All';
+
+function setStaffFinesCategoryFilter(category) {
+    staffFinesCategoryFilter = category;
+    document.querySelectorAll('#fr-panel-staff .records-category-toggle .category-btn').forEach(b => b.classList.remove('active'));
+    const map = { 'All': 'fr-staff-cat-all', 'Teaching': 'fr-staff-cat-teaching', 'Non-Teaching': 'fr-staff-cat-non-teaching' };
+    const btn = document.getElementById(map[category]); if (btn) btn.classList.add('active');
+    renderStaffFinesTable();
+}
+
+function filterStaffFinesTable() {
+    renderStaffFinesTable();
 }
 
 function renderStaffFinesTable() {
     const tbody = document.getElementById('staff-fines-tbody');
+    if (!tbody) return;
     const allFines = getStaffFinesData();
     const currentMonthKey = getCurrentMonthKey();
-    const fines = allFines.filter(f => !f.monthKey || f.monthKey === currentMonthKey);
+    const q = ((document.getElementById('staff-fines-view-search') || {}).value || '').trim().toLowerCase();
+
+    let fines = allFines.filter(f => !f.monthKey || f.monthKey === currentMonthKey);
+    if (staffFinesCategoryFilter && staffFinesCategoryFilter !== 'All') {
+        fines = fines.filter(f => f.category === staffFinesCategoryFilter);
+    }
+    if (q) {
+        fines = fines.filter(f =>
+            (f.name || '').toLowerCase().includes(q) ||
+            String(f.id || '').toLowerCase().includes(q) ||
+            (f.role || '').toLowerCase().includes(q)
+        );
+    }
+
     if (fines.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="4" class="empty-row">No fines recorded this month.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="4" class="empty-row">No fines match your filters.</td></tr>';
         return;
     }
     tbody.innerHTML = fines.map(f => `
@@ -554,9 +720,6 @@ function renderStaffFinesTable() {
 /* ============================================
    STAFF BONUS
    ============================================ */
-let selectedBonusCategory = 'Teaching';
-let selectedBonusStaffId = null;
-
 function getStaffBonusData() {
     const raw = localStorage.getItem('eduflow-staff-bonus');
     return raw ? JSON.parse(raw) : [];
@@ -565,97 +728,87 @@ function saveStaffBonusData(arr) {
     localStorage.setItem('eduflow-staff-bonus', JSON.stringify(arr));
 }
 
-function selectBonusCategory(category) {
-    selectedBonusCategory = category;
-    selectedBonusStaffId = null;
-    document.getElementById('btn-bonus-teaching').classList.toggle('active', category === 'Teaching');
-    document.getElementById('btn-bonus-non-teaching').classList.toggle('active', category === 'Non-Teaching');
-    const search = document.getElementById('bonus-search');
-    if (search) search.value = '';
-    renderBonusMembersList(category, '');
+/* Bonus Records: Teaching and Non-Teaching are two fully separate tabs,
+   each with its own search box and table — mirrors the Fine Records
+   Student/Staff tab pattern instead of a single merged table. */
+let bonusRecordsTab = 'Teaching';
+
+/**
+ * Context set before navigating to bonus records.
+ * 'Teaching' | 'Non-Teaching'
+ */
+let _bonusContext = 'Teaching';
+
+function initBonusRecordsHub() {
+    const ctx = _bonusContext || 'Teaching';
+    const tSearch  = document.getElementById('staff-bonus-view-search-teaching');  if (tSearch)  tSearch.value  = '';
+    const ntSearch = document.getElementById('staff-bonus-view-search-non-teaching'); if (ntSearch) ntSearch.value = '';
+    setBonusRecordsTab(ctx);
 }
 
-function filterBonusList() {
-    renderBonusMembersList(selectedBonusCategory, document.getElementById('bonus-search').value);
+function setBonusRecordsTab(category) {
+    bonusRecordsTab = category;
+    const isTeaching = category === 'Teaching';
+    // Tab buttons removed — just show/hide the relevant panel
+    const tPanel  = document.getElementById('vb-panel-teaching');
+    const ntPanel = document.getElementById('vb-panel-non-teaching');
+    if (tPanel)  tPanel.classList.toggle('d-none', !isTeaching);
+    if (ntPanel) ntPanel.classList.toggle('d-none', isTeaching);
+    renderStaffBonusTable(category);
 }
 
-function renderBonusMembersList(category, query) {
-    const container = document.getElementById('bonus-members-list');
-    const db = getGlobalData();
-    let members = db.staff[category] || [];
-    members = members.filter(s => staffMatchesQuery(s, query));
-    if (members.length === 0) {
-        container.innerHTML = '<p class="search-empty">No staff found in this category.</p>';
-        return;
-    }
-    container.innerHTML = members.map(s => {
-        const active = (String(s.id) === String(selectedBonusStaffId)) ? 'selected' : '';
-        return `
-        <div class="staff-member-item ${active}" id="bonus-item-${s.id}" onclick="selectBonusStaff('${s.id}')">
-            <div class="staff-member-info">
-                <span class="staff-member-name">${s.name}</span>
-                <span class="staff-member-role">${staffSubLine(s, category)}</span>
-            </div>
-            <div class="staff-member-check"><i class="fas fa-check"></i></div>
-        </div>`;
-    }).join('');
+function filterStaffBonusTable(category) {
+    renderStaffBonusTable(category);
 }
 
-function selectBonusStaff(id) {
-    document.querySelectorAll('#bonus-members-list .staff-member-item').forEach(el => el.classList.remove('selected'));
-    const item = document.getElementById('bonus-item-' + id);
-    if (item) item.classList.add('selected');
-    selectedBonusStaffId = id;
-}
-
-function handleAddStaffBonus() {
-    if (!selectedBonusStaffId) { alert('Please select a staff member.'); return; }
-    const amount = Number(document.getElementById('staff-bonus-amount').value);
-    const desc = document.getElementById('staff-bonus-desc').value.trim();
-    if (!amount || amount < 1) { alert('Please enter a valid bonus amount.'); return; }
-    if (!desc) { alert('Please enter a bonus description.'); return; }
+function renderStaffBonusTable(category) {
+    const tbody = document.getElementById(category === 'Teaching' ? 'staff-bonus-tbody-teaching' : 'staff-bonus-tbody-non-teaching');
+    if (!tbody) return;
 
     const db = getGlobalData();
-    const members = db.staff[selectedBonusCategory];
-    const idx = members.findIndex(s => s.id === selectedBonusStaffId);
-    if (idx === -1) { alert('Staff member not found.'); return; }
-
-    const role = selectedBonusCategory === 'Teaching'
-        ? (members[idx].subjects || 'Teacher')
-        : (members[idx].job || 'Staff');
-
-    const log = getStaffBonusData();
-    log.push({
-        staffId: members[idx].id, id: members[idx].id, name: members[idx].name, role: role,
-        category: selectedBonusCategory, amount: amount, description: desc,
-        date: new Date().toLocaleDateString('en-US'),
-        monthKey: getCurrentMonthKey()
-    });
-    saveStaffBonusData(log);
-
-    alert(`Bonus of RS ${amount.toLocaleString()} added to ${members[idx].name}.`);
-    document.getElementById('staff-bonus-amount').value = '';
-    document.getElementById('staff-bonus-desc').value = '';
-    showPage('page-staff-bonus');
-}
-
-function renderStaffBonusTable() {
-    const tbody = document.getElementById('staff-bonus-tbody');
+    const allStaff = (db.staff && db.staff[category]) ? db.staff[category] : [];
     const allLog = getStaffBonusData();
     const currentMonthKey = getCurrentMonthKey();
-    const log = allLog.filter(b => !b.monthKey || b.monthKey === currentMonthKey);
-    if (log.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="4" class="empty-row">No bonuses recorded this month.</td></tr>';
+    const searchId = category === 'Teaching' ? 'staff-bonus-view-search-teaching' : 'staff-bonus-view-search-non-teaching';
+    const q = ((document.getElementById(searchId) || {}).value || '').trim().toLowerCase();
+
+    // Filter staff by search query
+    const staffToShow = allStaff.filter(s => {
+        if (!q) return true;
+        return (s.name || '').toLowerCase().includes(q) ||
+               String(s.id || '').toLowerCase().includes(q) ||
+               (s.subjects || s.job || s.role || '').toLowerCase().includes(q);
+    });
+
+    if (staffToShow.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="5" class="empty-row">No ${category === 'Teaching' ? 'teaching' : 'non-teaching'} staff found.</td></tr>`;
         return;
     }
-    tbody.innerHTML = log.map(b => `
-        <tr>
-            <td>${b.name}</td>
-            <td>${b.role}</td>
-            <td>RS ${Number(b.amount).toLocaleString()}</td>
-            <td>${b.description}</td>
-        </tr>
-    `).join('');
+
+    tbody.innerHTML = staffToShow.map(s => {
+        // Find a bonus for this staff member in the current month
+        const bonus = allLog.find(b =>
+            (String(b.staffId) === String(s.id) || String(b.id) === String(s.id)) &&
+            b.category === category &&
+            (!b.monthKey || b.monthKey === currentMonthKey)
+        );
+        const given = !!bonus;
+        const role    = category === 'Teaching' ? (s.subjects || 'Teacher') : (s.job || 'Staff');
+        const amount  = given ? `RS ${Number(bonus.amount).toLocaleString()}` : '—';
+        const desc    = given ? (bonus.description || '—') : '—';
+        const badge   = given
+            ? `<span class="status-badge status-paid"><i class="fas fa-check-circle"></i> Given</span>`
+            : `<span class="status-badge status-pending"><i class="fas fa-clock"></i> Not Given</span>`;
+        return `
+            <tr>
+                <td>${escapeHtml(s.name)}</td>
+                <td>${escapeHtml(role)}</td>
+                <td>${amount}</td>
+                <td>${escapeHtml(desc)}</td>
+                <td>${badge}</td>
+            </tr>
+        `;
+    }).join('');
 }
 
 /* ============================================
@@ -2619,6 +2772,63 @@ function isStaffPaidThisMonth(staffId, category) {
     return (staff.salaryHistory || []).some(h => h.monthKey === getCurrentMonthKey());
 }
 
+/* ============================================
+   INLINE "ADD BONUS" — from the Salary Breakdown panel
+   Reuses the same eduflow-staff-bonus log as the Staff Bonus page,
+   just entered from a different section of the UI.
+   ============================================ */
+function toggleInlineBonus() {
+    const panel = document.getElementById('salary-breakdown-panel');
+    const staffId  = panel && panel.dataset.teacherId;
+    const category = (panel && panel.dataset.category) || 'Teaching';
+    if (staffId && isStaffPaidThisMonth(staffId, category)) {
+        alert('Salary for this month has already been paid. No further actions can be performed until next month.');
+        return;
+    }
+    const wrap = document.getElementById('sbp-inline-bonus-wrap');
+    if (!wrap) return;
+    wrap.classList.toggle('d-none');
+    if (!wrap.classList.contains('d-none')) {
+        const amt = document.getElementById('sbp-inline-bonus-amount');
+        if (amt) amt.focus();
+    }
+}
+
+function addBonusFromSalaryPanel() {
+    const panel = document.getElementById('salary-breakdown-panel');
+    const staffId  = panel && panel.dataset.teacherId;
+    const category = (panel && panel.dataset.category) || 'Teaching';
+    if (!staffId) return;
+
+    const amount = Number(document.getElementById('sbp-inline-bonus-amount').value);
+    const desc = document.getElementById('sbp-inline-bonus-desc').value.trim();
+    if (!amount || amount < 1) { alert('Please enter a valid bonus amount.'); return; }
+    if (!desc) { alert('Please enter a bonus reason.'); return; }
+
+    const db = getGlobalData();
+    const members = db.staff[category] || [];
+    const member = members.find(s => s.id === staffId);
+    if (!member) { alert('Staff member not found.'); return; }
+
+    const role = category === 'Teaching' ? (member.subjects || 'Teacher') : (member.job || 'Staff');
+
+    const log = getStaffBonusData();
+    log.push({
+        staffId: member.id, id: member.id, name: member.name, role: role,
+        category: category, amount: amount, description: desc,
+        date: new Date().toLocaleDateString('en-US'),
+        monthKey: getCurrentMonthKey()
+    });
+    saveStaffBonusData(log);
+
+    document.getElementById('sbp-inline-bonus-amount').value = '';
+    document.getElementById('sbp-inline-bonus-desc').value = '';
+    document.getElementById('sbp-inline-bonus-wrap').classList.add('d-none');
+
+    // Refresh the breakdown so the Bonus / Net Payable figures update immediately
+    showSalaryBreakdown(staffId, category);
+}
+
 function toggleAdvancePay() {
     const panel = document.getElementById('salary-breakdown-panel');
     const staffId  = panel && panel.dataset.teacherId;
@@ -3870,3 +4080,1088 @@ window.filterPrintStudentResults = filterPrintStudentResults;
 window.printAllVouchers = printAllVouchers;
 window.printClassVouchers = printClassVouchers;
 window.printStudentVoucher = printStudentVoucher;
+
+
+/* ============================================================
+   CUSTOM FEE & FEE DEFAULTER MODULE
+   ============================================================ */
+
+/* ── Helpers ─────────────────────────────────────────────── */
+function _escHtml(s) { return typeof escapeHtml === 'function' ? escapeHtml(s) : String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function _escAttr(s) { return typeof escapeForAttr === 'function' ? escapeForAttr(s) : String(s).replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/"/g,'&quot;'); }
+function _monthKey() { return typeof getCurrentMonthKey === 'function' ? getCurrentMonthKey() : new Date().toISOString().slice(0,7); }
+function _isBillable(s) { return typeof isStudentBillable === 'function' ? isStudentBillable(s) : true; }
+function _getStudents() { try { return JSON.parse(localStorage.getItem('edu_students') || '[]'); } catch(e) { return []; } }
+function _getClasses() {
+    let c = [];
+    try { c = JSON.parse(localStorage.getItem('edu_class_configs') || '[]'); } catch(e) {}
+    if (!c.length) c = [{name:'Montessori'},{name:'Nursery'},{name:'Prep'},{name:'Grade 1'},{name:'Grade 2'},{name:'Grade 3'},{name:'Grade 4'},{name:'Grade 5'}];
+    return c;
+}
+
+/* ── Toast ───────────────────────────────────────────────── */
+function _toast(msg, type) {
+    const container = document.getElementById('finance-toast-container');
+    if (!container) { alert(msg); return; }
+    const el = document.createElement('div');
+    el.className = `finance-toast toast-${type || 'success'}`;
+    el.innerHTML = `<i class="fas fa-${type === 'error' ? 'exclamation-circle' : type === 'info' ? 'info-circle' : 'check-circle'}"></i> ${msg}`;
+    container.appendChild(el);
+    requestAnimationFrame(() => el.classList.add('visible'));
+    setTimeout(() => { el.classList.remove('visible'); setTimeout(() => el.remove(), 350); }, 3000);
+}
+
+/* ── Custom Fee Data ─────────────────────────────────────── */
+function getCustomFees() { try { return JSON.parse(localStorage.getItem('eduflow-custom-fees') || '[]'); } catch(e) { return []; } }
+function saveCustomFees(arr) { localStorage.setItem('eduflow-custom-fees', JSON.stringify(arr)); }
+
+/* ── Custom Fee Generate Page ────────────────────────────── */
+let _cfScope = 'all';
+let _cfStudentId = '';
+let _cfStudentName = '';
+
+function initCustomFeeGeneratePage() {
+    const nameEl = document.getElementById('cf-fee-name');
+    const amountEl = document.getElementById('cf-fee-amount');
+    const descEl = document.getElementById('cf-description');
+    const dueDateEl = document.getElementById('cf-due-date');
+    if (nameEl) nameEl.value = '';
+    if (amountEl) amountEl.value = '';
+    if (descEl) descEl.value = '';
+    if (dueDateEl) dueDateEl.value = '';
+    _cfScope = 'all'; _cfStudentId = ''; _cfStudentName = '';
+    setCfScope('all');
+    _populateCfClassDropdown('cf-class-select', false);
+}
+
+function setCfScope(scope) {
+    _cfScope = scope;
+    ['all','class','student'].forEach(s => {
+        const btn = document.getElementById('cf-scope-' + s);
+        if (btn) btn.classList.toggle('active', s === scope);
+    });
+    const classWrap = document.getElementById('cf-class-wrap');
+    const studentWrap = document.getElementById('cf-student-wrap');
+    if (classWrap) classWrap.style.display = scope === 'class' ? 'block' : 'none';
+    if (studentWrap) studentWrap.style.display = scope === 'student' ? 'block' : 'none';
+    if (scope === 'student') { const res = document.getElementById('cf-student-results'); if (res && !res.innerHTML) filterCfStudents(); }
+}
+
+function _populateCfClassDropdown(selectId, includeAll) {
+    const sel = document.getElementById(selectId);
+    if (!sel) return;
+    const classes = _getClasses();
+    const allOpt = includeAll ? '<option value="">-- All Classes --</option>' : '<option value="">-- Select Class --</option>';
+    const current = sel.value;
+    sel.innerHTML = allOpt + classes.map(c => `<option value="${_escHtml(c.name)}"${c.name === current ? ' selected' : ''}>${_escHtml(c.name)}</option>`).join('');
+}
+
+function filterCfStudents() {
+    const q = ((document.getElementById('cf-student-search') || {}).value || '').trim().toLowerCase();
+    const students = _getStudents();
+    const matches = q ? students.filter(s => {
+        const name = (s.fullName || s.name || '').toLowerCase();
+        const id = (s.regNo || s.id || '').toLowerCase();
+        const cls = (s.studentClass || '').toLowerCase();
+        return name.includes(q) || id.includes(q) || cls.includes(q);
+    }) : students.slice(0, 25);
+    const container = document.getElementById('cf-student-results');
+    if (!container) return;
+    if (!matches.length) { container.innerHTML = '<p class="search-empty">No students found.</p>'; return; }
+    container.innerHTML = matches.map(s => {
+        const id = _escAttr(s.regNo || s.id || '');
+        const name = _escAttr(s.fullName || s.name || 'Unnamed');
+        const cls = s.studentClass || '-';
+        const active = (s.regNo || s.id) === _cfStudentId ? 'selected' : '';
+        return `<div class="staff-member-item ${active}" onclick="selectCfStudent('${id}','${name}',this)">
+            <div class="staff-member-info">
+                <span class="staff-member-name">${_escHtml(s.fullName || s.name || 'Unnamed')}</span>
+                <span class="staff-member-role"><b>ID:</b> ${_escHtml(s.regNo || s.id)} &bull; <b>Class:</b> ${_escHtml(cls)}</span>
+            </div>
+            <div class="staff-member-check"><i class="fas fa-check"></i></div>
+        </div>`;
+    }).join('');
+}
+
+function selectCfStudent(id, name, el) {
+    _cfStudentId = id; _cfStudentName = name;
+    document.querySelectorAll('#cf-student-results .staff-member-item').forEach(e => e.classList.remove('selected'));
+    if (el) el.classList.add('selected');
+}
+
+function handleGenerateCustomFee() {
+    const feeName = ((document.getElementById('cf-fee-name') || {}).value || '').trim();
+    const amount = Number((document.getElementById('cf-fee-amount') || {}).value || 0);
+    const description = ((document.getElementById('cf-description') || {}).value || '').trim();
+    const dueDate = ((document.getElementById('cf-due-date') || {}).value || '').trim();
+    if (!feeName) { _toast('Please enter a fee name.', 'error'); return; }
+    if (!amount || amount < 1) { _toast('Please enter a valid amount.', 'error'); return; }
+
+    const allStudents = _getStudents();
+    let targetStudents = [], scopeLabel = 'All';
+
+    if (_cfScope === 'all') {
+        targetStudents = allStudents.filter(_isBillable);
+    } else if (_cfScope === 'class') {
+        const cls = (document.getElementById('cf-class-select') || {}).value;
+        if (!cls) { _toast('Please select a class.', 'error'); return; }
+        targetStudents = allStudents.filter(s => s.studentClass === cls && _isBillable(s));
+        scopeLabel = cls;
+    } else if (_cfScope === 'student') {
+        if (!_cfStudentId) { _toast('Please select a student.', 'error'); return; }
+        const student = allStudents.find(s => (s.regNo || s.id) === _cfStudentId);
+        if (!student) { _toast('Student not found.', 'error'); return; }
+        targetStudents = [student];
+        scopeLabel = student.studentClass || 'N/A';
+    }
+
+    if (!targetStudents.length) { _toast('No billable students found for the selected scope.', 'error'); return; }
+
+    const record = {
+        id: 'cf_' + Date.now(), feeName, amount,
+        description: description || '',
+        dueDate: dueDate || '',
+        monthKey: _monthKey(), generatedAt: new Date().toISOString(),
+        scope: _cfScope, className: scopeLabel,
+        records: targetStudents.map(s => ({
+            studentId: s.regNo || s.id || '',
+            studentName: s.fullName || s.name || 'Unnamed',
+            studentClass: s.studentClass || '-',
+            section: s.section || '-',
+            guardianName: s.guardianName || '-',
+            paid: false
+        }))
+    };
+
+    const existing = getCustomFees();
+    existing.unshift(record);
+    saveCustomFees(existing);
+    _toast(`"${feeName}" generated for ${targetStudents.length} student(s)!`, 'success');
+    // Navigate back to workspace and auto-open the new record in detail
+    setTimeout(() => {
+        showPage('page-custom-fee');
+        setTimeout(() => showCfDetail(record.id), 150);
+    }, 700);
+}
+
+/* ── Custom Fee Records Page ─────────────────────────────── */
+let _cfrMode = 'class';
+
+function _onShowCustomFeeRecords() {
+    _populateCfClassDropdown('cfr-class-select', true);
+    _populateCfClassDropdown('cfr-allclass-select', false);
+    const cw = document.getElementById('cfr-class-filter-wrap');
+    const aw = document.getElementById('cfr-all-class-wrap');
+    const sw = document.getElementById('cfr-student-filter-wrap');
+    if (_cfrMode === 'class') {
+        if (cw) cw.style.display = 'block';
+        if (aw) aw.style.display = 'none';
+        if (sw) sw.style.display = 'none';
+        const btn = document.getElementById('cfr-filter-class');
+        if (btn) btn.classList.add('active');
+    }
+    renderCustomFeeRecords();
+}
+
+function setCfRecordFilter(mode) {
+    _cfrMode = mode;
+    ['class','all-class','student'].forEach(m => {
+        const btn = document.getElementById('cfr-filter-' + m);
+        if (btn) btn.classList.toggle('active', m === mode);
+    });
+    const cw = document.getElementById('cfr-class-filter-wrap');
+    const aw = document.getElementById('cfr-all-class-wrap');
+    const sw = document.getElementById('cfr-student-filter-wrap');
+    if (cw) cw.style.display = mode === 'class' ? 'block' : 'none';
+    if (aw) aw.style.display = mode === 'all-class' ? 'block' : 'none';
+    if (sw) sw.style.display = mode === 'student' ? 'block' : 'none';
+    renderCustomFeeRecords();
+}
+
+function renderCustomFeeRecords() {
+    const container = document.getElementById('cfr-records-container');
+    if (!container) return;
+    let allFees = getCustomFees();
+    if (!allFees.length) {
+        container.innerHTML = `<div class="cfr-empty"><i class="fas fa-inbox"></i><p>No custom fees generated yet. Use <strong>Generate Custom Fee</strong> to create one.</p></div>`;
+        return;
+    }
+    let filtered = allFees.map(f => ({ ...f, records: [...f.records] }));
+    if (_cfrMode === 'class') {
+        const cls = (document.getElementById('cfr-class-select') || {}).value;
+        if (cls) filtered = filtered.map(f => ({ ...f, records: f.records.filter(r => r.studentClass === cls) })).filter(f => f.records.length > 0);
+    } else if (_cfrMode === 'all-class') {
+        const cls = (document.getElementById('cfr-allclass-select') || {}).value;
+        if (cls) filtered = filtered.map(f => ({ ...f, records: f.records.filter(r => r.studentClass === cls) })).filter(f => f.records.length > 0);
+        else filtered = [];
+    } else if (_cfrMode === 'student') {
+        const q = ((document.getElementById('cfr-student-search') || {}).value || '').trim().toLowerCase();
+        if (q) filtered = filtered.map(f => ({ ...f, records: f.records.filter(r => (r.studentName || '').toLowerCase().includes(q) || (r.studentId || '').toLowerCase().includes(q)) })).filter(f => f.records.length > 0);
+    }
+    if (!filtered.length) { container.innerHTML = `<div class="cfr-empty"><i class="fas fa-search"></i><p>No records match your current filter.</p></div>`; return; }
+    container.innerHTML = filtered.map(fee => {
+        const paidCount = fee.records.filter(r => r.paid).length;
+        const pendingCount = fee.records.length - paidCount;
+        return `<div class="cfr-fee-group">
+            <div class="cfr-fee-header">
+                <div class="cfr-fee-info">
+                    <span class="cfr-fee-name"><i class="fas fa-tag"></i> ${_escHtml(fee.feeName)}</span>
+                    <span class="cfr-fee-meta">Rs. ${Number(fee.amount).toLocaleString()} &bull; Month: ${_escHtml(fee.monthKey)} &bull; ${fee.records.length} student(s) &bull; <span style="color:#16a34a;">${paidCount} paid</span> &bull; <span style="color:#dc2626;">${pendingCount} pending</span> &bull; Generated: ${new Date(fee.generatedAt).toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'})}</span>
+                </div>
+                <div class="cfr-fee-actions">
+                    <button class="btn-tiny btn-generate-voucher" onclick="printCustomFeeVouchers('${fee.id}')"><i class="fas fa-print"></i> Print All</button>
+                    <button class="btn-tiny" style="background:rgba(239,68,68,0.12);color:#dc2626;" onclick="deleteCustomFee('${fee.id}')"><i class="fas fa-trash"></i> Delete</button>
+                </div>
+            </div>
+            <div class="data-table-wrapper fee-table-wrapper" style="border-radius:0;border:none;">
+                <table class="student-table fee-students-table cfr-table">
+                    <thead><tr><th>Student ID</th><th>Name</th><th>Class</th><th>Guardian</th><th>Amount</th><th>Status</th><th>Actions</th></tr></thead>
+                    <tbody>${fee.records.map(r => `
+                        <tr>
+                            <td><span class="hrk-id-badge">${_escHtml(r.studentId)}</span></td>
+                            <td><strong>${_escHtml(r.studentName)}</strong></td>
+                            <td>${_escHtml(r.studentClass)}${r.section !== '-' ? ' – ' + _escHtml(r.section) : ''}</td>
+                            <td>${_escHtml(r.guardianName)}</td>
+                            <td><strong>Rs. ${Number(fee.amount).toLocaleString()}</strong></td>
+                            <td><span class="fee-status-badge ${r.paid ? 'fee-paid' : 'fee-overdue'}">${r.paid ? 'Paid' : 'Pending'}</span></td>
+                            <td class="fee-actions-cell">
+                                <button class="btn-tiny" onclick="viewCustomFeeVoucher('${_escAttr(fee.id)}','${_escAttr(r.studentId)}')"><i class="fas fa-eye"></i> Voucher</button>
+                                ${!r.paid ? `<button class="btn-tiny btn-add-fees" onclick="markCustomFeePaid('${_escAttr(fee.id)}','${_escAttr(r.studentId)}')"><i class="fas fa-check"></i> Paid</button>` : ''}
+                            </td>
+                        </tr>`).join('')}
+                    </tbody>
+                </table>
+            </div>
+        </div>`;
+    }).join('');
+}
+
+function deleteCustomFee(feeId) {
+    if (!confirm('Delete this custom fee record? This cannot be undone.')) return;
+    saveCustomFees(getCustomFees().filter(f => f.id !== feeId));
+    renderCustomFeeRecords();
+    _toast('Custom fee record deleted.', 'success');
+}
+
+function markCustomFeePaid(feeId, studentId) {
+    const fees = getCustomFees();
+    const fee = fees.find(f => f.id === feeId);
+    if (!fee) return;
+    const rec = fee.records.find(r => r.studentId === studentId);
+    if (rec) rec.paid = true;
+    saveCustomFees(fees);
+    renderCustomFeeRecords();
+    _toast('Marked as paid!', 'success');
+}
+
+function viewCustomFeeVoucher(feeId, studentId) {
+    const fee = getCustomFees().find(f => f.id === feeId);
+    if (!fee) return;
+    const rec = fee.records.find(r => r.studentId === studentId);
+    if (!rec) return;
+    const html = _buildCustomFeeVoucherHTML(fee, rec);
+    const target = document.getElementById('voucher-render-target');
+    const overlay = document.getElementById('voucher-modal-overlay');
+    const editBtn = document.getElementById('edit-voucher-btn');
+    if (target) target.innerHTML = html;
+    if (overlay) overlay.style.display = 'flex';
+    if (editBtn) editBtn.style.display = 'none';
+}
+
+function _buildCustomFeeVoucherHTML(fee, rec) {
+    const today = new Date();
+    const dateStr = today.toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'numeric' });
+    const challanNo = `CF-${rec.studentId}-${fee.monthKey.replace('-','')}`;
+    const paidStamp = rec.paid ? `<div class="paid-stamp-overlay">PAID</div>` : '';
+
+    // Due date row — only show if admin provided one
+    const dueDateRow = fee.dueDate
+        ? `<div><span>Due Date</span><strong style="color:#dc2626;">${new Date(fee.dueDate).toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'})}</strong></div>`
+        : '';
+
+    // Description row — only show if admin provided one
+    const descriptionRow = fee.description
+        ? `<tr><td colspan="2" style="color:var(--text-secondary,#64748b);font-size:0.78rem;padding-top:4px;">${_escHtml(fee.description)}</td><td></td></tr>`
+        : '';
+
+    const noteText = fee.description
+        ? fee.description
+        : 'Please clear dues by the due date to avoid penalties.';
+
+    const copy = label => `
+        <div class="voucher-copy">
+            <div class="voucher-copy-tag ${label === 'School Copy' ? 'tag-blue' : 'tag-green'}">${label}</div>
+            <div class="voucher-header">
+                <div class="voucher-school-info">
+                    <div class="voucher-logo"><i class="fas fa-graduation-cap"></i></div>
+                    <div><h2>ST. LAWRENCE INTERNATIONAL SCHOOL</h2><p>Financial Control Center &middot; Custom Fee Voucher</p></div>
+                </div>
+            </div>
+            <div class="voucher-meta-row" style="grid-template-columns: repeat(${dueDateRow ? 4 : 3}, 1fr);">
+                <div><span>Challan No.</span><strong>${_escHtml(challanNo)}</strong></div>
+                <div><span>Issue Date</span><strong>${dateStr}</strong></div>
+                <div><span>Month</span><strong>${_escHtml(fee.monthKey)}</strong></div>
+                ${dueDateRow}
+                <div><span>Fee Type</span><strong style="color:#f59e0b;">Custom</strong></div>
+            </div>
+            <div class="voucher-divider"></div>
+            <div class="voucher-student-grid">
+                <div><span>Student ID</span><strong>${_escHtml(rec.studentId)}</strong></div>
+                <div><span>Student Name</span><strong>${_escHtml(rec.studentName)}</strong></div>
+                <div><span>Class</span><strong>${_escHtml(rec.studentClass)}</strong></div>
+                <div><span>Guardian</span><strong>${_escHtml(rec.guardianName)}</strong></div>
+            </div>
+            <table class="voucher-fee-table">
+                <thead><tr><th>Description</th><th>Period</th><th>Amount</th></tr></thead>
+                <tbody>
+                    <tr><td><strong>${_escHtml(fee.feeName)}</strong></td><td>${_escHtml(fee.monthKey)}</td><td>Rs. ${Number(fee.amount).toLocaleString()}</td></tr>
+                    ${descriptionRow}
+                </tbody>
+                <tfoot><tr class="voucher-total-row voucher-total-ontime"><td colspan="2"><i class="fas fa-wallet"></i> NET PAYABLE</td><td>Rs. ${Number(fee.amount).toLocaleString()}</td></tr></tfoot>
+            </table>
+            <div class="voucher-footer">
+                <div class="voucher-note"><i class="fas fa-info-circle"></i> ${_escHtml(noteText)}</div>
+                <div class="voucher-signature"><div class="sig-line"></div><span>Principal / Accounts</span></div>
+            </div>
+        </div>`;
+    return `<div class="voucher-sheet" style="position:relative;">${copy('School Copy')}${copy('Student Copy')}${paidStamp}</div>`;
+}
+
+function printCustomFeeVouchers(feeId) {
+    const fee = getCustomFees().find(f => f.id === feeId);
+    if (!fee) return;
+    const html = fee.records.map(r => _buildCustomFeeVoucherHTML(fee, r)).join('<div style="page-break-after:always;"></div>');
+    const printArea = document.getElementById('voucher-print-area');
+    if (printArea) { printArea.innerHTML = html; window.print(); }
+}
+
+/* ── Fee Defaulter Page ──────────────────────────────────── */
+let _fdMonth = '', _fdSearch = '', _fdAllData = [];
+
+function initFeeDefaulterPage() {
+    _fdSearch = '';
+    const searchEl = document.getElementById('fd-search');
+    if (searchEl) searchEl.value = '';
+    _populateFdMonthDropdown();
+    _fdMonth = _monthKey();
+    const monthSel = document.getElementById('fd-month-filter');
+    if (monthSel) monthSel.value = _fdMonth;
+    loadFeeDefaulters();
+}
+
+function _populateFdMonthDropdown() {
+    const sel = document.getElementById('fd-month-filter');
+    if (!sel) return;
+    const now = new Date();
+    const opts = [];
+    for (let i = 0; i < 12; i++) {
+        const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+        const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+        const lbl = d.toLocaleDateString('en-US', { month:'long', year:'numeric' });
+        opts.push(`<option value="${key}">${lbl}</option>`);
+    }
+    sel.innerHTML = opts.join('');
+}
+
+async function loadFeeDefaulters() {
+    const tbody = document.getElementById('fd-tbody');
+    const countEl = document.getElementById('fd-count');
+    if (!tbody) return;
+    tbody.innerHTML = `<tr><td colspan="7" class="empty-row"><i class="fas fa-spinner fa-spin"></i> Loading fee defaulters…</td></tr>`;
+    if (countEl) countEl.textContent = '';
+
+    const students = _getStudents();
+    const monthKey = _fdMonth || _monthKey();
+
+    if (!students.length) {
+        tbody.innerHTML = `<tr><td colspan="7" class="empty-row">No students found. Add students from Admissions first.</td></tr>`;
+        return;
+    }
+
+    const defaulters = [];
+    for (const s of students) {
+        if (!_isBillable(s)) continue;
+        let finance = null;
+        try { if (typeof getFeeRowFinance === 'function') finance = await getFeeRowFinance(s, monthKey); } catch(e) {}
+        if (!finance) {
+            let feeTotal = 0;
+            try { feeTotal = computeFeeBreakdown(s).voucherTotal; } catch(e) { feeTotal = Number(s.standardFee || 0); }
+            const payments = (s.feePayments || []).filter(p => p.monthKey === monthKey);
+            const paidAmount = payments.reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
+            const remaining = Math.max(0, feeTotal - paidAmount);
+            finance = { remainingBalance: remaining, paidAmount, paymentStatus: remaining <= 0 ? 'Paid' : (paidAmount > 0 ? 'Partial' : 'Pending'), studentName: s.fullName || s.name, guardianName: s.guardianName };
+        }
+        if (finance.remainingBalance > 0 && finance.paymentStatus !== 'Paid') {
+            const pendingMonths = _computePendingMonths(s);
+            defaulters.push({
+                studentId: s.regNo || s.id || '',
+                studentName: finance.studentName || s.fullName || 'Unnamed',
+                studentClass: s.studentClass || '-', section: s.section || '',
+                guardianName: finance.guardianName || s.guardianName || '-',
+                remainingBalance: finance.remainingBalance, paymentStatus: finance.paymentStatus,
+                pendingMonthsList: pendingMonths, pendingMonthsCount: pendingMonths.length
+            });
+        }
+    }
+    defaulters.sort((a, b) => b.remainingBalance - a.remainingBalance);
+    _fdAllData = defaulters;
+    _renderDefaultersTable(defaulters);
+}
+
+function _computePendingMonths(student) {
+    const now = new Date(), pending = [];
+    for (let i = 0; i < 6; i++) {
+        const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+        const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+        const lbl = d.toLocaleDateString('en-US', { month:'short', year:'numeric' });
+        const payments = (student.feePayments || []).filter(p => p.monthKey === key);
+        const paidAmount = payments.reduce((s, p) => s + (Number(p.amount) || 0), 0);
+        let feeTotal = 0;
+        try { feeTotal = computeFeeBreakdown(student).voucherTotal; } catch(e) { feeTotal = Number(student.standardFee || 0); }
+        if (Math.max(0, feeTotal - paidAmount) > 0) pending.push(lbl);
+    }
+    return pending;
+}
+
+function _renderDefaultersTable(defaulters) {
+    const tbody = document.getElementById('fd-tbody');
+    const countEl = document.getElementById('fd-count');
+    if (!tbody) return;
+    if (countEl) countEl.textContent = `${defaulters.length} defaulter${defaulters.length !== 1 ? 's' : ''} found`;
+    if (!defaulters.length) {
+        tbody.innerHTML = `<tr><td colspan="7" class="empty-row"><i class="fas fa-check-circle" style="color:#16a34a;"></i>&nbsp; No fee defaulters found for this period. All caught up!</td></tr>`;
+        return;
+    }
+    tbody.innerHTML = defaulters.map(d => {
+        const cls = d.studentClass + (d.section ? ' – ' + d.section : '');
+        const monthsTitle = d.pendingMonthsList.join(', ') || 'Current month';
+        const monthsHtml = d.pendingMonthsCount > 0
+            ? `<div class="fd-months-badge" title="${_escHtml(monthsTitle)}"><i class="fas fa-calendar-times" style="color:#dc2626;"></i> <strong>${d.pendingMonthsCount}</strong> month${d.pendingMonthsCount !== 1 ? 's' : ''}<span class="fd-months-list">${d.pendingMonthsList.slice(0,3).map(_escHtml).join(', ')}${d.pendingMonthsCount > 3 ? '…' : ''}</span></div>`
+            : `<span style="color:var(--text-secondary);">—</span>`;
+        return `<tr>
+            <td><span class="hrk-id-badge">${_escHtml(d.studentId)}</span></td>
+            <td><strong>${_escHtml(d.studentName)}</strong></td>
+            <td><span class="class-chip" style="background:rgba(139,92,246,0.1);color:#8b5cf6;">${_escHtml(cls)}</span></td>
+            <td>${_escHtml(d.guardianName)}</td>
+            <td><strong style="color:#dc2626;font-size:1.05rem;">Rs. ${d.remainingBalance.toLocaleString()}</strong></td>
+            <td>${monthsHtml}</td>
+            <td><span class="fee-status-badge ${d.paymentStatus === 'Partial' ? 'fee-pending' : 'fee-overdue'}">${_escHtml(d.paymentStatus)}</span></td>
+        </tr>`;
+    }).join('');
+}
+
+function filterFdTable() {
+    _fdSearch = ((document.getElementById('fd-search') || {}).value || '').trim().toLowerCase();
+    const filtered = _fdSearch
+        ? _fdAllData.filter(d => (d.studentName || '').toLowerCase().includes(_fdSearch) || (d.studentId || '').toLowerCase().includes(_fdSearch) || (d.studentClass || '').toLowerCase().includes(_fdSearch) || (d.guardianName || '').toLowerCase().includes(_fdSearch))
+        : _fdAllData;
+    _renderDefaultersTable(filtered);
+}
+
+function onFdMonthChange() {
+    _fdMonth = (document.getElementById('fd-month-filter') || {}).value || _monthKey();
+    loadFeeDefaulters();
+}
+
+/* ============================================================
+   CUSTOM FEE WORKSPACE — Split-panel layout functions
+   ============================================================ */
+
+let _cfCurrentFeeId = null;
+
+/**
+ * Called whenever page-custom-fee is shown.
+ * Populates the class filter dropdown and renders the records list.
+ */
+function initCfWorkspace() {
+    // Populate class filter in left panel
+    const filterSel = document.getElementById('cf-panel-filter');
+    if (filterSel) {
+        const classes = _getClasses();
+        filterSel.innerHTML = '<option value="">All Classes</option>' +
+            classes.map(c => `<option value="${_escHtml(c.name)}">${_escHtml(c.name)}</option>`).join('');
+    }
+    // Render records list (left panel)
+    renderCfRecordsList();
+    // Show create form (right panel default)
+    showCfCreateForm();
+    // Init the create form fields
+    initCustomFeeGeneratePage();
+}
+
+/**
+ * Renders the list of fee name cards in the left panel,
+ * filtered by class dropdown and search input.
+ */
+function renderCfRecordsList() {
+    const container = document.getElementById('cf-records-list');
+    if (!container) return;
+
+    const allFees = getCustomFees();
+    const classFilter = ((document.getElementById('cf-panel-filter') || {}).value || '').trim();
+    const searchQ = ((document.getElementById('cf-panel-search-input') || {}).value || '').trim().toLowerCase();
+
+    let filtered = allFees;
+
+    if (classFilter) {
+        filtered = filtered.filter(fee =>
+            (fee.records || []).some(r => r.studentClass === classFilter)
+        );
+    }
+    if (searchQ) {
+        filtered = filtered.filter(fee =>
+            (fee.feeName || '').toLowerCase().includes(searchQ)
+        );
+    }
+
+    if (!filtered.length) {
+        container.innerHTML = `<div class="cf-records-empty">
+            <i class="fas fa-inbox"></i>
+            <p>${allFees.length ? 'No records match the filter' : 'No custom fees yet'}</p>
+        </div>`;
+        return;
+    }
+
+    container.innerHTML = filtered.map(fee => {
+        const paidCount = (fee.records || []).filter(r => r.paid).length;
+        const total = (fee.records || []).length;
+        const pending = total - paidCount;
+        const genDate = fee.generatedAt
+            ? new Date(fee.generatedAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+            : '—';
+        const isActive = fee.id === _cfCurrentFeeId;
+        return `<div class="cf-record-item${isActive ? ' active' : ''}" onclick="showCfDetail('${_escAttr(fee.id)}')">
+            <div class="cf-record-name"><i class="fas fa-tag"></i> ${_escHtml(fee.feeName)}</div>
+            <div class="cf-record-meta">Rs. ${Number(fee.amount).toLocaleString()} &bull; ${_escHtml(genDate)}</div>
+            <div class="cf-record-badges">
+                <span class="cf-badge cf-badge-paid"><i class="fas fa-check"></i> ${paidCount} paid</span>
+                <span class="cf-badge cf-badge-pending">${pending} pending</span>
+            </div>
+        </div>`;
+    }).join('');
+}
+
+/**
+ * Shows the detail view for a specific fee record.
+ */
+function showCfDetail(feeId) {
+    _cfCurrentFeeId = feeId;
+    const fee = getCustomFees().find(f => f.id === feeId);
+    if (!fee) return;
+
+    // Re-render list to highlight active item
+    renderCfRecordsList();
+
+    // Switch right panel to detail view
+    const createView = document.getElementById('cf-create-form-view');
+    const detailView = document.getElementById('cf-detail-view');
+    if (createView) createView.style.display = 'none';
+    if (detailView) detailView.style.display = 'block';
+
+    // Header
+    const nameEl = document.getElementById('cf-detail-name');
+    const metaEl = document.getElementById('cf-detail-meta');
+    if (nameEl) nameEl.textContent = fee.feeName;
+    if (metaEl) {
+        const genDate = fee.generatedAt
+            ? new Date(fee.generatedAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+            : '—';
+        const duePart = fee.dueDate
+            ? ` · Due: ${new Date(fee.dueDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}`
+            : '';
+        metaEl.textContent = `Generated: ${genDate} · Month: ${fee.monthKey} · Rs. ${Number(fee.amount).toLocaleString()} / student${duePart}`;
+    }
+
+    // Wire buttons
+    const printBtn = document.getElementById('cf-detail-print-btn');
+    const deleteBtn = document.getElementById('cf-detail-delete-btn');
+    if (printBtn) printBtn.onclick = () => printCustomFeeVouchers(feeId);
+    if (deleteBtn) deleteBtn.onclick = () => deleteCustomFeeFromWorkspace(feeId);
+
+    // Reset search/filter fields in detail view
+    const searchEl = document.getElementById('cf-detail-search');
+    const statusEl = document.getElementById('cf-detail-status-filter');
+    if (searchEl) searchEl.value = '';
+    if (statusEl) statusEl.value = '';
+
+    // Render stats + table
+    _renderCfDetailFull(fee);
+}
+
+/**
+ * Renders the stats bar and student table inside the detail view.
+ * Applies search and status filters.
+ */
+function _renderCfDetailFull(fee) {
+    const records = fee.records || [];
+    const searchQ = ((document.getElementById('cf-detail-search') || {}).value || '').trim().toLowerCase();
+    const statusFilter = ((document.getElementById('cf-detail-status-filter') || {}).value || '').trim();
+
+    // Stats (computed on all records, not filtered)
+    const paidCount = records.filter(r => r.paid).length;
+    const totalStudents = records.length;
+    const totalCollect = totalStudents * Number(fee.amount);
+    const collected = paidCount * Number(fee.amount);
+    const remaining = totalCollect - collected;
+
+    const totalEl = document.getElementById('cf-stat-total');
+    const collectedEl = document.getElementById('cf-stat-collected');
+    const remainingEl = document.getElementById('cf-stat-remaining');
+    if (totalEl) totalEl.textContent = `Rs. ${totalCollect.toLocaleString()}`;
+    if (collectedEl) collectedEl.textContent = `Rs. ${collected.toLocaleString()}`;
+    if (remainingEl) remainingEl.textContent = `Rs. ${remaining.toLocaleString()}`;
+
+    // Apply filters to table records
+    let filtered = records;
+    if (searchQ) {
+        filtered = filtered.filter(r =>
+            (r.studentName || '').toLowerCase().includes(searchQ) ||
+            (r.studentId || '').toLowerCase().includes(searchQ)
+        );
+    }
+    if (statusFilter === 'paid') filtered = filtered.filter(r => r.paid);
+    if (statusFilter === 'pending') filtered = filtered.filter(r => !r.paid);
+
+    const tbody = document.getElementById('cf-detail-tbody');
+    if (!tbody) return;
+
+    if (!filtered.length) {
+        tbody.innerHTML = `<tr><td colspan="7" class="empty-row">No records match your filter.</td></tr>`;
+        return;
+    }
+
+    tbody.innerHTML = filtered.map(r => `
+        <tr>
+            <td><span class="hrk-id-badge">${_escHtml(r.studentId)}</span></td>
+            <td><strong>${_escHtml(r.studentName)}</strong></td>
+            <td>${_escHtml(r.studentClass)}${r.section && r.section !== '-' ? ' – ' + _escHtml(r.section) : ''}</td>
+            <td>${_escHtml(r.guardianName || '-')}</td>
+            <td><strong>Rs. ${Number(fee.amount).toLocaleString()}</strong></td>
+            <td><span class="fee-status-badge ${r.paid ? 'fee-paid' : 'fee-overdue'}">${r.paid ? 'Paid' : 'Pending'}</span></td>
+            <td class="fee-actions-cell">
+                <button class="btn-tiny" onclick="viewCustomFeeVoucher('${_escAttr(fee.id)}','${_escAttr(r.studentId)}')">
+                    <i class="fas fa-eye"></i> Voucher
+                </button>
+                ${!r.paid ? `<button class="btn-tiny btn-add-fees" onclick="markCustomFeePaidWs('${_escAttr(fee.id)}','${_escAttr(r.studentId)}')">
+                    <i class="fas fa-check"></i> Paid
+                </button>` : ''}
+            </td>
+        </tr>`).join('');
+}
+
+/** Called when search/status filter changes inside the detail view. */
+function filterCfDetailTable() {
+    const fee = getCustomFees().find(f => f.id === _cfCurrentFeeId);
+    if (fee) _renderCfDetailFull(fee);
+}
+
+/** Switches the right panel back to the create form. */
+function showCfCreateForm() {
+    _cfCurrentFeeId = null;
+    const createView = document.getElementById('cf-create-form-view');
+    const detailView = document.getElementById('cf-detail-view');
+    if (createView) createView.style.display = 'block';
+    if (detailView) detailView.style.display = 'none';
+    renderCfRecordsList(); // Remove active highlight
+}
+
+/**
+ * Mark a custom fee record as paid (workspace version — refreshes detail view after).
+ */
+function markCustomFeePaidWs(feeId, studentId) {
+    markCustomFeePaid(feeId, studentId);
+    const fee = getCustomFees().find(f => f.id === feeId);
+    if (fee) _renderCfDetailFull(fee);
+    renderCfRecordsList();
+}
+
+/**
+ * Delete a custom fee record from the workspace panel (with confirmation).
+ */
+function deleteCustomFeeFromWorkspace(feeId) {
+    if (!confirm('Delete this custom fee record? This cannot be undone.')) return;
+    saveCustomFees(getCustomFees().filter(f => f.id !== feeId));
+    _toast('Custom fee record deleted.', 'success');
+    showCfCreateForm();
+    renderCfRecordsList();
+}
+
+/* ============================================================
+   SALARY PAGE — BONUS PANEL
+   Bonus state per salary page (keyed by 'teaching' / 'non-teaching')
+   ============================================================ */
+
+const _salaryBonusSelected = { teaching: null, 'non-teaching': null };
+
+/**
+ * Toggle the collapsible bonus panel on a salary page.
+ * panelId: 'teaching' | 'non-teaching'
+ */
+function toggleSalaryBonusPanel(panelId) {
+    const panel = document.getElementById('salary-bonus-panel-' + panelId);
+    if (!panel) return;
+    const isHidden = panel.classList.contains('d-none');
+    panel.classList.toggle('d-none', !isHidden);
+    if (isHidden) {
+        // Panel just opened — populate the staff list
+        filterSalaryBonusList(panelId);
+    }
+}
+
+/**
+ * Filter/render staff list inside a salary page bonus panel.
+ * panelId: 'teaching' | 'non-teaching'
+ */
+function filterSalaryBonusList(panelId) {
+    const searchEl = document.getElementById('bonus-search-' + panelId);
+    const query = searchEl ? searchEl.value : '';
+    const category = panelId === 'teaching' ? 'Teaching' : 'Non-Teaching';
+    const container = document.getElementById('bonus-members-list-' + panelId);
+    if (!container) return;
+
+    const db = getGlobalData();
+    let members = (db.staff && db.staff[category]) ? db.staff[category] : [];
+    if (query.trim()) {
+        members = members.filter(s => staffMatchesQuery(s, query));
+    }
+
+    if (members.length === 0) {
+        container.innerHTML = '<p class="search-empty">No staff found.</p>';
+        return;
+    }
+    const selectedId = _salaryBonusSelected[panelId];
+    container.innerHTML = members.map(s => {
+        const active = (String(s.id) === String(selectedId)) ? 'selected' : '';
+        return `
+        <div class="staff-member-item ${active}" id="sbp-bonus-item-${panelId}-${s.id}"
+             onclick="_selectSalaryBonusStaff('${panelId}','${s.id}')">
+            <div class="staff-member-info">
+                <span class="staff-member-name">${s.name}</span>
+                <span class="staff-member-role">${staffSubLine(s, category)}</span>
+            </div>
+            <div class="staff-member-check"><i class="fas fa-check"></i></div>
+        </div>`;
+    }).join('');
+}
+
+function _selectSalaryBonusStaff(panelId, id) {
+    const container = document.getElementById('bonus-members-list-' + panelId);
+    if (container) {
+        container.querySelectorAll('.staff-member-item').forEach(el => el.classList.remove('selected'));
+        const item = container.querySelector('#sbp-bonus-item-' + panelId + '-' + id);
+        if (item) item.classList.add('selected');
+    }
+    _salaryBonusSelected[panelId] = id;
+}
+
+/**
+ * Reset the salary page bonus form.
+ */
+function resetSalaryBonusForm(panelId) {
+    _salaryBonusSelected[panelId] = null;
+    const amtEl  = document.getElementById('bonus-amount-' + panelId);
+    const descEl = document.getElementById('bonus-desc-' + panelId);
+    const srchEl = document.getElementById('bonus-search-' + panelId);
+    if (amtEl)  amtEl.value  = '';
+    if (descEl) descEl.value = '';
+    if (srchEl) srchEl.value = '';
+    filterSalaryBonusList(panelId);
+}
+
+/**
+ * Submit bonus from salary page.
+ * category: 'Teaching' | 'Non-Teaching'
+ */
+function handleSalaryPageBonus(category) {
+    const panelId = category === 'Teaching' ? 'teaching' : 'non-teaching';
+    const selectedId = _salaryBonusSelected[panelId];
+    if (!selectedId) { alert('Please select a staff member.'); return; }
+
+    const amount = Number((document.getElementById('bonus-amount-' + panelId) || {}).value);
+    const desc   = ((document.getElementById('bonus-desc-' + panelId) || {}).value || '').trim();
+    if (!amount || amount < 1) { alert('Please enter a valid bonus amount.'); return; }
+    if (!desc) { alert('Please enter a bonus description.'); return; }
+
+    const db = getGlobalData();
+    const members = (db.staff && db.staff[category]) ? db.staff[category] : [];
+    const member  = members.find(s => String(s.id) === String(selectedId));
+    if (!member) { alert('Staff member not found.'); return; }
+
+    const role = category === 'Teaching'
+        ? (member.subjects || 'Teacher')
+        : (member.job || 'Staff');
+
+    const log = getStaffBonusData();
+    log.push({
+        staffId: member.id, id: member.id, name: member.name, role: role,
+        category: category, amount: amount, description: desc,
+        date: new Date().toLocaleDateString('en-US'),
+        monthKey: getCurrentMonthKey()
+    });
+    saveStaffBonusData(log);
+
+    alert('Bonus of RS ' + amount.toLocaleString() + ' added to ' + member.name + '.');
+    resetSalaryBonusForm(panelId);
+}
+
+/**
+ * Navigate to the bonus records page pre-filtered to a category.
+ * category: 'Teaching' | 'Non-Teaching'
+ */
+let _bonusRecordsOrigin = 'page-salary-hub';
+
+// Tracks which salary page the user came from when opening a bonus page
+let _bonusSalaryOrigin = 'page-salary-teaching';
+
+function goBackFromBonusRecords() {
+    showPage(_bonusRecordsOrigin);
+}
+
+/**
+ * Navigate back from the bonus form page to the salary page the user came from.
+ */
+function goBackToSalaryFromBonus() {
+    showPage(_bonusSalaryOrigin);
+}
+
+/**
+ * Initialize a bonus page when navigated to.
+ * panelId: 'teaching' | 'non-teaching'
+ */
+function initBonusPage(panelId) {
+    // Track which salary page to return to when the user hits Back
+    _bonusSalaryOrigin = panelId === 'teaching' ? 'page-salary-teaching' : 'page-salary-non-teaching';
+    resetSalaryBonusForm(panelId);
+    filterSalaryBonusList(panelId);
+}
+
+/**
+ * Navigate to bonus records filtered to a specific category,
+ * called from the bonus page's "View Records" button.
+ * category: 'Teaching' | 'Non-Teaching'
+ */
+function openBonusRecordsForCategory(category) {
+    _bonusContext = category;
+    _bonusRecordsOrigin = category === 'Teaching' ? 'page-bonus-teaching' : 'page-bonus-non-teaching';
+    showPage('page-view-staff-bonus');
+}
+
+/**
+ * Navigate to bonus records from the salary page "Bonus Records" button.
+ * category: 'Teaching' | 'Non-Teaching'
+ */
+function showSalaryBonusRecords(category) {
+    _bonusContext = category;
+    _bonusRecordsOrigin = category === 'Teaching' ? 'page-salary-teaching' : 'page-salary-non-teaching';
+    showPage('page-view-staff-bonus');
+}
+
+/* ============================================
+   SALARY RECORDS PAGE
+   ============================================ */
+let _salaryRecordsOrigin = 'page-salary-teaching';
+let _salaryRecordsTab = 'Teaching';
+
+/**
+ * Navigate to salary records from the salary page "Salary Records" button.
+ * category: 'Teaching' | 'Non-Teaching'
+ */
+function showSalaryRecords(category) {
+    _salaryRecordsTab = category || 'Teaching';
+    _salaryRecordsOrigin = category === 'Teaching' ? 'page-salary-teaching' : 'page-salary-non-teaching';
+
+    // Update the back button destination
+    const backBtn = document.getElementById('salary-records-back-btn');
+    if (backBtn) backBtn.setAttribute('onclick', `showPage('${_salaryRecordsOrigin}')`);
+
+    showPage('page-salary-records');
+}
+
+function initSalaryRecordsPage() {
+    // Populate the month filter select with available months
+    _populateSalaryRecordsMonthFilter();
+    // Clear search input
+    const searchInput = document.getElementById('sr-search-input');
+    if (searchInput) searchInput.value = '';
+    // Reset status filter
+    const statusFilter = document.getElementById('sr-status-filter');
+    if (statusFilter) statusFilter.value = '';
+    // Set the correct tab/category active
+    setSalaryRecordsTab(_salaryRecordsTab || 'Teaching');
+    // Update back button
+    const backBtn = document.getElementById('salary-records-back-btn');
+    if (backBtn) backBtn.setAttribute('onclick', `showPage('${_salaryRecordsOrigin}')`);
+}
+
+function _populateSalaryRecordsMonthFilter() {
+    const sel = document.getElementById('sr-month-select');
+    if (!sel) return;
+
+    const currentMk = getCurrentMonthKey();
+    const [cy, cm] = currentMk.split('-').map(Number);
+
+    // Always list the trailing 12 months (current month + previous 11),
+    // so the filter covers a full year even for months with no processed
+    // records yet.
+    const months = [];
+    for (let i = 0; i < 12; i++) {
+        const d = new Date(cy, (cm - 1) - i, 1);
+        const mk = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+        months.push(mk);
+    }
+
+    sel.innerHTML = months.map(mk => {
+        const [y, m] = mk.split('-');
+        const label = new Date(Number(y), Number(m) - 1, 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+        return `<option value="${mk}">${label}</option>`;
+    }).join('');
+
+    // Default to current month
+    sel.value = currentMk;
+}
+
+function setSalaryRecordsTab(category) {
+    _salaryRecordsTab = category;
+    // Update the category badge label
+    const labelEl = document.getElementById('sr-category-label-text');
+    const badgeEl = document.getElementById('sr-category-badge');
+    const isTeaching = category === 'Teaching';
+    if (labelEl) labelEl.textContent = isTeaching ? 'Teaching Staff' : 'Non-Teaching Staff';
+    if (badgeEl) {
+        const icon = badgeEl.querySelector('i');
+        if (icon) icon.className = isTeaching ? 'fas fa-chalkboard-teacher' : 'fas fa-hard-hat';
+    }
+    renderSalaryRecordsTable();
+}
+
+function onSalaryRecordsMonthChange() {
+    filterSalaryRecordsTable();
+}
+
+function filterSalaryRecordsTable() {
+    renderSalaryRecordsTable();
+}
+
+function renderSalaryRecordsTable() {
+    const tbody = document.getElementById('salary-records-tbody');
+    if (!tbody) return;
+
+    const category = _salaryRecordsTab || 'Teaching';
+    const sel = document.getElementById('sr-month-select');
+    const monthKey = sel ? sel.value : getCurrentMonthKey();
+
+    const searchInput = document.getElementById('sr-search-input');
+    const q = ((searchInput && searchInput.value) || '').trim().toLowerCase();
+
+    const statusFilter = document.getElementById('sr-status-filter');
+    const statusVal = (statusFilter && statusFilter.value) || '';
+
+    const db = getGlobalData();
+    const staff = db.staff[category] || [];
+
+    // Filter to staff who have a history entry for the selected month
+    let rows = [];
+    staff.forEach(s => {
+        const entry = (s.salaryHistory || []).find(h => h.monthKey === monthKey);
+        rows.push({ staff: s, entry: entry || null });
+    });
+
+    // Apply search filter
+    if (q) {
+        rows = rows.filter(({ staff: s }) =>
+            (s.name || '').toLowerCase().includes(q) ||
+            String(s.id || '').toLowerCase().includes(q) ||
+            (s.subjects || s.job || s.role || '').toLowerCase().includes(q)
+        );
+    }
+
+    // Apply status filter
+    if (statusVal) {
+        rows = rows.filter(({ entry }) =>
+            statusVal === 'paid' ? !!entry : !entry
+        );
+    }
+
+    if (rows.length === 0) {
+        const emptyMsg = q || statusVal
+            ? 'No records match your search / filter.'
+            : `No ${category.toLowerCase()} staff found.`;
+        tbody.innerHTML = `<tr><td colspan="8" class="empty-row">${emptyMsg}</td></tr>`;
+        return;
+    }
+
+    const [y, m] = monthKey.split('-');
+    const monthLabel = new Date(Number(y), Number(m) - 1, 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+
+    tbody.innerHTML = rows.map(({ staff: s, entry }) => {
+        const role = category === 'Teaching' ? (s.subjects || s.role || 'Teacher') : (s.job || 'Staff');
+        const baseSalary = Number(s.salary) || 0;
+        const finesDeducted = entry ? (Number(entry.absenceFineDeducted) || 0) : 0;
+        const secDeducted   = entry ? (Number(entry.securityDeducted) || 0) : 0;
+        const isPaid = !!entry;
+        const statusBadge = isPaid
+            ? `<span class="status-badge status-paid"><i class="fas fa-check-circle"></i> Paid</span>`
+            : `<span class="status-badge status-pending"><i class="fas fa-clock"></i> Pending</span>`;
+        const finesCell = finesDeducted > 0
+            ? `<span style="color:#ef4444;font-weight:600;">− RS ${finesDeducted.toLocaleString()}</span>`
+            : `<span style="color:var(--text-secondary);font-size:12px;">None</span>`;
+        const secCell = secDeducted > 0
+            ? `RS ${secDeducted.toLocaleString()}`
+            : `<span style="color:var(--text-secondary);font-size:12px;">—</span>`;
+        return `
+            <tr>
+                <td><span class="hrk-id-badge">${escapeHtml(s.id)}</span></td>
+                <td><strong>${escapeHtml(s.name)}</strong></td>
+                <td>${escapeHtml(role)}</td>
+                <td><strong>RS ${baseSalary.toLocaleString()}</strong></td>
+                <td>${finesCell}</td>
+                <td>${secCell}</td>
+                <td><span class="salary-month-chip">${monthLabel}</span></td>
+                <td>${statusBadge}</td>
+            </tr>`;
+    }).join('');
+}
+
+/* ============================================
+   EXPENSE HUB — inline form handlers
+   ============================================ */
+function initExpenseHub() {
+    // Hub is now self-contained; just ensure form is clear on each visit
+    const amtEl = document.getElementById('hub-exp-amount');
+    const descEl = document.getElementById('hub-exp-desc');
+    if (amtEl) amtEl.value = '';
+    if (descEl) descEl.value = '';
+}
+
+function clearExpenseHubForm() {
+    const amtEl = document.getElementById('hub-exp-amount');
+    const descEl = document.getElementById('hub-exp-desc');
+    if (amtEl) amtEl.value = '';
+    if (descEl) descEl.value = '';
+}
+
+function handleExpenseSubmitHub() {
+    const amount = Number(document.getElementById('hub-exp-amount').value);
+    const desc = document.getElementById('hub-exp-desc').value.trim();
+    if (!amount || amount < 1) { alert('Please enter a valid expense amount.'); return; }
+    if (!desc) { alert('Please enter an expense description.'); return; }
+
+    const list = getExpensesData();
+    const now = new Date();
+    list.push({
+        description: desc,
+        amount: amount,
+        date: now.toLocaleDateString('en-US'),
+        time: now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
+        monthKey: getCurrentMonthKey()
+    });
+    saveExpensesData(list);
+
+    const db = getGlobalData();
+    db.finances.expenses.other += amount;
+    saveGlobalData(db);
+
+    // Show success toast and clear the form — user stays on hub
+    showFeeSuccessToast(`Expense of RS ${amount.toLocaleString()} logged successfully.`);
+    clearExpenseHubForm();
+}

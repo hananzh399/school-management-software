@@ -400,6 +400,29 @@
     margin-top: 12px;
 }
 
+/* Left-aligned heading variant — used on Custom Fee and Fee Defaulter */
+.left-title-section {
+    text-align: left;
+    padding-left: 0;
+}
+
+.left-title-section .page-title,
+.left-title-section .page-description {
+    text-align: left;
+    padding-left: 0;
+}
+
+.left-title-section .page-title {
+    margin-left: 0;
+    padding-left: 110px; /* clear the Back button */
+}
+
+.left-title-section .title-divider {
+    margin-left: 110px;
+    margin-right: 0;
+    margin-top: 8px;
+}
+
 /* Back Button — pinned to top-left of sub-page */
 .back-btn {
     position: absolute;
@@ -423,6 +446,36 @@
 .back-btn:hover {
     border-color: var(--border-hover);
     background: var(--bg-hover, rgba(255,255,255,0.05));
+}
+
+/* Header variant that also carries a right-side action button (e.g. "View
+   Records") while keeping the title/description truly centered — both
+   buttons float outside the text flow via absolute positioning. */
+.header-with-action { position: relative; }
+
+.header-action-btn {
+    position: absolute;
+    right: 0;
+    top: 0;
+    z-index: 2;
+}
+
+@media (max-width: 720px) {
+    .header-with-action .back-btn,
+    .header-with-action .header-action-btn {
+        position: static;
+        margin: 0 auto 12px;
+    }
+    .header-with-action {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+    }
+    .header-with-action .page-title { order: 3; }
+    .header-with-action .page-description { order: 4; }
+    .header-with-action .title-divider { order: 5; }
+    .header-with-action .header-action-btn { order: 2; }
+    .header-with-action .back-btn { order: 1; }
 }
 
 /* Centered block utility for forms / tables on sub-pages */
@@ -546,6 +599,8 @@
     border: 1px solid var(--border-subtle);
     border-radius: var(--radius-lg);
     max-width: 960px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    background: var(--bg-card);
 }
 
 .finance-table { width: 100%; border-collapse: collapse; font-size: 14px; }
@@ -560,32 +615,316 @@
 .finance-table tbody tr:hover { background: var(--bg-hover, rgba(255,255,255,0.03)); }
 
 .empty-row { text-align: center; color: var(--text-secondary); padding: 32px !important; }
-/* ===== Student fine form inputs: theme-aware (no system-pref override) ===== */
-[data-theme="dark"] #page-add-student-fine select,
-[data-theme="dark"] #page-add-student-fine select option,
-[data-theme="dark"] #page-add-student-fine input,
-[data-theme="dark"] #page-add-student-fine textarea {
+
+/* Full-width variant of .table-container — spans the whole content area
+   instead of being capped at 960px, used for payroll tables. */
+.table-container-full {
+    max-width: none;
+    width: 100%;
+}
+
+/* Toolbar embedded inside the table card (search + month filter live in
+   the same white panel as the table, instead of a separate box above it) */
+.table-toolbar {
+    display: flex;
+    align-items: flex-end;
+    flex-wrap: wrap;
+    gap: 16px;
+    padding: 18px;
+    border-bottom: 1px solid var(--border-subtle);
+}
+
+.table-toolbar-search {
+    position: relative;
+    flex: 1;
+    min-width: 220px;
+}
+.table-toolbar-search i {
+    position: absolute;
+    left: 14px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--text-light);
+    font-size: 13px;
+}
+.table-toolbar-search input {
+    width: 100%;
+    padding: 10px 14px 10px 36px;
+    border-radius: var(--radius-md, 8px);
+    border: 1px solid var(--border-subtle);
+    background: var(--bg-input, rgba(255,255,255,0.05));
+    color: var(--text-primary);
+    font-size: 0.9rem;
+    font-family: inherit;
+}
+.table-toolbar-search input:focus { outline: none; border-color: var(--accent, #6366f1); }
+
+.table-toolbar-filter {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 180px;
+}
+.table-toolbar-filter label {
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+.table-toolbar-filter input,
+.table-toolbar-filter select {
+    padding: 10px 14px;
+    border-radius: var(--radius-md, 8px);
+    border: 1px solid var(--border-subtle);
+    background: var(--bg-input, rgba(255,255,255,0.05));
+    color: var(--text-primary);
+    font-weight: 700;
+    text-align: center;
+    font-size: 0.87rem;
+    font-family: inherit;
+}
+
+@media (max-width: 640px) {
+    .table-toolbar { flex-direction: column; align-items: stretch; }
+    .table-toolbar-filter { min-width: 0; }
+}
+
+/* Two action buttons placed above a payroll table (Salary Records / Bonus) */
+.salary-table-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    margin-bottom: 14px;
+    flex-wrap: wrap;
+}
+@media (max-width: 640px) {
+    .salary-table-actions { justify-content: stretch; }
+    .salary-table-actions .btn-salary-view-records,
+    .salary-table-actions .btn-salary-bonus { flex: 1; justify-content: center; }
+}
+/* ===== Fine / Bonus form inputs: theme-aware (no system-pref override) ===== */
+[data-theme="dark"] #page-student-fine select,
+[data-theme="dark"] #page-student-fine select option,
+[data-theme="dark"] #page-student-fine input,
+[data-theme="dark"] #page-student-fine textarea,
+[data-theme="dark"] #page-fine-records select,
+[data-theme="dark"] #page-fine-records select option,
+[data-theme="dark"] #page-fine-records input,
+[data-theme="dark"] #page-view-staff-bonus select,
+[data-theme="dark"] #page-view-staff-bonus input {
   background-color: #1e1e2e !important;
   color: #f5f5f5 !important;
   border: 1px solid #3a3a4a !important;
 }
-[data-theme="dark"] #page-add-student-fine select option:checked,
-[data-theme="dark"] #page-add-student-fine select option:hover {
+[data-theme="dark"] #page-student-fine select option:checked,
+[data-theme="dark"] #page-student-fine select option:hover,
+[data-theme="dark"] #page-fine-records select option:checked,
+[data-theme="dark"] #page-fine-records select option:hover {
   background-color: #2a2a3a !important;
   color: #ffffff !important;
 }
-[data-theme="light"] #page-add-student-fine select,
-[data-theme="light"] #page-add-student-fine select option,
-[data-theme="light"] #page-add-student-fine input,
-[data-theme="light"] #page-add-student-fine textarea {
+[data-theme="light"] #page-student-fine select,
+[data-theme="light"] #page-student-fine select option,
+[data-theme="light"] #page-student-fine input,
+[data-theme="light"] #page-student-fine textarea,
+[data-theme="light"] #page-fine-records select,
+[data-theme="light"] #page-fine-records select option,
+[data-theme="light"] #page-fine-records input,
+[data-theme="light"] #page-view-staff-bonus select,
+[data-theme="light"] #page-view-staff-bonus input {
   background-color: #ffffff !important;
   color: #1e293b !important;
   border: 1px solid #e2e8f0 !important;
 }
-[data-theme="light"] #page-add-student-fine select option:checked,
-[data-theme="light"] #page-add-student-fine select option:hover {
+[data-theme="light"] #page-student-fine select option:checked,
+[data-theme="light"] #page-student-fine select option:hover,
+[data-theme="light"] #page-fine-records select option:checked,
+[data-theme="light"] #page-fine-records select option:hover {
   background-color: #f1f5f9 !important;
   color: #0f172a !important;
+}
+
+/* ============================================
+   FINES / BONUS — unified layout
+   (left switch + right content, top-right View Records)
+   ============================================ */
+
+.fines-header-section { margin-bottom: 24px; }
+
+.fines-header-row {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+    padding-left: 110px; /* clear the Back button, matches .left-title-section */
+    flex-wrap: wrap;
+}
+.fines-header-row .page-title,
+.fines-header-row .page-description { padding-left: 0; margin-left: 0; }
+.fines-header-section .title-divider { margin-left: 110px; margin-right: 0; margin-top: 12px; }
+
+.btn-view-records {
+    background: var(--accent, #6366f1);
+    color: #fff;
+    border: none;
+    white-space: nowrap;
+}
+.btn-view-records:hover { opacity: 0.9; transform: none; }
+
+.fines-layout {
+    display: flex;
+    align-items: flex-start;
+    gap: 24px;
+    max-width: 1100px;
+}
+
+.fines-side-switch {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    width: 180px;
+    flex-shrink: 0;
+    position: sticky;
+    top: 12px;
+}
+
+.side-switch-btn {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 14px 16px;
+    border-radius: var(--radius-md, 8px);
+    border: 1px solid var(--border-subtle);
+    background: var(--bg-card);
+    color: var(--text-secondary);
+    font-size: 14px;
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    text-align: left;
+    transition: all 0.2s;
+}
+.side-switch-btn i { font-size: 15px; width: 18px; text-align: center; }
+.side-switch-btn:hover { border-color: var(--border-hover); }
+.side-switch-btn.active {
+    background: var(--accent, #6366f1);
+    border-color: var(--accent, #6366f1);
+    color: #fff;
+}
+
+.fines-content { flex: 1; min-width: 0; }
+.fine-panel .form-page-container { max-width: 100%; margin-top: 0; }
+
+.section-mini-label {
+    display: block;
+    font-size: 13px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-secondary);
+    margin-bottom: 10px;
+}
+
+.cascade-select-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 14px;
+    margin-bottom: 8px;
+}
+@media (max-width: 720px) {
+    .cascade-select-grid { grid-template-columns: 1fr; }
+    .fines-layout { flex-direction: column; }
+    .fines-side-switch { flex-direction: row; width: 100%; position: static; }
+    .side-switch-btn { flex: 1; justify-content: center; }
+    .fines-header-row { padding-left: 0; }
+    .fines-header-section .title-divider { margin-left: 0; }
+}
+
+.selected-target-info {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: rgba(99, 102, 241, 0.08);
+    border: 1px solid var(--accent, #6366f1);
+    color: var(--text-primary);
+    border-radius: var(--radius-md, 8px);
+    padding: 10px 14px;
+    font-size: 13.5px;
+    margin-bottom: 20px;
+}
+.selected-target-info i { color: var(--accent, #6366f1); }
+
+/* ---- Records filter bar (search + class/section or category) ---- */
+.records-filter-bar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-bottom: 18px;
+    margin-top: 4px;
+    max-width: 960px;
+}
+.records-search { flex: 1; min-width: 220px; max-width: 420px; }
+.records-category-toggle { max-width: 320px; }
+
+.records-filter-bar select {
+    background: var(--bg-input, rgba(255,255,255,0.05));
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-md, 8px);
+    color: var(--text-primary);
+    padding: 10px 14px;
+    font-size: 14px;
+    font-family: inherit;
+    min-width: 160px;
+}
+.records-filter-bar select:focus { outline: none; border-color: var(--border-hover); }
+
+/* ---- Salary Breakdown: inline "Add Bonus" ---- */
+.sbp-card-with-action label {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
+}
+.sbp-inline-add-btn {
+    width: 20px; height: 20px;
+    border-radius: 50%;
+    border: none;
+    background: var(--accent, #6366f1);
+    color: #fff;
+    font-size: 10px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: opacity 0.15s;
+}
+.sbp-inline-add-btn:hover { opacity: 0.85; }
+
+.sbp-inline-bonus-wrap {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 8px;
+}
+.sbp-inline-bonus-wrap input {
+    flex: 1 1 70px;
+    min-width: 0;
+    background: var(--bg-input, rgba(255,255,255,0.06));
+    border: 1px solid var(--border-subtle);
+    border-radius: 6px;
+    color: var(--text-primary);
+    padding: 6px 8px;
+    font-size: 12px;
+    font-family: inherit;
+}
+.sbp-inline-bonus-wrap button {
+    flex: 1 1 100%;
+    padding: 6px 10px;
+    font-size: 12px;
+    justify-content: center;
 }
 
 /* ============================================
@@ -2688,26 +3027,33 @@
 [data-theme="dark"] .sbp-c-yellow { background: rgba(148,163,184,0.14); color: #cbd5e1; }
 
 /* Dark mode search bar — strengthen overrides */
-[data-theme="dark"] #page-salary-teaching .search-filter-box {
+[data-theme="dark"] #page-salary-teaching .table-toolbar,
+[data-theme="dark"] #page-salary-non-teaching .table-toolbar {
     background: var(--bg-card) !important;
     border-color: var(--border-subtle) !important;
 }
 [data-theme="dark"] #page-salary-teaching #teacher-salary-search,
-[data-theme="dark"] #page-salary-teaching #current-salary-month {
+[data-theme="dark"] #page-salary-teaching #current-salary-month,
+[data-theme="dark"] #page-salary-non-teaching #worker-salary-search,
+[data-theme="dark"] #page-salary-non-teaching #current-salary-month-nt {
     background: var(--bg-input, rgba(255,255,255,0.06)) !important;
     color: var(--text-primary) !important;
     border-color: var(--border-subtle) !important;
 }
-[data-theme="dark"] #page-salary-teaching .search-filter-box label {
+[data-theme="dark"] #page-salary-teaching .table-toolbar-filter label,
+[data-theme="dark"] #page-salary-non-teaching .table-toolbar-filter label {
     color: var(--text-secondary) !important;
 }
-[data-theme="dark"] #page-salary-teaching .search-filter-box i {
+[data-theme="dark"] #page-salary-teaching .table-toolbar-search i,
+[data-theme="dark"] #page-salary-non-teaching .table-toolbar-search i {
     color: var(--text-secondary) !important;
 }
 
 /* Light mode search bar */
 [data-theme="light"] #page-salary-teaching #teacher-salary-search,
-[data-theme="light"] #page-salary-teaching #current-salary-month {
+[data-theme="light"] #page-salary-teaching #current-salary-month,
+[data-theme="light"] #page-salary-non-teaching #worker-salary-search,
+[data-theme="light"] #page-salary-non-teaching #current-salary-month-nt {
     background: #ffffff !important;
     color: #1e293b !important;
     border-color: #e2e8f0 !important;
@@ -4481,3 +4827,1328 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 .finance-toast-success i { color: #16a34a; }
 .finance-toast-error i { color: #ef4444; }
 .finance-toast-info i { color: #6366f1; }
+
+
+/* ============================================================
+   CUSTOM FEE & FEE DEFAULTER
+   ============================================================ */
+
+/* ── New Global Action Buttons ──────────────────────────── */
+.btn-customfee-global {
+    background: linear-gradient(135deg, #f59e0b, #d97706) !important;
+    color: #fff !important;
+    border: none !important;
+}
+.btn-customfee-global:hover {
+    background: linear-gradient(135deg, #d97706, #b45309) !important;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 14px rgba(245, 158, 11, 0.4) !important;
+}
+.btn-defaulter-global {
+    background: linear-gradient(135deg, #ef4444, #dc2626) !important;
+    color: #fff !important;
+    border: none !important;
+}
+.btn-defaulter-global:hover {
+    background: linear-gradient(135deg, #dc2626, #b91c1c) !important;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 14px rgba(239, 68, 68, 0.4) !important;
+}
+
+/* ── Custom Fee Records ─────────────────────────────────── */
+.cfr-filter-bar { margin-bottom: 8px; }
+.cfr-fee-group {
+    background: var(--bg-card, #1a1a2e);
+    border: 1px solid var(--border-subtle, rgba(255,255,255,0.07));
+    border-radius: 14px;
+    overflow: hidden;
+    margin-bottom: 20px;
+}
+[data-theme="light"] .cfr-fee-group { background: #fff; border-color: rgba(0,0,0,0.07); }
+.cfr-fee-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 20px;
+    background: rgba(255,255,255,0.03);
+    border-bottom: 1px solid var(--border-subtle, rgba(255,255,255,0.07));
+    gap: 12px;
+    flex-wrap: wrap;
+}
+[data-theme="light"] .cfr-fee-header { background: rgba(0,0,0,0.02); }
+.cfr-fee-info { display: flex; flex-direction: column; gap: 4px; }
+.cfr-fee-name {
+    font-size: 1rem; font-weight: 700;
+    color: var(--text-primary, #fff);
+    display: flex; align-items: center; gap: 8px;
+}
+.cfr-fee-name i { color: #f59e0b; }
+.cfr-fee-meta { font-size: 0.78rem; color: var(--text-secondary, #94a3b8); }
+.cfr-fee-actions { display: flex; gap: 8px; flex-shrink: 0; }
+.cfr-table { width: 100%; margin: 0 !important; border-radius: 0 !important; }
+.cfr-empty { text-align: center; padding: 60px 20px; color: var(--text-secondary, #94a3b8); }
+.cfr-empty i { font-size: 3rem; margin-bottom: 16px; opacity: 0.4; display: block; }
+.cfr-empty p { font-size: 1rem; font-weight: 500; }
+
+/* ── Fee Defaulter ──────────────────────────────────────── */
+.fd-months-badge { display: inline-flex; flex-direction: column; gap: 2px; }
+.fd-months-badge > i { color: #dc2626; margin-right: 4px; }
+.fd-months-list { font-size: 0.72rem; color: var(--text-secondary, #94a3b8); display: block; margin-top: 2px; }
+
+/* ── Responsive ─────────────────────────────────────────── */
+@media (max-width: 640px) {
+    .cfr-fee-header { flex-direction: column; align-items: flex-start; }
+    .cfr-fee-actions { width: 100%; }
+}
+
+/* ============================================================
+   CUSTOM FEE WORKSPACE — Split-panel redesign
+   ============================================================ */
+
+/* Main two-column workspace grid */
+.cf-workspace {
+    display: grid;
+    grid-template-columns: 1fr 300px;
+    gap: 20px;
+    align-items: start;
+    margin-top: 4px;
+}
+
+/* ─── LEFT PANEL: Records ─── */
+.cf-records-panel {
+    background: var(--bg-card);
+    border: 1px solid var(--border-subtle);
+    border-radius: 16px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    position: sticky;
+    top: 16px;
+    max-height: calc(100vh - 160px);
+}
+
+.cf-records-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 16px 12px;
+    border-bottom: 1px solid var(--border-subtle);
+    background: rgba(255,255,255,0.02);
+    flex-shrink: 0;
+}
+
+[data-theme="light"] .cf-records-header {
+    background: rgba(0,0,0,0.02);
+}
+
+.cf-records-header-title {
+    font-size: 0.88rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.cf-records-header-title i {
+    color: #6366f1;
+}
+
+.cf-refresh-btn {
+    width: 28px;
+    height: 28px;
+    border-radius: 8px;
+    background: none;
+    border: 1px solid var(--border-subtle);
+    color: var(--text-secondary);
+    font-size: 11px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.18s ease;
+}
+
+.cf-refresh-btn:hover {
+    border-color: #6366f1;
+    color: #6366f1;
+    background: rgba(99,102,241,0.06);
+}
+
+/* Dropdown filter */
+.cf-filter-row {
+    padding: 10px 12px 4px;
+    flex-shrink: 0;
+}
+
+.cf-panel-select {
+    width: 100%;
+    background: var(--bg-input, rgba(255,255,255,0.05));
+    border: 1px solid var(--border-subtle);
+    border-radius: 8px;
+    color: var(--text-primary);
+    padding: 8px 10px;
+    font-size: 13px;
+    font-family: inherit;
+    cursor: pointer;
+    outline: none;
+    transition: border-color 0.2s;
+}
+
+.cf-panel-select:focus { border-color: #6366f1; }
+
+/* Search bar */
+.cf-panel-search {
+    position: relative;
+    padding: 6px 12px 10px;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+}
+
+.cf-panel-search > i {
+    position: absolute;
+    left: 24px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--text-muted);
+    font-size: 12px;
+    pointer-events: none;
+}
+
+.cf-panel-search input {
+    width: 100%;
+    background: var(--bg-input, rgba(255,255,255,0.05));
+    border: 1px solid var(--border-subtle);
+    border-radius: 8px;
+    color: var(--text-primary);
+    padding: 8px 10px 8px 30px;
+    font-size: 12.5px;
+    font-family: inherit;
+    outline: none;
+    transition: border-color 0.2s;
+    box-sizing: border-box;
+}
+
+.cf-panel-search input:focus { border-color: #6366f1; }
+.cf-panel-search input::placeholder { color: var(--text-muted); }
+
+/* Records scroll list */
+.cf-records-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 4px 8px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.cf-record-item {
+    padding: 11px 12px;
+    border-radius: 10px;
+    border: 1px solid var(--border-subtle);
+    background: rgba(255,255,255,0.02);
+    cursor: pointer;
+    transition: all 0.15s ease;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+[data-theme="light"] .cf-record-item {
+    background: #fafafa;
+}
+
+.cf-record-item:hover {
+    border-color: #6366f1;
+    background: rgba(99,102,241,0.05);
+}
+
+.cf-record-item.active {
+    border-color: #6366f1;
+    background: rgba(99,102,241,0.1);
+    box-shadow: 0 0 0 3px rgba(99,102,241,0.12);
+}
+
+.cf-record-name {
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    line-height: 1.3;
+}
+
+.cf-record-name i { color: #6366f1; font-size: 0.75rem; }
+
+.cf-record-meta {
+    font-size: 0.72rem;
+    color: var(--text-secondary);
+}
+
+.cf-record-badges {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    margin-top: 2px;
+}
+
+.cf-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-size: 0.68rem;
+    font-weight: 700;
+}
+
+.cf-badge-paid {
+    background: rgba(22,163,74,0.1);
+    color: #16a34a;
+}
+
+.cf-badge-pending {
+    background: rgba(220,38,38,0.1);
+    color: #dc2626;
+}
+
+.cf-records-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    padding: 40px 20px;
+    color: var(--text-muted);
+    text-align: center;
+}
+
+.cf-records-empty i {
+    font-size: 2rem;
+    opacity: 0.3;
+}
+
+.cf-records-empty p {
+    font-size: 0.82rem;
+    font-weight: 500;
+    margin: 0;
+}
+
+/* ─── RIGHT PANEL: Create / Detail ─── */
+.cf-right-panel {
+    background: var(--bg-card);
+    border: 1px solid var(--border-subtle);
+    border-radius: 16px;
+    padding: 24px;
+    min-height: 480px;
+}
+
+/* Create form */
+.cf-panel-section-title {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-bottom: 6px;
+}
+
+.cf-section-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    background: rgba(99,102,241,0.1);
+    color: #6366f1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1rem;
+    flex-shrink: 0;
+}
+
+.cf-panel-hint {
+    font-size: 0.82rem;
+    color: var(--text-secondary);
+    margin-bottom: 20px;
+    line-height: 1.5;
+}
+
+.cf-required {
+    color: #ef4444;
+    font-weight: 700;
+}
+
+.cf-optional {
+    color: var(--text-muted);
+    font-weight: 400;
+    font-size: 0.78em;
+}
+
+/* Form grid: 2-col layout */
+.cf-form-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px 20px;
+    margin-bottom: 24px;
+}
+
+.cf-field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.cf-field.cf-full {
+    grid-column: 1 / -1;
+}
+
+.cf-field label {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.cf-input {
+    background: var(--bg-input, rgba(255,255,255,0.05));
+    border: 1px solid var(--border-subtle);
+    border-radius: 10px;
+    color: var(--text-primary);
+    padding: 10px 14px;
+    font-size: 14px;
+    font-family: inherit;
+    transition: border-color 0.2s, box-shadow 0.2s;
+    outline: none;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.cf-input:focus {
+    border-color: #6366f1;
+    box-shadow: 0 0 0 3px rgba(99,102,241,0.12);
+}
+
+.cf-input::placeholder { color: var(--text-muted); }
+
+/* Scope toggle (All / Class / Student) */
+.cf-scope-toggle {
+    display: flex;
+    gap: 8px;
+}
+
+.cf-scope-btn {
+    flex: 1;
+    padding: 9px 10px;
+    border-radius: 10px;
+    border: 1.5px solid var(--border-subtle);
+    background: var(--bg-card);
+    color: var(--text-secondary);
+    font-size: 0.8rem;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: inherit;
+    transition: all 0.18s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    white-space: nowrap;
+}
+
+.cf-scope-btn:hover {
+    border-color: #6366f1;
+    color: #6366f1;
+}
+
+.cf-scope-btn.active {
+    background: rgba(99,102,241,0.1);
+    border-color: #6366f1;
+    color: #6366f1;
+}
+
+/* Student results list */
+.cf-student-results {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    max-height: 200px;
+    overflow-y: auto;
+    padding-right: 2px;
+}
+
+.cf-hint-text {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    margin: 0;
+}
+
+/* Generate button */
+.cf-generate-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    width: 100%;
+    padding: 13px 24px;
+    border-radius: 12px;
+    background: linear-gradient(135deg, #6366f1, #4f46e5);
+    color: #fff;
+    font-size: 0.95rem;
+    font-weight: 700;
+    border: none;
+    cursor: pointer;
+    font-family: inherit;
+    letter-spacing: 0.01em;
+    transition: all 0.2s ease;
+    box-shadow: 0 4px 14px -4px rgba(99,102,241,0.5);
+}
+
+.cf-generate-btn:hover {
+    background: linear-gradient(135deg, #4f46e5, #4338ca);
+    transform: translateY(-1px);
+    box-shadow: 0 8px 20px -4px rgba(99,102,241,0.55);
+}
+
+/* ─── DETAIL VIEW ─── */
+.cf-back-to-form-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 14px;
+    border-radius: 8px;
+    background: none;
+    border: 1px solid var(--border-subtle);
+    color: var(--text-secondary);
+    font-size: 0.82rem;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: inherit;
+    transition: all 0.18s;
+    margin-bottom: 16px;
+}
+
+.cf-back-to-form-btn:hover {
+    border-color: #6366f1;
+    color: #6366f1;
+    background: rgba(99,102,241,0.05);
+}
+
+.cf-detail-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 18px;
+    flex-wrap: wrap;
+}
+
+.cf-detail-title-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    flex: 1;
+    min-width: 0;
+}
+
+.cf-detail-icon {
+    width: 42px;
+    height: 42px;
+    min-width: 42px;
+    border-radius: 12px;
+    background: rgba(99,102,241,0.1);
+    color: #6366f1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.1rem;
+    flex-shrink: 0;
+}
+
+.cf-detail-title-row h3 {
+    font-size: 1.1rem;
+    font-weight: 800;
+    color: var(--text-primary);
+    margin: 0 0 4px;
+    line-height: 1.3;
+    word-break: break-word;
+}
+
+.cf-detail-title-row p {
+    font-size: 0.77rem;
+    color: var(--text-secondary);
+    margin: 0;
+    line-height: 1.4;
+}
+
+.cf-detail-actions {
+    display: flex;
+    gap: 8px;
+    flex-shrink: 0;
+    flex-wrap: wrap;
+}
+
+/* Stats row */
+.cf-stats-row {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+    margin-bottom: 18px;
+}
+
+.cf-stat-card {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 14px 16px;
+    border-radius: 12px;
+    border: 1px solid var(--border-subtle);
+    background: var(--bg-card);
+    transition: transform 0.2s;
+}
+
+.cf-stat-card strong {
+    font-size: 1.15rem;
+    font-weight: 800;
+}
+
+.cf-stat-label {
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-secondary);
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.cf-stat-total {
+    border-color: rgba(99,102,241,0.25);
+    background: rgba(99,102,241,0.05);
+}
+.cf-stat-total strong { color: #6366f1; }
+.cf-stat-total .cf-stat-label i { color: #6366f1; }
+
+.cf-stat-collected {
+    border-color: rgba(22,163,74,0.25);
+    background: rgba(22,163,74,0.05);
+}
+.cf-stat-collected strong { color: #16a34a; }
+.cf-stat-collected .cf-stat-label i { color: #16a34a; }
+
+.cf-stat-remaining {
+    border-color: rgba(220,38,38,0.2);
+    background: rgba(220,38,38,0.05);
+}
+.cf-stat-remaining strong { color: #dc2626; }
+.cf-stat-remaining .cf-stat-label i { color: #dc2626; }
+
+/* Toolbar (search + filter) inside detail */
+.cf-detail-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 14px;
+    flex-wrap: wrap;
+}
+
+/* Detail table */
+.cf-detail-table-wrap {
+    overflow-x: auto;
+    border: 1px solid var(--border-subtle);
+    border-radius: 12px;
+}
+
+/* ─── RESPONSIVE ─── */
+@media (max-width: 900px) {
+    .cf-workspace {
+        grid-template-columns: 1fr;
+    }
+    .cf-records-panel {
+        position: static;
+        max-height: 320px;
+    }
+    .cf-stats-row {
+        grid-template-columns: repeat(3, 1fr);
+    }
+}
+
+@media (max-width: 640px) {
+    .cf-scope-toggle {
+        flex-direction: column;
+    }
+    .cf-form-grid {
+        grid-template-columns: 1fr;
+    }
+    .cf-stats-row {
+        grid-template-columns: 1fr;
+    }
+    .cf-detail-toolbar {
+        flex-direction: column;
+    }
+    .cf-detail-toolbar .cf-panel-search {
+        width: 100%;
+    }
+}
+
+/* =====================================================
+   FINES PAGE — TOP TAB SWITCHER (replaces left sidebar)
+   ===================================================== */
+
+.fines-top-switch {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 20px;
+    border-bottom: 2px solid var(--border-subtle, #e2e8f0);
+    padding-bottom: 0;
+    max-width: 1100px;
+}
+
+.fines-top-tab {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 22px;
+    border: none;
+    background: transparent;
+    color: var(--text-secondary, #64748b);
+    font-size: 0.93rem;
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    border-bottom: 3px solid transparent;
+    margin-bottom: -2px;
+    border-radius: 6px 6px 0 0;
+    transition: color 0.2s, border-color 0.2s, background 0.2s;
+}
+.fines-top-tab i { font-size: 0.9rem; }
+.fines-top-tab:hover {
+    color: var(--accent, #6366f1);
+    background: rgba(99, 102, 241, 0.05);
+}
+.fines-top-tab.active {
+    color: var(--accent, #6366f1);
+    border-bottom-color: var(--accent, #6366f1);
+    background: rgba(99, 102, 241, 0.06);
+}
+
+.fines-panels-area {
+    max-width: 1100px;
+}
+.fines-panels-area .fine-panel .form-page-container {
+    max-width: 100%;
+    margin-top: 0;
+}
+
+/* Keep old class names working for fine records page so no JS changes needed */
+.fines-layout { max-width: 1100px; }
+.fines-content { flex: 1; min-width: 0; }
+
+/* =====================================================
+   SALARY PAGES — BONUS ACTION BAR & COLLAPSIBLE PANEL
+   ===================================================== */
+
+.salary-bonus-action-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: linear-gradient(135deg, #fdf4ff, #f5f3ff);
+    border: 1.5px solid #e9d5ff;
+    border-radius: 12px;
+    padding: 12px 18px;
+    margin-bottom: 16px;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.salary-bonus-action-info {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 0.93rem;
+    font-weight: 700;
+    color: #6b21a8;
+}
+.salary-bonus-action-info i {
+    font-size: 1.1rem;
+    color: #9333ea;
+}
+
+.salary-bonus-action-btns {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.btn-salary-bonus {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 8px 18px;
+    background: linear-gradient(135deg, #9333ea, #7c3aed);
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    font-size: 0.87rem;
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    transition: opacity 0.2s, transform 0.15s;
+}
+.btn-salary-bonus:hover { opacity: 0.9; transform: translateY(-1px); }
+
+.btn-salary-view-bonus {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 8px 18px;
+    background: transparent;
+    color: #7c3aed;
+    border: 1.5px solid #c084fc;
+    border-radius: 8px;
+    font-size: 0.87rem;
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    transition: background 0.2s, color 0.2s;
+}
+.btn-salary-view-bonus:hover {
+    background: #fdf4ff;
+    color: #6b21a8;
+}
+
+/* Collapsible bonus panel */
+.salary-bonus-panel {
+    background: #fff;
+    border: 1.5px solid #e9d5ff;
+    border-radius: 14px;
+    margin-bottom: 16px;
+    overflow: hidden;
+    animation: slideDown 0.22s ease;
+}
+
+@keyframes slideDown {
+    from { opacity: 0; transform: translateY(-8px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+.sbp-bonus-inner {
+    padding: 20px 22px;
+}
+
+.sbp-bonus-title {
+    font-size: 0.97rem;
+    font-weight: 700;
+    color: #6b21a8;
+    margin: 0 0 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.sbp-bonus-title i { color: #9333ea; }
+
+.sbp-bonus-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+    margin-top: 14px;
+}
+
+@media (max-width: 640px) {
+    .sbp-bonus-row { grid-template-columns: 1fr; }
+    .salary-bonus-action-bar { flex-direction: column; align-items: flex-start; }
+    .salary-bonus-action-btns { width: 100%; }
+    .btn-salary-bonus, .btn-salary-view-bonus { flex: 1; justify-content: center; }
+}
+
+.mt-12 { margin-top: 12px; }
+
+/* ============================================================
+   FINES PAGE — alignment fix
+   ============================================================ */
+.fines-section-centered {
+    margin-left: auto;
+    margin-right: auto;
+}
+
+/* ============================================================
+   SALARY PAGES — "View Salary Records" button
+   ============================================================ */
+.btn-salary-view-records {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 8px 18px;
+    background: transparent;
+    color: #0369a1;
+    border: 1.5px solid #7dd3fc;
+    border-radius: 8px;
+    font-size: 0.87rem;
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    transition: background 0.2s, color 0.2s;
+}
+.btn-salary-view-records:hover {
+    background: #f0f9ff;
+    color: #075985;
+}
+
+/* End-of-month update notice */
+.salary-update-notice {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: rgba(14, 165, 233, 0.08);
+    border: 1px solid rgba(14, 165, 233, 0.25);
+    border-radius: 8px;
+    padding: 9px 14px;
+    font-size: 0.82rem;
+    color: var(--text-secondary);
+    margin-bottom: 16px;
+}
+.salary-update-notice i {
+    color: #0ea5e9;
+    flex-shrink: 0;
+}
+
+/* ============================================================
+   SALARY RECORDS PAGE
+   ============================================================ */
+.salary-records-controls {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 14px;
+    margin-bottom: 8px;
+}
+
+.salary-records-tabs {
+    display: flex;
+    gap: 6px;
+    border-bottom: 2px solid var(--border-subtle, #e2e8f0);
+    padding-bottom: 0;
+}
+
+.salary-rec-tab {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 9px 20px;
+    border: none;
+    background: transparent;
+    color: var(--text-secondary, #64748b);
+    font-size: 0.9rem;
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    border-bottom: 3px solid transparent;
+    margin-bottom: -2px;
+    border-radius: 6px 6px 0 0;
+    transition: color 0.2s, border-color 0.2s, background 0.2s;
+}
+.salary-rec-tab:hover {
+    color: var(--accent, #6366f1);
+    background: rgba(99,102,241,0.05);
+}
+.salary-rec-tab.active {
+    color: var(--accent, #6366f1);
+    border-bottom-color: var(--accent, #6366f1);
+    background: rgba(99,102,241,0.06);
+}
+
+.salary-records-month-filter {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+.sr-month-label {
+    font-size: 0.83rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    white-space: nowrap;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+.sr-month-label i { color: var(--accent, #6366f1); }
+
+#sr-month-select {
+    background: var(--bg-input, rgba(255,255,255,0.05));
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-md, 8px);
+    color: var(--text-primary);
+    padding: 9px 14px;
+    font-size: 0.87rem;
+    font-family: inherit;
+    min-width: 180px;
+}
+#sr-month-select:focus { outline: none; border-color: var(--accent, #6366f1); }
+
+.salary-month-chip {
+    display: inline-block;
+    background: rgba(99,102,241,0.1);
+    color: var(--accent, #6366f1);
+    border-radius: 6px;
+    padding: 3px 10px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+/* ============================================================
+   EXPENSE HUB — inline form redesign
+   ============================================================ */
+.expense-hub-form-wrap {
+    display: flex;
+    justify-content: center;
+    padding: 0 16px;
+}
+
+.expense-hub-form-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-lg, 16px);
+    padding: 32px 36px 28px;
+    width: 100%;
+    max-width: 640px;
+    box-shadow: 0 4px 24px -8px rgba(0,0,0,0.08);
+}
+
+.expense-hub-form-header {
+    display: flex;
+    align-items: flex-start;
+    gap: 16px;
+    margin-bottom: 28px;
+}
+
+.expense-hub-icon-wrap {
+    width: 48px;
+    height: 48px;
+    border-radius: 12px;
+    background: linear-gradient(135deg, #f97316, #ea580c);
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.25rem;
+    flex-shrink: 0;
+    box-shadow: 0 4px 12px -4px rgba(249,115,22,0.5);
+}
+
+.expense-hub-form-title {
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin: 0 0 4px;
+}
+.expense-hub-form-sub {
+    font-size: 0.83rem;
+    color: var(--text-secondary);
+    margin: 0;
+}
+
+.expense-hub-fields {
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+    margin-bottom: 24px;
+}
+.expense-hub-fields .form-group {
+    width: 100%;
+}
+.expense-hub-fields .form-group label {
+    display: block;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    margin-bottom: 7px;
+}
+.field-currency {
+    font-weight: 400;
+    color: var(--text-light);
+    font-size: 0.8rem;
+}
+
+.expense-amount-input-wrap {
+    display: flex;
+    align-items: center;
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-md, 8px);
+    overflow: hidden;
+    background: var(--bg-input);
+    transition: border-color 0.2s;
+}
+.expense-amount-input-wrap:focus-within {
+    border-color: var(--accent, #6366f1);
+}
+.expense-rs-prefix {
+    padding: 11px 14px;
+    background: var(--bg-secondary, rgba(99,102,241,0.07));
+    color: var(--text-secondary);
+    font-size: 0.85rem;
+    font-weight: 700;
+    border-right: 1px solid var(--border-subtle);
+    white-space: nowrap;
+}
+.expense-amount-input {
+    border: none;
+    background: transparent;
+    padding: 11px 14px;
+    flex: 1;
+    font-size: 1rem;
+    font-family: inherit;
+    color: var(--text-primary);
+    outline: none;
+}
+
+.expense-hub-actions {
+    display: flex;
+    gap: 12px;
+    justify-content: flex-end;
+}
+
+.expense-log-btn {
+    min-width: 150px;
+}
+
+@media (max-width: 600px) {
+    .expense-hub-form-card { padding: 22px 18px 20px; }
+    .expense-hub-form-header { flex-direction: column; gap: 10px; }
+    .expense-hub-actions { flex-direction: column; }
+    .expense-log-btn { width: 100%; justify-content: center; }
+    .salary-records-controls { flex-direction: column; align-items: flex-start; }
+    .salary-records-tabs { width: 100%; }
+    .salary-rec-tab { flex: 1; justify-content: center; }
+    .btn-salary-view-records { flex: 1; justify-content: center; }
+    .salary-bonus-action-btns { flex-wrap: wrap; }
+    .sr-controls-row { flex-direction: column; gap: 10px; }
+    .sr-search-wrap { min-width: 0; width: 100%; }
+    .bonus-records-toolbar { flex-direction: column; gap: 10px; }
+    .bonus-search-wrap { max-width: none !important; }
+}
+
+/* ============================================================
+   SALARY RECORDS — Revised controls (no tab switcher)
+   ============================================================ */
+.sr-controls-row {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
+    padding: 0 0 10px;
+    margin-bottom: 0;
+}
+
+.sr-category-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: linear-gradient(135deg, rgba(99,102,241,0.12), rgba(139,92,246,0.1));
+    border: 1px solid rgba(99,102,241,0.25);
+    color: var(--accent, #6366f1);
+    border-radius: 20px;
+    padding: 7px 16px;
+    font-size: 0.85rem;
+    font-weight: 700;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.sr-category-badge i {
+    font-size: 0.9rem;
+}
+
+.sr-search-wrap {
+    position: relative;
+    flex: 1;
+    min-width: 180px;
+}
+
+.sr-search-wrap i {
+    position: absolute;
+    left: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--text-muted, #94a3b8);
+    font-size: 12px;
+    pointer-events: none;
+}
+
+.sr-search-wrap input {
+    width: 100%;
+    padding: 9px 12px 9px 34px;
+    border-radius: var(--radius-md, 8px);
+    border: 1px solid var(--border-subtle);
+    background: var(--bg-input, rgba(255,255,255,0.05));
+    color: var(--text-primary);
+    font-size: 0.875rem;
+    font-family: inherit;
+    box-sizing: border-box;
+    transition: border-color 0.2s;
+}
+
+.sr-search-wrap input:focus {
+    outline: none;
+    border-color: var(--accent, #6366f1);
+}
+
+.sr-search-wrap input::placeholder {
+    color: var(--text-muted, #94a3b8);
+}
+
+.sr-status-filter-wrap {
+    flex-shrink: 0;
+    min-width: 130px;
+}
+
+/* Salary records table — full-width with no extra top margin */
+.sr-table-container {
+    margin-top: 0 !important;
+    max-width: none !important;
+    width: 100% !important;
+}
+
+/* ============================================================
+   BONUS RECORDS TABLE — Enhanced Styling
+   ============================================================ */
+
+/* Toolbar above the bonus table */
+.bonus-records-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin-bottom: 12px;
+    flex-wrap: wrap;
+}
+
+.bonus-records-category-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: linear-gradient(135deg, rgba(99,102,241,0.12), rgba(139,92,246,0.1));
+    border: 1px solid rgba(99,102,241,0.25);
+    color: var(--accent, #6366f1);
+    border-radius: 20px;
+    padding: 7px 16px;
+    font-size: 0.85rem;
+    font-weight: 700;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.bonus-chip-nt {
+    background: linear-gradient(135deg, rgba(16,185,129,0.12), rgba(5,150,105,0.1));
+    border-color: rgba(16,185,129,0.3);
+    color: #059669;
+}
+
+.bonus-search-wrap {
+    position: relative;
+    flex: 1;
+    max-width: 380px;
+}
+
+.bonus-search-wrap i {
+    position: absolute;
+    left: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--text-muted, #94a3b8);
+    font-size: 12px;
+    pointer-events: none;
+}
+
+.bonus-search-wrap input {
+    width: 100%;
+    padding: 9px 12px 9px 34px;
+    border-radius: var(--radius-md, 8px);
+    border: 1px solid var(--border-subtle);
+    background: var(--bg-input, rgba(255,255,255,0.05));
+    color: var(--text-primary);
+    font-size: 0.875rem;
+    font-family: inherit;
+    box-sizing: border-box;
+    transition: border-color 0.2s;
+}
+
+.bonus-search-wrap input:focus {
+    outline: none;
+    border-color: var(--accent, #6366f1);
+}
+
+/* The bonus table itself */
+.bonus-table-container {
+    margin-top: 0 !important;
+    max-width: none !important;
+    width: 100% !important;
+}
+
+.bonus-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13.5px;
+}
+
+.bonus-table thead tr {
+    background: linear-gradient(135deg, rgba(99,102,241,0.07), rgba(139,92,246,0.07));
+    border-bottom: 2px solid rgba(99,102,241,0.2);
+}
+
+.bonus-table th {
+    padding: 14px 20px;
+    text-align: left;
+    font-weight: 700;
+    color: var(--accent, #6366f1);
+    font-size: 11.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    white-space: nowrap;
+}
+
+.bonus-table td {
+    padding: 14px 20px;
+    color: var(--text-primary);
+    border-bottom: 1px solid var(--border-subtle);
+    vertical-align: middle;
+}
+
+.bonus-table tbody tr:last-child td {
+    border-bottom: none;
+}
+
+.bonus-table tbody tr:nth-child(even) {
+    background: rgba(99,102,241,0.018);
+}
+
+.bonus-table tbody tr:hover {
+    background: rgba(99,102,241,0.045);
+    transition: background 0.15s ease;
+}
+
+/* Amount column — highlight in green */
+.bonus-table td:nth-child(3) {
+    font-weight: 800;
+    font-size: 0.97rem;
+    color: #16a34a;
+    letter-spacing: 0.01em;
+}
+
+/* Description column — muted, compact */
+.bonus-table td:nth-child(4) {
+    color: var(--text-secondary);
+    font-size: 0.83rem;
+    max-width: 200px;
+}
+
+/* Status column — badge centering */
+.bonus-table td:nth-child(5) {
+    white-space: nowrap;
+}

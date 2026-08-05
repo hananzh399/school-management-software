@@ -8,6 +8,7 @@
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <link rel="stylesheet" href="manage-staff.css">
     <link rel="stylesheet" href="manage-finance.css">
+
     <script>(function(){const t=localStorage.getItem('eduflow-theme')||'dark';document.documentElement.setAttribute('data-theme',t);})()</script>
     <script src="access-control.js"></script>
 </head>
@@ -86,17 +87,9 @@
                 <div class="finance-card revenue-theme" onclick="showPage('page-student-fine')">
                     <div class="card-glow"></div>
                     <div class="icon-wrapper"><i class="fas fa-exclamation-circle"></i></div>
-                    <h3 class="card-title">Student Fines</h3>
-                    <p class="card-description">Late, Disciplinary or Attendance fine</p>
+                    <h3 class="card-title">Fines</h3>
+                    <p class="card-description">Student &amp; staff fines — late, disciplinary or attendance.</p>
                 </div>
-
-                <div class="finance-card expense-theme" onclick="showPage('page-staff-hub')">
-                    <div class="card-glow"></div>
-                    <div class="icon-wrapper"><i class="fas fa-file-invoice"></i></div>
-                    <h3 class="card-title">Staff Fine or Bonus</h3>
-                    <p class="card-description">Late, Disciplinary or Attendance fine</p>
-                </div>
-
 
                 <div class="finance-card salary-theme" onclick="showPage('page-salary-hub')">
                     <div class="card-glow"></div>
@@ -140,6 +133,12 @@
                         </button>
                         <button type="button" class="btn-global-action btn-print-global" id="btn-print-vouchers-global" onclick="openPrintVouchersModal()">
                             <i class="fas fa-print"></i> Print Vouchers
+                        </button>
+                        <button type="button" class="btn-global-action btn-customfee-global" onclick="showPage('page-custom-fee')">
+                            <i class="fas fa-tags"></i> Custom Fee
+                        </button>
+                        <button type="button" class="btn-global-action btn-defaulter-global" onclick="showPage('page-fee-defaulter')">
+                            <i class="fas fa-exclamation-triangle"></i> Fee Defaulter
                         </button>
                     </div>
                 </div>
@@ -186,324 +185,305 @@
         </div>
 
 
-        <!-- ===================== PAGE: STUDENT FINE HUB ===================== -->
+        <!-- ===================== PAGE: FINES (Students & Staff) ===================== -->
         <div id="page-student-fine" class="sub-page d-none">
-            <section class="page-title-section sub-title-section">
+            <section class="page-title-section sub-title-section header-with-action">
                 <button class="back-btn" onclick="showPage('page-main')"><i class="fas fa-arrow-left"></i> Back</button>
-                <h2 class="page-title">Student Fines</h2>
-                <p class="page-description">Add fines to students or view all students with fines.</p>
+                <button type="button" class="btn-global-action btn-view-records header-action-btn" onclick="openFineRecordsWithContext()">
+                    <i class="fas fa-list-alt"></i> View Records
+                </button>
+                <h2 class="page-title">Fines</h2>
+                <p class="page-description">Add a fine for a student or a staff member.</p>
                 <div class="title-divider"></div>
             </section>
 
-            <section class="finance-cards-container sub-cards">
-                <div class="finance-card revenue-theme" onclick="showPage('page-add-student-fine')">
-                    <div class="card-glow"></div>
-                    <div class="icon-wrapper"><i class="fas fa-plus-circle"></i></div>
-                    <h3 class="card-title">Add Fine</h3>
-                    <p class="card-description">Assign a fine with description to a student.</p>
-                </div>
-                <div class="finance-card expense-theme" onclick="showPage('page-view-student-fines')">
-                    <div class="card-glow"></div>
-                    <div class="icon-wrapper"><i class="fas fa-list-alt"></i></div>
-                    <h3 class="card-title">View Students with Fine</h3>
-                    <p class="card-description">See all students who have fines logged.</p>
-                </div>
-            </section>
-        </div>
-
-        <!-- ===================== PAGE: ADD STUDENT FINE ===================== -->
-        <div id="page-add-student-fine" class="sub-page d-none">
-            <section class="page-title-section sub-title-section">
-                <button class="back-btn" onclick="showPage('page-student-fine')"><i class="fas fa-arrow-left"></i> Back</button>
-                <h2 class="page-title">Add Student Fine</h2>
-                <p class="page-description">Select a student and enter fine details.</p>
-                <div class="title-divider"></div>
-            </section>
-
-            <div class="form-page-container centered-block">
-                <div class="form-group full-width">
-                    <label>Search Student</label>
-                    <input type="text" id="student-fine-search" class="fine-search-input" oninput="searchStudentsForFine()" placeholder="Search by name, or Name~Guardian (e.g. Hanan~Habib)">
-                    <p class="search-hint">Tip: type a name, or use <strong>Name~Guardian</strong> to match both (e.g. <em>Hanan~Habib</em>). Results show ID, Name, Class &amp; Father.</p>
-                    <div id="student-fine-results" class="staff-members-list fine-results-list"></div>
-                </div>
-                <div class="form-group full-width">
-                    <label>Fine Amount (RS)</label>
-                    <input type="number" id="student-fine-amount" min="1" placeholder="Enter amount">
-                </div>
-                <div class="form-group full-width">
-                    <label>Fine Description / Cause</label>
-                    <input type="text" id="student-fine-desc" placeholder="e.g. Disciplinary action, damage to property">
-                </div>
-                <div class="modal-actions mt-20">
-                    <button type="button" class="btn btn-cancel" onclick="showPage('page-student-fine')">Cancel</button>
-                    <button type="button" class="btn btn-primary" onclick="handleAddStudentFine()">Add Fine</button>
-                </div>
-            </div>
-        </div>
-
-        <!-- ===================== PAGE: VIEW STUDENT FINES ===================== -->
-        <div id="page-view-student-fines" class="sub-page d-none">
-            <section class="page-title-section sub-title-section">
-                <button class="back-btn" onclick="showPage('page-student-fine')"><i class="fas fa-arrow-left"></i> Back</button>
-                <h2 class="page-title">Student Fines</h2>
-                <p class="page-description">All students with recorded fines.</p>
-                <div class="title-divider"></div>
-            </section>
-
-            <div class="search-bar-container" style="max-width:600px; margin:0 auto 16px auto;">
-                <input type="text" id="student-fines-view-search" class="fine-search-input" oninput="filterStudentFinesTable()" placeholder="Search by Reg No, Name or Guardian Name (e.g. Ali~Ahmed)">
+            <!-- Top tab switcher -->
+            <div class="fines-top-switch fines-section-centered">
+                <button type="button" class="fines-top-tab active" id="fine-tab-student" onclick="setFineTargetTab('student')">
+                    <i class="fas fa-user-graduate"></i> Students
+                </button>
+                <button type="button" class="fines-top-tab" id="fine-tab-staff" onclick="setFineTargetTab('staff')">
+                    <i class="fas fa-chalkboard-teacher"></i> Staff
+                </button>
             </div>
 
-             <div class="table-container centered-block">
-        <table class="finance-table">
-            <thead>
-                <tr>
-                    <th>Student ID</th>
-                    <th>Name</th>
-                    <th>Class</th>
-                    <th>Section</th> <!-- Added this -->
-                    <th>Father Name</th>
-                    <th>Monthly Total Fine & Reason</th>
-                </tr>
-            </thead>
-            <tbody id="student-fines-tbody">
-                <tr><td colspan="6" class="empty-row">No fines recorded yet.</td></tr>
-            </tbody>
-        </table>
-    </div>
-        </div>
+            <!-- Panel area — full width below tabs -->
+            <div class="fines-panels-area fines-section-centered">
 
-        <!-- ===================== PAGE: STAFF HUB (Bonus / Fine) ===================== -->
-        <div id="page-staff-hub" class="sub-page d-none">
-            <section class="page-title-section sub-title-section">
-                <button class="back-btn" onclick="showPage('page-main')"><i class="fas fa-arrow-left"></i> Back</button>
-                <h2 class="page-title">Staff Fine or Bonus</h2>
-                <p class="page-description">Choose to manage staff bonuses or staff fines.</p>
-                <div class="title-divider"></div>
-            </section>
+                    <!-- STUDENT FINE FORM -->
+                    <div id="fine-panel-student" class="fine-panel">
+                        <div class="form-page-container">
+                            <label class="section-mini-label">Select Student</label>
+                            <div class="cascade-select-grid">
+                                <div class="form-group">
+                                    <label>Class</label>
+                                    <select id="sf-class-select" onchange="onFineClassChange()">
+                                        <option value="">-- Select Class --</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label>Section</label>
+                                    <select id="sf-section-select" onchange="onFineSectionChange()" disabled>
+                                        <option value="">-- Select Section --</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label>Student</label>
+                                    <select id="sf-student-select" onchange="onFineStudentChange()" disabled>
+                                        <option value="">-- Select Student --</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div id="sf-selected-student-info" class="selected-target-info d-none"></div>
 
-            <section class="finance-cards-container sub-cards">
-                <div class="finance-card revenue-theme" onclick="showPage('page-staff-bonus')">
-                    <div class="card-glow"></div>
-                    <div class="icon-wrapper"><i class="fas fa-gift"></i></div>
-                    <h3 class="card-title">Staff Bonus</h3>
-                    <p class="card-description">Reward teaching or non-teaching staff.</p>
-                </div>
-                <div class="finance-card expense-theme" onclick="showPage('page-staff-fine')">
-                    <div class="card-glow"></div>
-                    <div class="icon-wrapper"><i class="fas fa-file-invoice"></i></div>
-                    <h3 class="card-title">Staff Fine</h3>
-                    <p class="card-description">Deduct from teaching or non-teaching salaries.</p>
-                </div>
-            </section>
-        </div>
-
-        <!-- ===================== PAGE: STAFF BONUS HUB ===================== -->
-        <div id="page-staff-bonus" class="sub-page d-none">
-            <section class="page-title-section sub-title-section">
-                <button class="back-btn" onclick="showPage('page-staff-hub')"><i class="fas fa-arrow-left"></i> Back</button>
-                <h2 class="page-title">Staff Bonus</h2>
-                <p class="page-description">Add a bonus or view all staff with bonuses.</p>
-                <div class="title-divider"></div>
-            </section>
-
-            <section class="finance-cards-container sub-cards">
-                <div class="finance-card revenue-theme" onclick="showPage('page-add-staff-bonus')">
-                    <div class="card-glow"></div>
-                    <div class="icon-wrapper"><i class="fas fa-plus-circle"></i></div>
-                    <h3 class="card-title">Add Bonus</h3>
-                    <p class="card-description">Assign a bonus with description to a staff member.</p>
-                </div>
-                <div class="finance-card expense-theme" onclick="showPage('page-view-staff-bonus')">
-                    <div class="card-glow"></div>
-                    <div class="icon-wrapper"><i class="fas fa-list-alt"></i></div>
-                    <h3 class="card-title">View Staff with Bonus</h3>
-                    <p class="card-description">See all staff members who have bonuses logged.</p>
-                </div>
-            </section>
-        </div>
-
-        <!-- ===================== PAGE: ADD STAFF BONUS ===================== -->
-        <div id="page-add-staff-bonus" class="sub-page d-none">
-            <section class="page-title-section sub-title-section">
-                <button class="back-btn" onclick="showPage('page-staff-bonus')"><i class="fas fa-arrow-left"></i> Back</button>
-                <h2 class="page-title">Add Staff Bonus</h2>
-                <p class="page-description">Select staff category then member to assign bonus.</p>
-                <div class="title-divider"></div>
-            </section>
-
-            <div class="form-page-container centered-block">
-                <div class="form-group full-width">
-                    <label>Staff Category</label>
-                    <div class="staff-category-toggle">
-                        <button type="button" class="category-btn active" id="btn-bonus-teaching" onclick="selectBonusCategory('Teaching')">Teaching</button>
-                        <button type="button" class="category-btn" id="btn-bonus-non-teaching" onclick="selectBonusCategory('Non-Teaching')">Non-Teaching</button>
+                            <div class="form-group full-width">
+                                <label>Fine Amount (RS)</label>
+                                <input type="number" id="student-fine-amount" min="1" placeholder="Enter amount">
+                            </div>
+                            <div class="form-group full-width">
+                                <label>Fine Description / Cause</label>
+                                <input type="text" id="student-fine-desc" placeholder="e.g. Disciplinary action, damage to property">
+                            </div>
+                            <div class="modal-actions mt-20">
+                                <button type="button" class="btn btn-cancel" onclick="resetStudentFineForm()">Clear</button>
+                                <button type="button" class="btn btn-primary" onclick="handleAddStudentFine()">Add Fine</button>
+                            </div>
+                        </div>
                     </div>
-                </div>
 
-                <div class="form-group full-width">
-                    <label>Search Staff</label>
-                    <input type="text" id="bonus-search" class="fine-search-input" oninput="filterBonusList()" placeholder="Search teacher / staff by name, ID, subject or class">
-                    <p class="search-hint">Results show ID, Name, Class &amp; Subject (or Job for non-teaching).</p>
-                    <div id="bonus-members-list" class="staff-members-list fine-results-list"></div>
-                </div>
+                    <!-- STAFF FINE FORM -->
+                    <div id="fine-panel-staff" class="fine-panel d-none">
+                        <div class="form-page-container">
+                            <div class="form-group full-width">
+                                <label>Staff Category</label>
+                                <div class="staff-category-toggle">
+                                    <button type="button" class="category-btn active" id="btn-teaching" onclick="selectStaffCategory('Teaching')">Teaching</button>
+                                    <button type="button" class="category-btn" id="btn-non-teaching" onclick="selectStaffCategory('Non-Teaching')">Non-Teaching</button>
+                                </div>
+                            </div>
 
-                <div class="form-group full-width">
-                    <label>Bonus Amount (RS)</label>
-                    <input type="number" id="staff-bonus-amount" min="1" placeholder="Enter amount">
-                </div>
-                <div class="form-group full-width">
-                    <label>Bonus Description</label>
-                    <input type="text" id="staff-bonus-desc" placeholder="e.g. Performance bonus, Eid bonus">
-                </div>
-                <div class="modal-actions mt-20">
-                    <button type="button" class="btn btn-cancel" onclick="showPage('page-staff-bonus')">Cancel</button>
-                    <button type="button" class="btn btn-primary" onclick="handleAddStaffBonus()">Add Bonus</button>
-                </div>
+                            <div class="form-group full-width">
+                                <label>Search Staff</label>
+                                <input type="text" id="staff-fine-search" class="fine-search-input" oninput="filterStaffFineList()" placeholder="Search teacher / staff by name, ID, subject or class">
+                                <p class="search-hint">Results show ID, Name, Class &amp; Subject (or Job for non-teaching).</p>
+                                <div id="staff-members-list" class="staff-members-list fine-results-list"></div>
+                            </div>
+
+                            <div class="form-group full-width">
+                                <label>Fine Amount (RS)</label>
+                                <input type="number" id="staff-fine-amount" min="1" placeholder="Enter amount">
+                            </div>
+                            <div class="form-group full-width">
+                                <label>Fine Description / Cause</label>
+                                <input type="text" id="staff-fine-desc" placeholder="e.g. Late attendance, misconduct">
+                            </div>
+                            <div class="modal-actions mt-20">
+                                <button type="button" class="btn btn-cancel" onclick="resetStaffFineForm()">Clear</button>
+                                <button type="button" class="btn btn-primary" onclick="handleAddStaffFine()">Add Fine</button>
+                            </div>
+                        </div>
+                    </div>
+
             </div>
         </div>
 
-        <!-- ===================== PAGE: VIEW STAFF BONUS ===================== -->
+        <!-- ===================== PAGE: FINE RECORDS (Students & Staff) ===================== -->
+        <div id="page-fine-records" class="sub-page d-none">
+            <section class="page-title-section sub-title-section">
+                <button class="back-btn" onclick="showPage('page-student-fine')"><i class="fas fa-arrow-left"></i> Back</button>
+                <h2 class="page-title">Fine Records</h2>
+                <p class="page-description">Browse all recorded fines.</p>
+                <div class="title-divider"></div>
+            </section>
+
+            <div class="fines-panels-area">
+
+                    <!-- STUDENT RECORDS -->
+                    <div id="fr-panel-student" class="fine-panel">
+                        <div class="records-filter-bar">
+                            <div class="fee-search-wrap records-search">
+                                <i class="fas fa-search"></i>
+                                <input type="text" id="student-fines-view-search" oninput="filterStudentFinesTable()" placeholder="Search by Reg No, Name or Guardian (e.g. Ali~Ahmed)">
+                            </div>
+                            <select id="fr-student-class-filter" onchange="onFrStudentFilterChange()">
+                                <option value="">-- All Classes --</option>
+                            </select>
+                            <select id="fr-student-section-filter" onchange="onFrStudentFilterChange()">
+                                <option value="">-- All Sections --</option>
+                            </select>
+                        </div>
+
+                        <div class="table-container">
+                            <table class="finance-table">
+                                <thead>
+                                    <tr>
+                                        <th>Student ID</th>
+                                        <th>Name</th>
+                                        <th>Class</th>
+                                        <th>Section</th>
+                                        <th>Father Name</th>
+                                        <th>Monthly Total Fine & Reason</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="student-fines-tbody">
+                                    <tr><td colspan="6" class="empty-row">No fines recorded yet.</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- STAFF RECORDS -->
+                    <div id="fr-panel-staff" class="fine-panel d-none">
+                        <div class="records-filter-bar">
+                            <div class="fee-search-wrap records-search">
+                                <i class="fas fa-search"></i>
+                                <input type="text" id="staff-fines-view-search" oninput="filterStaffFinesTable()" placeholder="Search by name, ID or role">
+                            </div>
+                            <div class="staff-category-toggle records-category-toggle">
+                                <button type="button" class="category-btn active" id="fr-staff-cat-all" onclick="setStaffFinesCategoryFilter('All')">All</button>
+                                <button type="button" class="category-btn" id="fr-staff-cat-teaching" onclick="setStaffFinesCategoryFilter('Teaching')">Teaching</button>
+                                <button type="button" class="category-btn" id="fr-staff-cat-non-teaching" onclick="setStaffFinesCategoryFilter('Non-Teaching')">Non-Teaching</button>
+                            </div>
+                        </div>
+
+                        <div class="table-container">
+                            <table class="finance-table">
+                                <thead>
+                                    <tr>
+                                        <th>Name</th>
+                                        <th>Job / Role</th>
+                                        <th>Fine Amount (RS)</th>
+                                        <th>Cause</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="staff-fines-tbody">
+                                    <tr><td colspan="4" class="empty-row">No fines recorded yet.</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                </div>
+        </div>
+
+        <!-- ===================== PAGE: VIEW STAFF BONUS (Records) ===================== -->
         <div id="page-view-staff-bonus" class="sub-page d-none">
             <section class="page-title-section sub-title-section">
-                <button class="back-btn" onclick="showPage('page-staff-bonus')"><i class="fas fa-arrow-left"></i> Back</button>
-                <h2 class="page-title">Staff Bonuses</h2>
-                <p class="page-description">All staff members with recorded bonuses.</p>
+                <button class="back-btn" onclick="goBackFromBonusRecords()"><i class="fas fa-arrow-left"></i> Back</button>
+                <h2 class="page-title">Bonus Records</h2>
+                <p class="page-description">History of all staff bonuses.</p>
                 <div class="title-divider"></div>
             </section>
 
-            <div class="table-container centered-block">
-                <table class="finance-table">
-                    <thead>
-                        <tr>
-                            <th>Name</th>
-                            <th>Job</th>
-                            <th>Amount (RS)</th>
-                            <th>Description</th>
-                        </tr>
-                    </thead>
-                    <tbody id="staff-bonus-tbody">
-                        <tr><td colspan="4" class="empty-row">No bonuses recorded yet.</td></tr>
-                    </tbody>
-                </table>
-            </div>
-        </div>
+            <div class="fines-panels-area">
 
-        <!-- ===================== PAGE: STAFF FINE HUB ===================== -->
-        <div id="page-staff-fine" class="sub-page d-none">
-            <section class="page-title-section sub-title-section">
-                <button class="back-btn" onclick="showPage('page-staff-hub')"><i class="fas fa-arrow-left"></i> Back</button>
-                <h2 class="page-title">Staff Fines</h2>
-                <p class="page-description">Add fines to staff members or view all staff with fines.</p>
-                <div class="title-divider"></div>
-            </section>
-
-            <section class="finance-cards-container sub-cards">
-                <div class="finance-card expense-theme" onclick="showPage('page-add-staff-fine')">
-                    <div class="card-glow"></div>
-                    <div class="icon-wrapper"><i class="fas fa-plus-circle"></i></div>
-                    <h3 class="card-title">Add Fine</h3>
-                    <p class="card-description">Assign a fine with description to a staff member.</p>
-                </div>
-                <div class="finance-card revenue-theme" onclick="showPage('page-view-staff-fines')">
-                    <div class="card-glow"></div>
-                    <div class="icon-wrapper"><i class="fas fa-list-alt"></i></div>
-                    <h3 class="card-title">View Staff with Fine</h3>
-                    <p class="card-description">See all staff members who have fines logged.</p>
-                </div>
-            </section>
-        </div>
-
-        <!-- ===================== PAGE: ADD STAFF FINE ===================== -->
-        <div id="page-add-staff-fine" class="sub-page d-none">
-            <section class="page-title-section sub-title-section">
-                <button class="back-btn" onclick="showPage('page-staff-fine')"><i class="fas fa-arrow-left"></i> Back</button>
-                <h2 class="page-title">Add Staff Fine</h2>
-                <p class="page-description">Select staff category then member to assign fine.</p>
-                <div class="title-divider"></div>
-            </section>
-
-            <div class="form-page-container centered-block">
-                <div class="form-group full-width">
-                    <label>Staff Category</label>
-                    <div class="staff-category-toggle">
-                        <button type="button" class="category-btn active" id="btn-teaching" onclick="selectStaffCategory('Teaching')">Teaching</button>
-                        <button type="button" class="category-btn" id="btn-non-teaching" onclick="selectStaffCategory('Non-Teaching')">Non-Teaching</button>
+                <!-- TEACHING BONUS RECORDS -->
+                <div id="vb-panel-teaching" class="fine-panel">
+                    <div class="bonus-records-toolbar">
+                        <div class="bonus-records-category-chip">
+                            <i class="fas fa-chalkboard-teacher"></i> Teaching Staff Bonuses
+                        </div>
+                        <div class="fee-search-wrap bonus-search-wrap">
+                            <i class="fas fa-search"></i>
+                            <input type="text" id="staff-bonus-view-search-teaching" oninput="filterStaffBonusTable('Teaching')" placeholder="Search by name, ID or subject…">
+                        </div>
+                    </div>
+                    <div class="table-container table-container-full bonus-table-container">
+                        <table class="bonus-table">
+                            <thead>
+                                <tr>
+                                    <th><i class="fas fa-user"></i> &nbsp;Name</th>
+                                    <th><i class="fas fa-book"></i> &nbsp;Subject</th>
+                                    <th><i class="fas fa-money-bill-wave"></i> &nbsp;Amount (RS)</th>
+                                    <th><i class="fas fa-comment-alt"></i> &nbsp;Description</th>
+                                    <th><i class="fas fa-circle-check"></i> &nbsp;Status</th>
+                                </tr>
+                            </thead>
+                            <tbody id="staff-bonus-tbody-teaching">
+                                <tr><td colspan="5" class="empty-row">No bonuses recorded yet.</td></tr>
+                            </tbody>
+                        </table>
                     </div>
                 </div>
 
-                <div class="form-group full-width">
-                    <label>Search Staff</label>
-                    <input type="text" id="staff-fine-search" class="fine-search-input" oninput="filterStaffFineList()" placeholder="Search teacher / staff by name, ID, subject or class">
-                    <p class="search-hint">Results show ID, Name, Class &amp; Subject (or Job for non-teaching).</p>
-                    <div id="staff-members-list" class="staff-members-list fine-results-list"></div>
+                <!-- NON-TEACHING BONUS RECORDS -->
+                <div id="vb-panel-non-teaching" class="fine-panel d-none">
+                    <div class="bonus-records-toolbar">
+                        <div class="bonus-records-category-chip bonus-chip-nt">
+                            <i class="fas fa-user-tie"></i> Non-Teaching Staff Bonuses
+                        </div>
+                        <div class="fee-search-wrap bonus-search-wrap">
+                            <i class="fas fa-search"></i>
+                            <input type="text" id="staff-bonus-view-search-non-teaching" oninput="filterStaffBonusTable('Non-Teaching')" placeholder="Search by name, ID or job role…">
+                        </div>
+                    </div>
+                    <div class="table-container table-container-full bonus-table-container">
+                        <table class="bonus-table">
+                            <thead>
+                                <tr>
+                                    <th><i class="fas fa-user"></i> &nbsp;Name</th>
+                                    <th><i class="fas fa-briefcase"></i> &nbsp;Job Role</th>
+                                    <th><i class="fas fa-money-bill-wave"></i> &nbsp;Amount (RS)</th>
+                                    <th><i class="fas fa-comment-alt"></i> &nbsp;Description</th>
+                                    <th><i class="fas fa-circle-check"></i> &nbsp;Status</th>
+                                </tr>
+                            </thead>
+                            <tbody id="staff-bonus-tbody-non-teaching">
+                                <tr><td colspan="5" class="empty-row">No bonuses recorded yet.</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
 
-                <div class="form-group full-width">
-                    <label>Fine Amount (RS)</label>
-                    <input type="number" id="staff-fine-amount" min="1" placeholder="Enter amount">
-                </div>
-                <div class="form-group full-width">
-                    <label>Fine Description / Cause</label>
-                    <input type="text" id="staff-fine-desc" placeholder="e.g. Late attendance, misconduct">
-                </div>
-                <div class="modal-actions mt-20">
-                    <button type="button" class="btn btn-cancel" onclick="showPage('page-staff-fine')">Cancel</button>
-                    <button type="button" class="btn btn-primary" onclick="handleAddStaffFine()">Add Fine</button>
-                </div>
             </div>
         </div>
-
-        <!-- ===================== PAGE: VIEW STAFF FINES ===================== -->
-        <div id="page-view-staff-fines" class="sub-page d-none">
-            <section class="page-title-section sub-title-section">
-                <button class="back-btn" onclick="showPage('page-staff-fine')"><i class="fas fa-arrow-left"></i> Back</button>
-                <h2 class="page-title">Staff Fines</h2>
-                <p class="page-description">All staff members with recorded fines.</p>
-                <div class="title-divider"></div>
-            </section>
-
-            <div class="table-container centered-block">
-                <table class="finance-table">
-                    <thead>
-                        <tr>
-                            <th>Name</th>
-                            <th>Job / Role</th>
-                            <th>Fine Amount (RS)</th>
-                            <th>Cause</th>
-                        </tr>
-                    </thead>
-                    <tbody id="staff-fines-tbody">
-                        <tr><td colspan="4" class="empty-row">No fines recorded yet.</td></tr>
-                    </tbody>
-                </table>
-            </div>
-        </div>
-
         <!-- ===================== PAGE: EXPENSE HUB ===================== -->
         <div id="page-expense-hub" class="sub-page d-none">
-            <section class="page-title-section sub-title-section">
+            <section class="page-title-section sub-title-section header-with-action">
                 <button class="back-btn" onclick="showPage('page-main')"><i class="fas fa-arrow-left"></i> Back</button>
+                <button type="button" class="btn-global-action btn-view-records header-action-btn" onclick="showPage('page-view-expenses')">
+                    <i class="fas fa-list-alt"></i> View Records
+                </button>
                 <h2 class="page-title">Other Expenses</h2>
-                <p class="page-description">Add a new expense or view all logged expenses.</p>
+                <p class="page-description">Log operational costs — utilities, maintenance, supplies and more.</p>
                 <div class="title-divider"></div>
             </section>
 
-            <section class="finance-cards-container sub-cards">
-                <div class="finance-card expense-theme" onclick="showPage('page-add-expense')">
-                    <div class="card-glow"></div>
-                    <div class="icon-wrapper"><i class="fas fa-plus-circle"></i></div>
-                    <h3 class="card-title">Add Expense</h3>
-                    <p class="card-description">Record utilities, maintenance or supplies.</p>
+            <!-- Inline add-expense form -->
+            <div class="expense-hub-form-wrap">
+                <div class="expense-hub-form-card">
+                    <div class="expense-hub-form-header">
+                        <div class="expense-hub-icon-wrap">
+                            <i class="fas fa-receipt"></i>
+                        </div>
+                        <div>
+                            <h3 class="expense-hub-form-title">Record New Expense</h3>
+                            <p class="expense-hub-form-sub">Fill in the details below to log an expense entry.</p>
+                        </div>
+                    </div>
+                    <div class="expense-hub-fields">
+                        <div class="form-group">
+                            <label>Expense Amount <span class="field-currency">(RS)</span></label>
+                            <div class="expense-amount-input-wrap">
+                                <span class="expense-rs-prefix">RS</span>
+                                <input type="number" id="hub-exp-amount" min="1" placeholder="0" class="expense-amount-input">
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label>Description</label>
+                            <input type="text" id="hub-exp-desc" placeholder="e.g. Electricity bill, maintenance supplies, stationery…">
+                        </div>
+                    </div>
+                    <div class="expense-hub-actions">
+                        <button type="button" class="btn btn-cancel" onclick="clearExpenseHubForm()">
+                            <i class="fas fa-times"></i> Clear
+                        </button>
+                        <button type="button" class="btn btn-primary expense-log-btn" onclick="handleExpenseSubmitHub()">
+                            <i class="fas fa-plus-circle"></i> Log Expense
+                        </button>
+                    </div>
                 </div>
-                <div class="finance-card revenue-theme" onclick="showPage('page-view-expenses')">
-                    <div class="card-glow"></div>
-                    <div class="icon-wrapper"><i class="fas fa-list-alt"></i></div>
-                    <h3 class="card-title">View Expense</h3>
-                    <p class="card-description">See all recorded operational expenses.</p>
-                </div>
-            </section>
+            </div>
         </div>
 
         <!-- ===================== PAGE: ADD EXPENSE ===================== -->
@@ -594,28 +574,34 @@
         <div class="title-divider"></div>
     </section>
 
-    <!-- Search & Filter Bar -->
-    <div class="centered-block" style="max-width: 960px; margin-bottom: 20px;">
-        <div class="search-filter-box">
-            <div class="search-grid">
-                <div class="search-group" style="grid-column: span 2;">
-                    <label>Search Teacher</label>
-                    <div style="position: relative;">
-                        <i class="fas fa-search" style="position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--text-light);"></i>
-                        <input type="text" id="teacher-salary-search" placeholder="Enter Name or Teacher ID..." style="padding-left: 35px; width: 100%;" oninput="filterTeachingSalaries()">
-                    </div>
-                </div>
-                <div class="search-group">
-                    <label>Current Month</label>
-                    <input type="text" id="current-salary-month" readonly style="background: var(--bg-input); font-weight: 700; text-align: center;">
-                </div>
-            </div>
-        </div>
+    <!-- End-of-month update indicator -->
+    <div class="salary-update-notice">
+        <i class="fas fa-info-circle"></i>
+        <span>Salary status is updated at the end of each month after processing. Paid entries are locked until the next month.</span>
     </div>
 
+    <!-- Two action buttons above the table -->
+    <div class="salary-table-actions">
+        <button type="button" class="btn-salary-view-records" onclick="showSalaryRecords('Teaching')">
+            <i class="fas fa-history"></i> Salary Records
+        </button>
+        <button type="button" class="btn-salary-bonus" onclick="showPage('page-bonus-teaching')">
+            <i class="fas fa-gift"></i> Bonus
+        </button>
+    </div>
 
-    <!-- Salary Table -->
-    <div class="table-container centered-block">
+    <!-- Salary Table (search + month filter live inside the same card) -->
+    <div class="table-container table-container-full">
+        <div class="table-toolbar">
+            <div class="table-toolbar-search">
+                <i class="fas fa-search"></i>
+                <input type="text" id="teacher-salary-search" placeholder="Enter Name or Teacher ID..." oninput="filterTeachingSalaries()">
+            </div>
+            <div class="table-toolbar-filter">
+                <label>Current Month</label>
+                <input type="text" id="current-salary-month" readonly>
+            </div>
+        </div>
         <table class="finance-table">
             <thead>
                 <tr>
@@ -644,27 +630,34 @@
         <div class="title-divider"></div>
     </section>
 
-    <!-- Search & Filter Bar -->
-    <div class="centered-block" style="max-width: 960px; margin-bottom: 20px;">
-        <div class="search-filter-box">
-            <div class="search-grid">
-                <div class="search-group" style="grid-column: span 2;">
-                    <label>Search Worker</label>
-                    <div style="position: relative;">
-                        <i class="fas fa-search" style="position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--text-light);"></i>
-                        <input type="text" id="worker-salary-search" placeholder="Enter Name or Worker ID..." style="padding-left: 35px; width: 100%;" oninput="filterNonTeachingSalaries()">
-                    </div>
-                </div>
-                <div class="search-group">
-                    <label>Current Month</label>
-                    <input type="text" id="current-salary-month-nt" readonly style="background: var(--bg-input); font-weight: 700; text-align: center;">
-                </div>
-            </div>
-        </div>
+    <!-- End-of-month update indicator -->
+    <div class="salary-update-notice">
+        <i class="fas fa-info-circle"></i>
+        <span>Salary status is updated at the end of each month after processing. Paid entries are locked until the next month.</span>
     </div>
 
-    <!-- Salary Table -->
-    <div class="table-container centered-block">
+    <!-- Two action buttons above the table -->
+    <div class="salary-table-actions">
+        <button type="button" class="btn-salary-view-records" onclick="showSalaryRecords('Non-Teaching')">
+            <i class="fas fa-history"></i> Salary Records
+        </button>
+        <button type="button" class="btn-salary-bonus" onclick="showPage('page-bonus-non-teaching')">
+            <i class="fas fa-gift"></i> Bonus
+        </button>
+    </div>
+
+    <!-- Salary Table (search + month filter live inside the same card) -->
+    <div class="table-container table-container-full">
+        <div class="table-toolbar">
+            <div class="table-toolbar-search">
+                <i class="fas fa-search"></i>
+                <input type="text" id="worker-salary-search" placeholder="Enter Name or Worker ID..." oninput="filterNonTeachingSalaries()">
+            </div>
+            <div class="table-toolbar-filter">
+                <label>Current Month</label>
+                <input type="text" id="current-salary-month-nt" readonly>
+            </div>
+        </div>
         <table class="finance-table">
             <thead>
                 <tr>
@@ -681,6 +674,158 @@
                 <!-- Data populated via JS -->
             </tbody>
         </table>
+    </div>
+</div>
+
+<!-- ===================== PAGE: SALARY RECORDS ===================== -->
+<div id="page-salary-records" class="sub-page d-none">
+    <section class="page-title-section sub-title-section">
+        <button class="back-btn" id="salary-records-back-btn" onclick="showPage('page-salary-teaching')"><i class="fas fa-arrow-left"></i> Back</button>
+        <h2 class="page-title">Staff Salary Records</h2>
+        <p class="page-description">Month-wise salary payment history for all staff.</p>
+        <div class="title-divider"></div>
+    </section>
+
+    <!-- Controls bar: Category label + Search + Month filter -->
+    <div class="salary-records-controls sr-controls-row">
+        <div class="sr-category-badge" id="sr-category-badge">
+            <i class="fas fa-chalkboard-teacher"></i>
+            <span id="sr-category-label-text">Teaching Staff</span>
+        </div>
+        <div class="sr-search-wrap">
+            <i class="fas fa-search"></i>
+            <input type="text" id="sr-search-input" placeholder="Search by name or ID…" oninput="filterSalaryRecordsTable()">
+        </div>
+        <div class="salary-records-month-filter">
+            <label class="sr-month-label"><i class="fas fa-calendar-alt"></i> Month</label>
+            <select id="sr-month-select" onchange="onSalaryRecordsMonthChange()">
+                <!-- Populated by JS -->
+            </select>
+        </div>
+        <div class="table-toolbar-filter sr-status-filter-wrap">
+            <label>Status</label>
+            <select id="sr-status-filter" onchange="filterSalaryRecordsTable()">
+                <option value="">All</option>
+                <option value="paid">Paid</option>
+                <option value="pending">Pending</option>
+            </select>
+        </div>
+    </div>
+
+    <!-- Records table — full width, no top margin -->
+    <div class="table-container table-container-full sr-table-container">
+        <table class="finance-table">
+            <thead>
+                <tr>
+                    <th>Staff ID</th>
+                    <th>Name</th>
+                    <th>Role / Job</th>
+                    <th>Base Salary</th>
+                    <th>Fines Deducted</th>
+                    <th>Security Deducted</th>
+                    <th>Month</th>
+                    <th>Status</th>
+                </tr>
+            </thead>
+            <tbody id="salary-records-tbody">
+                <tr><td colspan="8" class="empty-row">Loading records…</td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- ===================== PAGE: BONUS HUB ===================== -->
+<div id="page-bonus-hub" class="sub-page d-none">
+    <section class="page-title-section sub-title-section">
+        <button class="back-btn" onclick="showPage('page-main')"><i class="fas fa-arrow-left"></i> Back</button>
+        <h2 class="page-title">Manage Staff Bonuses</h2>
+        <p class="page-description">Select staff category to add or review bonuses.</p>
+        <div class="title-divider"></div>
+    </section>
+
+    <section class="finance-cards-container sub-cards">
+        <div class="finance-card salary-theme" onclick="showPage('page-bonus-teaching')">
+            <div class="card-glow"></div>
+            <div class="icon-wrapper"><i class="fas fa-chalkboard-teacher"></i></div>
+            <h3 class="card-title">Teaching Staff</h3>
+            <p class="card-description">Add or view bonuses for teachers and instructors.</p>
+        </div>
+        <div class="finance-card salary-theme" onclick="showPage('page-bonus-non-teaching')">
+            <div class="card-glow"></div>
+            <div class="icon-wrapper"><i class="fas fa-user-tie"></i></div>
+            <h3 class="card-title">Non-Teaching Staff</h3>
+            <p class="card-description">Add or view bonuses for admin and support staff.</p>
+        </div>
+    </section>
+</div>
+
+<!-- ===================== PAGE: BONUS - TEACHING STAFF ===================== -->
+<div id="page-bonus-teaching" class="sub-page d-none">
+    <section class="page-title-section sub-title-section header-with-action">
+        <button class="back-btn" onclick="goBackToSalaryFromBonus()"><i class="fas fa-arrow-left"></i> Back</button>
+        <button type="button" class="btn-global-action btn-view-records header-action-btn" onclick="openBonusRecordsForCategory('Teaching')">
+            <i class="fas fa-list-alt"></i> View Records
+        </button>
+        <h2 class="page-title">Add Bonus — Teaching Staff</h2>
+        <p class="page-description">Select a teaching staff member and record their bonus.</p>
+        <div class="title-divider"></div>
+    </section>
+    <div class="form-page-container">
+        <div class="form-group full-width">
+            <label>Search Staff</label>
+            <input type="text" id="bonus-search-teaching" class="fine-search-input" oninput="filterSalaryBonusList('teaching')" placeholder="Search teacher by name, ID or subject…">
+            <p class="search-hint">Results show ID, Name, Class &amp; Subject.</p>
+            <div id="bonus-members-list-teaching" class="staff-members-list fine-results-list"></div>
+        </div>
+        <div class="sbp-bonus-row">
+            <div class="form-group">
+                <label>Bonus Amount (RS)</label>
+                <input type="number" id="bonus-amount-teaching" min="1" placeholder="Enter amount">
+            </div>
+            <div class="form-group">
+                <label>Reason / Description</label>
+                <input type="text" id="bonus-desc-teaching" placeholder="e.g. Annual performance bonus">
+            </div>
+        </div>
+        <div class="modal-actions mt-12">
+            <button type="button" class="btn btn-cancel" onclick="resetSalaryBonusForm('teaching')">Clear</button>
+            <button type="button" class="btn btn-primary" onclick="handleSalaryPageBonus('Teaching')">Add Bonus</button>
+        </div>
+    </div>
+</div>
+
+<!-- ===================== PAGE: BONUS - NON-TEACHING STAFF ===================== -->
+<div id="page-bonus-non-teaching" class="sub-page d-none">
+    <section class="page-title-section sub-title-section header-with-action">
+        <button class="back-btn" onclick="goBackToSalaryFromBonus()"><i class="fas fa-arrow-left"></i> Back</button>
+        <button type="button" class="btn-global-action btn-view-records header-action-btn" onclick="openBonusRecordsForCategory('Non-Teaching')">
+            <i class="fas fa-list-alt"></i> View Records
+        </button>
+        <h2 class="page-title">Add Bonus — Non-Teaching Staff</h2>
+        <p class="page-description">Select a non-teaching staff member and record their bonus.</p>
+        <div class="title-divider"></div>
+    </section>
+    <div class="form-page-container">
+        <div class="form-group full-width">
+            <label>Search Staff</label>
+            <input type="text" id="bonus-search-non-teaching" class="fine-search-input" oninput="filterSalaryBonusList('non-teaching')" placeholder="Search staff by name, ID or job role…">
+            <p class="search-hint">Results show ID, Name and Job Role.</p>
+            <div id="bonus-members-list-non-teaching" class="staff-members-list fine-results-list"></div>
+        </div>
+        <div class="sbp-bonus-row">
+            <div class="form-group">
+                <label>Bonus Amount (RS)</label>
+                <input type="number" id="bonus-amount-non-teaching" min="1" placeholder="Enter amount">
+            </div>
+            <div class="form-group">
+                <label>Reason / Description</label>
+                <input type="text" id="bonus-desc-non-teaching" placeholder="e.g. Annual performance bonus">
+            </div>
+        </div>
+        <div class="modal-actions mt-12">
+            <button type="button" class="btn btn-cancel" onclick="resetSalaryBonusForm('non-teaching')">Clear</button>
+            <button type="button" class="btn btn-primary" onclick="handleSalaryPageBonus('Non-Teaching')">Add Bonus</button>
+        </div>
     </div>
 </div>
 
@@ -720,9 +865,20 @@
                 <label><i class="fas fa-money-bill-wave"></i> Total Salary</label>
                 <input type="text" id="sbp-total-salary" readonly>
             </div>
-            <div class="sbp-card sbp-c-green">
-                <label><i class="fas fa-gift"></i> Bonus</label>
+            <div class="sbp-card sbp-c-green sbp-card-with-action">
+                <label><i class="fas fa-gift"></i> Bonus
+                    <button type="button" class="sbp-inline-add-btn" id="sbp-add-bonus-btn" onclick="toggleInlineBonus()" title="Add Bonus">
+                        <i class="fas fa-plus"></i>
+                    </button>
+                </label>
                 <input type="text" id="sbp-bonus" readonly>
+                <div id="sbp-inline-bonus-wrap" class="sbp-inline-bonus-wrap d-none">
+                    <input type="number" min="1" id="sbp-inline-bonus-amount" placeholder="Amount">
+                    <input type="text" id="sbp-inline-bonus-desc" placeholder="Reason">
+                    <button type="button" class="sbp-btn sbp-btn-pay" onclick="addBonusFromSalaryPanel()">
+                        <i class="fas fa-check"></i> Add
+                    </button>
+                </div>
             </div>
             <div class="sbp-card sbp-c-orange">
                 <label><i class="fas fa-shield-alt"></i> Security</label>
@@ -1147,6 +1303,326 @@
                     </div>
                     <p id="progress-status-text">Preparing…</p>
                 </div>
+            </div>
+        </div>
+
+        <!-- ===================== PAGE: CUSTOM FEE (REDESIGNED WORKSPACE) ===================== -->
+        <div id="page-custom-fee" class="sub-page d-none">
+            <section class="page-title-section sub-title-section left-title-section">
+                <button class="back-btn" onclick="showPage('page-student-fees')"><i class="fas fa-arrow-left"></i> Back</button>
+                <h2 class="page-title">Custom Fees</h2>
+                <div class="title-divider"></div>
+            </section>
+
+            <div class="cf-workspace">
+
+                <!-- ─── LEFT: Create / Detail Panel ─── -->
+                <div class="cf-right-panel" id="cf-right-panel">
+
+                    <!-- CREATE FORM VIEW (default) -->
+                    <div id="cf-create-form-view">
+                        <div class="cf-form-grid">
+                            <div class="cf-field cf-full">
+                                <label>Fee / Voucher Title <span class="cf-required">*</span></label>
+                                <input type="text" id="cf-fee-name" class="cf-input" placeholder="e.g. Board Registration Fee">
+                            </div>
+                            <div class="cf-field">
+                                <label>Amount (Rs.) <span class="cf-required">*</span></label>
+                                <input type="number" id="cf-fee-amount" class="cf-input" min="1" placeholder="e.g. 1500">
+                            </div>
+                            <div class="cf-field">
+                                <label>Due Date <span class="cf-optional">(optional)</span></label>
+                                <input type="date" id="cf-due-date" class="cf-input">
+                            </div>
+                            <div class="cf-field cf-full">
+                                <label>Description / Note <span class="cf-optional">(shown on voucher)</span></label>
+                                <input type="text" id="cf-description" class="cf-input" placeholder="e.g. Annual session fee">
+                            </div>
+                            <div class="cf-field cf-full">
+                                <label>Apply To <span class="cf-required">*</span></label>
+                                <div class="cf-scope-toggle">
+                                    <button type="button" class="cf-scope-btn active" id="cf-scope-all" onclick="setCfScope('all')">
+                                        <i class="fas fa-users"></i> All Students
+                                    </button>
+                                    <button type="button" class="cf-scope-btn" id="cf-scope-class" onclick="setCfScope('class')">
+                                        <i class="fas fa-layer-group"></i> Specific Class
+                                    </button>
+                                    <button type="button" class="cf-scope-btn" id="cf-scope-student" onclick="setCfScope('student')">
+                                        <i class="fas fa-user"></i> Specific Student
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="cf-field cf-full" id="cf-class-wrap" style="display:none;">
+                                <label>Select Class</label>
+                                <select id="cf-class-select" class="cf-input">
+                                    <option value="">-- Select Class --</option>
+                                </select>
+                            </div>
+                            <div class="cf-field cf-full" id="cf-student-wrap" style="display:none;">
+                                <label>Search Student</label>
+                                <div class="cf-panel-search" style="margin-bottom:8px;">
+                                    <i class="fas fa-search"></i>
+                                    <input type="text" id="cf-student-search" oninput="filterCfStudents()">
+                                </div>
+                                <p class="cf-hint-text"><i class="fas fa-info-circle"></i> Type to search. Click a student to select.</p>
+                                <div id="cf-student-results" class="cf-student-results"></div>
+                            </div>
+                        </div>
+
+                        <button class="cf-generate-btn" onclick="handleGenerateCustomFee()">
+                            <i class="fas fa-file-invoice"></i> Generate Voucher
+                        </button>
+                    </div>
+
+                    <!-- DETAIL VIEW (shown on record click) -->
+                    <div id="cf-detail-view" style="display:none;">
+                        <button class="cf-back-to-form-btn" onclick="showCfCreateForm()">
+                            <i class="fas fa-arrow-left"></i> Back to Create
+                        </button>
+
+                        <div class="cf-detail-header">
+                            <div class="cf-detail-title-row">
+                                <span class="cf-detail-icon"><i class="fas fa-tag"></i></span>
+                                <div>
+                                    <h3 id="cf-detail-name">—</h3>
+                                    <p id="cf-detail-meta">—</p>
+                                </div>
+                            </div>
+                            <div class="cf-detail-actions">
+                                <button class="btn-tiny btn-generate-voucher" id="cf-detail-print-btn">
+                                    <i class="fas fa-print"></i> Print All
+                                </button>
+                                <button class="btn-tiny" style="background:rgba(239,68,68,0.12);color:#dc2626;" id="cf-detail-delete-btn">
+                                    <i class="fas fa-trash"></i> Delete
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Collection Stats -->
+                        <div class="cf-stats-row">
+                            <div class="cf-stat-card cf-stat-total">
+                                <span class="cf-stat-label"><i class="fas fa-file-invoice-dollar"></i> Total to Collect</span>
+                                <strong id="cf-stat-total">Rs. 0</strong>
+                            </div>
+                            <div class="cf-stat-card cf-stat-collected">
+                                <span class="cf-stat-label"><i class="fas fa-check-circle"></i> Collected</span>
+                                <strong id="cf-stat-collected">Rs. 0</strong>
+                            </div>
+                            <div class="cf-stat-card cf-stat-remaining">
+                                <span class="cf-stat-label"><i class="fas fa-hourglass-half"></i> Remaining</span>
+                                <strong id="cf-stat-remaining">Rs. 0</strong>
+                            </div>
+                        </div>
+
+                        <!-- Search + Filter bar inside detail -->
+                        <div class="cf-detail-toolbar">
+                            <div class="cf-panel-search" style="flex:1; min-width:0;">
+                                <i class="fas fa-search"></i>
+                                <input type="text" id="cf-detail-search" oninput="filterCfDetailTable()">
+                            </div>
+                            <select id="cf-detail-status-filter" class="cf-panel-select" style="width:auto;min-width:130px;flex-shrink:0;" onchange="filterCfDetailTable()">
+                                <option value="">All Status</option>
+                                <option value="paid">Paid</option>
+                                <option value="pending">Pending</option>
+                            </select>
+                        </div>
+
+                        <!-- Student Table -->
+                        <div class="cf-detail-table-wrap">
+                            <table class="finance-table cfr-table">
+                                <thead>
+                                    <tr>
+                                        <th>Student ID</th>
+                                        <th>Name</th>
+                                        <th>Class</th>
+                                        <th>Guardian</th>
+                                        <th>Amount</th>
+                                        <th>Status</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="cf-detail-tbody"></tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                </div><!-- end cf-right-panel (left col) -->
+
+                <!-- ─── RIGHT: Records Panel ─── -->
+                <div class="cf-records-panel">
+                    <div class="cf-records-header">
+                        <span class="cf-records-header-title"><i class="fas fa-list-ul"></i> Records</span>
+                        <button class="cf-refresh-btn" onclick="renderCfRecordsList()" title="Refresh"><i class="fas fa-sync-alt"></i></button>
+                    </div>
+
+                    <div class="cf-filter-row">
+                        <select id="cf-panel-filter" class="cf-panel-select" onchange="renderCfRecordsList()">
+                            <option value="">All Classes</option>
+                        </select>
+                    </div>
+
+                    <div class="cf-panel-search">
+                        <i class="fas fa-search"></i>
+                        <input type="text" id="cf-panel-search-input" oninput="renderCfRecordsList()">
+                    </div>
+
+                    <div class="cf-records-list" id="cf-records-list">
+                        <div class="cf-records-empty">
+                            <i class="fas fa-inbox"></i>
+                            <p>No records yet</p>
+                        </div>
+                    </div>
+                </div><!-- end cf-records-panel (right col) -->
+
+            </div><!-- end cf-workspace -->
+        </div>
+
+        <!-- ===================== PAGE: CUSTOM FEE — GENERATE ===================== -->
+        <div id="page-custom-fee-generate" class="sub-page d-none">
+            <section class="page-title-section sub-title-section">
+                <button class="back-btn" onclick="showPage('page-custom-fee')"><i class="fas fa-arrow-left"></i> Back</button>
+                <h2 class="page-title">Generate Custom Fee</h2>
+                <p class="page-description">Enter the fee details and choose who to apply it to.</p>
+                <div class="title-divider"></div>
+            </section>
+            <div class="form-page-container centered-block">
+                <div class="form-group full-width">
+                    <label>Fee Name</label>
+                    <input type="text" id="cf-fee-name" placeholder="e.g. Board Registration Fees, Exam Fees, Sports Day Fee, Annual Trip">
+                </div>
+                <div class="form-group full-width">
+                    <label>Fee Amount (Rs.)</label>
+                    <input type="number" id="cf-fee-amount" min="1" placeholder="Enter amount in rupees">
+                </div>
+                <div class="form-group full-width">
+                    <label>Apply To</label>
+                    <div class="staff-category-toggle">
+                        <button type="button" class="category-btn active" id="cf-scope-all" onclick="setCfScope('all')">All Students</button>
+                        <button type="button" class="category-btn" id="cf-scope-class" onclick="setCfScope('class')">Specific Class</button>
+                        <button type="button" class="category-btn" id="cf-scope-student" onclick="setCfScope('student')">Specific Student</button>
+                    </div>
+                </div>
+                <div class="form-group full-width" id="cf-class-wrap" style="display:none;">
+                    <label>Select Class</label>
+                    <select id="cf-class-select" class="fine-search-input">
+                        <option value="">-- Select Class --</option>
+                    </select>
+                </div>
+                <div class="form-group full-width" id="cf-student-wrap" style="display:none;">
+                    <label>Search Student</label>
+                    <input type="text" id="cf-student-search" class="fine-search-input" oninput="filterCfStudents()" placeholder="Search by name, ID or class...">
+                    <p class="search-hint">Type to search. Click a student to select them.</p>
+                    <div id="cf-student-results" class="staff-members-list fine-results-list"></div>
+                </div>
+                <div class="modal-actions mt-20">
+                    <button type="button" class="btn btn-cancel" onclick="showPage('page-custom-fee')">Cancel</button>
+                    <button type="button" class="btn btn-primary" onclick="handleGenerateCustomFee()">
+                        <i class="fas fa-file-invoice"></i> Generate Voucher
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- ===================== PAGE: CUSTOM FEE — RECORDS ===================== -->
+        <div id="page-custom-fee-records" class="sub-page d-none">
+            <section class="page-title-section sub-title-section">
+                <button class="back-btn" onclick="showPage('page-custom-fee')"><i class="fas fa-arrow-left"></i> Back</button>
+                <h2 class="page-title">Custom Fee Records</h2>
+                <p class="page-description">Browse all previously generated custom fee vouchers.</p>
+                <div class="title-divider"></div>
+            </section>
+
+            <!-- 3-mode filter bar -->
+            <div class="centered-block cfr-filter-bar" style="max-width:960px;">
+                <div class="staff-category-toggle" style="margin-bottom:14px;">
+                    <button type="button" class="category-btn active" id="cfr-filter-class"     onclick="setCfRecordFilter('class')">Class-wise</button>
+                    <button type="button" class="category-btn"        id="cfr-filter-all-class" onclick="setCfRecordFilter('all-class')">All Students of Class</button>
+                    <button type="button" class="category-btn"        id="cfr-filter-student"   onclick="setCfRecordFilter('student')">Specific Student</button>
+                </div>
+
+                <!-- Filter: class-wise (default visible) -->
+                <div id="cfr-class-filter-wrap" style="margin-bottom:10px;">
+                    <select id="cfr-class-select" class="fine-search-input" style="max-width:320px;" onchange="renderCustomFeeRecords()">
+                        <option value="">-- All Classes --</option>
+                    </select>
+                </div>
+
+                <!-- Filter: all students of a specific class -->
+                <div id="cfr-all-class-wrap" style="display:none; margin-bottom:10px;">
+                    <select id="cfr-allclass-select" class="fine-search-input" style="max-width:320px;" onchange="renderCustomFeeRecords()">
+                        <option value="">-- Select a Class --</option>
+                    </select>
+                </div>
+
+                <!-- Filter: specific student search -->
+                <div id="cfr-student-filter-wrap" style="display:none; margin-bottom:10px;">
+                    <div class="fee-search-wrap" style="max-width:420px;">
+                        <i class="fas fa-search"></i>
+                        <input type="text" id="cfr-student-search" placeholder="Search by student name or ID..." oninput="renderCustomFeeRecords()">
+                    </div>
+                </div>
+            </div>
+
+            <div class="centered-block" style="max-width:960px;" id="cfr-records-container">
+                <!-- Populated by JS -->
+            </div>
+        </div>
+
+        <!-- ===================== PAGE: FEE DEFAULTER ===================== -->
+        <div id="page-fee-defaulter" class="sub-page d-none">
+            <section class="page-title-section sub-title-section left-title-section">
+                <button class="back-btn" onclick="showPage('page-student-fees')"><i class="fas fa-arrow-left"></i> Back</button>
+                <h2 class="page-title">Fee Defaulters</h2>
+                <div class="title-divider"></div>
+            </section>
+
+            <!-- Search & Month filter bar -->
+            <div class="centered-block" style="max-width:960px; margin-bottom:18px;">
+                <div class="search-filter-box">
+                    <div class="search-grid">
+                        <div class="search-group" style="grid-column: span 2;">
+                            <label>Search Students</label>
+                            <div style="position:relative;">
+                                <i class="fas fa-search" style="position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--text-light);"></i>
+                                <input type="text" id="fd-search" placeholder="Search by name, ID, class or guardian..." style="padding-left:35px;width:100%;" oninput="filterFdTable()">
+                            </div>
+                        </div>
+                        <div class="search-group">
+                            <label>Filter by Month</label>
+                            <select id="fd-month-filter" onchange="onFdMonthChange()" style="width:100%;">
+                                <!-- Populated by JS -->
+                            </select>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Count + Refresh -->
+            <div class="centered-block" style="max-width:960px; margin-bottom:10px; display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;">
+                <span id="fd-count" style="font-size:0.85rem; font-weight:600; color:var(--text-secondary);"></span>
+                <button type="button" class="btn-global-action btn-generate-global" onclick="loadFeeDefaulters()" style="padding:8px 16px;">
+                    <i class="fas fa-sync-alt"></i> Refresh
+                </button>
+            </div>
+
+            <!-- Defaulters table -->
+            <div class="table-container centered-block" style="max-width:960px;">
+                <table class="finance-table">
+                    <thead>
+                        <tr>
+                            <th>Student ID</th>
+                            <th>Name</th>
+                            <th>Class</th>
+                            <th>Guardian</th>
+                            <th>Amount Pending</th>
+                            <th>Months Pending</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody id="fd-tbody">
+                        <tr><td colspan="7" class="empty-row">Loading…</td></tr>
+                    </tbody>
+                </table>
             </div>
         </div>
 
