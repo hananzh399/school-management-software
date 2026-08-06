@@ -2658,6 +2658,50 @@
     font-weight: 500;
 }
 
+/* ---- Fee Defaulters toolbar: search + month filter + count + refresh,
+   all inline, left-aligned, filling the page width instead of being
+   boxed into a separate centered card. ---- */
+.fd-toolbar { margin-bottom: 16px; }
+.fd-month-wrap {
+    position: relative;
+    flex: 0 0 auto;
+}
+.fd-month-wrap i {
+    position: absolute;
+    left: 14px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--text-secondary, #6b7280);
+    font-size: 0.85rem;
+    pointer-events: none;
+}
+.fd-month-wrap select {
+    padding: 11px 14px 11px 36px;
+    border-radius: 12px;
+    border: 1px solid var(--border-subtle);
+    background: var(--bg-card);
+    color: var(--text-primary);
+    font-size: 0.88rem;
+    font-weight: 600;
+    font-family: 'Inter', sans-serif;
+    cursor: pointer;
+    min-width: 170px;
+}
+.fd-month-wrap select:focus {
+    outline: none;
+    border-color: #6366f1;
+    box-shadow: 0 0 0 3px rgba(99,102,241,0.15);
+}
+.fd-refresh-btn { padding: 10px 16px; margin-left: auto; }
+
+@media (max-width: 900px) {
+    .fd-toolbar { justify-content: flex-start; }
+    .fee-search-wrap { flex: 1 1 100%; max-width: none; }
+    .fd-month-wrap { flex: 1 1 auto; }
+    .fd-month-wrap select { width: 100%; }
+    .fd-refresh-btn { margin-left: 0; }
+}
+
 /* ---- Fee table redesign ---- */
 .fee-table-wrapper {
     background: var(--bg-card);
@@ -4560,7 +4604,7 @@ input[type="date"]::-webkit-calendar-picker-indicator {
     align-items: center;
     justify-content: flex-end;
     gap: 12px;
-    margin: -6px 0 18px;
+    margin: 8px 0 22px;
 }
 .fee-global-toolbar-spacer { flex: 1; }
 .fee-global-actions {
@@ -4614,12 +4658,166 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 }
 .class-level-title-row h3 { margin: 0; }
 
+/* Pull the class title, its stats, and the table closer together now that
+   the page-wide stats row is hidden while a class is open. */
+#class-student-list-view .section-title.class-level-title-row {
+    margin-bottom: 8px;
+}
+#class-student-list-view .btn-ghost {
+    margin-bottom: 16px;
+}
+#class-student-list-view .fee-stats-row-compact {
+    margin: 4px 0 18px;
+}
+
+/* Heading now lives inline with the global action buttons */
+.fee-global-toolbar {
+    justify-content: space-between;
+    align-items: center;
+}
+.fee-toolbar-heading-group {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+.fee-toolbar-heading {
+    margin: 0;
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    white-space: nowrap;
+}
+.fee-toolbar-heading i { color: var(--accent-primary, #6366f1); }
+.fee-toolbar-desc {
+    margin: 0;
+    font-size: 0.82rem;
+    font-weight: 500;
+    color: var(--text-secondary);
+}
+
 @media (max-width: 720px) {
-    .fee-global-toolbar { justify-content: stretch; }
+    .fee-global-toolbar { justify-content: stretch; flex-direction: column; align-items: stretch; }
     .fee-global-toolbar-spacer { display: none; }
     .fee-global-actions { width: 100%; }
     .fee-global-actions .btn-global-action { flex: 1; justify-content: center; }
     .class-level-title-row { flex-direction: column; align-items: stretch; }
+}
+
+/* ============================================================================
+   MANAGE STUDENT FEES — top header stat cards (Generated / Collected / Pending)
+   ============================================================================ */
+.fee-stats-header { padding-bottom: 4px; margin-bottom: 42px; transition: margin-bottom 0.15s ease; }
+
+/* Applied while viewing a single class — the top stats row is hidden, so
+   collapse the section's bottom margin down to just enough room for the
+   Back button, instead of leaving a large empty gap. */
+.fee-stats-header.header-compact { margin-bottom: 20px; min-height: 46px; }
+
+.fee-stats-row {
+    display: flex;
+    justify-content: center;
+    gap: 18px;
+    flex-wrap: wrap;
+    margin-top: 4px;
+}
+.fee-stat-card {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    background: var(--bg-card);
+    border: 1px solid var(--border-subtle);
+    border-radius: 14px;
+    padding: 14px 22px;
+    min-width: 220px;
+    text-align: left;
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+}
+.fee-stat-icon {
+    width: 42px;
+    height: 42px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 17px;
+    flex-shrink: 0;
+}
+.fee-stat-info { display: flex; flex-direction: column; gap: 3px; }
+.fee-stat-label {
+    font-size: 0.72rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: var(--text-secondary);
+}
+.fee-stat-value {
+    font-size: 1.15rem;
+    font-weight: 800;
+    color: var(--text-primary);
+}
+.fee-stat-generated .fee-stat-icon { background: rgba(99,102,241,0.12); color: #6366f1; }
+.fee-stat-collected .fee-stat-icon { background: rgba(22,163,74,0.12); color: #16a34a; }
+.fee-stat-pending   .fee-stat-icon { background: rgba(239,68,68,0.12); color: #ef4444; }
+.fee-stat-collected .fee-stat-value { color: #16a34a; }
+.fee-stat-pending   .fee-stat-value { color: #ef4444; }
+.fee-stat-neutral   .fee-stat-icon { background: rgba(139,92,246,0.12); color: #8b5cf6; }
+
+@media (max-width: 720px) {
+    .fee-stats-row { flex-direction: column; align-items: stretch; }
+    .fee-stat-card { min-width: 0; }
+}
+
+/* ---- Compact variant: used inline inside a class's fee table, the
+   Custom Fee page, and the Fee Defaulter page (not the big page header) ---- */
+.fee-stats-row-compact {
+    display: flex;
+    justify-content: center;
+    gap: 14px;
+    flex-wrap: wrap;
+    margin: 4px 0 18px;
+}
+
+/* ---- Standalone header used on Custom Fee / Fee Defaulter: just the
+   Back button + a centered pricing/stats row, nothing else. The row is
+   given top clearance so it never sits underneath the absolutely
+   positioned Back button (which otherwise wouldn't add to the section's
+   height and would end up overlapping whatever comes right after it). ---- */
+.stats-header-section {
+    padding-top: 0;
+}
+.stats-header-section .fee-stats-row-compact {
+    padding-top: 48px;
+    margin-bottom: 4px;
+}
+@media (max-width: 720px) {
+    .stats-header-section .back-btn {
+        position: static;
+        margin: 0 auto 14px;
+    }
+    .stats-header-section .fee-stats-row-compact { padding-top: 0; }
+}
+.fee-stats-row-compact .fee-stat-card {
+    min-width: 170px;
+    padding: 10px 16px;
+    gap: 11px;
+    border-radius: 12px;
+}
+.fee-stats-row-compact .fee-stat-icon {
+    width: 34px;
+    height: 34px;
+    font-size: 14px;
+    border-radius: 9px;
+}
+.fee-stats-row-compact .fee-stat-label { font-size: 0.66rem; }
+.fee-stats-row-compact .fee-stat-value { font-size: 1rem; }
+
+@media (max-width: 720px) {
+    .fee-stats-row-compact { flex-direction: column; align-items: stretch; }
+    .fee-stats-row-compact .fee-stat-card { min-width: 0; }
 }
 
 /* ---- Class card generation-status badge ---- */
@@ -6151,4 +6349,497 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 /* Status column — badge centering */
 .bonus-table td:nth-child(5) {
     white-space: nowrap;
+}
+
+/* ============================================================================
+   DYNAMIC USER-REQUESTED FIXES — Sticky pricing, spacing, alignment, tables
+   ============================================================================ */
+
+/* ---- 1) MAIN STUDENT FEES — top pricing row sticky ---- */
+.fee-stats-header {
+    position: sticky;
+    top: 0;
+    z-index: 12;
+    background: var(--bg-main, #F7F8FC);
+    padding-bottom: 12px;
+    padding-top: 6px;
+    margin-bottom: 20px;
+    border-bottom: 1px solid var(--border-subtle);
+    transition: margin-bottom 0.15s ease;
+}
+[data-theme="dark"] .fee-stats-header {
+    background: var(--bg-main, #1A1A1D);
+}
+
+/* ---- 2) CLASS-WISE — pricing row sticky when viewing a class ---- */
+#class-fee-stats-row {
+    position: sticky;
+    top: 0;
+    z-index: 11;
+    background: var(--bg-main, #F7F8FC);
+    padding: 14px 0 12px;
+    margin-top: 0;
+    margin-bottom: 16px;
+    border-bottom: 1px solid var(--border-subtle);
+}
+[data-theme="dark"] #class-fee-stats-row {
+    background: var(--bg-main, #1A1A1D);
+}
+/* Lift the class title + table closer to the sticky pricing */
+#class-student-list-view .section-title.class-level-title-row {
+    margin-top: 4px;
+    margin-bottom: 6px;
+}
+#class-student-list-view .fee-table-toolbar {
+    margin-top: 0;
+}
+
+/* ---- 3) CUSTOM FEE — pricing row sticky at top ---- */
+.stats-header-section {
+    position: sticky;
+    top: 0;
+    z-index: 12;
+    background: var(--bg-main, #F7F8FC);
+    padding: 10px 0 14px;
+    margin-top: 0;
+    margin-bottom: 10px;
+    border-bottom: 1px solid var(--border-subtle);
+}
+[data-theme="dark"] .stats-header-section {
+    background: var(--bg-main, #1A1A1D);
+}
+/* Give the stats row inside it proper breathing room (not crammed) */
+.stats-header-section .fee-stats-row-compact {
+    padding-top: 46px;
+    margin-bottom: 0;
+}
+
+/* ---- 4) CUSTOM FEE heading + DEFAULTER heading — LEFT-ALIGNED above table ---- */
+#page-custom-fee > .page-title-section.header-with-action {
+    text-align: left;
+    margin-bottom: 10px;
+    padding-top: 0;
+}
+#page-custom-fee > .page-title-section.header-with-action .page-title {
+    text-align: left;
+}
+#page-custom-fee > .page-title-section.header-with-action .title-divider {
+    margin-left: 0;
+    margin-right: auto;
+}
+
+#page-fee-defaulter > .page-title-section:not(.stats-header-section) {
+    text-align: left;
+    margin-bottom: 8px;
+    padding-top: 0;
+}
+#page-fee-defaulter > .page-title-section:not(.stats-header-section) .page-title {
+    text-align: left;
+}
+#page-fee-defaulter > .page-title-section:not(.stats-header-section) .title-divider {
+    margin-left: 0;
+    margin-right: auto;
+}
+
+/* ---- 5) FEE DEFAULTER — lift toolbar & table closer to heading ---- */
+#page-fee-defaulter .fd-toolbar {
+    margin-top: 0;
+}
+#page-fee-defaulter .fee-table-wrapper {
+    margin-top: 0;
+}
+
+/* ---- 6) CUSTOM FEE workspace — full width, hide side records panel ---- */
+.cf-workspace {
+    grid-template-columns: 1fr;
+    margin-top: 0;
+}
+.cf-records-panel {
+    display: none !important;
+}
+
+/* ---- 7) CUSTOM FEE RECORDS — Summary Cards & Roster View ---- */
+
+/* Fix top clearance for stats header section & back button */
+.stats-header-section {
+    position: relative !important;
+    display: flex !important;
+    align-items: center !important;
+    padding: 0 0 10px !important;
+    margin: 0 0 10px 0 !important;
+}
+
+.stats-header-section .back-btn {
+    position: static !important;
+    margin: 0 16px 0 0 !important;
+    flex-shrink: 0;
+}
+
+.stats-header-section .fee-stats-row-compact {
+    padding-top: 0 !important;
+    margin: 0 !important;
+}
+
+/* Custom Fee Records Summary Grid */
+.cfr-fees-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    margin-top: 10px;
+}
+
+.cfr-summary-card {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: var(--bg-card);
+    border: 1px solid var(--border-subtle);
+    border-radius: 14px;
+    padding: 16px 22px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.03);
+}
+
+.cfr-summary-card:hover {
+    border-color: var(--accent-primary, #6366f1);
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(99,102,241,0.1);
+}
+
+.cfr-card-left {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+.cfr-card-icon {
+    width: 44px;
+    height: 44px;
+    border-radius: 12px;
+    background: rgba(99,102,241,0.12);
+    color: #6366f1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    flex-shrink: 0;
+}
+
+.cfr-card-title {
+    margin: 0 0 4px 0;
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    text-transform: capitalize;
+}
+
+.cfr-card-meta {
+    display: flex;
+    gap: 16px;
+    font-size: 0.82rem;
+    color: var(--text-secondary);
+    flex-wrap: wrap;
+}
+
+.cfr-card-meta span {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.cfr-card-right {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+}
+
+.cfr-stat-pill {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 6px 14px;
+    border-radius: 10px;
+    min-width: 75px;
+}
+
+.cfr-pill-total {
+    background: rgba(99,102,241,0.08);
+    color: #6366f1;
+}
+
+.cfr-pill-paid {
+    background: rgba(22,163,74,0.08);
+    color: #16a34a;
+}
+
+.cfr-pill-pending {
+    background: rgba(239,68,68,0.08);
+    color: #ef4444;
+}
+
+.cfr-pill-val {
+    font-size: 1.1rem;
+    font-weight: 800;
+    line-height: 1.1;
+}
+
+.cfr-pill-lbl {
+    font-size: 0.65rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    opacity: 0.85;
+}
+
+.cfr-card-arrow {
+    color: var(--text-muted);
+    font-size: 14px;
+    margin-left: 6px;
+    transition: transform 0.2s ease;
+}
+
+.cfr-summary-card:hover .cfr-card-arrow {
+    color: var(--accent-primary, #6366f1);
+    transform: translateX(4px);
+}
+
+/* Roster Banner Card */
+.cfr-detail-banner {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: var(--bg-card);
+    border: 1px solid var(--border-subtle);
+    border-radius: 14px;
+    padding: 16px 22px;
+    margin-bottom: 12px;
+}
+
+.cfr-banner-title-row {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+}
+
+.cfr-banner-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    background: rgba(99,102,241,0.12);
+    color: #6366f1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+}
+
+.cfr-banner-title {
+    margin: 0;
+    font-size: 1.15rem;
+    font-weight: 700;
+}
+
+.cfr-banner-sub {
+    margin: 2px 0 0;
+    font-size: 0.83rem;
+    color: var(--text-secondary);
+}
+
+.cfr-banner-counts {
+    display: flex;
+    gap: 10px;
+    margin-top: 6px;
+}
+
+.cfr-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.78rem;
+    font-weight: 700;
+    padding: 3px 10px;
+    border-radius: 6px;
+}
+
+.cfr-badge-paid {
+    background: rgba(22,163,74,0.12);
+    color: #16a34a;
+}
+
+.cfr-badge-pending {
+    background: rgba(239,68,68,0.12);
+    color: #ef4444;
+}
+
+.cfr-banner-actions {
+    display: flex;
+    gap: 10px;
+}
+
+/* Filters Toolbar INSIDE Table Header — Sidewise Horizontal Layout */
+.cfr-table-toolbar {
+    display: flex !important;
+    flex-direction: row !important;
+    flex-wrap: nowrap !important;
+    gap: 12px !important;
+    align-items: center !important;
+    background: var(--bg-main, #F7F8FC);
+    padding: 10px 0;
+    margin-bottom: 8px;
+    width: 100% !important;
+}
+
+[data-theme="dark"] .cfr-table-toolbar {
+    background: var(--bg-main, #1A1A1D);
+}
+
+.cfr-table-toolbar .fee-search-wrap {
+    flex: 1 1 240px !important;
+    min-width: 180px !important;
+    margin: 0 !important;
+}
+
+.cfr-table-toolbar .cfr-filter-select,
+.cfr-table-toolbar select,
+.cfr-table-toolbar .cf-input {
+    flex: 0 0 auto !important;
+    width: auto !important;
+    min-width: 130px !important;
+    max-width: 180px !important;
+    margin: 0 !important;
+    padding: 8px 12px;
+    font-size: 0.83rem;
+    border-radius: 8px;
+    border: 1px solid var(--border-subtle);
+    background: var(--bg-card);
+    color: var(--text-primary);
+    outline: none;
+}
+
+/* Sticky Table & Toolbar */
+.sticky-toolbar {
+    position: sticky;
+    top: 0;
+    z-index: 15;
+}
+
+.cfr-sticky-table {
+    position: sticky;
+    top: 52px;
+    z-index: 10;
+}
+
+/* ---- 8) CENTERING PRICING, CLASS VIEW LIFT & FOOTER SUMMARY ---- */
+
+/* Center pricing cards in Fee Defaulter, Custom Fees & Class views */
+.stats-header-section {
+    display: flex !important;
+    justify-content: center !important;
+    align-items: center !important;
+    position: relative !important;
+    padding: 6px 0 10px !important;
+    margin: 0 0 10px 0 !important;
+}
+
+.stats-header-section .back-btn {
+    position: absolute !important;
+    left: 0 !important;
+    top: 50% !important;
+    transform: translateY(-50%) !important;
+    margin: 0 !important;
+}
+
+.stats-header-section .fee-stats-row-compact,
+#class-fee-stats-row {
+    display: flex !important;
+    justify-content: center !important;
+    gap: 20px !important;
+    margin: 0 auto !important;
+    padding: 0 !important;
+}
+
+/* Class view lift & centering */
+#class-student-list-view {
+    position: relative;
+}
+
+#class-student-list-view .btn-ghost {
+    margin-bottom: 8px !important;
+}
+
+#class-fee-stats-row {
+    position: sticky !important;
+    top: 0 !important;
+    z-index: 12 !important;
+    background: var(--bg-main, #F7F8FC) !important;
+    padding: 10px 0 !important;
+    margin-top: 0 !important;
+    margin-bottom: 12px !important;
+    border-bottom: 1px solid var(--border-subtle) !important;
+}
+
+[data-theme="dark"] #class-fee-stats-row {
+    background: var(--bg-main, #1A1A1D) !important;
+}
+
+/* Clean Custom Fee Roster Footer Summary Bar at END of table */
+.cfr-table-footer-summary {
+    margin-top: 12px;
+    margin-bottom: 24px;
+}
+
+.cfr-footer-summary-bar {
+    display: flex;
+    justify-content: space-around;
+    align-items: center;
+    gap: 16px;
+    background: var(--bg-card);
+    border: 1px solid var(--border-subtle);
+    border-radius: 12px;
+    padding: 12px 18px;
+    font-size: 0.88rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    flex-wrap: wrap;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.02);
+}
+
+.cfr-footer-summary-bar span {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.cfr-footer-summary-bar b {
+    font-weight: 800;
+}
+
+/* Responsive */
+@media (max-width: 720px) {
+    .cfr-summary-card {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 14px;
+    }
+    .cfr-card-right {
+        justify-content: space-between;
+    }
+    .cfr-detail-banner {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 12px;
+    }
+    .cfr-table-toolbar {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    .stats-header-section .back-btn {
+        position: static !important;
+        transform: none !important;
+        margin-bottom: 10px !important;
+    }
+    .stats-header-section {
+        flex-direction: column !important;
+    }
 }

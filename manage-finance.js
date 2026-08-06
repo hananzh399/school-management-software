@@ -995,6 +995,105 @@ function _classDisplayLabel(name) {
 }
 
 /**
+ * Computes and paints the three header stat cards on the "Manage Student
+ * Fees" page for THE CURRENT MONTH ONLY: Fee Generated (sum of this month's
+ * generated voucher totals), Collected (sum of payments recorded against
+ * this month), and Pending (the difference, floored at 0).
+ * Called every time renderClassCardGrid() runs — i.e. on page load, class
+ * navigation, and right after a voucher is generated or a payment is
+ * recorded — so the figures always reflect the current month automatically
+ * and roll over to the new month on their own once the calendar turns.
+ */
+function updateFeeStatsHeader() {
+    const genEl = document.getElementById('fee-stat-generated');
+    const colEl = document.getElementById('fee-stat-collected');
+    const penEl = document.getElementById('fee-stat-pending');
+    if (!genEl || !colEl || !penEl) return;
+
+    const monthKey = getCurrentMonthKey();
+    const monthLabel = new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+
+    let totalGenerated = 0;
+    try {
+        totalGenerated = getGeneratedVouchers()
+            .filter(r => r.monthKey === monthKey)
+            .reduce((sum, r) => sum + (Number(r.snapshot && r.snapshot.voucherTotal) || 0), 0);
+    } catch (e) { totalGenerated = 0; }
+
+    let totalCollected = 0;
+    try {
+        const students = JSON.parse(localStorage.getItem('edu_students') || '[]');
+        totalCollected = students.reduce((sum, s) => {
+            const payments = Array.isArray(s.feePayments) ? s.feePayments : [];
+            return sum + payments
+                .filter(p => p.monthKey === monthKey)
+                .reduce((pSum, p) => pSum + (Number(p.amount) || 0), 0);
+        }, 0);
+    } catch (e) { totalCollected = 0; }
+
+    const totalPending = Math.max(0, totalGenerated - totalCollected);
+
+    genEl.textContent = `Rs. ${totalGenerated.toLocaleString()}`;
+    colEl.textContent = `Rs. ${totalCollected.toLocaleString()}`;
+    penEl.textContent = `Rs. ${totalPending.toLocaleString()}`;
+
+    const genLabel = document.getElementById('fee-stat-generated-label');
+    const colLabel = document.getElementById('fee-stat-collected-label');
+    const penLabel = document.getElementById('fee-stat-pending-label');
+    if (genLabel) genLabel.textContent = `Generated · ${monthLabel}`;
+    if (colLabel) colLabel.textContent = `Collected · ${monthLabel}`;
+    if (penLabel) penLabel.textContent = `Pending · ${monthLabel}`;
+}
+
+/**
+ * Same idea as updateFeeStatsHeader(), but scoped to a single class — used
+ * in the per-class fee table view. Called every time renderFees() runs
+ * (class selection, after generating a voucher, after recording a payment),
+ * so it always reflects the current month for that class automatically.
+ */
+function updateClassFeeStats(className) {
+    const genEl = document.getElementById('class-fee-stat-generated');
+    const colEl = document.getElementById('class-fee-stat-collected');
+    const penEl = document.getElementById('class-fee-stat-pending');
+    if (!genEl || !colEl || !penEl) return;
+
+    const monthKey = getCurrentMonthKey();
+    const monthLabel = new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+
+    let totalGenerated = 0;
+    try {
+        totalGenerated = getGeneratedVouchers()
+            .filter(r => r.monthKey === monthKey && r.studentClass === className)
+            .reduce((sum, r) => sum + (Number(r.snapshot && r.snapshot.voucherTotal) || 0), 0);
+    } catch (e) { totalGenerated = 0; }
+
+    let totalCollected = 0;
+    try {
+        const students = JSON.parse(localStorage.getItem('edu_students') || '[]')
+            .filter(s => s.studentClass === className);
+        totalCollected = students.reduce((sum, s) => {
+            const payments = Array.isArray(s.feePayments) ? s.feePayments : [];
+            return sum + payments
+                .filter(p => p.monthKey === monthKey)
+                .reduce((pSum, p) => pSum + (Number(p.amount) || 0), 0);
+        }, 0);
+    } catch (e) { totalCollected = 0; }
+
+    const totalPending = Math.max(0, totalGenerated - totalCollected);
+
+    genEl.textContent = `Rs. ${totalGenerated.toLocaleString()}`;
+    colEl.textContent = `Rs. ${totalCollected.toLocaleString()}`;
+    penEl.textContent = `Rs. ${totalPending.toLocaleString()}`;
+
+    const genLabel = document.getElementById('class-fee-stat-generated-label');
+    const colLabel = document.getElementById('class-fee-stat-collected-label');
+    const penLabel = document.getElementById('class-fee-stat-pending-label');
+    if (genLabel) genLabel.textContent = `Generated · ${monthLabel}`;
+    if (colLabel) colLabel.textContent = `Collected · ${monthLabel}`;
+    if (penLabel) penLabel.textContent = `Pending · ${monthLabel}`;
+}
+
+/**
  * Renders the class-card-grid from whatever classes are stored in
  * localStorage under 'edu_class_configs' (written by settings.js).
  * Falls back to the original set of 5 default classes if nothing is saved.
@@ -1002,6 +1101,8 @@ function _classDisplayLabel(name) {
  * is triggered, so the grid always stays in sync with settings changes.
  */
 function renderClassCardGrid() {
+    updateFeeStatsHeader();
+
     const grid = document.getElementById('class-card-grid');
     if (!grid) return;
 
@@ -1011,15 +1112,8 @@ function renderClassCardGrid() {
         if (raw) classes = JSON.parse(raw);
     } catch (e) { classes = []; }
 
-    // Fall back to the same defaults that settings.js uses
-    if (!Array.isArray(classes) || classes.length === 0) {
-        classes = [
-            { name: 'Montessori' },
-            { name: 'Nursery' },
-            { name: 'Prep' },
-            { name: 'Grade 1' },
-            { name: 'Grade 2' },
-        ];
+    if (!Array.isArray(classes)) {
+        classes = [];
     }
 
     grid.innerHTML = classes.map((cls, i) => {
@@ -1047,7 +1141,16 @@ function selectClassForFees(className) {
     // 1. Toggle UI Views
     document.getElementById('class-selection-view').style.display = 'none';
     document.getElementById('class-student-list-view').style.display = 'block';
-    
+
+    // Hide the page-wide monthly totals while inside a specific class —
+    // the class already shows its own scoped totals right below its title,
+    // so keeping both visible was redundant. The Back button (to the main
+    // fees page) stays untouched since it lives outside the stats row.
+    const topStatsRow = document.getElementById('fee-stats-row');
+    const statsHeader = document.querySelector('.fee-stats-header');
+    if (topStatsRow) topStatsRow.style.display = 'none';
+    if (statsHeader) statsHeader.style.display = 'none';
+
     // 2. Set Title
     document.getElementById('selected-class-title').innerText = `Fee Records: ${className}`;
     currentFeeClassName = className;
@@ -1059,6 +1162,14 @@ function backToClassSelection() {
     document.getElementById('class-selection-view').style.display = 'block';
     document.getElementById('class-student-list-view').style.display = 'none';
     currentFeeClassName = null;
+
+    // Restore the page-wide monthly totals now that we're back at the
+    // class-grid level (no single class is selected anymore).
+    const topStatsRow = document.getElementById('fee-stats-row');
+    const statsHeader = document.querySelector('.fee-stats-header');
+    if (topStatsRow) topStatsRow.style.display = '';
+    if (statsHeader) statsHeader.style.display = '';
+
     // Refresh badges in case anything was generated while inside the class view
     renderClassCardGrid();
 }
@@ -1599,6 +1710,8 @@ async function getFeeRowFinance(student, monthKey) {
 }
 
 async function renderFees(className) {
+    updateClassFeeStats(className);
+
     const students = JSON.parse(localStorage.getItem('edu_students') || '[]');
     const tbody = document.getElementById('fee-table-body');
     const monthKey = getCurrentMonthKey(); 
@@ -3731,8 +3844,8 @@ function getAllClassNames() {
         const raw = localStorage.getItem('edu_class_configs');
         if (raw) classes = JSON.parse(raw);
     } catch (e) { classes = []; }
-    if (!Array.isArray(classes) || classes.length === 0) {
-        classes = [{ name: 'Montessori' }, { name: 'Nursery' }, { name: 'Prep' }, { name: 'Grade 1' }, { name: 'Grade 2' }];
+    if (!Array.isArray(classes)) {
+        classes = [];
     }
     return classes.map(c => (c.name || '').trim()).filter(Boolean);
 }
@@ -4095,7 +4208,7 @@ function _getStudents() { try { return JSON.parse(localStorage.getItem('edu_stud
 function _getClasses() {
     let c = [];
     try { c = JSON.parse(localStorage.getItem('edu_class_configs') || '[]'); } catch(e) {}
-    if (!c.length) c = [{name:'Montessori'},{name:'Nursery'},{name:'Prep'},{name:'Grade 1'},{name:'Grade 2'},{name:'Grade 3'},{name:'Grade 4'},{name:'Grade 5'}];
+    if (!c.length) c = [];
     return c;
 }
 
@@ -4158,16 +4271,27 @@ function _populateCfClassDropdown(selectId, includeAll) {
 
 function filterCfStudents() {
     const q = ((document.getElementById('cf-student-search') || {}).value || '').trim().toLowerCase();
+    const container = document.getElementById('cf-student-results');
+    if (!container) return;
+
+    if (!q) {
+        container.innerHTML = '<p class="search-empty" style="color:var(--text-muted);font-size:0.8rem;padding:8px;"><i class="fas fa-info-circle"></i> Type student name or ID to search...</p>';
+        return;
+    }
+
     const students = _getStudents();
-    const matches = q ? students.filter(s => {
+    const matches = students.filter(s => {
         const name = (s.fullName || s.name || '').toLowerCase();
         const id = (s.regNo || s.id || '').toLowerCase();
         const cls = (s.studentClass || '').toLowerCase();
         return name.includes(q) || id.includes(q) || cls.includes(q);
-    }) : students.slice(0, 25);
-    const container = document.getElementById('cf-student-results');
-    if (!container) return;
-    if (!matches.length) { container.innerHTML = '<p class="search-empty">No students found.</p>'; return; }
+    });
+
+    if (!matches.length) {
+        container.innerHTML = '<p class="search-empty">No matching students found.</p>';
+        return;
+    }
+
     container.innerHTML = matches.map(s => {
         const id = _escAttr(s.regNo || s.id || '');
         const name = _escAttr(s.fullName || s.name || 'Unnamed');
@@ -4263,82 +4387,172 @@ function _onShowCustomFeeRecords() {
     renderCustomFeeRecords();
 }
 
-function setCfRecordFilter(mode) {
-    _cfrMode = mode;
-    ['class','all-class','student'].forEach(m => {
-        const btn = document.getElementById('cfr-filter-' + m);
-        if (btn) btn.classList.toggle('active', m === mode);
-    });
-    const cw = document.getElementById('cfr-class-filter-wrap');
-    const aw = document.getElementById('cfr-all-class-wrap');
-    const sw = document.getElementById('cfr-student-filter-wrap');
-    if (cw) cw.style.display = mode === 'class' ? 'block' : 'none';
-    if (aw) aw.style.display = mode === 'all-class' ? 'block' : 'none';
-    if (sw) sw.style.display = mode === 'student' ? 'block' : 'none';
-    renderCustomFeeRecords();
-}
+let _activeCfrFeeId = null;
 
 function renderCustomFeeRecords() {
-    const container = document.getElementById('cfr-records-container');
-    if (!container) return;
-    let allFees = getCustomFees();
+    if (_activeCfrFeeId) {
+        showCustomFeeDetail(_activeCfrFeeId);
+    } else {
+        showCustomFeeSummaryList();
+    }
+}
+
+function showCustomFeeSummaryList() {
+    _activeCfrFeeId = null;
+    const summaryView = document.getElementById('cfr-summary-view');
+    const detailView = document.getElementById('cfr-detail-view');
+    const pageTitle = document.getElementById('cfr-page-title');
+    const pageDesc = document.getElementById('cfr-page-desc');
+    const backBtn = document.getElementById('cfr-main-back-btn');
+
+    if (summaryView) summaryView.classList.remove('d-none');
+    if (detailView) detailView.classList.add('d-none');
+    if (pageTitle) pageTitle.textContent = 'Custom Fee Records';
+    if (pageDesc) pageDesc.textContent = 'Browse all generated custom fee vouchers.';
+    if (backBtn) backBtn.setAttribute('onclick', "showPage('page-custom-fee')");
+
+    const tbody = document.getElementById('cfr-fees-summary-tbody');
+    if (!tbody) return;
+
+    const allFees = getCustomFees();
     if (!allFees.length) {
-        container.innerHTML = `<div class="cfr-empty"><i class="fas fa-inbox"></i><p>No custom fees generated yet. Use <strong>Generate Custom Fee</strong> to create one.</p></div>`;
+        tbody.innerHTML = `<tr><td colspan="7" class="empty-row">No custom fees generated yet. Use <strong>Generate Custom Fee</strong> to create one.</td></tr>`;
         return;
     }
-    let filtered = allFees.map(f => ({ ...f, records: [...f.records] }));
-    if (_cfrMode === 'class') {
-        const cls = (document.getElementById('cfr-class-select') || {}).value;
-        if (cls) filtered = filtered.map(f => ({ ...f, records: f.records.filter(r => r.studentClass === cls) })).filter(f => f.records.length > 0);
-    } else if (_cfrMode === 'all-class') {
-        const cls = (document.getElementById('cfr-allclass-select') || {}).value;
-        if (cls) filtered = filtered.map(f => ({ ...f, records: f.records.filter(r => r.studentClass === cls) })).filter(f => f.records.length > 0);
-        else filtered = [];
-    } else if (_cfrMode === 'student') {
-        const q = ((document.getElementById('cfr-student-search') || {}).value || '').trim().toLowerCase();
-        if (q) filtered = filtered.map(f => ({ ...f, records: f.records.filter(r => (r.studentName || '').toLowerCase().includes(q) || (r.studentId || '').toLowerCase().includes(q)) })).filter(f => f.records.length > 0);
-    }
-    if (!filtered.length) { container.innerHTML = `<div class="cfr-empty"><i class="fas fa-search"></i><p>No records match your current filter.</p></div>`; return; }
-    container.innerHTML = filtered.map(fee => {
-        const paidCount = fee.records.filter(r => r.paid).length;
-        const pendingCount = fee.records.length - paidCount;
-        return `<div class="cfr-fee-group">
-            <div class="cfr-fee-header">
-                <div class="cfr-fee-info">
-                    <span class="cfr-fee-name"><i class="fas fa-tag"></i> ${_escHtml(fee.feeName)}</span>
-                    <span class="cfr-fee-meta">Rs. ${Number(fee.amount).toLocaleString()} &bull; Month: ${_escHtml(fee.monthKey)} &bull; ${fee.records.length} student(s) &bull; <span style="color:#16a34a;">${paidCount} paid</span> &bull; <span style="color:#dc2626;">${pendingCount} pending</span> &bull; Generated: ${new Date(fee.generatedAt).toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'})}</span>
-                </div>
-                <div class="cfr-fee-actions">
-                    <button class="btn-tiny btn-generate-voucher" onclick="printCustomFeeVouchers('${fee.id}')"><i class="fas fa-print"></i> Print All</button>
-                    <button class="btn-tiny" style="background:rgba(239,68,68,0.12);color:#dc2626;" onclick="deleteCustomFee('${fee.id}')"><i class="fas fa-trash"></i> Delete</button>
-                </div>
-            </div>
-            <div class="data-table-wrapper fee-table-wrapper" style="border-radius:0;border:none;">
-                <table class="student-table fee-students-table cfr-table">
-                    <thead><tr><th>Student ID</th><th>Name</th><th>Class</th><th>Guardian</th><th>Amount</th><th>Status</th><th>Actions</th></tr></thead>
-                    <tbody>${fee.records.map(r => `
-                        <tr>
-                            <td><span class="hrk-id-badge">${_escHtml(r.studentId)}</span></td>
-                            <td><strong>${_escHtml(r.studentName)}</strong></td>
-                            <td>${_escHtml(r.studentClass)}${r.section !== '-' ? ' – ' + _escHtml(r.section) : ''}</td>
-                            <td>${_escHtml(r.guardianName)}</td>
-                            <td><strong>Rs. ${Number(fee.amount).toLocaleString()}</strong></td>
-                            <td><span class="fee-status-badge ${r.paid ? 'fee-paid' : 'fee-overdue'}">${r.paid ? 'Paid' : 'Pending'}</span></td>
-                            <td class="fee-actions-cell">
-                                <button class="btn-tiny" onclick="viewCustomFeeVoucher('${_escAttr(fee.id)}','${_escAttr(r.studentId)}')"><i class="fas fa-eye"></i> Voucher</button>
-                                ${!r.paid ? `<button class="btn-tiny btn-add-fees" onclick="markCustomFeePaid('${_escAttr(fee.id)}','${_escAttr(r.studentId)}')"><i class="fas fa-check"></i> Paid</button>` : ''}
-                            </td>
-                        </tr>`).join('')}
-                    </tbody>
-                </table>
-            </div>
-        </div>`;
+
+    tbody.innerHTML = allFees.map(fee => {
+        const records = fee.records || [];
+        const paidCount = records.filter(r => r.paid).length;
+        const pendingCount = records.length - paidCount;
+
+        return `
+        <tr>
+            <td><strong style="font-size:0.95rem;">${_escHtml(fee.feeName)}</strong></td>
+            <td><strong>Rs. ${Number(fee.amount).toLocaleString()}</strong></td>
+            <td><span class="hrk-id-badge">${_escHtml(fee.monthKey)}</span></td>
+            <td><b>${records.length}</b> Students</td>
+            <td><span style="color:#16a34a; font-weight:700;">${paidCount} Paid</span></td>
+            <td><span style="color:#ef4444; font-weight:700;">${pendingCount} Pending</span></td>
+            <td class="fee-actions-cell">
+                <button class="btn-tiny btn-primary" onclick="showCustomFeeDetail('${fee.id}')"><i class="fas fa-list-ul"></i> View Roster</button>
+                <button class="btn-tiny" style="background:rgba(239,68,68,0.12);color:#dc2626;" onclick="deleteCustomFee('${fee.id}')"><i class="fas fa-trash"></i> Delete</button>
+            </td>
+        </tr>`;
     }).join('');
+}
+
+function showCustomFeeDetail(feeId) {
+    _activeCfrFeeId = feeId;
+    const summaryView = document.getElementById('cfr-summary-view');
+    const detailView = document.getElementById('cfr-detail-view');
+    const pageTitle = document.getElementById('cfr-page-title');
+    const pageDesc = document.getElementById('cfr-page-desc');
+    const backBtn = document.getElementById('cfr-main-back-btn');
+
+    if (summaryView) summaryView.classList.add('d-none');
+    if (detailView) detailView.classList.remove('d-none');
+    if (backBtn) backBtn.setAttribute('onclick', "showCustomFeeSummaryList()");
+
+    const fee = getCustomFees().find(f => f.id === feeId);
+    if (!fee) { showCustomFeeSummaryList(); return; }
+
+    if (pageTitle) pageTitle.textContent = fee.feeName;
+    if (pageDesc) pageDesc.textContent = `Rs. ${Number(fee.amount).toLocaleString()} per student • Month: ${fee.monthKey}`;
+
+    const records = fee.records || [];
+    _populateCfrDetailFilters(records);
+    filterCfrDetailTable();
+}
+
+function _populateCfrDetailFilters(records) {
+    const classSel = document.getElementById('cfr-detail-class-filter');
+    const secSel = document.getElementById('cfr-detail-section-filter');
+    if (!classSel) return;
+
+    const classes = Array.from(new Set(records.map(r => r.studentClass).filter(Boolean))).sort();
+    const sections = Array.from(new Set(records.map(r => r.section).filter(s => s && s !== '-'))).sort();
+
+    let classHtml = '<option value="">All Classes</option>';
+    classes.forEach(c => { classHtml += `<option value="${_escAttr(c)}">${_escHtml(c)}</option>`; });
+    classSel.innerHTML = classHtml;
+
+    if (secSel) {
+        let secHtml = '<option value="">All Sections</option>';
+        sections.forEach(s => { secHtml += `<option value="${_escAttr(s)}">Section ${_escHtml(s)}</option>`; });
+        secSel.innerHTML = secHtml;
+    }
+}
+
+function filterCfrDetailTable() {
+    const feeId = _activeCfrFeeId;
+    if (!feeId) return;
+
+    const fee = getCustomFees().find(f => f.id === feeId);
+    if (!fee) return;
+
+    const searchQ = ((document.getElementById('cfr-detail-search-input') || {}).value || '').trim().toLowerCase();
+    const classF = (document.getElementById('cfr-detail-class-filter') || {}).value || '';
+    const secF = (document.getElementById('cfr-detail-section-filter') || {}).value || '';
+    const statusF = (document.getElementById('cfr-detail-status-filter') || {}).value || '';
+
+    let filtered = (fee.records || []).filter(r => {
+        if (searchQ) {
+            const name = (r.studentName || '').toLowerCase();
+            const id = (r.studentId || '').toLowerCase();
+            if (!name.includes(searchQ) && !id.includes(searchQ)) return false;
+        }
+        if (classF && r.studentClass !== classF) return false;
+        if (secF && r.section !== secF) return false;
+        if (statusF === 'paid' && !r.paid) return false;
+        if (statusF === 'pending' && r.paid) return false;
+        return true;
+    });
+
+    const tbody = document.getElementById('cfr-detail-tbody');
+    if (tbody) {
+        if (!filtered.length) {
+            tbody.innerHTML = `<tr><td colspan="7" class="empty-row">No student records match your filters.</td></tr>`;
+        } else {
+            tbody.innerHTML = filtered.map(r => `
+                <tr>
+                    <td><span class="hrk-id-badge">${_escHtml(r.studentId)}</span></td>
+                    <td><strong>${_escHtml(r.studentName)}</strong></td>
+                    <td>${_escHtml(r.studentClass)}${r.section && r.section !== '-' ? ' – Section ' + _escHtml(r.section) : ''}</td>
+                    <td>${_escHtml(r.guardianName || '-')}</td>
+                    <td><strong>Rs. ${Number(fee.amount).toLocaleString()}</strong></td>
+                    <td><span class="fee-status-badge ${r.paid ? 'fee-paid' : 'fee-overdue'}">${r.paid ? 'Paid' : 'Pending'}</span></td>
+                    <td class="fee-actions-cell">
+                        <button class="btn-tiny" onclick="viewCustomFeeVoucher('${_escAttr(fee.id)}','${_escAttr(r.studentId)}')"><i class="fas fa-eye"></i> Voucher</button>
+                        ${!r.paid ? `<button class="btn-tiny btn-add-fees" onclick="markCustomFeePaid('${_escAttr(fee.id)}','${_escAttr(r.studentId)}')"><i class="fas fa-check"></i> Paid</button>` : ''}
+                    </td>
+                </tr>
+            `).join('');
+        }
+    }
+
+    // Update Top Summary Bar above table
+    const topSummary = document.getElementById('cfr-detail-top-summary');
+    if (topSummary) {
+        const totalCount = (fee.records || []).filter(r => _isBillable(r)).length || (fee.records || []).length;
+        const totalBilled = totalCount * Number(fee.amount);
+        const paidCount = (fee.records || []).filter(r => r.paid).length;
+        const paidAmount = paidCount * Number(fee.amount);
+        const pendingCount = Math.max(0, totalCount - paidCount);
+        const pendingAmount = pendingCount * Number(fee.amount);
+
+        topSummary.innerHTML = `
+            <span><i class="fas fa-users"></i> Total Students: <b>${totalCount}</b></span>
+            <span><i class="fas fa-coins"></i> Total Billed: <b>Rs. ${totalBilled.toLocaleString()}</b></span>
+            <span style="color:#16a34a;"><i class="fas fa-check-circle"></i> Collected: <b>Rs. ${paidAmount.toLocaleString()} (${paidCount} Paid)</b></span>
+            <span style="color:#ef4444;"><i class="fas fa-exclamation-triangle"></i> Pending: <b>Rs. ${pendingAmount.toLocaleString()} (${pendingCount} Pending)</b></span>
+        `;
+    }
 }
 
 function deleteCustomFee(feeId) {
     if (!confirm('Delete this custom fee record? This cannot be undone.')) return;
     saveCustomFees(getCustomFees().filter(f => f.id !== feeId));
+    _activeCfrFeeId = null;
     renderCustomFeeRecords();
     _toast('Custom fee record deleted.', 'success');
 }
@@ -4499,6 +4713,7 @@ async function loadFeeDefaulters() {
                 studentClass: s.studentClass || '-', section: s.section || '',
                 guardianName: finance.guardianName || s.guardianName || '-',
                 remainingBalance: finance.remainingBalance, paymentStatus: finance.paymentStatus,
+                paidAmount: Number(finance.paidAmount) || 0,
                 pendingMonthsList: pendingMonths, pendingMonthsCount: pendingMonths.length
             });
         }
@@ -4523,7 +4738,36 @@ function _computePendingMonths(student) {
     return pending;
 }
 
+/**
+ * Paints the overview stat row at the top of the Fee Defaulters page.
+ * Runs on whatever list is currently being shown (all defaulters, or a
+ * filtered/searched subset), so the totals always match what's on screen.
+ *
+ * Shows three totals:
+ *   - Pending After 1 Month: sum owed by defaulters who have been pending
+ *     for more than one month (aging beyond the current month).
+ *   - Total Collected: how much has already been paid in by these
+ *     defaulters (partial payments) for the selected month.
+ *   - Total Remaining: the full outstanding balance still owed.
+ */
+function updateFdOverviewStats(defaulters) {
+    const afterEl = document.getElementById('fd-overview-after1month');
+    const colEl = document.getElementById('fd-overview-collected');
+    const penEl = document.getElementById('fd-overview-pending');
+    if (!afterEl || !colEl || !penEl) return;
+
+    const list = Array.isArray(defaulters) ? defaulters : [];
+    const totalRemaining = list.reduce((sum, d) => sum + (Number(d.remainingBalance) || 0), 0);
+    const totalCollected = list.reduce((sum, d) => sum + (Number(d.paidAmount) || 0), 0);
+
+    afterEl.textContent = `Rs. ${totalRemaining.toLocaleString()}`;
+    colEl.textContent = `Rs. ${totalCollected.toLocaleString()}`;
+    penEl.textContent = `Rs. ${totalRemaining.toLocaleString()}`;
+}
+
 function _renderDefaultersTable(defaulters) {
+    updateFdOverviewStats(defaulters);
+
     const tbody = document.getElementById('fd-tbody');
     const countEl = document.getElementById('fd-count');
     if (!tbody) return;
@@ -4593,7 +4837,38 @@ function initCfWorkspace() {
  * Renders the list of fee name cards in the left panel,
  * filtered by class dropdown and search input.
  */
+/**
+ * Paints the overview stat row at the top of the Custom Fee page — totals
+ * across EVERY custom fee record (not month-scoped, since custom fees are
+ * one-off charges that can be generated any time). Called whenever the
+ * records list re-renders, so it stays in sync with new fees, deletions,
+ * and payments recorded from the detail view.
+ */
+function updateCfOverviewStats() {
+    const genEl = document.getElementById('cf-overview-generated');
+    const colEl = document.getElementById('cf-overview-collected');
+    const penEl = document.getElementById('cf-overview-pending');
+    if (!genEl || !colEl || !penEl) return;
+
+    const allFees = getCustomFees();
+    let totalGenerated = 0, totalCollected = 0;
+    allFees.forEach(fee => {
+        const records = fee.records || [];
+        const amount = Number(fee.amount) || 0;
+        const paidCount = records.filter(r => r.paid).length;
+        totalGenerated += records.length * amount;
+        totalCollected += paidCount * amount;
+    });
+    const totalPending = Math.max(0, totalGenerated - totalCollected);
+
+    genEl.textContent = `Rs. ${totalGenerated.toLocaleString()}`;
+    colEl.textContent = `Rs. ${totalCollected.toLocaleString()}`;
+    penEl.textContent = `Rs. ${totalPending.toLocaleString()}`;
+}
+
 function renderCfRecordsList() {
+    updateCfOverviewStats();
+
     const container = document.getElementById('cf-records-list');
     if (!container) return;
 

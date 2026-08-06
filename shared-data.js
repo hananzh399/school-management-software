@@ -5,38 +5,28 @@
 
 const DEFAULT_DATA = {
     staff: {
-        'Teaching': [
-            {
-                id: "TCH-9021", name: "Taha Khan", qualification: "M.Sc. Mathematics, B.Ed", subjects: "Mathematics, Physics", classes: "Grade 9, Grade 10", incharge: "Grade 10-A", gender: "Male", salary: 4500, joined: "Aug 15, 2021", cnic: "42101-1234567-1", phone: "+1 (555) 123-4567", address: "123 Education Lane",
-                fines: 0
-            }
-        ],
-        'Non-Teaching': [
-            {
-                id: "NTS-4012", name: "John Doe", job: "Maintenance Supervisor", startTime: "07:00 AM", endTime: "04:00 PM", gender: "Male", salary: 3200, cnic: "12345-6789012-3", phone: "+1 (555) 987-6543", address: "456 Facility Rd",
-                fines: 0
-            }
-        ]
+        'Teaching': [],
+        'Non-Teaching': []
     },
     students: {
-        totalCount: 1245,
-        withPendingFees: 125,
+        totalCount: 0,
+        withPendingFees: 0,
         fines: {
-            lateFees: 0, // Automatically calculated
-            other: 12000 // Disciplinary, etc.
+            lateFees: 0,
+            other: 0
         }
     },
     finances: {
         fees: {
-            expected: 4500000,
-            collected: 3800000,
-            pending: 700000
+            expected: 0,
+            collected: 0,
+            pending: 0
         },
         expenses: {
-            other: 450000
+            other: 0
         },
         historical: {
-            lastMonthProfit: 1400000
+            lastMonthProfit: 0
         }
     }
 };

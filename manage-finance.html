@@ -110,23 +110,41 @@
 
         <!-- ===================== PAGE: STUDENT FEES ===================== -->
         <div id="page-student-fees" class="sub-page d-none">
-            <section class="page-title-section sub-title-section">
+            <section class="page-title-section sub-title-section fee-stats-header">
                 <button class="back-btn" onclick="showPage('page-main')"><i class="fas fa-arrow-left"></i> Back</button>
-                <h2 class="page-title">Manage Student Fees</h2>
-                <p class="page-description">Select a class then a student to record payments or generate vouchers.</p>
-                <div class="title-divider"></div>
+                <div class="fee-stats-row" id="fee-stats-row">
+                    <div class="fee-stat-card fee-stat-generated">
+                        <div class="fee-stat-icon"><i class="fas fa-file-invoice-dollar"></i></div>
+                        <div class="fee-stat-info">
+                            <span class="fee-stat-label" id="fee-stat-generated-label">Fee Generated</span>
+                            <span class="fee-stat-value" id="fee-stat-generated">Rs. 0</span>
+                        </div>
+                    </div>
+                    <div class="fee-stat-card fee-stat-collected">
+                        <div class="fee-stat-icon"><i class="fas fa-hand-holding-usd"></i></div>
+                        <div class="fee-stat-info">
+                            <span class="fee-stat-label" id="fee-stat-collected-label">Collected</span>
+                            <span class="fee-stat-value" id="fee-stat-collected">Rs. 0</span>
+                        </div>
+                    </div>
+                    <div class="fee-stat-card fee-stat-pending">
+                        <div class="fee-stat-icon"><i class="fas fa-exclamation-triangle"></i></div>
+                        <div class="fee-stat-info">
+                            <span class="fee-stat-label" id="fee-stat-pending-label">Pending</span>
+                            <span class="fee-stat-value" id="fee-stat-pending">Rs. 0</span>
+                        </div>
+                    </div>
+                </div>
             </section>
 
             <!-- Part A: Class Card Selector (Visible first) -->
             <div id="class-selection-view">
-                <div class="section-title">
-                    <h3><i class="fas fa-layer-group"></i> Select Class Grade</h3>
-                    <p>Select a grade level to generate or view fee vouchers</p>
-                </div>
-
-                <!-- Global voucher actions — top right, just above the class list -->
+                <!-- Heading + global voucher actions, same line -->
                 <div class="fee-global-toolbar">
-                    <div class="fee-global-toolbar-spacer"></div>
+                    <div class="fee-toolbar-heading-group">
+                        <h3 class="fee-toolbar-heading"><i class="fas fa-layer-group"></i> Manage Student Fees</h3>
+                        <p class="fee-toolbar-desc">Select a grade from the following to manage fees</p>
+                    </div>
                     <div class="fee-global-actions">
                         <button type="button" class="btn-global-action btn-generate-global" id="btn-generate-monthly-global" onclick="handleGenerateMonthlyGlobalClick()">
                             <i class="fas fa-file-invoice"></i> Generate Monthly Fees
@@ -150,9 +168,36 @@
 
             <!-- Part B: Student List (Hidden until card clicked) -->
             <div id="class-student-list-view" style="display: none;">
-                <button class="btn-ghost" onclick="backToClassSelection()" style="margin-bottom: 5px;">
+                <button class="btn-ghost" onclick="backToClassSelection()">
                     <i class="fas fa-chevron-left"></i> Change Class
                 </button>
+
+                <!-- Class stats: sit right at the top, centered -->
+                <div class="fee-stats-row-compact" id="class-fee-stats-row">
+                    <div class="fee-stat-card fee-stat-generated">
+                        <div class="fee-stat-icon"><i class="fas fa-file-invoice-dollar"></i></div>
+                        <div class="fee-stat-info">
+                            <span class="fee-stat-label" id="class-fee-stat-generated-label">Generated</span>
+                            <span class="fee-stat-value" id="class-fee-stat-generated">Rs. 0</span>
+                        </div>
+                    </div>
+                    <div class="fee-stat-card fee-stat-collected">
+                        <div class="fee-stat-icon"><i class="fas fa-hand-holding-usd"></i></div>
+                        <div class="fee-stat-info">
+                            <span class="fee-stat-label" id="class-fee-stat-collected-label">Collected</span>
+                            <span class="fee-stat-value" id="class-fee-stat-collected">Rs. 0</span>
+                        </div>
+                    </div>
+                    <div class="fee-stat-card fee-stat-pending">
+                        <div class="fee-stat-icon"><i class="fas fa-exclamation-triangle"></i></div>
+                        <div class="fee-stat-info">
+                            <span class="fee-stat-label" id="class-fee-stat-pending-label">Pending</span>
+                            <span class="fee-stat-value" id="class-fee-stat-pending">Rs. 0</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Heading now sits directly above the search bar / table -->
                 <div class="section-title class-level-title-row">
                     <h3 id="selected-class-title">Class Name</h3>
                     <button type="button" class="btn-global-action btn-generate-class" id="btn-generate-class" onclick="handleGenerateClassClick()">
@@ -1308,9 +1353,40 @@
 
         <!-- ===================== PAGE: CUSTOM FEE (REDESIGNED WORKSPACE) ===================== -->
         <div id="page-custom-fee" class="sub-page d-none">
-            <section class="page-title-section sub-title-section left-title-section">
+            <!-- Pricing / stats sit at the very top, centered -->
+            <section class="page-title-section sub-title-section stats-header-section">
                 <button class="back-btn" onclick="showPage('page-student-fees')"><i class="fas fa-arrow-left"></i> Back</button>
+                <div class="fee-stats-row-compact" id="cf-overview-stats-row">
+                    <div class="fee-stat-card fee-stat-generated">
+                        <div class="fee-stat-icon"><i class="fas fa-file-invoice-dollar"></i></div>
+                        <div class="fee-stat-info">
+                            <span class="fee-stat-label">Total Generated</span>
+                            <span class="fee-stat-value" id="cf-overview-generated">Rs. 0</span>
+                        </div>
+                    </div>
+                    <div class="fee-stat-card fee-stat-collected">
+                        <div class="fee-stat-icon"><i class="fas fa-hand-holding-usd"></i></div>
+                        <div class="fee-stat-info">
+                            <span class="fee-stat-label">Total Collected</span>
+                            <span class="fee-stat-value" id="cf-overview-collected">Rs. 0</span>
+                        </div>
+                    </div>
+                    <div class="fee-stat-card fee-stat-pending">
+                        <div class="fee-stat-icon"><i class="fas fa-exclamation-triangle"></i></div>
+                        <div class="fee-stat-info">
+                            <span class="fee-stat-label">Total Pending</span>
+                            <span class="fee-stat-value" id="cf-overview-pending">Rs. 0</span>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Heading now sits below the pricing, above the workspace/table -->
+            <section class="page-title-section sub-title-section header-with-action">
                 <h2 class="page-title">Custom Fees</h2>
+                <button type="button" class="btn-global-action btn-view-records header-action-btn" onclick="showPage('page-custom-fee-records')">
+                    <i class="fas fa-list-alt"></i> Records
+                </button>
                 <div class="title-divider"></div>
             </section>
 
@@ -1322,22 +1398,6 @@
                     <!-- CREATE FORM VIEW (default) -->
                     <div id="cf-create-form-view">
                         <div class="cf-form-grid">
-                            <div class="cf-field cf-full">
-                                <label>Fee / Voucher Title <span class="cf-required">*</span></label>
-                                <input type="text" id="cf-fee-name" class="cf-input" placeholder="e.g. Board Registration Fee">
-                            </div>
-                            <div class="cf-field">
-                                <label>Amount (Rs.) <span class="cf-required">*</span></label>
-                                <input type="number" id="cf-fee-amount" class="cf-input" min="1" placeholder="e.g. 1500">
-                            </div>
-                            <div class="cf-field">
-                                <label>Due Date <span class="cf-optional">(optional)</span></label>
-                                <input type="date" id="cf-due-date" class="cf-input">
-                            </div>
-                            <div class="cf-field cf-full">
-                                <label>Description / Note <span class="cf-optional">(shown on voucher)</span></label>
-                                <input type="text" id="cf-description" class="cf-input" placeholder="e.g. Annual session fee">
-                            </div>
                             <div class="cf-field cf-full">
                                 <label>Apply To <span class="cf-required">*</span></label>
                                 <div class="cf-scope-toggle">
@@ -1366,6 +1426,22 @@
                                 </div>
                                 <p class="cf-hint-text"><i class="fas fa-info-circle"></i> Type to search. Click a student to select.</p>
                                 <div id="cf-student-results" class="cf-student-results"></div>
+                            </div>
+                            <div class="cf-field cf-full">
+                                <label>Fee / Voucher Title <span class="cf-required">*</span></label>
+                                <input type="text" id="cf-fee-name" class="cf-input" placeholder="e.g. Board Registration Fee">
+                            </div>
+                            <div class="cf-field">
+                                <label>Amount (Rs.) <span class="cf-required">*</span></label>
+                                <input type="number" id="cf-fee-amount" class="cf-input" min="1" placeholder="e.g. 1500">
+                            </div>
+                            <div class="cf-field">
+                                <label>Due Date <span class="cf-optional">(optional)</span></label>
+                                <input type="date" id="cf-due-date" class="cf-input">
+                            </div>
+                            <div class="cf-field cf-full">
+                                <label>Description / Note <span class="cf-optional">(shown on voucher)</span></label>
+                                <input type="text" id="cf-description" class="cf-input" placeholder="e.g. Annual session fee">
                             </div>
                         </div>
 
@@ -1525,88 +1601,141 @@
 
         <!-- ===================== PAGE: CUSTOM FEE — RECORDS ===================== -->
         <div id="page-custom-fee-records" class="sub-page d-none">
-            <section class="page-title-section sub-title-section">
-                <button class="back-btn" onclick="showPage('page-custom-fee')"><i class="fas fa-arrow-left"></i> Back</button>
-                <h2 class="page-title">Custom Fee Records</h2>
-                <p class="page-description">Browse all previously generated custom fee vouchers.</p>
-                <div class="title-divider"></div>
-            </section>
-
-            <!-- 3-mode filter bar -->
-            <div class="centered-block cfr-filter-bar" style="max-width:960px;">
-                <div class="staff-category-toggle" style="margin-bottom:14px;">
-                    <button type="button" class="category-btn active" id="cfr-filter-class"     onclick="setCfRecordFilter('class')">Class-wise</button>
-                    <button type="button" class="category-btn"        id="cfr-filter-all-class" onclick="setCfRecordFilter('all-class')">All Students of Class</button>
-                    <button type="button" class="category-btn"        id="cfr-filter-student"   onclick="setCfRecordFilter('student')">Specific Student</button>
-                </div>
-
-                <!-- Filter: class-wise (default visible) -->
-                <div id="cfr-class-filter-wrap" style="margin-bottom:10px;">
-                    <select id="cfr-class-select" class="fine-search-input" style="max-width:320px;" onchange="renderCustomFeeRecords()">
-                        <option value="">-- All Classes --</option>
-                    </select>
-                </div>
-
-                <!-- Filter: all students of a specific class -->
-                <div id="cfr-all-class-wrap" style="display:none; margin-bottom:10px;">
-                    <select id="cfr-allclass-select" class="fine-search-input" style="max-width:320px;" onchange="renderCustomFeeRecords()">
-                        <option value="">-- Select a Class --</option>
-                    </select>
-                </div>
-
-                <!-- Filter: specific student search -->
-                <div id="cfr-student-filter-wrap" style="display:none; margin-bottom:10px;">
-                    <div class="fee-search-wrap" style="max-width:420px;">
-                        <i class="fas fa-search"></i>
-                        <input type="text" id="cfr-student-search" placeholder="Search by student name or ID..." oninput="renderCustomFeeRecords()">
+            <!-- VIEW 1: Clean Overview Table of Generated Custom Fees -->
+            <div id="cfr-summary-view" class="centered-block" style="max-width:1100px;">
+                <section class="page-title-section sub-title-section stats-header-section" style="margin-bottom:12px;">
+                    <button class="back-btn" onclick="showPage('page-custom-fee')"><i class="fas fa-arrow-left"></i> Back</button>
+                    <div class="cfr-header-text-group" style="text-align:left; margin-left:110px;">
+                        <h2 class="page-title" style="text-align:left; margin:0;">Custom Fee Records</h2>
+                        <p class="page-description" style="text-align:left; margin:2px 0 0; font-size:0.85rem;">Browse all generated custom fee vouchers.</p>
                     </div>
+                </section>
+                <div class="data-table-wrapper fee-table-wrapper">
+                    <table class="student-table fee-students-table">
+                        <thead>
+                            <tr>
+                                <th>Fee Name</th>
+                                <th>Amount</th>
+                                <th>Month</th>
+                                <th>Students</th>
+                                <th>Paid</th>
+                                <th>Pending</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="cfr-fees-summary-tbody">
+                            <!-- Populated by JS -->
+                        </tbody>
+                    </table>
                 </div>
             </div>
 
-            <div class="centered-block" style="max-width:960px;" id="cfr-records-container">
-                <!-- Populated by JS -->
+            <!-- VIEW 2: Detailed Roster for Selected Custom Fee (Opened on click) -->
+            <div id="cfr-detail-view" class="centered-block d-none" style="max-width:1100px;">
+                <!-- Navigation + Summary of Fees ON TOP -->
+                <div class="cfr-detail-top-nav" style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; gap:16px;">
+                    <button class="btn-ghost" onclick="showCustomFeeSummaryList()" style="white-space:nowrap; margin:0;"><i class="fas fa-arrow-left"></i> Back to Custom Fees</button>
+                    <!-- Summary Bar ON TOP -->
+                    <div id="cfr-detail-top-summary" class="cfr-footer-summary-bar" style="margin:0; flex:1; justify-content:space-around;"></div>
+                </div>
+
+                <!-- Filters Toolbar INSIDE table header -->
+                <div class="fee-table-toolbar cfr-table-toolbar sticky-toolbar">
+                    <div class="fee-search-wrap" style="flex:1; max-width:280px;">
+                        <i class="fas fa-search"></i>
+                        <input type="text" id="cfr-detail-search-input" placeholder="Search student name or ID..." oninput="filterCfrDetailTable()">
+                    </div>
+                    <select id="cfr-detail-class-filter" class="cf-input cfr-filter-select" onchange="filterCfrDetailTable()">
+                        <option value="">All Classes</option>
+                    </select>
+                    <select id="cfr-detail-section-filter" class="cf-input cfr-filter-select" onchange="filterCfrDetailTable()">
+                        <option value="">All Sections</option>
+                    </select>
+                    <select id="cfr-detail-status-filter" class="cf-input cfr-filter-select" onchange="filterCfrDetailTable()">
+                        <option value="">All Status</option>
+                        <option value="paid">Paid</option>
+                        <option value="pending">Pending</option>
+                    </select>
+                </div>
+
+                <!-- Sticky Student Table -->
+                <div class="data-table-wrapper fee-table-wrapper cfr-sticky-table">
+                    <table class="student-table fee-students-table cfr-table">
+                        <thead>
+                            <tr>
+                                <th>Student ID</th>
+                                <th>Name</th>
+                                <th>Class</th>
+                                <th>Guardian</th>
+                                <th>Amount</th>
+                                <th>Status</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="cfr-detail-tbody">
+                            <!-- Populated by JS -->
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </div>
 
         <!-- ===================== PAGE: FEE DEFAULTER ===================== -->
         <div id="page-fee-defaulter" class="sub-page d-none">
-            <section class="page-title-section sub-title-section left-title-section">
+            <!-- Pricing / stats sit at the very top, centered -->
+            <section class="page-title-section sub-title-section stats-header-section">
                 <button class="back-btn" onclick="showPage('page-student-fees')"><i class="fas fa-arrow-left"></i> Back</button>
+                <div class="fee-stats-row-compact" id="fd-overview-stats-row">
+                    <div class="fee-stat-card fee-stat-pending">
+                        <div class="fee-stat-icon"><i class="fas fa-calendar-times"></i></div>
+                        <div class="fee-stat-info">
+                            <span class="fee-stat-label">Pending Fees</span>
+                            <span class="fee-stat-value" id="fd-overview-after1month">Rs. 0</span>
+                        </div>
+                    </div>
+                    <div class="fee-stat-card fee-stat-collected">
+                        <div class="fee-stat-icon"><i class="fas fa-hand-holding-usd"></i></div>
+                        <div class="fee-stat-info">
+                            <span class="fee-stat-label">Total Collected</span>
+                            <span class="fee-stat-value" id="fd-overview-collected">Rs. 0</span>
+                        </div>
+                    </div>
+                    <div class="fee-stat-card fee-stat-pending">
+                        <div class="fee-stat-icon"><i class="fas fa-exclamation-triangle"></i></div>
+                        <div class="fee-stat-info">
+                            <span class="fee-stat-label">Total Remaining</span>
+                            <span class="fee-stat-value" id="fd-overview-pending">Rs. 0</span>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Heading now sits below the pricing, above the table -->
+            <section class="page-title-section sub-title-section">
                 <h2 class="page-title">Fee Defaulters</h2>
                 <div class="title-divider"></div>
             </section>
 
-            <!-- Search & Month filter bar -->
-            <div class="centered-block" style="max-width:960px; margin-bottom:18px;">
-                <div class="search-filter-box">
-                    <div class="search-grid">
-                        <div class="search-group" style="grid-column: span 2;">
-                            <label>Search Students</label>
-                            <div style="position:relative;">
-                                <i class="fas fa-search" style="position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--text-light);"></i>
-                                <input type="text" id="fd-search" placeholder="Search by name, ID, class or guardian..." style="padding-left:35px;width:100%;" oninput="filterFdTable()">
-                            </div>
-                        </div>
-                        <div class="search-group">
-                            <label>Filter by Month</label>
-                            <select id="fd-month-filter" onchange="onFdMonthChange()" style="width:100%;">
-                                <!-- Populated by JS -->
-                            </select>
-                        </div>
-                    </div>
+            <!-- Search + Month filter + count + refresh, all in one toolbar above the table -->
+            <div class="fee-table-toolbar fd-toolbar">
+                <div class="fee-search-wrap">
+                    <i class="fas fa-search"></i>
+                    <input type="text" id="fd-search" placeholder="Search by name, ID, class or guardian..." oninput="filterFdTable()">
                 </div>
-            </div>
-
-            <!-- Count + Refresh -->
-            <div class="centered-block" style="max-width:960px; margin-bottom:10px; display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;">
-                <span id="fd-count" style="font-size:0.85rem; font-weight:600; color:var(--text-secondary);"></span>
-                <button type="button" class="btn-global-action btn-generate-global" onclick="loadFeeDefaulters()" style="padding:8px 16px;">
+                <div class="fd-month-wrap">
+                    <i class="fas fa-calendar-alt"></i>
+                    <select id="fd-month-filter" onchange="onFdMonthChange()">
+                        <!-- Populated by JS -->
+                    </select>
+                </div>
+                <span class="fee-search-count" id="fd-count"></span>
+                <button type="button" class="btn-global-action btn-generate-global fd-refresh-btn" onclick="loadFeeDefaulters()">
                     <i class="fas fa-sync-alt"></i> Refresh
                 </button>
             </div>
 
             <!-- Defaulters table -->
-            <div class="table-container centered-block" style="max-width:960px;">
+            <div class="data-table-wrapper fee-table-wrapper">
                 <table class="finance-table">
                     <thead>
                         <tr>
