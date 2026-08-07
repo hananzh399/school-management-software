@@ -1469,6 +1469,167 @@
     color: var(--text-light);
 }
 
+/* ================= SIBLING / FAMILY VOUCHER TOGGLE ================= */
+.pv-sibling-toggle {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    background: linear-gradient(135deg, rgba(52,152,219,0.07), rgba(39,174,96,0.07));
+    border: 1.5px solid var(--border-subtle, #e2e8f0);
+    border-radius: 14px;
+    padding: 12px 14px;
+    margin-bottom: 16px;
+    cursor: pointer;
+    transition: border-color 0.2s ease, background 0.2s ease;
+}
+.pv-sibling-toggle:hover {
+    border-color: #3498db;
+}
+.pv-sibling-toggle input {
+    position: absolute;
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+.pv-sibling-toggle-box {
+    flex-shrink: 0;
+    width: 20px;
+    height: 20px;
+    border-radius: 6px;
+    border: 2px solid #94a3b8;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-top: 1px;
+    color: transparent;
+    font-size: 0.65rem;
+    transition: all 0.15s ease;
+}
+.pv-sibling-toggle input:checked + .pv-sibling-toggle-box {
+    background: linear-gradient(135deg, #3498db, #27ae60);
+    border-color: transparent;
+    color: #fff;
+}
+.pv-sibling-toggle-text {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+.pv-sibling-toggle-text strong {
+    font-size: 0.85rem;
+    color: var(--text-primary, #1e293b);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+.pv-sibling-toggle-text span {
+    font-size: 0.75rem;
+    color: var(--text-secondary, #64748b);
+    line-height: 1.4;
+}
+
+/* ================= FAMILY VOUCHER ================= */
+/* Gives the combined Family Voucher its own visual identity instead of
+   silently falling back to the plain single-voucher card styling. */
+.voucher-copy-family {
+    border-color: #c4b5fd;
+    background: linear-gradient(180deg, #faf9ff 0%, #ffffff 40%);
+}
+
+.voucher-family-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: linear-gradient(135deg, #7c3aed, #4f46e5);
+    color: #fff;
+    font-size: 0.68rem;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    padding: 4px 12px;
+    border-radius: 999px;
+    margin-bottom: 14px;
+}
+
+.voucher-children-summary {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    margin-bottom: 14px;
+}
+
+.voucher-child-block {
+    border: 1.5px solid #e2e8f0;
+    border-radius: 12px;
+    overflow: hidden;
+    background: #fbfdff;
+}
+
+.voucher-child-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 12px;
+    background: linear-gradient(135deg, #eff6ff, #ecfdf5);
+    border-bottom: 1px solid #e2e8f0;
+}
+
+.voucher-child-index {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #3498db, #27ae60);
+    color: #fff;
+    font-size: 0.72rem;
+    font-weight: 800;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.voucher-child-info {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-width: 0;
+}
+
+.voucher-child-info strong {
+    font-size: 0.85rem;
+    color: var(--text-dark);
+}
+
+.voucher-child-info span {
+    font-size: 0.72rem;
+    color: var(--text-light);
+}
+
+.voucher-child-subtotal {
+    font-size: 0.85rem;
+    font-weight: 800;
+    color: #166534;
+    white-space: nowrap;
+}
+
+.voucher-child-table {
+    margin-bottom: 0;
+}
+
+.voucher-child-table th {
+    font-size: 0.68rem;
+    padding: 6px 10px;
+}
+
+.voucher-child-table td {
+    padding: 7px 10px;
+    font-size: 0.8rem;
+}
+
+.voucher-family-total-table {
+    margin-bottom: 14px;
+}
+
 /* ================= PRINT STYLES ================= */
 .print-only {
     display: none;
@@ -1495,6 +1656,9 @@
     }
     .voucher-copy {
         border: 1.5px dashed #94a3b8;
+        page-break-inside: avoid;
+    }
+    .voucher-child-block {
         page-break-inside: avoid;
     }
     .print-page-break {
@@ -3896,6 +4060,13 @@
 [data-theme="dark"] .voucher-modal-scroll {
     background: #1a2236;
 }
+[data-theme="dark"] .pv-sibling-toggle {
+    background: linear-gradient(135deg, rgba(52,152,219,0.12), rgba(39,174,96,0.1));
+    border-color: var(--border-subtle, #334155);
+}
+[data-theme="dark"] .pv-sibling-toggle-text strong { color: var(--text-primary, #f1f5f9); }
+[data-theme="dark"] .pv-sibling-toggle-text span { color: var(--text-secondary, #94a3b8); }
+
 /* Keep the print voucher itself white (it's a paper document) */
 [data-theme="dark"] .voucher-sheet {
     filter: none;

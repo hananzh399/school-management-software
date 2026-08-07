@@ -2,6 +2,51 @@
  * EUFLOW PRO - FINNCE LOGIC
  */
 
+// ---------------------------------------------------------------------------
+// SCHOOL IDENTITY
+// ---------------------------------------------------------------------------
+// BUGFIX — "school name/logo never match what was added in Super Admin":
+// This used to be a hardcoded `const SCHOOL_NAME = "YOUR SCHOOL NAME HERE"`,
+// so every school using this app saw the exact same placeholder name on the
+// header AND on every printed voucher, no matter what was actually entered
+// for that school in superadmin.html. There was also no logo anywhere on
+// the vouchers at all.
+//
+// access-control.js (loaded before this file) already knows which school is
+// currently logged in — window.SoftSchoolAdmin.getCurrentSchool() returns
+// that school's full record, including `name` and `logo` exactly as entered
+// in the Add/Manage School screens. getSchoolIdentity() below is now the
+// single source of truth for both the header AND every voucher template, so
+// editing a school's name/logo in Super Admin updates it everywhere in this
+// file automatically. If no school is registered yet (single-school/demo
+// mode, before Super Admin has added anyone), it falls back to a generic
+// placeholder so the app still works out of the box.
+function getSchoolIdentity() {
+    if (window.SoftSchoolAdmin && typeof window.SoftSchoolAdmin.getCurrentSchool === 'function') {
+        const school = window.SoftSchoolAdmin.getCurrentSchool();
+        if (school) return { name: school.name || 'Soft School', logo: school.logo || '' };
+    }
+    return { name: 'YOUR SCHOOL NAME HERE', logo: '' };
+}
+
+// Renders the little logo box used on every voucher copy — the school's
+// actual uploaded logo when one exists, otherwise the same generic
+// graduation-cap icon that was always shown before.
+function voucherLogoHtml() {
+    const logo = getSchoolIdentity().logo;
+    if (logo) {
+        return `<div class="voucher-logo"><img src="${escapeHtml(logo)}" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:inherit;display:block;"></div>`;
+    }
+    return `<div class="voucher-logo"><i class="fas fa-graduation-cap"></i></div>`;
+}
+
+// Keep the header branding in sync with the real logged-in school so
+// there's only one place this is computed (see getSchoolIdentity above).
+document.addEventListener('DOMContentLoaded', () => {
+    const headerNameEl = document.getElementById('header-school-name');
+    if (headerNameEl) headerNameEl.textContent = getSchoolIdentity().name;
+});
+
 const API_BASE = "http://localhost:8080/api/finance";
 
 async function apiCall(endpoint, method = "GET", body = null) {
@@ -1188,6 +1233,11 @@ let currentVoucherStudentName = null;
 // Caching the last-fetched fine here lets other flows see the real value.
 let currentVoucherFineAmount = 0;
 let currentVoucherFineReason = '';
+// Whether the voucher currently open in the modal is a combined Family
+// Voucher (multiple siblings) rather than a single student's voucher.
+// The inline editor only knows how to edit one student, so Edit stays
+// hidden whenever this is true — see openVoucherEditModal().
+let currentVoucherIsFamily = false;
 
 async function viewVoucher(studentId, fullName, isPaidBill = false) {
     // 1. Validation
@@ -1206,8 +1256,74 @@ async function viewVoucher(studentId, fullName, isPaidBill = false) {
     }
 
     const monthKey = getCurrentMonthKey();
-    
+
+    // 2b. SIBLING DETECTION — mirrors the "Combine siblings into one Family
+    // Voucher" behavior already used by the Print flow (see
+    // groupStudentsForPrinting / buildFamilyVoucherHTML below), so that
+    // View Voucher shows a parent the same combined voucher they'd get on
+    // paper instead of silently only ever showing one child.
+    let familyGroup = null;
+    if (_pvCombineSiblingsEnabled()) {
+        const key = _familyKey(student);
+        if (key) {
+            const siblings = students.filter(s => isStudentBillable(s) && _familyKey(s) === key);
+            if (siblings.length > 1) familyGroup = siblings;
+        }
+    }
+
     try {
+        if (familyGroup) {
+            // 3f. Best-effort refresh of each sibling's backend fine status —
+            // same reasoning as the single-student fetch below, just done
+            // per-child. One sibling's fetch failing shouldn't block the
+            // rest of the family voucher from rendering.
+            await Promise.all(familyGroup.map(async (s) => {
+                try {
+                    const sId = s.id || s.regNo;
+                    const finance = await apiRequest(`/status/${sId}/${monthKey}`);
+                    if (finance) {
+                        s.backendFine = finance.fineAmount || 0;
+                        s.backendFineReason = finance.fineReason || "";
+                    }
+                } catch (e) {
+                    // fall back to whatever is already known locally for this child
+                }
+            }));
+
+            // Set global variables for the Share/Print functionality
+            currentVoucherStudentId = studentId;
+            currentVoucherStudentName = fullName;
+            currentVoucherIsFamily = true;
+
+            // 5f. Build the combined Family Voucher HTML
+            let html = buildFamilyVoucherHTML(familyGroup);
+
+            // 6f. Apply the "PAID" stamp if the monthly bill is fully settled
+            if (isPaidBill) {
+                html = `
+                    <div style="position:relative;">
+                        ${html}
+                        <div class="paid-stamp-overlay">PAID</div>
+                    </div>`;
+            }
+
+            // 7f. Update the Modal UI
+            const renderTarget = document.getElementById('voucher-render-target');
+            const modalOverlay = document.getElementById('voucher-modal-overlay');
+
+            if (renderTarget) renderTarget.innerHTML = html;
+            if (modalOverlay) modalOverlay.style.display = 'flex';
+
+            // 8f. Family vouchers span multiple students — the inline editor
+            // only edits one, so Edit stays hidden regardless of paid status.
+            const editBtn = document.getElementById('edit-voucher-btn');
+            if (editBtn) {
+                editBtn.style.display = 'none';
+                editBtn.setAttribute('data-paid-locked', isPaidBill ? '1' : '0');
+            }
+            return;
+        }
+
         // 3. API CALL: Fetch FRESH status from the MySQL database.
         // If a fine was just settled/paid in the ledger, the backend logic 
         // has already subtracted it from 'fineAmount'.
@@ -1227,6 +1343,7 @@ async function viewVoucher(studentId, fullName, isPaidBill = false) {
         // Set global variables for the Edit/Share functionality
         currentVoucherStudentId = studentId;
         currentVoucherStudentName = fullName;
+        currentVoucherIsFamily = false;
         // Cache the fine so it's still available if the editor re-reads the
         // student fresh from localStorage (see note above the declaration).
         const fBreakdown = computeFeeBreakdown(student);
@@ -1269,6 +1386,7 @@ async function viewVoucher(studentId, fullName, isPaidBill = false) {
 function openVoucherEditModal() {
     const editBtn = document.getElementById('edit-voucher-btn');
     if (editBtn && editBtn.getAttribute('data-paid-locked') === '1') return; // Paid bills cannot be edited
+    if (currentVoucherIsFamily) return; // Family Vouchers combine multiple students — nothing to edit here
     if (currentVoucherStudentId) {
         openInlineVoucherEditor(currentVoucherStudentId, currentVoucherStudentName);
     }
@@ -1558,9 +1676,9 @@ function buildVoucherHTML(s) {
             <div class="voucher-copy-tag ${label === 'School Copy' ? 'tag-blue' : 'tag-green'}">${label}</div>
             <div class="voucher-header">
                 <div class="voucher-school-info">
-                    <div class="voucher-logo"><i class="fas fa-graduation-cap"></i></div>
+                    ${voucherLogoHtml()}
                     <div>
-                        <h2>ST. LAWRENCE INTERNATIONAL SCHOOL</h2>
+                        <h2>${escapeHtml(getSchoolIdentity().name)}</h2>
                         <p>Financial Control Center &middot; Fee Voucher</p>
                     </div>
                 </div>
@@ -1721,10 +1839,14 @@ async function renderFees(className) {
     // Show loading state while syncing with database
     tbody.innerHTML = "<tr><td colspan='6' style='text-align:center; padding:20px;'><i class='fas fa-spinner fa-spin'></i> Syncing with MySQL Database...</td></tr>";
     
-    const filtered = students.filter(s => s.studentClass === className);
+    // BUGFIX — dropped-out/graduated/suspended students were still showing
+    // up as rows in the Fees table (just with an "Inactive"-style badge
+    // instead of action buttons). They should not appear here at all —
+    // this table is specifically for billing active students.
+    const filtered = students.filter(s => s.studentClass === className).filter(isStudentBillable);
 
     if(filtered.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; padding:40px;">No students found enrolled in <strong>${className}</strong>.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; padding:40px;">No active students found enrolled in <strong>${className}</strong>.</td></tr>`;
         return;
     }
 
@@ -2490,91 +2612,63 @@ function initTeachingSalaryPage() {
     renderTeachingSalaries();
 }
 
-async function renderTeachingSalaries(filterText = '') {
+function renderTeachingSalaries(filterText = '') {
     const tbody = document.getElementById('teaching-salary-tbody');
-    const monthKey = getCurrentMonthKey(); // e.g., "2024-03"
-    
-    // Show loading state
-    tbody.innerHTML = '<tr><td colspan="7" class="empty-row"><i class="fas fa-spinner fa-spin"></i> Loading Teaching Staff...</td></tr>';
+    if (!tbody) return;
 
-    try {
-        // 1. Fetch all staff from the backend StaffController
-        const staffResponse = await fetch("http://localhost:8080/api/staff");
-        if (!staffResponse.ok) throw new Error("Failed to fetch staff");
-        const allStaff = await staffResponse.json();
+    // BUGFIX — "Teaching Salary page always shows 'Error connecting to
+    // backend server'": this used to fetch staff from a hardcoded
+    // http://localhost:8080/api/staff backend that doesn't exist in this
+    // app (everything else — including the Non-Teaching salary page right
+    // below — reads/writes staff via getGlobalData()/db.staff, which is
+    // backed by localStorage, see shared-data.js). Since that backend was
+    // never reachable, this page could never actually show the teaching
+    // staff that were added through the app, and "advance" was hardcoded
+    // to 0 instead of being read from the real advance records. Now this
+    // mirrors renderNonTeachingSalaries() exactly.
+    const db = getGlobalData();
+    const teachers = db.staff['Teaching'] || [];
+    const currentMonthKey = getCurrentMonthKey();
 
-        // 2. Fetch all salary records for the current month to check payment status
-        // We assume you might add a "GET all for month" endpoint, 
-        // or we can fetch them individually. For now, let's fetch the staff 
-        // and filter for the 'Teaching' category.
-        const teachingStaff = allStaff.filter(t => 
-            t.category === 'Teaching' && 
-            (t.name.toLowerCase().includes(filterText.toLowerCase()) || 
-             t.id.toLowerCase().includes(filterText.toLowerCase()))
-        );
+    const filtered = teachers.filter(t =>
+        (t.name || '').toLowerCase().includes(filterText.toLowerCase()) ||
+        (t.id || '').toLowerCase().includes(filterText.toLowerCase())
+    );
 
-        if (teachingStaff.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="7" class="empty-row">No teaching staff found.</td></tr>';
-            return;
-        }
-
-        // 3. Generate HTML rows
-        let rowsHtml = "";
-
-        for (const t of teachingStaff) {
-            // Check status: We call an endpoint to see if this staff is paid for this month
-            // If you haven't built this endpoint yet, it will default to 'Pending'
-            let isPaid = false;
-            try {
-                const statusRes = await fetch(`http://localhost:8080/api/finance/salary/status/${t.id}/${monthKey}`);
-                if (statusRes.ok) {
-                    const statusData = await statusRes.json();
-                    isPaid = statusData.paid; // Expecting { paid: true/false }
-                }
-            } catch (e) {
-                isPaid = false; // Fallback if endpoint doesn't exist
-            }
-
-            const absenceFine = Number(t.fines) || 0;
-            const basicSalary = Number(t.salary) || 0;
-            
-            // Note: Advances are now handled in the backend, 
-            // you might want to add a field 'totalAdvance' to your Staff model
-            const advance = 0; 
-
-            rowsHtml += `
-                <tr class="salary-row-clickable" onclick="showSalaryBreakdown('${t.id}', 'Teaching')" title="Click to view salary breakdown">
-                    <td class="teacher-id-cell">${t.id}</td>
-                    <td>
-                        <div style="font-weight:600;">${t.name}</div>
-                        <div style="font-size:11px; color:var(--text-secondary);">${t.phone || 'No Phone'}</div>
-                    </td>
-                    <td>${t.role || 'Teacher'}</td>
-                    <td><strong>RS ${basicSalary.toLocaleString()}</strong></td>
-                    <td>
-                        <span style="color:#ef4444; font-weight:600;">
-                            ${absenceFine > 0 ? '− RS ' + absenceFine.toLocaleString() : 'None'}
-                        </span>
-                    </td>
-                    <td>
-                        <strong style="color:#eab308;">RS ${advance.toLocaleString()}</strong>
-                    </td>
-                    <td>
-                        <span class="status-badge ${isPaid ? 'status-paid' : 'status-pending'}">
-                            <i class="fas ${isPaid ? 'fa-check-circle' : 'fa-clock'}"></i>
-                            ${isPaid ? 'Paid' : 'Pending'}
-                        </span>
-                    </td>
-                </tr>
-            `;
-        }
-
-        tbody.innerHTML = rowsHtml;
-
-    } catch (err) {
-        console.error("Fetch Error:", err);
-        tbody.innerHTML = '<tr><td colspan="7" class="empty-row" style="color:red;">Error connecting to backend server.</td></tr>';
+    if (filtered.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" class="empty-row">No teaching staff found.</td></tr>';
+        return;
     }
+
+    tbody.innerHTML = filtered.map(t => {
+        const isPaid = (t.salaryHistory || []).some(h => h.monthKey === currentMonthKey);
+        const advance = getTotalAdvance(t.id);
+        const absenceFine = Number(t.fines) || 0;
+        const absentDays  = Number(t.absentDaysThisMonth) || 0;
+        const basicSalary = Number(t.salary) || 0;
+        const fineLabel = absenceFine > 0
+            ? `<span style="color:#ef4444;font-weight:600;">− RS ${absenceFine.toLocaleString()}</span><span style="font-size:10px;color:var(--text-secondary);display:block;">${absentDays}d absent</span>`
+            : `<span style="color:var(--text-secondary);font-size:12px;">None</span>`;
+        return `
+            <tr class="salary-row-clickable" onclick="showSalaryBreakdown('${t.id}', 'Teaching')" title="Click to view salary breakdown">
+                <td class="teacher-id-cell">${t.id}</td>
+                <td>
+                    <div style="font-weight:600;">${t.name}</div>
+                    <div style="font-size:11px; color:var(--text-secondary);">${t.classes ? 'Class ' + t.classes : ''}</div>
+                </td>
+                <td>${t.subjects || 'Teacher'}</td>
+                <td><strong>RS ${basicSalary.toLocaleString()}</strong></td>
+                <td>${fineLabel}</td>
+                <td><strong style="color:#eab308;">RS ${advance.toLocaleString()}</strong></td>
+                <td>
+                    <span class="status-badge ${isPaid ? 'status-paid' : 'status-pending'}">
+                        <i class="fas ${isPaid ? 'fa-check-circle' : 'fa-clock'}"></i>
+                        ${isPaid ? 'Paid' : 'Pending'}
+                    </span>
+                </td>
+            </tr>
+        `;
+    }).join('');
 }
 
 function filterTeachingSalaries() {
@@ -3688,11 +3782,30 @@ function studentStatusLabel(s) {
  */
 function computeOutstandingArrears(student) {
     const studentId = student.regNo || student.id;
+
+    // BUGFIX — "newly added student already shows arrears": with no
+    // identifier yet there is nothing safe to look up (an empty/undefined
+    // studentId as a string, "undefined", could accidentally match another
+    // broken record), so bail out to 0 rather than risk a false match.
+    if (!studentId) return 0;
+
     const currentMonthKey = getCurrentMonthKey();
     const payments = student.feePayments || [];
 
     const priorRecords = getGeneratedVouchers()
-        .filter(r => String(r.studentId) === String(studentId) && r.monthKey !== currentMonthKey)
+        .filter(r => String(r.studentId) === String(studentId)
+                   && r.monthKey !== currentMonthKey
+                   // BUGFIX — "recently added student already shows arrears":
+                   // regNo/id values get reused (e.g. after an old/dropped
+                   // student is removed, a brand-new admission can be handed
+                   // the same identifier). Matching by ID alone let a new
+                   // student silently inherit a completely unrelated,
+                   // possibly-old student's unpaid balance. Every saved
+                   // record also carries the student's name at the time it
+                   // was generated, so require that to match too — a record
+                   // only counts as this student's own history if both the
+                   // ID *and* the name line up.
+                   && (!r.studentName || r.studentName === student.fullName))
         .sort((a, b) => a.monthKey.localeCompare(b.monthKey));
 
     if (priorRecords.length === 0) return 0;
@@ -4113,7 +4226,12 @@ function showPrintClassPicker() {
     const classes = getAllClassNames();
     const list = document.getElementById('pv-class-list');
     list.innerHTML = classes.map(name => {
-        const count = JSON.parse(localStorage.getItem('edu_students') || '[]').filter(s => s.studentClass === name).length;
+        // Only count billable (active) students — dropped-out/graduated/
+        // suspended students never get a voucher printed, so they shouldn't
+        // be counted here either.
+        const count = JSON.parse(localStorage.getItem('edu_students') || '[]')
+            .filter(s => s.studentClass === name)
+            .filter(isStudentBillable).length;
         return `<button type="button" class="pv-list-item" onclick="printClassVouchers('${escapeForAttr(name)}')">
                     <span>${escapeHtml(name)}</span>
                     <span class="pv-list-item-count">${count} student${count === 1 ? '' : 's'}</span>
@@ -4135,7 +4253,10 @@ function filterPrintStudentResults() {
     const results = document.getElementById('pv-student-results');
     if (!q) { results.innerHTML = '<p class="pv-empty">Start typing to search…</p>'; return; }
 
-    const students = JSON.parse(localStorage.getItem('edu_students') || '[]');
+    // Only search active/billable students — dropped-out, graduated, or
+    // suspended students should never surface here, since selecting one
+    // would print/generate a voucher for a student who shouldn't get one.
+    const students = JSON.parse(localStorage.getItem('edu_students') || '[]').filter(isStudentBillable);
     const matches = students.filter(s => {
         const name = (s.fullName || '').toLowerCase();
         const id = (s.regNo || s.id || '').toLowerCase();
@@ -4150,38 +4271,265 @@ function filterPrintStudentResults() {
     `).join('') : '<p class="pv-empty">No matching students.</p>';
 }
 
-/** Renders one or more students' vouchers into the hidden print area and triggers print. */
-function printStudentsSequentially(students, emptyMessage) {
+/* ============================================================
+   SIBLING DETECTION & FAMILY VOUCHER
+   ------------------------------------------------------------
+   Whenever two or more billable students share the same guardian,
+   they can be printed as ONE combined "Family Voucher" instead of
+   one voucher per child. This is an option (see the "Combine
+   siblings" toggle in the Print Vouchers modal) — students without
+   a matching sibling always print exactly as before.
+   ============================================================ */
+
+/** Normalizes a student's guardian name into a comparable key. Returns
+ *  null when there's no usable guardian name (so that student is never
+ *  grouped with anyone by accident). */
+function _familyKey(s) {
+    const name = (s.guardianName || '').trim().toLowerCase();
+    if (!name || name === '-' || name === 'n/a' || name === 'na') return null;
+    return name;
+}
+
+/** Whether the "Combine siblings into one Family Voucher" toggle is on.
+ *  Defaults to true if the toggle isn't present in the DOM (e.g. called
+ *  from outside the Print Vouchers modal). */
+function _pvCombineSiblingsEnabled() {
+    const el = document.getElementById('pv-combine-siblings');
+    return el ? !!el.checked : true;
+}
+
+/** Groups a flat student list into print "units" — each unit is either
+ *  { type: 'single', students: [s] } or, when 2+ students share a
+ *  guardian AND combineSiblings is true, { type: 'family', students: [...] }.
+ *  Order is preserved: a family unit sits at the position of the first
+ *  sibling encountered. */
+function groupStudentsForPrinting(students, combineSiblings) {
+    if (!combineSiblings) return students.map(s => ({ type: 'single', students: [s] }));
+
+    const unitByKey = new Map();
+    const units = [];
+
+    students.forEach(s => {
+        const key = _familyKey(s);
+        if (!key) {
+            units.push({ type: 'single', students: [s] });
+            return;
+        }
+        if (unitByKey.has(key)) {
+            const unit = unitByKey.get(key);
+            unit.students.push(s);
+            unit.type = 'family';
+        } else {
+            const unit = { type: 'single', students: [s] };
+            unitByKey.set(key, unit);
+            units.push(unit);
+        }
+    });
+
+    return units;
+}
+
+/** Builds one combined "Family Voucher" — same visual language and layout
+ *  as the standard voucher (school-branded header, meta row, dashed
+ *  School/Student copies, signature footer) but with a per-child fee
+ *  breakdown for every sibling and a single grand-total due for the
+ *  whole family. */
+function buildFamilyVoucherHTML(studentsGroup) {
+    const today = new Date();
+    const dateStr = today.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+    const guardianName = studentsGroup[0].guardianName || 'Guardian';
+    const famTag = (guardianName || 'FAM').replace(/[^a-zA-Z0-9]/g, '').toUpperCase().slice(0, 6) || 'FAM';
+    const challanNo = `FV-${famTag}-${today.getFullYear()}${String(today.getMonth() + 1).padStart(2, '0')}`;
+
+    const breakdowns = studentsGroup.map(s => ({ student: s, f: computeFeeBreakdown(s) }));
+    const dueDateStr = breakdowns[0].f.dueDateStr;
+    const expiryDateStr = breakdowns[0].f.expiryDateStr;
+    const lateFeeEnabled = breakdowns.some(b => b.f.lateFineEnabled);
+
+    const grandTotal = breakdowns.reduce((sum, b) => sum + b.f.voucherTotal, 0);
+    const grandTotalLate = breakdowns.reduce((sum, b) => sum + b.f.totalAfterDueDate, 0);
+
+    const classesList = [...new Set(studentsGroup.map(s => s.studentClass || '-'))].join(', ');
+
+    const childBlocksHTML = breakdowns.map(({ student: s, f }, idx) => {
+        let rowsHTML;
+        if (f.isCustom && Array.isArray(f.customRows)) {
+            rowsHTML = f.customRows.map(r => {
+                const amt = Number(r.amount) || 0;
+                const disc = Number(r.discount) || 0;
+                const net = Math.max(0, amt - disc);
+                return `<tr><td>${escapeHtml(r.description || 'Fee')}</td><td>${escapeHtml(r.period || '-')}</td><td>Rs. ${net.toLocaleString()}</td></tr>`;
+            }).join('');
+            if (f.bulkDiscount > 0) {
+                rowsHTML += `<tr class="voucher-row-discount"><td style="padding-left:20px;">- Bulk Discount</td><td>Concession</td><td>- Rs. ${f.bulkDiscount.toLocaleString()}</td></tr>`;
+            }
+        } else {
+            rowsHTML = `
+                ${f.tuitionFee > 0 ? `<tr><td>Tuition Fee</td><td>${f.monthLabel}</td><td>Rs. ${f.tuitionFee.toLocaleString()}</td></tr>` : ''}
+                ${f.transportFee > 0 ? `<tr><td>Transportation Fee</td><td>${f.monthLabel}</td><td>Rs. ${f.transportFee.toLocaleString()}</td></tr>` : ''}
+                ${f.otherFee > 0 ? `<tr><td>Other Charges</td><td>-</td><td>Rs. ${f.otherFee.toLocaleString()}</td></tr>` : ''}
+            `;
+        }
+
+        if (f.fineAmount > 0) {
+            rowsHTML += `<tr style="color:#dc2626;"><td><strong>Fine / Penalty</strong></td><td>${escapeHtml(s.backendFineReason || 'Disciplinary')}</td><td>Rs. ${f.fineAmount.toLocaleString()}</td></tr>`;
+        }
+        if (f.monthlyFineTotal > 0) {
+            rowsHTML += `<tr style="color:#dc2626;"><td>Disciplinary Fines</td><td>${escapeHtml(f.fineDetails || '')}</td><td>Rs. ${f.monthlyFineTotal.toLocaleString()}</td></tr>`;
+        }
+        if (f.activeDiscounts.length > 0) {
+            f.activeDiscounts.forEach(d => {
+                rowsHTML += `<tr class="voucher-row-discount"><td style="padding-left:20px;">- ${d.label}</td><td>Concession</td><td>- Rs. ${d.amount.toLocaleString()}</td></tr>`;
+            });
+        }
+        if (f.arrears > 0) {
+            rowsHTML += `<tr class="voucher-row-arrears"><td><strong>Previous Arrears</strong></td><td>Balance B/F</td><td>Rs. ${f.arrears.toLocaleString()}</td></tr>`;
+        }
+
+        return `
+            <div class="voucher-child-block">
+                <div class="voucher-child-header">
+                    <span class="voucher-child-index">${idx + 1}</span>
+                    <div class="voucher-child-info">
+                        <strong>${escapeHtml(s.fullName || s.name || '')}</strong>
+                        <span>${escapeHtml(f.regNo)} &middot; Class ${escapeHtml(s.studentClass || '-')}</span>
+                    </div>
+                    <div class="voucher-child-subtotal">Rs. ${f.voucherTotal.toLocaleString()}</div>
+                </div>
+                <table class="voucher-fee-table voucher-child-table">
+                    <thead><tr><th>Description</th><th>Period</th><th>Amount</th></tr></thead>
+                    <tbody>${rowsHTML}</tbody>
+                </table>
+            </div>
+        `;
+    }).join('');
+
+    const copy = (label) => `
+        <div class="voucher-copy voucher-copy-family">
+            <div class="voucher-copy-tag ${label === 'School Copy' ? 'tag-blue' : 'tag-green'}">${label}</div>
+            <div class="voucher-family-badge"><i class="fas fa-users"></i> Family Voucher &middot; ${studentsGroup.length} Children</div>
+            <div class="voucher-header">
+                <div class="voucher-school-info">
+                    ${voucherLogoHtml()}
+                    <div>
+                        <h2>${escapeHtml(getSchoolIdentity().name)}</h2>
+                        <p>Financial Control Center &middot; Combined Family Fee Voucher</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="voucher-meta-row">
+                <div><span>Challan No.</span><strong>${challanNo}</strong></div>
+                <div><span>Issue Date</span><strong>${dateStr}</strong></div>
+                <div><span>Due Date</span><strong>${dueDateStr}</strong></div>
+                <div><span>Expiry Date</span><strong>${expiryDateStr}</strong></div>
+            </div>
+
+            <div class="voucher-divider"></div>
+
+            <div class="voucher-student-grid">
+                <div><span>Guardian / Father Name</span><strong>${escapeHtml(guardianName)}</strong></div>
+                <div><span>Children Enrolled</span><strong>${studentsGroup.length} Students &middot; ${escapeHtml(classesList)}</strong></div>
+            </div>
+
+            <div class="voucher-children-summary">
+                ${childBlocksHTML}
+            </div>
+
+            <table class="voucher-fee-table voucher-family-total-table">
+                <tfoot>
+                    <tr class="voucher-total-row voucher-total-ontime">
+                        <td colspan="2"><i class="fas fa-wallet"></i> TOTAL FAMILY PAYABLE (on or before ${dueDateStr})</td>
+                        <td>Rs. ${grandTotal.toLocaleString()}</td>
+                    </tr>
+                    ${lateFeeEnabled ? `
+                    <tr class="voucher-total-row voucher-total-late">
+                        <td colspan="2"><i class="fas fa-exclamation-triangle"></i> Payable After Due Date</td>
+                        <td>Rs. ${grandTotalLate.toLocaleString()}</td>
+                    </tr>` : ''}
+                </tfoot>
+            </table>
+
+            <div class="voucher-footer">
+                <div class="voucher-note"><i class="fas fa-info-circle"></i> This voucher combines fees for all children of the above guardian. Please clear dues by the due date to avoid late fees.</div>
+                <div class="voucher-signature">
+                    <div class="sig-line"></div>
+                    <span>Principal / Accounts</span>
+                </div>
+            </div>
+        </div>
+    `;
+
+    return `<div class="voucher-sheet voucher-sheet-family">${copy('School Copy')}${copy('Student Copy')}</div>`;
+}
+
+/** Renders one or more students' vouchers into the hidden print area and triggers print.
+ *  When combineSiblings is true (the default), students who share a guardian are
+ *  merged into a single Family Voucher; everyone else prints exactly as before. */
+function printStudentsSequentially(students, emptyMessage, combineSiblings) {
     if (students.length === 0) {
         showFinanceToast(emptyMessage || 'No students to print.', 'info');
         return;
     }
+    if (combineSiblings === undefined) combineSiblings = _pvCombineSiblingsEnabled();
+
+    const units = groupStudentsForPrinting(students, combineSiblings);
     const printArea = document.getElementById('voucher-print-area');
-    printArea.innerHTML = students.map(s => buildVoucherHTML(s)).join('<div class="print-page-break"></div>');
+    printArea.innerHTML = units
+        .map(u => (u.type === 'family' && u.students.length > 1) ? buildFamilyVoucherHTML(u.students) : buildVoucherHTML(u.students[0]))
+        .join('<div class="print-page-break"></div>');
     closePrintVouchersModal();
-    showFinanceToast(`Preparing ${students.length} voucher${students.length === 1 ? '' : 's'} for print…`, 'info');
+
+    const familyCount = units.filter(u => u.type === 'family' && u.students.length > 1).length;
+    const singleCount = units.length - familyCount;
+    const msg = familyCount > 0
+        ? `Preparing ${singleCount} voucher${singleCount === 1 ? '' : 's'} + ${familyCount} family voucher${familyCount === 1 ? '' : 's'} for print…`
+        : `Preparing ${units.length} voucher${units.length === 1 ? '' : 's'} for print…`;
+    showFinanceToast(msg, 'info');
     setTimeout(() => window.print(), 200);
 }
 
 function printAllVouchers() {
+    const combineSiblings = _pvCombineSiblingsEnabled();
     const students = JSON.parse(localStorage.getItem('edu_students') || '[]').filter(isStudentBillable);
     // Sequential by class, then by name, for a predictable print order.
     students.sort((a, b) => (a.studentClass || '').localeCompare(b.studentClass || '') || (a.fullName || '').localeCompare(b.fullName || ''));
-    printStudentsSequentially(students, 'No active students found to print.');
+    printStudentsSequentially(students, 'No active students found to print.', combineSiblings);
 }
 
 function printClassVouchers(className) {
+    const combineSiblings = _pvCombineSiblingsEnabled();
     const students = JSON.parse(localStorage.getItem('edu_students') || '[]')
         .filter(s => s.studentClass === className)
         .filter(isStudentBillable);
-    printStudentsSequentially(students, `No active students found in ${className}.`);
+    printStudentsSequentially(students, `No active students found in ${className}.`, combineSiblings);
 }
 
 function printStudentVoucher(studentId, fullName) {
+    const combineSiblings = _pvCombineSiblingsEnabled();
     const students = JSON.parse(localStorage.getItem('edu_students') || '[]');
     const student = findStudentExact(students, studentId, fullName);
     if (!student) { showFinanceToast('Student not found.', 'error'); return; }
-    printStudentsSequentially([student]);
+
+    // BUGFIX — a dropped-out/graduated/suspended student reached via the
+    // Print Vouchers search could still have a voucher printed/generated
+    // for them. Block it here the same way handleGenerateSingleVoucher does.
+    if (!isStudentBillable(student)) {
+        showFinanceToast(`Cannot print a voucher — student is ${studentStatusLabel(student).toLowerCase()}.`, 'error');
+        return;
+    }
+
+    if (combineSiblings) {
+        const key = _familyKey(student);
+        if (key) {
+            const siblings = students.filter(s => isStudentBillable(s) && _familyKey(s) === key);
+            if (siblings.length > 1) {
+                printStudentsSequentially(siblings, '', true);
+                return;
+            }
+        }
+    }
+    printStudentsSequentially([student], '', false);
 }
 
 window.openPrintVouchersModal = openPrintVouchersModal;
@@ -4607,8 +4955,8 @@ function _buildCustomFeeVoucherHTML(fee, rec) {
             <div class="voucher-copy-tag ${label === 'School Copy' ? 'tag-blue' : 'tag-green'}">${label}</div>
             <div class="voucher-header">
                 <div class="voucher-school-info">
-                    <div class="voucher-logo"><i class="fas fa-graduation-cap"></i></div>
-                    <div><h2>ST. LAWRENCE INTERNATIONAL SCHOOL</h2><p>Financial Control Center &middot; Custom Fee Voucher</p></div>
+                    ${voucherLogoHtml()}
+                    <div><h2>${_escHtml(getSchoolIdentity().name)}</h2><p>Financial Control Center &middot; Custom Fee Voucher</p></div>
                 </div>
             </div>
             <div class="voucher-meta-row" style="grid-template-columns: repeat(${dueDateRow ? 4 : 3}, 1fr);">

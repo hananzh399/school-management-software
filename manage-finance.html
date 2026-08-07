@@ -51,7 +51,7 @@
             <div class="header-left">
                 <button id="open-sidebar" class="menu-toggle" aria-label="Open sidebar"><i class="fas fa-bars"></i></button>
                 <div class="school-branding">
-                    <h1 class="school-name">ST. LAWRENCE INTERNATIONAL SCHOOL</h1>
+                    <h1 class="school-name" id="header-school-name">YOUR SCHOOL NAME HERE</h1>
                 </div>
             </div>
             <div class="header-right">
@@ -1247,6 +1247,16 @@
                     <button class="afm-close-btn" onclick="closePrintVouchersModal()"><i class="fas fa-times"></i></button>
                 </div>
                 <div class="voucher-modal-scroll pv-scroll">
+
+                    <!-- Sibling detection toggle — persists across all steps below -->
+                    <label class="pv-sibling-toggle" for="pv-combine-siblings">
+                        <input type="checkbox" id="pv-combine-siblings" checked>
+                        <span class="pv-sibling-toggle-box"><i class="fas fa-check"></i></span>
+                        <span class="pv-sibling-toggle-text">
+                            <strong><i class="fas fa-users"></i> Combine siblings into one Family Voucher</strong>
+                            <span>When children share the same guardian, print a single combined bill instead of separate ones.</span>
+                        </span>
+                    </label>
 
                     <!-- Step 1: choose a mode -->
                     <div id="pv-mode-select">
