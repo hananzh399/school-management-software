@@ -12,6 +12,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script src="shared-data.js"></script>
+    <script src="access-control.js"></script>
 </head>
 <body>
     <aside id="sidebar" class="sidebar">
@@ -302,7 +303,7 @@
                             <i class="fas fa-user-slash"></i>
                         </div>
                         <h3 class="card-title">Dropped Out Students</h3>
-                        <p class="card-description">View dropped-out students.</p>
+                        <p class="card-description">View or reactivate dropped-out students.</p>
                     </div>
                 </div>
             </div>
@@ -381,7 +382,7 @@
                         <thead>
                             <tr>
                                 <th>#</th><th>Student ID</th><th>Name</th><th>Guardian</th>
-                                <th>Class</th><th>Section</th><th>Date Removed</th><th class="text-center">View</th>
+                                <th>Class</th><th>Section</th><th>Date Removed</th><th class="text-center">Actions</th>
                             </tr>
                         </thead>
                         <tbody id="archive-drop-tbody"><!-- Populated by JS --></tbody>
@@ -904,7 +905,8 @@
                 <button class="btn-ghost profile-close-action" onclick="closeModal('profile-modal')"><i class="fas fa-times"></i> Close</button>
                 <div class="profile-action-btns">
                     <button class="btn-share-profile" id="profile-share-btn" onclick="shareCurrentProfile()"><i class="fas fa-share-nodes"></i> Share</button>
-                    <button class="btn-print-profile" onclick="window.print()"><i class="fas fa-print"></i> Print Record</button>
+                    <button class="btn-print-profile" onclick="printCurrentStudentRecord()"><i class="fas fa-print"></i> Print Record</button>
+                    <button class="btn-print-admission" onclick="printCurrentAdmissionForm()"><i class="fas fa-file-signature"></i> Print Admission Form</button>
                 </div>
             </div>
         </div>
