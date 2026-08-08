@@ -159,6 +159,26 @@ function getSchoolPrefix() {
 }
 const SYSTEM_PREFIX = getSchoolPrefix();
 
+/**
+ * Read the logged-in school's logo (Base64 data URL, set in Super Admin →
+ * school → "School logo") for use in print-ready documents that build their
+ * own standalone HTML (Admission Form, Student Record, Student List Report).
+ * These pages open in a brand-new window via window.open()/document.write(),
+ * so they can't rely on the .school-branding logo already injected into the
+ * live page by access-control.js — each one needs its own copy of the URL.
+ * Returns '' when no school is logged in / no logo was uploaded, so callers
+ * can fall back to the default icon crest.
+ */
+function getSchoolLogoUrl() {
+    try {
+        if (window.SoftSchoolAdmin) {
+            const school = window.SoftSchoolAdmin.getCurrentSchool();
+            if (school && school.logo) return school.logo;
+        }
+    } catch (e) { /* ignore — fall back to icon */ }
+    return '';
+}
+
 /** Escape a string for safe use inside a RegExp (prefix may contain odd chars). */
 function escapeRegExp(str) {
     return String(str).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -1267,6 +1287,8 @@ if (certUploadInput) {
     // System Data
     const schoolEl = document.querySelector('.school-name');
     const schoolName = schoolEl ? schoolEl.textContent.trim() : 'ST. LAWRENCE INTERNATIONAL SCHOOL';
+    const schoolLogoUrl = getSchoolLogoUrl();
+    const crestInner = schoolLogoUrl ? `<img src="${esc(schoolLogoUrl)}" alt="School Logo">` : `<i class="fas fa-graduation-cap"></i>`;
     const academicSession = getCurrentAcademicSession(); // Uses the helper in your JS
     const printedOn = new Date().toLocaleDateString('en-US', {
         day: '2-digit', month: 'short', year: 'numeric'
@@ -1281,8 +1303,71 @@ if (certUploadInput) {
     const dateOfBirth = studentData.dob ? new Date(studentData.dob).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
     const admissionDate = studentData.admissionDate ? new Date(studentData.admissionDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
 
+    // ── Fee & Transport figures (formatted, blank-safe) ──
+    const fmtRs = (v) => (v === undefined || v === null || v === '') ? '—' : ('Rs. ' + Number(v).toLocaleString('en-PK'));
+    const transportMode = studentData.transportMode || 'Private (Self)';
+    const transportType = studentData.transportType && studentData.transportType !== 'None' ? studentData.transportType : 'N/A';
+    const totalDiscount = [studentData.tuitionDiscount, studentData.transportDiscount, studentData.siblingDiscount]
+        .map(v => Number(v) || 0).reduce((a, b) => a + b, 0);
+
+    // ── Siblings section (only rendered when the student has a sibling link) ──
+    // Two independent signals, same as the on-screen Profile view:
+    //   • studentData.isSibling / .siblingOf / .siblingGroupId — this student IS a
+    //     sibling of one or more names already in the system (reverse-lookup string).
+    //   • studentData.hasSiblings — {name, regNo}[] of the other student(s) in the
+    //     same sibling group; looked up against the live DB for current class/section.
+    const siblingList = Array.isArray(studentData.hasSiblings) ? studentData.hasSiblings : [];
+    const isSiblingLinked = !!(studentData.isSibling && studentData.siblingOf);
+    let siblingsSectionHtml = '';
+    if (siblingList.length > 0 || isSiblingLinked) {
+        let fullDb = [];
+        try { fullDb = getDatabase(); } catch (e) { fullDb = []; }
+
+        const siblingOfNoticeHtml = isSiblingLinked ? `
+            <div class="sibling-of-notice">
+                <i class="fas fa-user-friends"></i>
+                <span>This student is a <strong>sibling of ${esc(studentData.siblingOf)}</strong>${studentData.siblingGroupId ? ` &nbsp;·&nbsp; Sibling Group ID: <strong>${esc(studentData.siblingGroupId)}</strong>` : ''}</span>
+            </div>` : '';
+
+        const siblingRowsHtml = siblingList.map(sib => {
+            const matched = fullDb.find(s => s.regNo === sib.regNo || s.id === sib.regNo) || null;
+            const sibClass   = matched && matched.studentClass ? matched.studentClass : '—';
+            const sibSection = matched && matched.section      ? matched.section      : '—';
+            return `
+                    <tr>
+                        <td>${esc(sib.regNo || '—')}</td>
+                        <td>${esc(sib.name || '—')}</td>
+                        <td>${esc(sibClass)}</td>
+                        <td>${esc(sibSection)}</td>
+                    </tr>`;
+        }).join('');
+
+        const siblingTableHtml = siblingList.length > 0 ? `
+            <table class="sibling-table" ${isSiblingLinked ? 'style="margin-top:9px;"' : ''}>
+                <thead>
+                    <tr>
+                        <th>Reg. No.</th>
+                        <th>Full Name</th>
+                        <th>Class</th>
+                        <th>Section</th>
+                    </tr>
+                </thead>
+                <tbody>${siblingRowsHtml}
+                </tbody>
+            </table>` : '';
+
+        siblingsSectionHtml = `
+        <section class="section">
+            <div class="section-label"><span class="num">5</span><span class="txt">Sibling Information</span></div>
+            ${siblingOfNoticeHtml}
+            ${siblingTableHtml}
+        </section>`;
+    }
+
+    const safeFileName = (studentData.fullName || 'student').replace(/[^a-z0-9]+/gi, '_');
+
     const printWin = window.open('', '_blank', 'width=1000,height=1000');
-    
+
     printWin.document.write(`
 <!DOCTYPE html>
 <html lang="en">
@@ -1290,52 +1375,110 @@ if (certUploadInput) {
     <meta charset="UTF-8">
     <title>Admission Form — ${esc(studentData.fullName)}</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Roboto+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <style>
+        @page { size: A4; margin: 0; }
         :root {
             --ink-900:#0f172a; --ink-700:#1e293b; --ink-500:#475569; --ink-400:#64748b;
             --line:#e2e8f0; --line-strong:#cbd5e1; --surface:#ffffff; --surface-tint:#f8fafc;
-            --accent:#1e3a5f; --gold:#a97c1f;
+            --steel:#4682b4; --steel-dark:#2c5c80; --steel-deep:#1f4a6b; --steel-light:#eaf3fa; --steel-line:#bcd7ea;
+            --accent:#2c5c80; --gold:#a97c1f;
         }
         * { box-sizing:border-box; margin:0; padding:0; }
-        body { font-family:'Inter', sans-serif; color:var(--ink-700); background: #fff; }
-        .page { width:210mm; min-height:297mm; padding:11mm 12mm; position:relative; margin: auto; }
-        .doc-header { display:flex; align-items:flex-start; justify-content:space-between; padding-bottom:6px; }
-        .crest { width:44px; height:44px; border-radius:50%; border:1.6px solid var(--gold); display:flex; align-items:center; justify-content:center; color:var(--gold); font-size:9px; font-weight:600; background:radial-gradient(circle at 35% 30%, #fffdf6, #f3ede0 70%); }
-        .school-name-title { font-size:19px; font-weight:800; color:var(--ink-900); }
-        .school-sub { font-size:9px; color:var(--ink-400); text-transform:uppercase; margin-top:2px; }
-        .meta-badge { text-align:right; border:1px solid var(--line); padding:5px 10px; border-radius:4px; background:var(--surface-tint); }
-        .meta-label { font-size:7.5px; text-transform:uppercase; color:var(--ink-400); font-weight:600; display:block; }
-        .meta-value { font-family:'Roboto Mono', monospace; font-size:10px; }
-        .title-bar { margin-top:10px; padding:9px 0; border-top:2px solid var(--ink-900); border-bottom:1px solid var(--line-strong); text-align:center; }
-        .title-bar h1 { font-size:16px; letter-spacing:2.5px; font-weight:800; text-transform:uppercase; }
-        .section { margin-top:13px; }
-        .section-label { display:flex; align-items:center; gap:8px; margin-bottom:7px; }
-        .section-label .num { width:17px; height:17px; border-radius:3px; background:var(--ink-900); color:#fff; font-size:9.5px; font-weight:700; display:flex; align-items:center; justify-content:center; }
-        .section-label .txt { font-size:10px; font-weight:700; letter-spacing:1.2px; text-transform:uppercase; }
-        .section-label::after { content:""; flex:1; height:1px; background:var(--line); }
-        .profile-grid { display:grid; grid-template-columns:1fr 120px; gap:16px; }
-        .field-grid { display:grid; grid-template-columns:1fr 1fr 1fr; column-gap:16px; row-gap:9px; }
+        html, body { width:210mm; }
+        body { font-family:'Inter', sans-serif; color:var(--ink-700); background:#dce8f0; }
+
+        /* ── On-screen toolbar (hidden on print / capture) ── */
+        .toolbar { position:sticky; top:0; z-index:20; display:flex; align-items:center; justify-content:center; gap:10px;
+            padding:12px 16px; background:#0f172a; box-shadow:0 2px 10px rgba(0,0,0,.25); }
+        .toolbar-hint { color:#94a3b8; font-size:12px; margin-right:auto; padding-left:4px; }
+        .tb-btn { display:inline-flex; align-items:center; gap:7px; border:none; cursor:pointer; padding:9px 16px;
+            border-radius:7px; font-family:'Inter',sans-serif; font-weight:600; font-size:12.5px; transition:opacity .15s; }
+        .tb-btn:hover { opacity:.88; }
+        .tb-btn:disabled { opacity:.55; cursor:default; }
+        .tb-print { background:var(--steel); color:#fff; }
+        .tb-share { background:#25D366; color:#fff; }
+        .tb-close { background:#334155; color:#e2e8f0; }
+
+        .page-frame { width:210mm; min-height:297mm; margin:14px auto; padding:7mm; background:linear-gradient(160deg, var(--steel) 0%, var(--steel-dark) 55%, var(--steel-deep) 100%); border-radius:10px; display:flex; }
+        .page { width:100%; min-height:calc(297mm - 14mm); padding:10mm 12mm; position:relative; margin:0; background:#fff; border-radius:6px; box-shadow:0 1px 3px rgba(15,23,42,0.15); display:flex; flex-direction:column; }
+        .page::before { content:""; position:absolute; top:6px; left:6px; right:6px; bottom:6px; border:1px solid var(--steel-line); border-radius:4px; pointer-events:none; }
+        .corner { position:absolute; width:20px; height:20px; pointer-events:none; }
+        .corner-tl { top:12px; left:12px; border-top:2.2px solid var(--gold); border-left:2.2px solid var(--gold); }
+        .corner-tr { top:12px; right:12px; border-top:2.2px solid var(--gold); border-right:2.2px solid var(--gold); }
+        .corner-bl { bottom:12px; left:12px; border-bottom:2.2px solid var(--gold); border-left:2.2px solid var(--gold); }
+        .corner-br { bottom:12px; right:12px; border-bottom:2.2px solid var(--gold); border-right:2.2px solid var(--gold); }
+        .watermark { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%) rotate(-32deg); font-size:70px; font-weight:800; letter-spacing:6px; color:var(--steel); opacity:0.045; text-transform:uppercase; white-space:nowrap; pointer-events:none; z-index:0; }
+        .doc-header, .title-bar, .section, .declaration, .doc-footer { position:relative; z-index:1; }
+        .doc-header { display:flex; align-items:flex-start; justify-content:space-between; padding-bottom:8px; border-bottom:1px solid var(--steel-line); }
+        .crest { width:46px; height:46px; border-radius:50%; flex-shrink:0; display:flex; align-items:center; justify-content:center; color:#fff; font-size:19px;
+            background:linear-gradient(135deg, var(--steel) 0%, var(--steel-deep) 100%); box-shadow:0 3px 10px rgba(31,74,107,0.4); border:1.6px solid var(--gold); }
+        .crest img { width:100%; height:100%; object-fit:cover; border-radius:50%; }
+        .school-name-title { font-size:18px; font-weight:800; color:var(--ink-900); line-height:1.15; }
+        .school-sub { font-size:9px; color:var(--steel-dark); text-transform:uppercase; margin-top:2px; letter-spacing:0.5px; }
+        .meta-badge { text-align:right; border:1px solid var(--steel-line); padding:5px 10px; border-radius:4px; background:var(--steel-light); }
+        .meta-label { font-size:7.5px; text-transform:uppercase; color:var(--steel-dark); font-weight:600; display:block; }
+        .meta-value { font-family:'Roboto Mono', monospace; font-size:10px; color:var(--ink-900); }
+        .title-bar { margin-top:10px; padding:8px 0; border-top:2.2px solid var(--steel); border-bottom:1px solid var(--steel-line); text-align:center; background:linear-gradient(180deg, var(--steel-light) 0%, #ffffff 100%); }
+        .title-bar h1 { font-size:15px; letter-spacing:2.5px; font-weight:800; text-transform:uppercase; color:var(--steel-deep); }
+        .section { margin-top:10px; }
+        .section-label { display:flex; align-items:center; gap:8px; margin-bottom:6px; }
+        .section-label .num { width:16px; height:16px; border-radius:3px; background:var(--steel-dark); color:#fff; font-size:9px; font-weight:700; display:flex; align-items:center; justify-content:center; }
+        .section-label .txt { font-size:9.5px; font-weight:700; letter-spacing:1.2px; text-transform:uppercase; color:var(--ink-900); }
+        .section-label::after { content:""; flex:1; height:1px; background:linear-gradient(90deg, var(--steel-line), transparent); }
+        .profile-grid { display:grid; grid-template-columns:1fr 108px; gap:14px; }
+        .field-grid { display:grid; grid-template-columns:1fr 1fr 1fr; column-gap:14px; row-gap:7px; }
         .field { display:flex; align-items:baseline; gap:5px; border-bottom:1px solid var(--line-strong); padding-bottom:2.5px; }
-        .f-label { font-size:7.3px; text-transform:uppercase; color:var(--ink-400); font-weight:700; white-space:nowrap; }
-        .f-value { font-size:10.5px; font-weight:500; color:var(--ink-900); }
-        .photo-box { width:120px; height:152px; border:1.4px dashed var(--line-strong); border-radius:3px; background:var(--surface-tint); display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; color:var(--ink-400); }
-        .panel { border:1px solid var(--line); border-radius:4px; padding:10px 14px; background: #fff; }
-        .panel-title { font-size:8.3px; font-weight:700; color:var(--accent); margin-bottom:8px; text-transform:uppercase; }
-        .row-3 { display:grid; grid-template-columns:repeat(3, 1fr); gap:16px; background:var(--surface-tint); border:1px solid var(--line); padding:9px 14px; border-radius:4px; }
-        .declaration { margin-top:14px; padding:12px 15px; border-left:3px solid var(--accent); background:var(--surface-tint); font-size:9px; font-style:italic; }
-        .doc-footer { margin-top:auto; padding-top:20px; }
-        .sign-row { display:grid; grid-template-columns:1fr 1fr; gap:40px; margin-top:30px; }
+        .f-label { font-size:7.2px; text-transform:uppercase; color:var(--ink-400); font-weight:700; white-space:nowrap; }
+        .f-value { font-size:10px; font-weight:500; color:var(--ink-900); }
+        .photo-box { width:108px; height:132px; border:1.4px dashed var(--steel-line); border-radius:3px; background:var(--steel-light); display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; color:var(--steel-dark); }
+        .panel { border:1px solid var(--steel-line); border-radius:4px; padding:8px 12px; background:#fff; }
+        .panel-title { font-size:8px; font-weight:700; color:var(--accent); margin-bottom:6px; text-transform:uppercase; padding-bottom:4px; border-bottom:1px solid var(--line); }
+        .row-3 { display:grid; grid-template-columns:repeat(3, 1fr); gap:14px; background:var(--steel-light); border:1px solid var(--steel-line); padding:8px 14px; border-radius:4px; }
+        .row-4 { display:grid; grid-template-columns:repeat(4, 1fr); gap:12px; background:var(--steel-light); border:1px solid var(--steel-line); padding:8px 14px; border-radius:4px; }
+        .fee-summary-row { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-top:7px; padding:7px 12px; background:var(--surface-tint); border:1px dashed var(--steel-line); border-radius:4px; }
+        .fee-summary-row .net-label { font-size:8.5px; font-weight:700; text-transform:uppercase; color:var(--steel-dark); }
+        .fee-summary-row .net-value { font-family:'Roboto Mono', monospace; font-size:13px; font-weight:700; color:var(--accent); }
+        .sibling-table { width:100%; border-collapse:collapse; border:1px solid var(--steel-line); border-radius:4px; overflow:hidden; }
+        .sibling-table th, .sibling-table td { border:1px solid var(--steel-line); padding:5px 10px; text-align:left; }
+        .sibling-table th { background:var(--steel-light); font-size:7.6px; text-transform:uppercase; letter-spacing:0.6px; color:var(--steel-dark); font-weight:700; }
+        .sibling-table td { font-size:9.5px; color:var(--ink-900); font-weight:500; }
+        .sibling-table tbody tr:nth-child(even) { background:var(--surface-tint); }
+        .sibling-of-notice { display:flex; align-items:center; gap:8px; font-size:9.2px; font-weight:500; color:var(--ink-900); background:var(--steel-light); border:1px solid var(--steel-line); border-left:3px solid var(--gold); border-radius:0 4px 4px 0; padding:7px 12px; }
+        .sibling-of-notice i { color:var(--gold); font-size:11px; }
+        .declaration { margin-top:11px; padding:9px 14px; border-left:3px solid var(--steel); background:var(--steel-light); font-size:8.5px; font-style:italic; border-radius:0 4px 4px 0; }
+        .doc-footer { margin-top:auto; padding-top:14px; }
+        .sign-row { display:grid; grid-template-columns:1fr 1fr; gap:40px; margin-top:22px; }
         .sign-block { text-align:center; }
-        .sign-line { border-bottom:1.4px dotted var(--ink-400); height:30px; }
-        .sign-label { font-size:8.5px; font-weight:600; text-transform:uppercase; margin-top:5px; }
-        @media print { .page { width:100%; min-height:0; padding:0; margin:0; } }
+        .sign-line { border-bottom:1.4px dotted var(--ink-400); height:26px; }
+        .sign-label { font-size:8.3px; font-weight:600; text-transform:uppercase; margin-top:5px; color:var(--steel-dark); }
+        @media print {
+            .toolbar { display:none !important; }
+            html, body { width:210mm; height:297mm; background:#fff; }
+            body { -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+            .page-frame { width:210mm; height:297mm; min-height:297mm; padding:4mm; margin:0; border-radius:0; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+            .page { height:100%; min-height:0; box-shadow:none; border-radius:2px; }
+        }
     </style>
 </head>
 <body>
+    <div class="toolbar no-print">
+        <span class="toolbar-hint"><i class="fas fa-circle-info"></i> Review the form below, then print or share it.</span>
+        <button class="tb-btn tb-print" onclick="window.print()"><i class="fas fa-print"></i> Print</button>
+        <button class="tb-btn tb-share" id="admShareBtn" onclick="shareAdmissionForm()"><i class="fab fa-whatsapp"></i> Share on WhatsApp</button>
+        <button class="tb-btn tb-close" onclick="window.close()"><i class="fas fa-times"></i> Close</button>
+    </div>
+    <div class="page-frame" id="admPageFrame">
     <div class="page">
+        <div class="corner corner-tl"></div>
+        <div class="corner corner-tr"></div>
+        <div class="corner corner-bl"></div>
+        <div class="corner corner-br"></div>
+        <div class="watermark">${esc(schoolName).split(' ').slice(0,2).join(' ')}</div>
         <header class="doc-header">
             <div style="display:flex; gap:10px; align-items:center;">
-                <div class="crest">CREST</div>
+                <div class="crest">${crestInner}</div>
                 <div>
                     <div class="school-name-title">${esc(schoolName)}</div>
                     <div class="school-sub">Official Admission Record</div>
@@ -1380,6 +1523,14 @@ if (certUploadInput) {
                         <span class="f-label">DOB / Age:</span>
                         <span class="f-value">${dateOfBirth} | ${esc(studentData.age)}</span>
                     </div>
+                    <div class="field">
+                        <span class="f-label">Orphan Status:</span>
+                        <span class="f-value">${esc(studentData.orphanStatus || 'Not Orphan')}</span>
+                    </div>
+                    <div class="field" style="grid-column: span 2;">
+                        <span class="f-label">Medical Issues / Allergies:</span>
+                        <span class="f-value">${esc(studentData.medicalIssues || 'None')}</span>
+                    </div>
                 </div>
                 <div class="photo-box">
                     ${photoSrc ? `<img src="${photoSrc}" style="width:100%; height:100%; object-fit:cover;">` : '<div style="font-size:8px;">AFFIX PHOTO</div>'}
@@ -1398,20 +1549,36 @@ if (certUploadInput) {
 
         <section class="section">
             <div class="section-label"><span class="num">3</span><span class="txt">Guardian & Contact</span></div>
-            <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px;">
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:14px;">
                 <div class="panel">
                     <div class="panel-title">Guardian Details</div>
-                    <div class="field" style="margin-bottom:8px;"><span class="f-label">Name:</span><span class="f-value">${esc(studentData.guardianName)}</span></div>
-                    <div class="field" style="margin-bottom:8px;"><span class="f-label">Relation:</span><span class="f-value">${esc(studentData.guardianRole)}</span></div>
+                    <div class="field" style="margin-bottom:7px;"><span class="f-label">Name:</span><span class="f-value">${esc(studentData.guardianName)}</span></div>
+                    <div class="field" style="margin-bottom:7px;"><span class="f-label">Relation:</span><span class="f-value">${esc(studentData.guardianRole)}</span></div>
                     <div class="field"><span class="f-label">CNIC:</span><span class="f-value">${esc(studentData.guardianCnic)}</span></div>
                 </div>
                 <div class="panel">
                     <div class="panel-title">Contact Information</div>
-                    <div class="field" style="margin-bottom:8px;"><span class="f-label">Phones:</span><span class="f-value">${esc(studentData.phone1)} / ${esc(studentData.phone2)}</span></div>
-                    <div class="field" style="margin-bottom:8px;"><span class="f-label">Address:</span><span class="f-value" style="font-size:9px;">${esc(studentData.permanentAddress)}</span></div>
+                    <div class="field" style="margin-bottom:7px;"><span class="f-label">Phones:</span><span class="f-value">${esc(studentData.phone1)} / ${esc(studentData.phone2)}</span></div>
+                    <div class="field" style="margin-bottom:7px;"><span class="f-label">Permanent Address:</span><span class="f-value" style="font-size:9px;">${esc(studentData.permanentAddress)}</span></div>
+                    <div class="field"><span class="f-label">Mailing Address:</span><span class="f-value" style="font-size:9px;">${esc(studentData.mailingAddress || 'Same as permanent')}</span></div>
                 </div>
             </div>
         </section>
+
+        <section class="section">
+            <div class="section-label"><span class="num">4</span><span class="txt">Transport &amp; Fee Summary</span></div>
+            <div class="row-4">
+                <div class="field"><span class="f-label">Transport:</span><span class="f-value">${esc(transportMode)} (${esc(transportType)})</span></div>
+                <div class="field"><span class="f-label">Transport Fee:</span><span class="f-value">${fmtRs(studentData.transportFee)}</span></div>
+                <div class="field"><span class="f-label">Standard Tuition Fee:</span><span class="f-value">${fmtRs(studentData.standardFee)}</span></div>
+                <div class="field"><span class="f-label">Admission Fee:</span><span class="f-value">${fmtRs(studentData.admissionFee)}</span></div>
+            </div>
+            <div class="fee-summary-row">
+                <span class="net-label">Total Discounts Applied: <span style="font-family:'Roboto Mono',monospace; color:var(--ink-900); font-weight:700;">${fmtRs(totalDiscount)}</span>${studentData.isLifetime ? ' &nbsp;·&nbsp; Lifetime' : (studentData.discountExpiry ? ` &nbsp;·&nbsp; Valid Until ${esc(studentData.discountExpiry)}` : '')}</span>
+                <span class="net-label">Net Payable (First Month): <span class="net-value">${fmtRs(studentData.netPayable)}</span></span>
+            </div>
+        </section>
+        ${siblingsSectionHtml}
 
         <section class="declaration">
             <div style="font-weight:700; color:var(--accent); text-transform:uppercase; margin-bottom:5px; font-size:8.3px;">Guardian Declaration</div>
@@ -1425,12 +1592,647 @@ if (certUploadInput) {
             </div>
         </footer>
     </div>
+    </div>
+
+    <script>
+        async function shareAdmissionForm() {
+            const btn = document.getElementById('admShareBtn');
+            const oldHtml = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Preparing...';
+            try {
+                const target = document.getElementById('admPageFrame');
+                const canvas = await html2canvas(target, { scale: 2, backgroundColor: '#ffffff', useCORS: true });
+                const blob = await new Promise(res => canvas.toBlob(res, 'image/png'));
+                if (!blob) throw new Error('Capture failed');
+                const filename = 'Admission_Form_${esc(safeFileName)}.png';
+                const file = new File([blob], filename, { type: 'image/png' });
+
+                if (navigator.canShare && navigator.canShare({ files: [file] })) {
+                    await navigator.share({
+                        files: [file],
+                        title: 'Admission Form',
+                        text: 'Admission Form for ${esc(studentData.fullName || "")}'
+                    });
+                    return;
+                }
+
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url; a.download = filename; document.body.appendChild(a); a.click(); a.remove();
+                setTimeout(() => URL.revokeObjectURL(url), 4000);
+
+                const msg = encodeURIComponent('Admission Form for ${esc(studentData.fullName || "student")}.\\n(The form image has been downloaded — please attach "' + filename + '" in WhatsApp.)');
+                window.open('https://wa.me/?text=' + msg, '_blank');
+            } catch (err) {
+                console.error('Share failed', err);
+                alert('Sharing failed. The admission form image could not be generated.');
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = oldHtml;
+            }
+        }
+    <\/script>
 </body>
 </html>`);
     printWin.document.close();
     printWin.focus();
-    setTimeout(() => { printWin.print(); printWin.close(); }, 800);
 }
+
+    window.printAdmissionFormForStudent = function(regNo) {
+        const db = getDatabase();
+        const s = db.find(x => x.regNo === regNo) || db.find(x => x.id === regNo);
+        if (!s) {
+            showToast("Not Found", "Could not locate this student's record to print.", "danger");
+            return;
+        }
+        printAdmissionForm(s);
+    };
+
+    /**
+     * Build and open a print-ready, WhatsApp-shareable "Complete Student Record"
+     * — the same information shown in the on-screen Profile modal (Academic,
+     * Personal, Guardian & Contact, Finance & Transport, sibling links), laid
+     * out on a single branded A4 page with the school name/logo, instead of
+     * relying on the browser's raw window.print() of the live modal DOM.
+     */
+    function printStudentRecord(studentData) {
+        const esc = escapeHtmlForPrint;
+        const s = studentData;
+
+        const schoolEl = document.querySelector('.school-name');
+        const schoolName = schoolEl ? schoolEl.textContent.trim() : 'ST. LAWRENCE INTERNATIONAL SCHOOL';
+        const schoolLogoUrl = getSchoolLogoUrl();
+        const recCrestInner = schoolLogoUrl ? `<img src="${esc(schoolLogoUrl)}" alt="School Logo">` : `<i class="fas fa-id-card-clip"></i>`;
+        const printedOn = new Date().toLocaleDateString('en-US', {
+            day: '2-digit', month: 'short', year: 'numeric'
+        }) + '  ·  ' + new Date().toLocaleTimeString('en-US', {
+            hour: '2-digit', minute: '2-digit', hour12: true
+        });
+
+        const safeVal = v => (v !== undefined && v !== null && v !== '') ? esc(v) : '—';
+        const fmtRs = (v) => (v === undefined || v === null || v === '' || isNaN(Number(v))) ? '—' : ('Rs. ' + Number(v).toLocaleString('en-PK'));
+        const photoSrc = (s.photo && !/placeholder\.com/i.test(s.photo)) ? s.photo : '';
+        const registrationNo = s.regNo || s.id || '—';
+
+        // ── Sibling info (mirrors the Profile modal's two independent signals) ──
+        const isSiblingLinked = !!(s.isSibling && s.siblingOf);
+        const hasSiblingsList = Array.isArray(s.hasSiblings) ? s.hasSiblings : [];
+        let siblingHtml = '';
+        if (isSiblingLinked || hasSiblingsList.length > 0) {
+            const linkedNotice = isSiblingLinked ? `
+                <div class="sibling-of-notice">
+                    <i class="fas fa-user-friends"></i>
+                    <span>Sibling of <strong>${esc(s.siblingOf)}</strong>${s.siblingGroupId ? ` &nbsp;·&nbsp; Sibling Group ID: <strong>${esc(s.siblingGroupId)}</strong>` : ''}</span>
+                </div>` : '';
+            const hasRows = hasSiblingsList.map(sib => `
+                    <tr><td>${esc(sib.regNo || '—')}</td><td>${esc(sib.name || '—')}</td></tr>`).join('');
+            const hasTable = hasSiblingsList.length > 0 ? `
+                <table class="sibling-table" ${isSiblingLinked ? 'style="margin-top:9px;"' : ''}>
+                    <thead><tr><th>Reg. No.</th><th>Full Name</th></tr></thead>
+                    <tbody>${hasRows}</tbody>
+                </table>` : '';
+            siblingHtml = `
+        <section class="rec-section">
+            <div class="rec-section-label"><span class="rec-ico"><i class="fas fa-people-roof"></i></span><span class="rec-txt">Sibling Information</span></div>
+            ${linkedNotice}${hasTable}
+        </section>`;
+        }
+
+        // ── Books / other fees / discounts (same math as the on-screen profile) ──
+        const booksFee = parseFloat(s.booksFee || 0);
+        const booksDiscount = parseFloat(s.booksDiscount || 0);
+        let otherFeesArr = [];
+        try { otherFeesArr = JSON.parse(s.otherFeesData || '[]'); } catch (e) { otherFeesArr = []; }
+        otherFeesArr = otherFeesArr.filter(f => (parseFloat(f.amount || 0) > 0 || parseFloat(f.discount || 0) > 0));
+
+        const otherFeeRowsHtml = otherFeesArr.map(f => `
+                <div class="rec-field"><span class="rec-flabel">${esc(f.description || 'Other Fee')}:</span><span class="rec-fvalue">${fmtRs(f.amount)}</span></div>`).join('');
+        const otherDiscountsTotal = otherFeesArr.reduce((sum, f) => sum + (parseFloat(f.discount || 0)), 0);
+
+        const totalDiscount = [s.tuitionDiscount, s.transportDiscount, s.siblingDiscount, booksDiscount]
+            .map(v => Number(v) || 0).reduce((a, b) => a + b, 0) + otherDiscountsTotal;
+
+        // ── Certificate-on-file note (the actual document is viewed separately) ──
+        const certNoticeHtml = s.certData ? `
+            <div class="rec-field"><span class="rec-flabel">B-Form / Certificate:</span><span class="rec-fvalue" style="color:var(--sg-dark);"><i class="fas fa-check-circle"></i> On file with the school office</span></div>`
+            : `<div class="rec-field"><span class="rec-flabel">B-Form / Certificate:</span><span class="rec-fvalue">Not on file</span></div>`;
+
+        const safeFileName = (s.fullName || 'student').replace(/[^a-z0-9]+/gi, '_');
+
+        const printWin = window.open('', '_blank', 'width=1000,height=1000');
+
+        printWin.document.write(`
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Student Record — ${esc(s.fullName)}</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Roboto+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <style>
+        @page { size: A4; margin: 0; }
+        :root {
+            --ink-900:#0f172a; --ink-700:#1e293b; --ink-500:#475569; --ink-400:#64748b;
+            --line:#e2e8f0; --line-strong:#cbd5e1; --surface:#ffffff; --surface-tint:#f6fbf8;
+            /* ── Sea Green palette (deliberately distinct from the Admission Form's steel-blue theme) ── */
+            --sg:#2e8b57; --sg-dark:#1f6b44; --sg-deep:#134d32; --sg-light:#e8f7ee; --sg-line:#bfe3cd;
+            --accent:#1f6b44; --amber:#b9791f;
+        }
+        * { box-sizing:border-box; margin:0; padding:0; }
+        html, body { width:210mm; }
+        body { font-family:'Inter', sans-serif; color:var(--ink-700); background:#dcefe3; }
+
+        .toolbar { position:sticky; top:0; z-index:20; display:flex; align-items:center; justify-content:center; gap:10px;
+            padding:12px 16px; background:#0f172a; box-shadow:0 2px 10px rgba(0,0,0,.25); }
+        .toolbar-hint { color:#94a3b8; font-size:12px; margin-right:auto; padding-left:4px; }
+        .tb-btn { display:inline-flex; align-items:center; gap:7px; border:none; cursor:pointer; padding:9px 16px;
+            border-radius:7px; font-family:'Inter',sans-serif; font-weight:600; font-size:12.5px; transition:opacity .15s; }
+        .tb-btn:hover { opacity:.88; }
+        .tb-btn:disabled { opacity:.55; cursor:default; }
+        .tb-print { background:var(--sg); color:#fff; }
+        .tb-share { background:#25D366; color:#fff; }
+        .tb-close { background:#334155; color:#e2e8f0; }
+
+        /* ── Different frame treatment: no gradient border frame like the Admission
+           Form — instead a flat card with a bold top ribbon and a left rail. ── */
+        .page-frame { width:210mm; min-height:297mm; margin:14px auto; padding:0; background:transparent; display:flex; }
+        .page { width:100%; min-height:297mm; padding:0; position:relative; margin:0; background:#fff; border-radius:8px; box-shadow:0 1px 3px rgba(15,23,42,0.15); display:flex; flex-direction:column; overflow:hidden; }
+        .rec-ribbon { height:9mm; width:100%; background:linear-gradient(90deg, var(--sg-deep) 0%, var(--sg) 55%, var(--sg-dark) 100%); flex-shrink:0; }
+        .rec-body { padding:9mm 12mm 10mm; display:flex; flex-direction:column; flex:1; position:relative; }
+        .rec-railtext { position:absolute; top:50%; right:-38px; transform:translateY(-50%) rotate(90deg); transform-origin:center; font-size:9px; letter-spacing:3px; text-transform:uppercase; color:var(--sg-line); font-weight:700; opacity:0.7; white-space:nowrap; pointer-events:none; }
+        .watermark { position:absolute; bottom:14mm; right:8mm; font-size:52px; font-weight:800; letter-spacing:4px; color:var(--sg); opacity:0.05; text-transform:uppercase; white-space:nowrap; pointer-events:none; z-index:0; transform:rotate(-8deg); }
+        .rec-header, .rec-title-wrap, .rec-section, .rec-footer { position:relative; z-index:1; }
+        .rec-header { display:flex; align-items:center; justify-content:space-between; padding-bottom:9px; border-bottom:2px solid var(--sg-light); }
+        .rec-crest { width:44px; height:44px; border-radius:12px; flex-shrink:0; display:flex; align-items:center; justify-content:center; color:#fff; font-size:18px;
+            background:linear-gradient(135deg, var(--sg) 0%, var(--sg-deep) 100%); box-shadow:0 3px 10px rgba(19,77,50,0.35); overflow:hidden; }
+        .rec-crest img { width:100%; height:100%; object-fit:cover; border-radius:12px; }
+        .rec-school-name { font-size:17px; font-weight:800; color:var(--ink-900); line-height:1.15; }
+        .rec-school-sub { font-size:8.6px; color:var(--sg-dark); text-transform:uppercase; margin-top:2px; letter-spacing:0.6px; font-weight:600; }
+        .rec-meta-pill { display:flex; align-items:center; gap:6px; border:1px solid var(--sg-line); padding:5px 12px; border-radius:999px; background:var(--sg-light); }
+        .rec-meta-pill i { color:var(--sg-dark); font-size:10px; }
+        .rec-meta-value { font-family:'Roboto Mono', monospace; font-size:9.5px; color:var(--ink-900); }
+
+        /* ── Title block: centered avatar + name, unlike the Admission Form's boxed title-bar ── */
+        .rec-title-wrap { display:flex; align-items:center; gap:14px; margin-top:14px; padding:10px 4px 12px; }
+        .rec-avatar { width:64px; height:64px; border-radius:50%; flex-shrink:0; overflow:hidden; border:3px solid var(--sg-light); box-shadow:0 0 0 2px var(--sg); background:var(--sg-light); display:flex; align-items:center; justify-content:center; color:var(--sg-dark); font-size:10px; text-align:center; }
+        .rec-avatar img { width:100%; height:100%; object-fit:cover; }
+        .rec-title-name { font-size:19px; font-weight:800; color:var(--ink-900); letter-spacing:0.2px; }
+        .rec-title-tags { margin-top:5px; display:flex; gap:6px; flex-wrap:wrap; }
+        .rec-tag { display:inline-flex; align-items:center; gap:5px; font-size:8.5px; font-weight:700; text-transform:uppercase; letter-spacing:0.4px; color:var(--sg-deep); background:var(--sg-light); border:1px solid var(--sg-line); padding:3px 9px; border-radius:999px; }
+
+        .rec-section { margin-top:12px; }
+        .rec-section-label { display:flex; align-items:center; gap:8px; margin-bottom:7px; }
+        .rec-ico { width:20px; height:20px; border-radius:50%; background:var(--sg); color:#fff; font-size:9.5px; display:flex; align-items:center; justify-content:center; flex-shrink:0; box-shadow:0 2px 5px rgba(46,139,87,0.35); }
+        .rec-txt { font-size:9.8px; font-weight:800; letter-spacing:1.1px; text-transform:uppercase; color:var(--sg-deep); }
+        .rec-section-label::after { content:""; flex:1; height:1px; background:linear-gradient(90deg, var(--sg-line), transparent); }
+
+        .rec-field-grid { display:grid; grid-template-columns:1fr 1fr 1fr; column-gap:14px; row-gap:8px; }
+        .rec-field { display:flex; align-items:baseline; gap:5px; border-bottom:1px solid var(--line-strong); padding-bottom:3px; }
+        .rec-flabel { font-size:7.2px; text-transform:uppercase; color:var(--ink-400); font-weight:700; white-space:nowrap; }
+        .rec-fvalue { font-size:10px; font-weight:500; color:var(--ink-900); }
+
+        .rec-panel { border:1px solid var(--sg-line); border-radius:8px; padding:9px 13px; background:var(--surface-tint); }
+        .rec-panel-title { font-size:8px; font-weight:800; color:var(--sg-dark); margin-bottom:7px; text-transform:uppercase; padding-bottom:4px; border-bottom:1px solid var(--sg-line); letter-spacing:0.4px; }
+
+        .rec-fee-summary { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-top:8px; padding:9px 14px; background:var(--sg-deep); border-radius:8px; }
+        .rec-fee-summary .rec-net-label { font-size:8.3px; font-weight:700; text-transform:uppercase; color:#bfe3cd; }
+        .rec-fee-summary .rec-net-value { font-family:'Roboto Mono', monospace; font-size:14px; font-weight:800; color:#fff; }
+        .rec-fee-summary .rec-net-label span.disc-val { font-family:'Roboto Mono',monospace; color:#fff; font-weight:700; }
+
+        .sibling-table { width:100%; border-collapse:collapse; border:1px solid var(--sg-line); border-radius:6px; overflow:hidden; }
+        .sibling-table th, .sibling-table td { border:1px solid var(--sg-line); padding:5px 10px; text-align:left; }
+        .sibling-table th { background:var(--sg-light); font-size:7.6px; text-transform:uppercase; letter-spacing:0.6px; color:var(--sg-dark); font-weight:700; }
+        .sibling-table td { font-size:9.5px; color:var(--ink-900); font-weight:500; }
+        .sibling-table tbody tr:nth-child(even) { background:var(--surface-tint); }
+        .sibling-of-notice { display:flex; align-items:center; gap:8px; font-size:9.2px; font-weight:500; color:var(--ink-900); background:var(--sg-light); border:1px solid var(--sg-line); border-left:3px solid var(--sg); border-radius:0 6px 6px 0; padding:7px 12px; }
+        .sibling-of-notice i { color:var(--sg-dark); font-size:11px; }
+
+        .rec-footer { margin-top:auto; padding-top:14px; text-align:center; }
+        .rec-footer-rule { height:2px; background:linear-gradient(90deg, transparent, var(--sg), transparent); margin-bottom:10px; }
+        .rec-footer p { font-size:7.6px; color:var(--ink-400); text-transform:uppercase; letter-spacing:0.6px; }
+
+        @media print {
+            .toolbar { display:none !important; }
+            html, body { width:210mm; height:297mm; background:#fff; }
+            body { -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+            .page-frame { width:210mm; height:297mm; min-height:297mm; padding:0; margin:0; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+            .page { height:100%; min-height:0; box-shadow:none; border-radius:0; }
+        }
+    </style>
+</head>
+<body>
+    <div class="toolbar no-print">
+        <span class="toolbar-hint"><i class="fas fa-circle-info"></i> Review the record below, then print or share it.</span>
+        <button class="tb-btn tb-print" onclick="window.print()"><i class="fas fa-print"></i> Print</button>
+        <button class="tb-btn tb-share" id="recShareBtn" onclick="shareStudentRecordImage()"><i class="fab fa-whatsapp"></i> Share on WhatsApp</button>
+        <button class="tb-btn tb-close" onclick="window.close()"><i class="fas fa-times"></i> Close</button>
+    </div>
+    <div class="page-frame" id="recPageFrame">
+    <div class="page">
+        <div class="rec-ribbon"></div>
+        <div class="rec-body">
+        <div class="watermark">${esc(schoolName).split(' ').slice(0,2).join(' ')}</div>
+        <header class="rec-header">
+            <div style="display:flex; gap:10px; align-items:center;">
+                <div class="rec-crest">${recCrestInner}</div>
+                <div>
+                    <div class="rec-school-name">${esc(schoolName)}</div>
+                    <div class="rec-school-sub">Complete Student Record</div>
+                </div>
+            </div>
+            <div class="rec-meta-pill">
+                <i class="fas fa-clock"></i>
+                <span class="rec-meta-value">${printedOn}</span>
+            </div>
+        </header>
+
+        <div class="rec-title-wrap">
+            <div class="rec-avatar">
+                ${photoSrc ? `<img src="${photoSrc}">` : '<span>NO<br>PHOTO</span>'}
+            </div>
+            <div>
+                <div class="rec-title-name">${esc(s.fullName)}</div>
+                <div class="rec-title-tags">
+                    <span class="rec-tag"><i class="fas fa-hashtag"></i> ${esc(registrationNo)}</span>
+                    <span class="rec-tag"><i class="fas fa-graduation-cap"></i> ${esc(s.studentClass || 'N/A')}${s.section ? ' - ' + esc(s.section) : ''}</span>
+                    ${s.orphanStatus === 'Orphan' ? '<span class="rec-tag" style="color:#b91c1c;background:#fef2f2;border-color:#fecaca;"><i class="fas fa-heart"></i> Orphan</span>' : ''}
+                </div>
+            </div>
+        </div>
+
+        <section class="rec-section">
+            <div class="rec-section-label"><span class="rec-ico"><i class="fas fa-graduation-cap"></i></span><span class="rec-txt">Academic Information</span></div>
+            <div class="rec-field-grid">
+                <div class="rec-field"><span class="rec-flabel">Registration No.:</span><span class="rec-fvalue" style="font-family:monospace;">${safeVal(registrationNo)}</span></div>
+                <div class="rec-field"><span class="rec-flabel">Roll No. (Class):</span><span class="rec-fvalue">${safeVal(s.rollNo)}</span></div>
+                <div class="rec-field"><span class="rec-flabel">Class / Section:</span><span class="rec-fvalue">${safeVal(s.studentClass)}${s.section ? ' - ' + esc(s.section) : ''}</span></div>
+                <div class="rec-field"><span class="rec-flabel">Admission Date:</span><span class="rec-fvalue">${safeVal(s.admissionDate)}</span></div>
+                ${s.siblingGroupId ? `<div class="rec-field"><span class="rec-flabel">Sibling Group ID:</span><span class="rec-fvalue">${esc(s.siblingGroupId)}</span></div>` : ''}
+            </div>
+        </section>
+
+        <section class="rec-section">
+            <div class="rec-section-label"><span class="rec-ico"><i class="fas fa-user"></i></span><span class="rec-txt">Personal Data</span></div>
+            <div class="rec-field-grid">
+                <div class="rec-field"><span class="rec-flabel">Gender:</span><span class="rec-fvalue">${safeVal(s.gender)}</span></div>
+                <div class="rec-field"><span class="rec-flabel">Date of Birth:</span><span class="rec-fvalue">${safeVal(s.dob)}</span></div>
+                <div class="rec-field"><span class="rec-flabel">Computed Age:</span><span class="rec-fvalue">${safeVal(s.age)}</span></div>
+                <div class="rec-field"><span class="rec-flabel">B-Form / CNIC:</span><span class="rec-fvalue">${safeVal(s.studentBform)}</span></div>
+                <div class="rec-field"><span class="rec-flabel">Orphan Status:</span><span class="rec-fvalue">${safeVal(s.orphanStatus)}</span></div>
+                <div class="rec-field"><span class="rec-flabel">Previous School:</span><span class="rec-fvalue">${safeVal(s.previousSchool)}</span></div>
+                <div class="rec-field"><span class="rec-flabel">Previous Class:</span><span class="rec-fvalue">${safeVal(s.previousClass)}</span></div>
+                <div class="rec-field" style="grid-column: span 2;"><span class="rec-flabel">Medical Conditions:</span><span class="rec-fvalue">${safeVal(s.medicalIssues)}</span></div>
+                ${certNoticeHtml}
+            </div>
+        </section>
+
+        <section class="rec-section">
+            <div class="rec-section-label"><span class="rec-ico"><i class="fas fa-address-book"></i></span><span class="rec-txt">Guardian & Contact</span></div>
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:14px;">
+                <div class="rec-panel">
+                    <div class="rec-panel-title">Guardian Details</div>
+                    <div class="rec-field" style="margin-bottom:7px;"><span class="rec-flabel">Name:</span><span class="rec-fvalue">${safeVal(s.guardianName)}</span></div>
+                    <div class="rec-field" style="margin-bottom:7px;"><span class="rec-flabel">Relation:</span><span class="rec-fvalue">${safeVal(s.guardianRole)}</span></div>
+                    <div class="rec-field"><span class="rec-flabel">CNIC:</span><span class="rec-fvalue">${safeVal(s.guardianCnic)}</span></div>
+                </div>
+                <div class="rec-panel">
+                    <div class="rec-panel-title">Contact Information</div>
+                    <div class="rec-field" style="margin-bottom:7px;"><span class="rec-flabel">Phones:</span><span class="rec-fvalue">${safeVal(s.phone1)} / ${safeVal(s.phone2)}</span></div>
+                    <div class="rec-field"><span class="rec-flabel">Permanent Address:</span><span class="rec-fvalue" style="font-size:9px;">${safeVal(s.permanentAddress)}</span></div>
+                </div>
+            </div>
+        </section>
+
+        <section class="rec-section">
+            <div class="rec-section-label"><span class="rec-ico"><i class="fas fa-sack-dollar"></i></span><span class="rec-txt">Finance & Transport</span></div>
+            <div class="rec-field-grid">
+                <div class="rec-field"><span class="rec-flabel">Tuition Fee:</span><span class="rec-fvalue">${fmtRs(s.standardFee)}</span></div>
+                <div class="rec-field"><span class="rec-flabel">Admission Fee:</span><span class="rec-fvalue">${fmtRs(s.admissionFee || 0)}</span></div>
+                <div class="rec-field"><span class="rec-flabel">Transport Fee:</span><span class="rec-fvalue">${fmtRs(s.transportFee)}</span></div>
+                ${booksFee > 0 ? `<div class="rec-field"><span class="rec-flabel">Books Fee:</span><span class="rec-fvalue">${fmtRs(booksFee)}</span></div>` : ''}
+                ${otherFeeRowsHtml}
+            </div>
+            <div class="rec-fee-summary">
+                <span class="rec-net-label">Total Discount: <span class="disc-val">${fmtRs(totalDiscount)}</span></span>
+                <span class="rec-net-label">Net Payable: <span class="rec-net-value">${fmtRs(s.netPayable)}</span></span>
+            </div>
+        </section>
+        ${siblingHtml}
+
+        <footer class="rec-footer">
+            <div class="rec-footer-rule"></div>
+            <p>This is a system-generated record from the Student Management System &nbsp;·&nbsp; ${esc(schoolName)}</p>
+        </footer>
+        </div>
+    </div>
+    </div>
+
+    <script>
+        async function shareStudentRecordImage() {
+            const btn = document.getElementById('recShareBtn');
+            const oldHtml = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Preparing...';
+            try {
+                const target = document.getElementById('recPageFrame');
+                const canvas = await html2canvas(target, { scale: 2, backgroundColor: '#ffffff', useCORS: true });
+                const blob = await new Promise(res => canvas.toBlob(res, 'image/png'));
+                if (!blob) throw new Error('Capture failed');
+                const filename = 'Student_Record_${esc(safeFileName)}.png';
+                const file = new File([blob], filename, { type: 'image/png' });
+
+                if (navigator.canShare && navigator.canShare({ files: [file] })) {
+                    await navigator.share({
+                        files: [file],
+                        title: 'Student Record',
+                        text: 'Student Record for ${esc(s.fullName || "")}'
+                    });
+                    return;
+                }
+
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url; a.download = filename; document.body.appendChild(a); a.click(); a.remove();
+                setTimeout(() => URL.revokeObjectURL(url), 4000);
+
+                const msg = encodeURIComponent('Student Record for ${esc(s.fullName || "student")}.\\n(The record image has been downloaded — please attach "' + filename + '" in WhatsApp.)');
+                window.open('https://wa.me/?text=' + msg, '_blank');
+            } catch (err) {
+                console.error('Share failed', err);
+                alert('Sharing failed. The student record image could not be generated.');
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = oldHtml;
+            }
+        }
+    <\/script>
+</body>
+</html>`);
+        printWin.document.close();
+        printWin.focus();
+    }
+
+    /**
+     * Print the "Complete Student Record" for an EXISTING student, looked up by
+     * regNo (falls back to id) from the live database. Used by the "Print
+     * Record" button in the Student Profile modal footer, replacing the old
+     * raw window.print() of the on-screen modal (which had no dedicated print
+     * layout, no school letterhead, and printed the surrounding page chrome).
+     */
+    window.printStudentRecordForStudent = function(regNo) {
+        const db = getDatabase();
+        const s = db.find(x => x.regNo === regNo) || db.find(x => x.id === regNo);
+        if (!s) {
+            showToast("Not Found", "Could not locate this student's record to print.", "danger");
+            return;
+        }
+        printStudentRecord(s);
+    };
+
+    // ── FOOTER "PRINT RECORD" BUTTON HANDLER ─────────────────────────────────
+    // Prints the Complete Student Record for whichever student's profile is
+    // currently open (tracked via profile-modal's data-current-reg-no).
+    window.printCurrentStudentRecord = function() {
+        const modal = document.getElementById('profile-modal');
+        const regNo = modal ? modal.dataset.currentRegNo : null;
+        if (regNo) window.printStudentRecordForStudent(regNo);
+    };
+
+    // ── CLASS / SECTION / WHOLE-SCHOOL STUDENT LIST PRINT ────────────────────
+    /**
+     * Build and open a print-ready "Student List" report — a compact table
+     * (numbering, name, guardian name, combined Class-Section e.g. "2-A",
+     * B-Form / CNIC No., Guardian CNIC, Contact No.) for either:
+     *   - the ENTIRE school   → call with (ALL_STUDENTS_KEY, null)
+     *   - one class, all sections → call with (className, null) or (className, 'ALL')
+     *   - one class + one specific section → call with (className, sectionLetter)
+     * Triggered from the small print buttons on the class/section selector
+     * cards in the View Database / Update Record modals.
+     */
+    function buildStudentListReport(filterClass, filterSection) {
+        const esc = escapeHtmlForPrint;
+        const db = getActiveDatabase();
+
+        let list = db;
+        let scopeLabel = 'All Students — Every Class & Section';
+
+        if (filterClass && filterClass !== ALL_STUDENTS_KEY) {
+            list = list.filter(s => s.studentClass === filterClass);
+            if (filterSection && filterSection !== 'ALL') {
+                list = list.filter(s => s.section === filterSection);
+                scopeLabel = `${filterClass} — Section ${filterSection}`;
+            } else {
+                scopeLabel = `${filterClass} — All Sections`;
+            }
+        }
+
+        // Sort by class (if mixed), then section, then roll number, then name.
+        list = list.slice().sort((a, b) => {
+            const ca = (a.studentClass || '').localeCompare(b.studentClass || '', undefined, { numeric: true });
+            if (ca !== 0) return ca;
+            const sa = (a.section || '').localeCompare(b.section || '');
+            if (sa !== 0) return sa;
+            const ra = parseInt(a.rollNo) || 0, rb = parseInt(b.rollNo) || 0;
+            if (ra !== rb) return ra - rb;
+            return (a.fullName || '').localeCompare(b.fullName || '');
+        });
+
+        const schoolEl = document.querySelector('.school-name');
+        const schoolName = schoolEl ? schoolEl.textContent.trim() : 'ST. LAWRENCE INTERNATIONAL SCHOOL';
+        const schoolLogoUrl = getSchoolLogoUrl();
+        const slCrestInner = schoolLogoUrl ? `<img src="${esc(schoolLogoUrl)}" alt="School Logo">` : `<i class="fas fa-users"></i>`;
+        const printedOn = new Date().toLocaleDateString('en-US', {
+            day: '2-digit', month: 'short', year: 'numeric'
+        }) + '  ·  ' + new Date().toLocaleTimeString('en-US', {
+            hour: '2-digit', minute: '2-digit', hour12: true
+        });
+
+        const rowsHtml = list.length === 0
+            ? `<tr><td colspan="7" class="sl-empty">No student records found for this selection.</td></tr>`
+            : list.map((s, idx) => {
+                const classSection = `${s.studentClass || '—'}${s.section ? '-' + s.section : ''}`;
+                return `
+                <tr>
+                    <td class="sl-num">${idx + 1}</td>
+                    <td class="sl-name">${esc(s.fullName || '—')}</td>
+                    <td>${esc(s.guardianName || '—')}</td>
+                    <td class="sl-center"><span class="sl-chip">${esc(classSection)}</span></td>
+                    <td class="sl-mono">${esc(s.studentBform || '—')}</td>
+                    <td class="sl-mono">${esc(s.guardianCnic || '—')}</td>
+                    <td class="sl-mono">${esc(s.phone1 || '—')}</td>
+                </tr>`;
+            }).join('');
+
+        const printWin = window.open('', '_blank', 'width=1100,height=850');
+        if (!printWin) {
+            showToast('Pop-up Blocked', 'Please allow pop-ups to print the student list.', 'danger');
+            return;
+        }
+
+        printWin.document.write(`
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Student List — ${esc(scopeLabel)}</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Roboto+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <style>
+        @page { size: A4 landscape; margin: 10mm; }
+        :root {
+            --ink-900:#0f172a; --ink-700:#1e293b; --ink-500:#475569; --ink-400:#64748b;
+            --line:#e2e8f0; --line-strong:#cbd5e1;
+            --sg:#2e8b57; --sg-dark:#1f6b44; --sg-deep:#134d32; --sg-light:#e8f7ee; --sg-line:#bfe3cd;
+        }
+        * { box-sizing:border-box; margin:0; padding:0; }
+        body { font-family:'Inter', sans-serif; color:var(--ink-700); background:#dcefe3; }
+
+        .toolbar { position:sticky; top:0; z-index:20; display:flex; align-items:center; justify-content:center; gap:10px;
+            padding:12px 16px; background:#0f172a; box-shadow:0 2px 10px rgba(0,0,0,.25); }
+        .toolbar-hint { color:#94a3b8; font-size:12px; margin-right:auto; padding-left:4px; }
+        .tb-btn { display:inline-flex; align-items:center; gap:7px; border:none; cursor:pointer; padding:9px 16px;
+            border-radius:7px; font-family:'Inter',sans-serif; font-weight:600; font-size:12.5px; transition:opacity .15s; }
+        .tb-btn:hover { opacity:.88; }
+        .tb-print { background:var(--sg); color:#fff; }
+        .tb-share { background:#25D366; color:#fff; }
+        .tb-close { background:#334155; color:#e2e8f0; }
+
+        .sl-page { width:277mm; min-height:190mm; margin:16px auto; padding:10mm 12mm; background:#fff;
+            border-radius:8px; box-shadow:0 1px 3px rgba(15,23,42,0.15); }
+
+        .sl-header { display:flex; align-items:center; justify-content:space-between; padding-bottom:10px; border-bottom:2px solid var(--sg-light); }
+        .sl-crest { width:44px; height:44px; border-radius:12px; flex-shrink:0; display:flex; align-items:center; justify-content:center; color:#fff; font-size:18px;
+            background:linear-gradient(135deg, var(--sg) 0%, var(--sg-deep) 100%); box-shadow:0 3px 10px rgba(19,77,50,0.35); overflow:hidden; }
+        .sl-crest img { width:100%; height:100%; object-fit:cover; border-radius:12px; }
+        .sl-school-name { font-size:17px; font-weight:800; color:var(--ink-900); line-height:1.15; }
+        .sl-school-sub { font-size:8.6px; color:var(--sg-dark); text-transform:uppercase; margin-top:2px; letter-spacing:0.6px; font-weight:600; }
+        .sl-meta-pill { display:flex; align-items:center; gap:6px; border:1px solid var(--sg-line); padding:5px 12px; border-radius:999px; background:var(--sg-light); }
+        .sl-meta-pill i { color:var(--sg-dark); font-size:10px; }
+        .sl-meta-value { font-family:'Roboto Mono', monospace; font-size:9.5px; color:var(--ink-900); }
+
+        .sl-title-row { display:flex; align-items:baseline; justify-content:space-between; margin-top:14px; margin-bottom:10px; }
+        .sl-title { font-size:15px; font-weight:800; color:var(--ink-900); display:flex; align-items:center; gap:8px; }
+        .sl-title i { color:var(--sg-dark); }
+        .sl-count { font-size:10.5px; font-weight:700; color:var(--sg-dark); background:var(--sg-light); border:1px solid var(--sg-line); padding:3px 10px; border-radius:999px; }
+
+        table.sl-table { width:100%; border-collapse:collapse; }
+        table.sl-table thead th { background:var(--sg-deep); color:#fff; font-size:9px; text-transform:uppercase; letter-spacing:0.5px;
+            font-weight:700; text-align:left; padding:7px 9px; }
+        table.sl-table thead th.sl-center, table.sl-table td.sl-center { text-align:center; }
+        table.sl-table tbody td { font-size:10.5px; padding:6px 9px; border-bottom:1px solid var(--line); color:var(--ink-900); }
+        table.sl-table tbody tr:nth-child(even) { background:#f6fbf8; }
+        table.sl-table td.sl-num { color:var(--ink-400); font-weight:600; width:28px; }
+        table.sl-table td.sl-name { font-weight:700; }
+        table.sl-table td.sl-mono { font-family:'Roboto Mono', monospace; font-size:9.5px; }
+        table.sl-table td.sl-empty { text-align:center; padding:40px; color:var(--ink-400); }
+        .sl-chip { display:inline-block; font-size:9.5px; font-weight:700; color:var(--sg-deep); background:var(--sg-light);
+            border:1px solid var(--sg-line); padding:2px 9px; border-radius:999px; }
+
+        .sl-footer { margin-top:16px; padding-top:10px; text-align:center; }
+        .sl-footer-rule { height:2px; background:linear-gradient(90deg, transparent, var(--sg), transparent); margin-bottom:8px; }
+        .sl-footer p { font-size:7.6px; color:var(--ink-400); text-transform:uppercase; letter-spacing:0.6px; }
+
+        @media print {
+            .toolbar { display:none !important; }
+            body { background:#fff; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+            .sl-page { width:100%; min-height:0; margin:0; padding:0; box-shadow:none; border-radius:0; }
+            table.sl-table thead { display:table-header-group; }
+            table.sl-table tr { page-break-inside:avoid; }
+        }
+    </style>
+</head>
+<body>
+    <div class="toolbar no-print">
+        <span class="toolbar-hint"><i class="fas fa-circle-info"></i> Review the list below, then print or share it.</span>
+        <button class="tb-btn tb-share" onclick="shareStudentList()"><i class="fab fa-whatsapp"></i> Share</button>
+        <button class="tb-btn tb-print" onclick="window.print()"><i class="fas fa-print"></i> Print</button>
+        <button class="tb-btn tb-close" onclick="window.close()"><i class="fas fa-times"></i> Close</button>
+    </div>
+    <div class="sl-page">
+        <header class="sl-header">
+            <div style="display:flex; gap:10px; align-items:center;">
+                <div class="sl-crest">${slCrestInner}</div>
+                <div>
+                    <div class="sl-school-name">${esc(schoolName)}</div>
+                    <div class="sl-school-sub">Student List Report</div>
+                </div>
+            </div>
+            <div class="sl-meta-pill">
+                <i class="fas fa-calendar-day"></i>
+                <span class="sl-meta-value">${esc(printedOn)}</span>
+            </div>
+        </header>
+
+        <div class="sl-title-row">
+            <div class="sl-title"><i class="fas fa-layer-group"></i> ${esc(scopeLabel)}</div>
+            <div class="sl-count"><i class="fas fa-user-graduate"></i> ${list.length} Student${list.length === 1 ? '' : 's'}</div>
+        </div>
+
+        <table class="sl-table">
+            <thead>
+                <tr>
+                    <th style="width:28px;">#</th>
+                    <th>Student Name</th>
+                    <th>Guardian / Father Name</th>
+                    <th class="sl-center">Class-Section</th>
+                    <th>B-Form / CNIC No.</th>
+                    <th>Guardian CNIC</th>
+                    <th>Contact No.</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${rowsHtml}
+            </tbody>
+        </table>
+
+        <div class="sl-footer">
+            <div class="sl-footer-rule"></div>
+            <p>Generated by EduFlow Pro · ${esc(schoolName)}</p>
+        </div>
+    </div>
+    <script>
+        var shareListData   = ${JSON.stringify(list.map(s => ({
+            name: s.fullName || '—',
+            guardian: s.guardianName || '—',
+            cls: `${s.studentClass || '—'}${s.section ? '-' + s.section : ''}`,
+            phone: s.phone1 || ''
+        })))};
+        var shareListLabel  = ${JSON.stringify(scopeLabel)};
+        var shareListSchool = ${JSON.stringify(schoolName)};
+
+        /* Share this list — Web Share API first (WhatsApp, Messages, Email, etc.
+           on mobile), falling back to a WhatsApp Web link with the text prefilled. */
+        function shareStudentList() {
+            var lines = shareListData.map(function(s, i) {
+                return (i + 1) + '. ' + s.name + ' (' + s.cls + ')' + (s.phone ? ' - ' + s.phone : '');
+            });
+            var text = '*' + shareListSchool + '*\n*Student List — ' + shareListLabel + '*\n' +
+                'Total: ' + shareListData.length + ' student(s)\n\n' + lines.join('\n');
+
+            if (navigator.share) {
+                navigator.share({ title: 'Student List — ' + shareListLabel, text: text })
+                    .catch(function(err) {
+                        // Ignore the user simply cancelling the native share sheet.
+                        if (err && err.name === 'AbortError') return;
+                        window.open('https://wa.me/?text=' + encodeURIComponent(text), '_blank');
+                    });
+            } else {
+                window.open('https://wa.me/?text=' + encodeURIComponent(text), '_blank');
+            }
+        }
+    </script>
+</body>
+</html>
+        `);
+        printWin.document.close();
+    }
+
+    /** Public entry point wired to the print buttons on the class/section cards. */
+    window.printStudentListReport = function(filterClass, filterSection) {
+        buildStudentListReport(filterClass, filterSection);
+    };
 
     // ── 7. TABLE RENDERING ───────────────────────────────────────────────────
 
@@ -1844,6 +2646,7 @@ if (certUploadInput) {
 
         let html = `
             <div class="msc-class-card msc-class-card--all" onclick="voOpenAllStudents()">
+                <button type="button" class="msc-print-btn" onclick="event.stopPropagation(); printStudentListReport('${ALL_STUDENTS_KEY}', null);" title="Print full school student list"><i class="fas fa-print"></i></button>
                 <div class="class-name"><i class="fas fa-users"></i> All Students</div>
                 <div class="class-meta">Every class &amp; section</div>
                 <div class="class-count"><i class="fas fa-user-graduate"></i> ${db.length} students</div>
@@ -1861,6 +2664,7 @@ if (certUploadInput) {
                 const sections = (Array.isArray(c.sections) && c.sections.length) ? c.sections.join(', ') : 'No sections configured';
                 html += `
                     <div class="msc-class-card" onclick="voOpenClass('${c.name}')">
+                        <button type="button" class="msc-print-btn" onclick="event.stopPropagation(); printStudentListReport('${c.name}', null);" title="Print ${c.name} student list"><i class="fas fa-print"></i></button>
                         <div class="class-name">${c.name}</div>
                         <div class="class-meta">Sections: ${sections}</div>
                         <div class="class-count"><i class="fas fa-users"></i> ${count} students</div>
@@ -1891,6 +2695,7 @@ if (certUploadInput) {
                 <span>Class Incharge: <strong>${allTeacher || 'Not Assigned'}</strong></span>
             </div>
             <div class="msc-class-card msc-class-card--all" onclick="voOpenSection('ALL')">
+                <button type="button" class="msc-print-btn" onclick="event.stopPropagation(); printStudentListReport('${voActiveClass}', 'ALL');" title="Print ${voActiveClass} — all sections student list"><i class="fas fa-print"></i></button>
                 <div class="class-name"><i class="fas fa-layer-group"></i> All Sections</div>
                 <div class="class-meta">All ${classStudents.length} students</div>
                 <div class="class-count"><i class="fas fa-users"></i> ${classStudents.length} students</div>
@@ -1907,6 +2712,7 @@ if (certUploadInput) {
                 const t   = getClassTeacher(voActiveClass, sec);
                 html += `
                     <div class="msc-class-card" onclick="voOpenSection('${sec}')">
+                        <button type="button" class="msc-print-btn" onclick="event.stopPropagation(); printStudentListReport('${voActiveClass}', '${sec}');" title="Print ${voActiveClass} — Section ${sec} student list"><i class="fas fa-print"></i></button>
                         <div class="class-name">Section ${sec}</div>
                         <div class="class-meta">${t ? 'Incharge: ' + t : 'No incharge assigned'}</div>
                         <div class="class-count"><i class="fas fa-users"></i> ${cnt} students</div>
@@ -2052,9 +2858,17 @@ if (certUploadInput) {
                 <td><span class="class-chip">${classSectionCell}</span></td>
                 <td>${s.gender}</td>
                 <td style="text-align:center;">
-                    <button class="btn-icon view" onclick="viewFullProfile('${s.regNo}')" title="View Profile">
-                        <i class="fas fa-eye"></i>
-                    </button>
+                    <div class="vo-action-btn-group">
+                        <button class="btn-icon vo-view" onclick="viewFullProfile('${s.regNo}')" title="View Profile">
+                            <i class="fas fa-eye"></i><span>View</span>
+                        </button>
+                        <button class="btn-icon print-admission" onclick="printAdmissionFormForStudent('${s.regNo}')" title="Print Admission Form">
+                            <i class="fas fa-file-signature"></i><span>Admission</span>
+                        </button>
+                        <button class="btn-icon print-record" onclick="printStudentRecordForStudent('${s.regNo}')" title="Print Student Record">
+                            <i class="fas fa-print"></i><span>Record</span>
+                        </button>
+                    </div>
                 </td>
             </tr>`;
     });
@@ -2339,10 +3153,49 @@ if (certUploadInput) {
                         <button class="btn-icon view" onclick="viewFullProfile('${s.regNo}')" title="View Profile">
                             <i class="fas fa-eye"></i>
                         </button>
+                        ${kind === 'dropped' ? `<button class="btn-icon reactivate" onclick="reactivateStudent('${s.regNo}')" title="Reactivate Student">
+                            <i class="fas fa-user-check"></i>
+                        </button>` : ''}
                     </td>
                 </tr>`;
         }).join('');
     }
+
+    /**
+     * Reactivate a dropped-out student — moves them back onto the live/active
+     * roster (status -> 'active') so they reappear in the dashboard counters,
+     * class cards, and every search/print/share list. Mirrors deleteRecord's
+     * pattern: update local cache immediately, then best-effort sync to MySQL.
+     */
+    window.reactivateStudent = async function(studentId) {
+        const db    = getDatabase();
+        const index = db.findIndex(s => s.regNo === studentId || s.id === studentId);
+        if (index === -1) {
+            showToast("Error", "Could not find that student to reactivate.", "danger");
+            return;
+        }
+
+        const student = db[index];
+        if (!confirm(`Reactivate ${student.fullName || 'this student'} and move them back to the active roster?`)) return;
+
+        student.status = 'active';
+        delete student.droppedDate;
+        saveDatabase(db);
+
+        showToast("Success", `${student.fullName || 'Student'} has been reactivated.`, "success");
+        updateDashboardStats();
+        if (typeof renderStudentTable === 'function') renderStudentTable();
+        if (typeof renderViewOnlyTable === 'function') renderViewOnlyTable();
+        if (typeof renderArchiveDroppedTable === 'function') renderArchiveDroppedTable();
+
+        // Best-effort sync so the backend record stops showing as "dropped" too.
+        try {
+            if (student.regNo) await apiSaveStudent(student);
+        } catch (err) {
+            console.error('Backend reactivate failed:', err);
+            showToast("Offline", "Reactivated locally — couldn't reach the server.", "danger");
+        }
+    };
 
     // ── 8. EDIT STUDENT ──────────────────────────────────────────────────────
 
@@ -2846,6 +3699,15 @@ if (certUploadInput) {
         const modal = document.getElementById('profile-modal');
         const regNo = modal ? modal.dataset.currentRegNo : null;
         if (regNo) window.shareStudentProfile(regNo);
+    };
+
+    // ── FOOTER "PRINT ADMISSION FORM" BUTTON HANDLER ─────────────────────────
+    // Prints the official Admission Form for whichever student's profile is
+    // currently open (tracked via profile-modal's data-current-reg-no).
+    window.printCurrentAdmissionForm = function() {
+        const modal = document.getElementById('profile-modal');
+        const regNo = modal ? modal.dataset.currentRegNo : null;
+        if (regNo) window.printAdmissionFormForStudent(regNo);
     };
 
     // ── SHARE STUDENT PROFILE (Web Share API + clipboard fallback) ──────────
