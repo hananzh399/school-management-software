@@ -1495,6 +1495,14 @@ const PV_PORTRAIT_CONTENT_H = PV_PAGE_H_MM - 2 * PV_MARGIN_MM;
 const PV_LANDSCAPE_CONTENT_W = PV_PAGE_H_MM - 2 * PV_MARGIN_MM;
 const PV_LANDSCAPE_CONTENT_H = PV_PAGE_W_MM - 2 * PV_MARGIN_MM;
 const PV_MIN_SCALE = 0.55;
+// Extra clearance kept free at the bottom/right of the usable area so the
+// second (bottom) copy never rides right up against the page edge — real
+// printers, and the gap between our off-screen measurement and the actual
+// print render, both eat a few mm that @page margin alone doesn't cover.
+const PV_SAFETY_MM = 8;
+const PV_PORTRAIT_FIT_H = PV_PORTRAIT_CONTENT_H - PV_SAFETY_MM;
+const PV_LANDSCAPE_FIT_W = PV_LANDSCAPE_CONTENT_W - PV_SAFETY_MM;
+const PV_LANDSCAPE_FIT_H = PV_LANDSCAPE_CONTENT_H - PV_SAFETY_MM;
 
 function pvPxToMm(px) { return px * 25.4 / 96; }
 
@@ -1502,6 +1510,10 @@ function pvPxToMm(px) { return px * 25.4 / 96; }
  *  can be called repeatedly (e.g. once explicitly + once on 'beforeprint')
  *  without stacking transforms. */
 function pvResetScaling(printArea) {
+    printArea.querySelectorAll('.voucher-sheet').forEach(sheet => {
+        sheet.style.marginLeft = '';
+        sheet.style.marginRight = '';
+    });
     printArea.querySelectorAll('.pv-scale-wrap').forEach(wrap => {
         const sheet = wrap.querySelector(':scope > .voucher-sheet');
         if (sheet) {
@@ -1558,14 +1570,14 @@ function preparePrintLayout() {
 
     let orientation, layoutClass, scale = 1, boxWmm = copyWmm, boxHmm = stackedHmm;
 
-    if (stackedHmm <= PV_PORTRAIT_CONTENT_H) {
-        // Fits stacked on a single portrait page at full size.
+    if (stackedHmm <= PV_PORTRAIT_FIT_H) {
+        // Fits stacked on a single portrait page at full size, with clearance to spare.
         orientation = 'portrait';
         layoutClass = 'pv-stack';
     } else {
-        const fitsLandscapeNatural = sideBySideWmm <= PV_LANDSCAPE_CONTENT_W && copyHmm <= PV_LANDSCAPE_CONTENT_H;
-        const scalePortrait = PV_PORTRAIT_CONTENT_H / stackedHmm;
-        const scaleLandscape = Math.min(PV_LANDSCAPE_CONTENT_W / sideBySideWmm, PV_LANDSCAPE_CONTENT_H / copyHmm);
+        const fitsLandscapeNatural = sideBySideWmm <= PV_LANDSCAPE_FIT_W && copyHmm <= PV_LANDSCAPE_FIT_H;
+        const scalePortrait = PV_PORTRAIT_FIT_H / stackedHmm;
+        const scaleLandscape = Math.min(PV_LANDSCAPE_FIT_W / sideBySideWmm, PV_LANDSCAPE_FIT_H / copyHmm);
 
         if (fitsLandscapeNatural) {
             // Fits side-by-side on a single landscape page at full size.
@@ -1594,16 +1606,25 @@ function preparePrintLayout() {
 
     sheets.forEach(sheet => {
         sheet.classList.add(layoutClass);
-        if (layoutClass !== 'pv-separate' && scale < 0.999) {
+        if (layoutClass === 'pv-separate') return;
+
+        // Horizontally center the block on the page. When the block is at
+        // full natural size it already spans the page's printable width, so
+        // this only visibly kicks in once the content is scaled down.
+        if (scale < 0.999) {
             const wrap = document.createElement('div');
             wrap.className = 'pv-scale-wrap';
             wrap.style.width = (boxWmm * scale) + 'mm';
             wrap.style.height = (boxHmm * scale) + 'mm';
+            wrap.style.margin = '0 auto';
             sheet.parentNode.insertBefore(wrap, sheet);
             wrap.appendChild(sheet);
             sheet.style.width = boxWmm + 'mm';
             sheet.style.transform = `scale(${scale})`;
             sheet.style.transformOrigin = 'top left';
+        } else {
+            sheet.style.marginLeft = 'auto';
+            sheet.style.marginRight = 'auto';
         }
     });
 

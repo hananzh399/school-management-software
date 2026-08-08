@@ -1667,9 +1667,12 @@
 /* Shrink-to-fit wrapper — sized exactly to the scaled content by JS so the
    print pagination engine reserves only that much space (transform alone
    does not shrink an element's layout box, which is what used to force a
-   second page and the need to manually pick "2 pages per sheet"). */
+   second page and the need to manually pick "2 pages per sheet"). Centered
+   horizontally on the page whenever the scaled block is narrower than the
+   printable width. */
 .pv-scale-wrap {
     overflow: hidden;
+    margin: 0 auto;
 }
 
 @media print {
