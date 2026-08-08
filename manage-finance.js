@@ -1,4 +1,4 @@
-  /**
+/**
  * EUFLOW PRO - FINNCE LOGIC
  */
 
@@ -1485,10 +1485,145 @@ function _showShareToast(message) {
     toast._timer = setTimeout(() => toast.classList.remove('visible'), 2800);
 }
 
+/* ===================== DUAL-COPY PRINT LAYOUT ENGINE ===================== */
+const PV_MARGIN_MM = 10;
+const PV_GAP_MM = 20;
+const PV_PAGE_W_MM = 210;
+const PV_PAGE_H_MM = 297;
+const PV_PORTRAIT_CONTENT_W = PV_PAGE_W_MM - 2 * PV_MARGIN_MM;
+const PV_PORTRAIT_CONTENT_H = PV_PAGE_H_MM - 2 * PV_MARGIN_MM;
+const PV_LANDSCAPE_CONTENT_W = PV_PAGE_H_MM - 2 * PV_MARGIN_MM;
+const PV_LANDSCAPE_CONTENT_H = PV_PAGE_W_MM - 2 * PV_MARGIN_MM;
+const PV_MIN_SCALE = 0.55;
+
+function pvPxToMm(px) { return px * 25.4 / 96; }
+
+/** Undoes any scale-wrapping from a previous run so preparePrintLayout()
+ *  can be called repeatedly (e.g. once explicitly + once on 'beforeprint')
+ *  without stacking transforms. */
+function pvResetScaling(printArea) {
+    printArea.querySelectorAll('.pv-scale-wrap').forEach(wrap => {
+        const sheet = wrap.querySelector(':scope > .voucher-sheet');
+        if (sheet) {
+            sheet.style.transform = '';
+            sheet.style.transformOrigin = '';
+            sheet.style.width = '';
+            wrap.parentNode.insertBefore(sheet, wrap);
+        }
+        wrap.remove();
+    });
+}
+
+/** Measures the tallest/widest .voucher-copy currently queued for print and
+ *  decides page orientation + copy layout so both the School and Student
+ *  copies always land on ONE physical sheet — first by choosing
+ *  stack/side-by-side/portrait-landscape, and if the natural size still
+ *  overflows, by shrinking the whole two-copy block (via a fixed-size
+ *  wrapper + transform: scale) so the browser never silently spills onto
+ *  a second print page. Runs automatically right before every
+ *  window.print() call, so no manual "pages per sheet" setting is needed. */
+function preparePrintLayout() {
+    const printArea = document.getElementById('voucher-print-area');
+    if (!printArea) return;
+
+    pvResetScaling(printArea);
+
+    const sheets = Array.from(printArea.querySelectorAll('.voucher-sheet'));
+    const copies = Array.from(printArea.querySelectorAll('.voucher-copy'));
+    if (sheets.length === 0 || copies.length === 0) return;
+
+    sheets.forEach(s => s.classList.remove('pv-stack', 'pv-side-by-side', 'pv-separate'));
+
+    const measurer = document.createElement('div');
+    measurer.style.cssText = `position:fixed; top:0; left:-10000px; visibility:hidden; width:${PV_PORTRAIT_CONTENT_W}mm;`;
+    document.body.appendChild(measurer);
+
+    let maxH = 0, maxW = 0;
+    copies.forEach(copy => {
+        const clone = copy.cloneNode(true);
+        clone.style.margin = '0';
+        clone.style.transform = 'none';
+        measurer.innerHTML = '';
+        measurer.appendChild(clone);
+        const rect = clone.getBoundingClientRect();
+        if (rect.height > maxH) maxH = rect.height;
+        if (rect.width > maxW) maxW = rect.width;
+    });
+    document.body.removeChild(measurer);
+
+    const copyHmm = pvPxToMm(maxH);
+    const copyWmm = pvPxToMm(maxW);
+    const stackedHmm = copyHmm * 2 + PV_GAP_MM;
+    const sideBySideWmm = copyWmm * 2 + PV_GAP_MM;
+
+    let orientation, layoutClass, scale = 1, boxWmm = copyWmm, boxHmm = stackedHmm;
+
+    if (stackedHmm <= PV_PORTRAIT_CONTENT_H) {
+        // Fits stacked on a single portrait page at full size.
+        orientation = 'portrait';
+        layoutClass = 'pv-stack';
+    } else {
+        const fitsLandscapeNatural = sideBySideWmm <= PV_LANDSCAPE_CONTENT_W && copyHmm <= PV_LANDSCAPE_CONTENT_H;
+        const scalePortrait = PV_PORTRAIT_CONTENT_H / stackedHmm;
+        const scaleLandscape = Math.min(PV_LANDSCAPE_CONTENT_W / sideBySideWmm, PV_LANDSCAPE_CONTENT_H / copyHmm);
+
+        if (fitsLandscapeNatural) {
+            // Fits side-by-side on a single landscape page at full size.
+            orientation = 'landscape';
+            layoutClass = 'pv-side-by-side';
+            boxWmm = sideBySideWmm;
+            boxHmm = copyHmm;
+        } else if (scalePortrait >= PV_MIN_SCALE && scalePortrait >= scaleLandscape) {
+            // Shrink-to-fit on portrait keeps both copies stacked and legible.
+            orientation = 'portrait';
+            layoutClass = 'pv-stack';
+            scale = scalePortrait;
+        } else if (scaleLandscape >= PV_MIN_SCALE) {
+            // Shrink-to-fit on landscape keeps both copies side-by-side.
+            orientation = 'landscape';
+            layoutClass = 'pv-side-by-side';
+            scale = scaleLandscape;
+            boxWmm = sideBySideWmm;
+            boxHmm = copyHmm;
+        } else {
+            // Even shrunk it would be too small to read — give each copy its own page.
+            orientation = 'portrait';
+            layoutClass = 'pv-separate';
+        }
+    }
+
+    sheets.forEach(sheet => {
+        sheet.classList.add(layoutClass);
+        if (layoutClass !== 'pv-separate' && scale < 0.999) {
+            const wrap = document.createElement('div');
+            wrap.className = 'pv-scale-wrap';
+            wrap.style.width = (boxWmm * scale) + 'mm';
+            wrap.style.height = (boxHmm * scale) + 'mm';
+            sheet.parentNode.insertBefore(wrap, sheet);
+            wrap.appendChild(sheet);
+            sheet.style.width = boxWmm + 'mm';
+            sheet.style.transform = `scale(${scale})`;
+            sheet.style.transformOrigin = 'top left';
+        }
+    });
+
+    let styleTag = document.getElementById('pv-dynamic-page-style');
+    if (!styleTag) {
+        styleTag = document.createElement('style');
+        styleTag.id = 'pv-dynamic-page-style';
+        document.head.appendChild(styleTag);
+    }
+    styleTag.textContent = `@media print { @page { size: A4 ${orientation} !important; margin: ${PV_MARGIN_MM}mm !important; } }`;
+
+    return { orientation, layoutClass, scale };
+}
+window.addEventListener('beforeprint', preparePrintLayout);
+
 function printVoucherFromModal() {
     const content = document.getElementById('voucher-render-target').innerHTML;
     const printArea = document.getElementById('voucher-print-area');
     printArea.innerHTML = content;
+    preparePrintLayout();
     window.print();
 }
 
@@ -4486,7 +4621,8 @@ function printStudentsSequentially(students, emptyMessage, combineSiblings) {
         ? `Preparing ${singleCount} voucher${singleCount === 1 ? '' : 's'} + ${familyCount} family voucher${familyCount === 1 ? '' : 's'} for print…`
         : `Preparing ${units.length} voucher${units.length === 1 ? '' : 's'} for print…`;
     showFinanceToast(msg, 'info');
-    setTimeout(() => window.print(), 200);
+    preparePrintLayout();
+    setTimeout(() => { preparePrintLayout(); window.print(); }, 200);
 }
 
 function printAllVouchers() {
@@ -4532,6 +4668,7 @@ function printStudentVoucher(studentId, fullName) {
     printStudentsSequentially([student], '', false);
 }
 
+window.preparePrintLayout = preparePrintLayout;
 window.openPrintVouchersModal = openPrintVouchersModal;
 window.closePrintVouchersModal = closePrintVouchersModal;
 window.backToPrintModeSelect = backToPrintModeSelect;
@@ -4994,7 +5131,7 @@ function printCustomFeeVouchers(feeId) {
     if (!fee) return;
     const html = fee.records.map(r => _buildCustomFeeVoucherHTML(fee, r)).join('<div style="page-break-after:always;"></div>');
     const printArea = document.getElementById('voucher-print-area');
-    if (printArea) { printArea.innerHTML = html; window.print(); }
+    if (printArea) { printArea.innerHTML = html; preparePrintLayout(); window.print(); }
 }
 
 /* ── Fee Defaulter Page ──────────────────────────────────── */
