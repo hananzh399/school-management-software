@@ -1216,6 +1216,7 @@
     border: 2px dashed #cbd5e1;
     border-radius: 14px;
     padding: 22px 24px 18px;
+    margin-top: 14px;
     background: linear-gradient(180deg, #f8fffd 0%, #ffffff 40%);
 }
 
@@ -1223,13 +1224,16 @@
     position: absolute;
     top: -12px;
     right: 20px;
-    padding: 5px 14px;
+    padding: 6px 16px;
     border-radius: 999px;
-    font-size: 0.7rem;
+    font-size: 0.74rem;
     font-weight: 800;
     letter-spacing: 0.05em;
     text-transform: uppercase;
     color: white;
+    border: 1.5px solid rgba(255,255,255,0.6);
+    z-index: 2;
+    white-space: nowrap;
 }
 
 .tag-blue { background: linear-gradient(135deg, #3498db, #2980b9); }
@@ -1635,7 +1639,44 @@
     display: none;
 }
 
+/* Dual-copy layout modes — the class is applied dynamically by
+   preparePrintLayout() in JS right before window.print(), based on
+   measured voucher height/width vs A4 dimensions. */
+.voucher-sheet.pv-stack {
+    display: flex;
+    flex-direction: column;
+}
+.voucher-sheet.pv-side-by-side {
+    display: flex;
+    flex-direction: row;
+    align-items: flex-start;
+}
+.voucher-sheet.pv-side-by-side > .voucher-copy {
+    flex: 1 1 0;
+    min-width: 0;
+}
+.voucher-sheet.pv-separate > .voucher-copy {
+    break-after: page;
+    page-break-after: always;
+}
+.voucher-sheet.pv-separate > .voucher-copy:last-child {
+    break-after: auto;
+    page-break-after: auto;
+}
+
+/* Shrink-to-fit wrapper — sized exactly to the scaled content by JS so the
+   print pagination engine reserves only that much space (transform alone
+   does not shrink an element's layout box, which is what used to force a
+   second page and the need to manually pick "2 pages per sheet"). */
+.pv-scale-wrap {
+    overflow: hidden;
+}
+
 @media print {
+    html, body {
+        background: none !important;
+        overflow: visible !important;
+    }
     body * {
         visibility: hidden;
     }
@@ -1648,24 +1689,63 @@
         top: 0;
         left: 0;
         width: 100%;
+        overflow: visible;
+    }
+    #voucher-print-area, #voucher-print-area * {
+        box-shadow: none !important;
+        filter: none !important;
     }
     .voucher-sheet {
-        box-shadow: none;
-        gap: 12px;
-        padding: 10px;
+        gap: 20mm;
+        padding: 0;
     }
     .voucher-copy {
         border: 1.5px dashed #94a3b8;
+        break-inside: avoid;
         page-break-inside: avoid;
     }
     .voucher-child-block {
+        break-inside: avoid;
         page-break-inside: avoid;
     }
     .print-page-break {
+        break-after: page;
         page-break-after: always;
     }
+    /* Colors that carry meaning (tags, totals, discounts, stamps) are
+       force-printed; everything else stays plain to avoid heavy ink /
+       "black box" rendering issues on some printers. */
+    .voucher-copy-tag,
+    .voucher-family-badge,
+    .voucher-total-row.voucher-total-ontime td,
+    .voucher-total-row.voucher-total-late td,
+    .voucher-row-discount td,
+    .voucher-row-arrears td,
+    .paid-stamp-overlay,
+    .class-status-badge {
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+        color-adjust: exact;
+    }
+    /* Solid, bordered, bold label instead of the light on-screen gradient —
+       stays legible on grayscale/monochrome printers, where a pale
+       blue/green gradient with white text can wash out almost completely. */
+    .voucher-copy-tag {
+        background: #ffffff !important;
+        border: 1.5px solid #0f172a;
+        text-shadow: none;
+        font-weight: 900;
+    }
+    .voucher-copy-tag.tag-blue {
+        border-color: #1d4ed8;
+        color: #1d4ed8 !important;
+    }
+    .voucher-copy-tag.tag-green {
+        border-color: #15803d;
+        color: #15803d !important;
+    }
     @page {
-        size: A4;
+        size: A4 portrait;
         margin: 10mm;
     }
 }
