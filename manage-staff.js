@@ -11,6 +11,15 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 
+ // NEW: Update UI Logo from Settings immediately
+    const school = _getSchoolIdentity();
+    const logos = document.querySelectorAll('.brand-logo');
+    logos.forEach(img => {
+        if (school.logo && !school.logo.includes('logo-icon.png')) {
+            img.src = school.logo;
+        }
+    });
+
 /* ============================================
    THEME TOGGLE
    ============================================ */
@@ -443,16 +452,17 @@ function renderFormFields(category) {
     const grid = document.getElementById('form-dynamic-fields');
     grid.innerHTML = '';
 
-    const createInput = (id, label, type='text', fullWidth=false, required=true) => {
+    const createInput = (id, label, type='text', fullWidth=false, required=true, readonly=false) => {
         return `
             <div class="form-group ${fullWidth ? 'full-width' : ''}">
                 <label for="${id}">${label}</label>
-                <input type="${type}" id="${id}" name="${id}" ${required ? 'required' : ''} ${type === 'number' ? 'min="0"' : ''}>
+                <input type="${type}" id="${id}" name="${id}" ${required ? 'required' : ''} ${type === 'number' ? 'min="0"' : ''} ${readonly ? 'readonly' : ''}>
             </div>
         `;
     };
 
     if (category === 'Teaching') {
+        grid.innerHTML += createInput('f-staff-id', 'Teacher ID', 'text', false, false, true);
         grid.innerHTML += createInput('f-name', 'Teacher Name');
         grid.innerHTML += createInput('f-qualification', 'Qualification');
         grid.innerHTML += createInput('f-subjects', 'Subjects');
@@ -481,6 +491,7 @@ function renderFormFields(category) {
         grid.innerHTML += createInput('f-security-total', 'Total Security Amount (PKR)', 'number', false, false);
         grid.innerHTML += createInput('f-security-monthly', 'Monthly Deduction (PKR)', 'number', false, false);
     } else {
+        grid.innerHTML += createInput('f-staff-id', 'Staff ID', 'text', false, false, true);
         grid.innerHTML += createInput('f-name', 'Staff Name');
         grid.innerHTML += createInput('f-job', 'Job Title');
         grid.innerHTML += createInput('f-startTime', 'Start Time');
@@ -515,6 +526,9 @@ function openAddForm() {
     document.getElementById('form-modal-title').textContent = title;
     renderFormFields(currentCategory);
     document.getElementById('staff-form').reset();
+    // Show the auto-generated staff ID before saving
+    const idField = document.getElementById('f-staff-id');
+    if (idField) idField.value = generateStaffId();
     document.getElementById('form-modal').classList.remove('d-none');
 }
 
@@ -527,6 +541,10 @@ function openEditForm() {
     // Prefill data
     const staff = staffData[currentCategory].find(s => s.id === currentProfileId);
     if (!staff) return;
+
+    // Show existing staff ID (read-only)
+    const idField = document.getElementById('f-staff-id');
+    if (idField) idField.value = staff.id;
 
     document.getElementById('f-name').value = staff.name;
     document.getElementById('f-gender').value = staff.gender;
@@ -613,9 +631,13 @@ function handleFormSubmit(e) {
         // Update profile view text
         showProfileView(currentProfileId, currentCategory);
     } else {
-        // Add new
-        const prefix = currentCategory === 'Teaching' ? 'TCH-' : 'NTS-';
-        newData.id = prefix + Math.floor(1000 + Math.random() * 9000);
+        // Add new — use the ID shown in the form if still available, otherwise regenerate
+        const displayedId = document.getElementById('f-staff-id')?.value || '';
+        const allIds = []
+            .concat(staffData['Teaching'] || [])
+            .concat(staffData['Non-Teaching'] || [])
+            .map(s => s.id);
+        newData.id = displayedId && !allIds.includes(displayedId) ? displayedId : generateStaffId();
         newData.fines = 0;
         newData.type = currentCategory; // tag for bucket integrity
         staffData[currentCategory].push(newData);
@@ -1053,16 +1075,17 @@ function renderFormFields(category) {
     const grid = document.getElementById('form-dynamic-fields');
     grid.innerHTML = '';
 
-    const createInput = (id, label, type='text', fullWidth=false, required=true) => `
+    const createInput = (id, label, type='text', fullWidth=false, required=true, readonly=false) => `
         <div class="form-group ${fullWidth ? 'full-width' : ''}">
             <label for="${id}">${label}</label>
-            <input type="${type}" id="${id}" name="${id}" ${required ? 'required' : ''} ${type === 'number' ? 'min="0"' : ''}>
+            <input type="${type}" id="${id}" name="${id}" ${required ? 'required' : ''} ${type === 'number' ? 'min="0"' : ''} ${readonly ? 'readonly' : ''}>
         </div>`;
 
     // Photo first (both categories)
     grid.innerHTML += buildPhotoField('');
 
     if (category === 'Teaching') {
+        grid.innerHTML += createInput('f-staff-id', 'Teacher ID', 'text', false, false, true);
         grid.innerHTML += createInput('f-name', 'Teacher Name');
         grid.innerHTML += createInput('f-qualification', 'Qualification');
         grid.innerHTML += createInput('f-subjects', 'Subjects');
@@ -1087,6 +1110,7 @@ function renderFormFields(category) {
         grid.innerHTML += createInput('f-phone', 'Phone Number');
         grid.innerHTML += createInput('f-address', 'Address', 'text', true);
     } else {
+        grid.innerHTML += createInput('f-staff-id', 'Staff ID', 'text', false, false, true);
         grid.innerHTML += createInput('f-name', 'Staff Name');
         grid.innerHTML += createInput('f-job', 'Job Title');
         grid.innerHTML += createInput('f-startTime', 'Start Time', 'time');
@@ -1145,6 +1169,10 @@ function openEditForm() {
     const cnicInput = document.getElementById('f-cnic');
     if (cnicInput) cnicInput.value = formatCnic(staff.cnic || '');
 
+    // Show existing staff ID (read-only)
+    const idField = document.getElementById('f-staff-id');
+    if (idField) idField.value = staff.id || '';
+
     // Common
     document.getElementById('f-name').value = staff.name || '';
     document.getElementById('f-gender').value = staff.gender || 'Male';
@@ -1188,6 +1216,9 @@ function openAddForm() {
     document.getElementById('form-modal-title').textContent = title;
     renderFormFields(currentCategory);
     document.getElementById('staff-form').reset();
+    // Show the auto-generated staff ID before saving
+    const idField = document.getElementById('f-staff-id');
+    if (idField) idField.value = generateStaffId();
     document.getElementById('form-modal').classList.remove('d-none');
 }
 
@@ -1248,8 +1279,13 @@ function handleFormSubmit(e) {
         }
         showProfileView(currentProfileId, currentCategory);
     } else {
-        const prefix = currentCategory === 'Teaching' ? 'TCH-' : 'NTS-';
-        newData.id = prefix + Math.floor(1000 + Math.random() * 9000);
+        // Add new — use the ID shown in the form if still available, otherwise regenerate
+        const displayedId = document.getElementById('f-staff-id')?.value || '';
+        const allIds = []
+            .concat(staffData['Teaching'] || [])
+            .concat(staffData['Non-Teaching'] || [])
+            .map(s => s.id);
+        newData.id = displayedId && !allIds.includes(displayedId) ? displayedId : generateStaffId();
         newData.fines = 0;
         newData.type = currentCategory;
         staffData[currentCategory].push(newData);
@@ -1404,4 +1440,1480 @@ function populateDirectory(category, filterText = '') {
         }
         tbody.appendChild(tr);
     });
+}
+
+/* ============================================================
+   ============================================================
+   V2 UPGRADE BLOCK
+   Uploads (200KB limit), conditional guardian field,
+   dynamic class assignment tags, class-incharge toggle.
+   Declared LAST so these definitions win.
+   ============================================================
+   ============================================================ */
+
+const MAX_UPLOAD_BYTES = 200 * 1024;
+
+/* Shared state for the new widgets */
+let _pendingAgreement   = null;   // { name, type, data }
+let _classAssignments   = [];     // [{ cls, section }]
+let _guardianType       = 'Father';
+let _inchargeOn         = false;
+
+/* ---- Class/section source (Settings) ---- */
+function getAssignClasses() {
+    return getSettingsClasses();
+}
+function getSectionsFor(clsName) {
+    const cfg = getAssignClasses().find(c => c.name === clsName);
+    return (cfg && Array.isArray(cfg.sections)) ? cfg.sections.filter(Boolean) : [];
+}
+function _esc(v) {
+    return String(v == null ? '' : v).replace(/&/g,'&amp;').replace(/</g,'&lt;')
+        .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function _fillSectionSelect(secSel, clsName, placeholder) {
+    if (!secSel) return;
+    if (!clsName) {
+        secSel.innerHTML = `<option value="">${placeholder}</option>`;
+        secSel.disabled = true;
+        return;
+    }
+    const sections = getSectionsFor(clsName);
+    if (!sections.length) {
+        secSel.innerHTML = '<option value="">No sections</option>';
+        secSel.disabled = true;
+    } else {
+        secSel.innerHTML = '<option value="">— Select Section —</option>' +
+            sections.map(s => `<option value="${_esc(s)}">Section ${_esc(s)}</option>`).join('');
+        secSel.disabled = false;
+    }
+}
+
+/* ============================================
+   FILE UPLOADS — 200KB LIMIT
+   ============================================ */
+function _setUploadError(errorElId, msg) {
+    const el = document.getElementById(errorElId);
+    if (!el) return;
+    el.textContent = msg || '';
+    el.classList.toggle('visible', !!msg);
+}
+function _isOverLimit(file) {
+    return !!file && file.size > MAX_UPLOAD_BYTES;
+}
+function _kb(bytes) {
+    return Math.round(bytes / 1024) + 'KB';
+}
+
+/* ---- Staff photo (override) ---- */
+function buildPhotoField(existing = '') {
+    _pendingPhoto = existing || '';
+    const inner = existing
+        ? `<img src="${_esc(existing)}" alt="Staff photo">`
+        : `<i class="fas fa-user"></i>`;
+    return `
+    <div class="form-group full-width photo-upload-group">
+        <div class="photo-upload-preview" id="f-photo-preview">${inner}</div>
+        <div class="photo-upload-actions">
+            <label for="f-photo" class="btn-photo-pick"><i class="fas fa-camera"></i> Choose Photo</label>
+            <input type="file" id="f-photo" accept="image/*">
+            <button type="button" class="btn-photo-remove" onclick="clearStaffPhoto()"><i class="fas fa-times"></i> Remove</button>
+            <div class="upload-hint">JPG / PNG — max 200KB</div>
+            <div class="upload-error" id="f-photo-error"></div>
+        </div>
+    </div>`;
+}
+function wirePhotoField() {
+    const input = document.getElementById('f-photo');
+    if (!input) return;
+    input.addEventListener('change', (e) => {
+        _setUploadError('f-photo-error', '');
+        const file = e.target.files && e.target.files[0];
+        if (!file) return;
+        if (_isOverLimit(file)) {
+            input.value = '';
+            _setUploadError('f-photo-error', `File too large (${_kb(file.size)}). Maximum size is 200KB.`);
+            return;
+        }
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+            _pendingPhoto = ev.target.result;
+            const prev = document.getElementById('f-photo-preview');
+            if (prev) prev.innerHTML = `<img src="${_pendingPhoto}" alt="Staff photo">`;
+        };
+        reader.readAsDataURL(file);
+    });
+}
+function clearStaffPhoto() {
+    _pendingPhoto = '';
+    const prev = document.getElementById('f-photo-preview');
+    if (prev) prev.innerHTML = '<i class="fas fa-user"></i>';
+    const input = document.getElementById('f-photo');
+    if (input) input.value = '';
+    _setUploadError('f-photo-error', '');
+}
+
+/* ---- Staff agreement ---- */
+function buildAgreementField(existing = null) {
+    _pendingAgreement = existing || null;
+    return `
+    <div class="form-group full-width agreement-upload-group">
+        <label>Staff Agreement</label>
+        <div class="agreement-row">
+            <label for="f-agreement" class="btn-photo-pick"><i class="fas fa-file-upload"></i> Choose File</label>
+            <input type="file" id="f-agreement" accept="application/pdf,image/*">
+            <span class="agreement-file-name" id="f-agreement-name">${_pendingAgreement ? _esc(_pendingAgreement.name) : 'No file selected'}</span>
+            <button type="button" class="btn-photo-remove" onclick="clearStaffAgreement()"><i class="fas fa-times"></i> Remove</button>
+        </div>
+        <div class="upload-hint">PDF, JPG or PNG — max 200KB</div>
+        <div class="upload-error" id="f-agreement-error"></div>
+    </div>`;
+}
+function wireAgreementField() {
+    const input = document.getElementById('f-agreement');
+    if (!input) return;
+    input.addEventListener('change', (e) => {
+        _setUploadError('f-agreement-error', '');
+        const file = e.target.files && e.target.files[0];
+        if (!file) return;
+
+        const okType = file.type === 'application/pdf' || /^image\//.test(file.type);
+        if (!okType) {
+            input.value = '';
+            _setUploadError('f-agreement-error', 'Unsupported file type. Upload a PDF or an image.');
+            return;
+        }
+        if (_isOverLimit(file)) {
+            input.value = '';
+            _setUploadError('f-agreement-error', `File too large (${_kb(file.size)}). Maximum size is 200KB.`);
+            return;
+        }
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+            _pendingAgreement = { name: file.name, type: file.type, data: ev.target.result };
+            const nameEl = document.getElementById('f-agreement-name');
+            if (nameEl) nameEl.textContent = file.name;
+        };
+        reader.readAsDataURL(file);
+    });
+}
+function clearStaffAgreement() {
+    _pendingAgreement = null;
+    const input = document.getElementById('f-agreement');
+    if (input) input.value = '';
+    const nameEl = document.getElementById('f-agreement-name');
+    if (nameEl) nameEl.textContent = 'No file selected';
+    _setUploadError('f-agreement-error', '');
+}
+
+/* ============================================
+   GENDER + CONDITIONAL GUARDIAN FIELD
+   ============================================ */
+function buildGenderField(value = 'Male') {
+    return `
+    <div class="form-group">
+        <label for="f-gender">Gender</label>
+        <select id="f-gender" name="f-gender" onchange="onGenderChange()">
+            <option value="Male"${value === 'Male' ? ' selected' : ''}>Male</option>
+            <option value="Female"${value === 'Female' ? ' selected' : ''}>Female</option>
+            <option value="Other"${value === 'Other' ? ' selected' : ''}>Other</option>
+        </select>
+    </div>`;
+}
+function buildGuardianField(type = 'Father', name = '') {
+    _guardianType = (type === 'Husband') ? 'Husband' : 'Father';
+    return `
+    <div class="form-group guardian-group" id="f-guardian-group">
+        <div class="guardian-toggle collapsible" id="f-guardian-toggle">
+            <button type="button" class="guardian-opt${_guardianType === 'Father' ? ' active' : ''}"
+                    id="f-guardian-opt-father" onclick="setGuardianType('Father')">Father Name</button>
+            <button type="button" class="guardian-opt${_guardianType === 'Husband' ? ' active' : ''}"
+                    id="f-guardian-opt-husband" onclick="setGuardianType('Husband')">Husband Name</button>
+        </div>
+        <label for="f-guardian-name" id="f-guardian-label">${_guardianType} Name</label>
+        <input type="text" id="f-guardian-name" name="f-guardian-name" value="${_esc(name)}">
+    </div>`;
+}
+function setGuardianType(type) {
+    _guardianType = (type === 'Husband') ? 'Husband' : 'Father';
+    const label = document.getElementById('f-guardian-label');
+    if (label) label.textContent = `${_guardianType} Name`;
+    const input = document.getElementById('f-guardian-name');
+    if (input) input.placeholder = `Enter ${_guardianType.toLowerCase()} name`;
+    const f = document.getElementById('f-guardian-opt-father');
+    const h = document.getElementById('f-guardian-opt-husband');
+    if (f) f.classList.toggle('active', _guardianType === 'Father');
+    if (h) h.classList.toggle('active', _guardianType === 'Husband');
+}
+function onGenderChange() {
+    const gender = (document.getElementById('f-gender') || {}).value || 'Male';
+    const toggle = document.getElementById('f-guardian-toggle');
+    if (!toggle) return;
+    const isFemale = gender === 'Female';
+    toggle.classList.toggle('open', isFemale);
+    if (!isFemale) setGuardianType('Father');
+}
+
+/* ============================================
+   DYNAMIC TEACHING CLASS ASSIGNMENT (green tags)
+   ============================================ */
+function buildClassAssignPicker(existing = '') {
+    _classAssignments = [];
+    if (existing) {
+        try {
+            const arr = typeof existing === 'string' ? JSON.parse(existing) : existing;
+            if (Array.isArray(arr)) {
+                arr.forEach(a => {
+                    if (a && a.cls) _classAssignments.push({ cls: a.cls, section: a.section || '' });
+                });
+            }
+        } catch (e) { /* ignore */ }
+    }
+
+    const classes = getAssignClasses();
+    return `
+    <div class="form-group full-width class-assign-group" id="f-classassign-group">
+        <label>Class Assignment</label>
+        <div class="class-tags" id="f-class-tags">${_renderClassTags()}</div>
+        ${classes.length ? `
+        <button type="button" class="add-class-btn" onclick="toggleClassAssignBox()">
+            <i class="fas fa-plus"></i> Add Class
+        </button>
+        <div class="class-assign-box collapsible" id="f-classassign-box">
+            <div class="class-assign-row">
+                <div>
+                    <span class="assign-select-label">Class</span>
+                    <select id="f-assign-cls" onchange="onAssignClassChange()">
+                        <option value="">— Select Class —</option>
+                        ${classes.map(c => `<option value="${_esc(c.name)}">${_esc(c.name)}</option>`).join('')}
+                    </select>
+                </div>
+                <div>
+                    <span class="assign-select-label">Section</span>
+                    <select id="f-assign-sec" disabled>
+                        <option value="">— Select Class first —</option>
+                    </select>
+                </div>
+                <button type="button" class="assign-add-btn" onclick="addClassAssignment()">Add</button>
+            </div>
+            <div class="upload-error" id="f-assign-error"></div>
+        </div>` : '<span class="incharge-no-assignment">No classes defined in Settings yet.</span>'}
+    </div>`;
+}
+function _renderClassTags() {
+    if (!_classAssignments.length) {
+        return '<span class="incharge-no-assignment">No class assigned yet.</span>';
+    }
+    return _classAssignments.map((a, i) => {
+        const label = a.section ? `${_esc(a.cls)} — ${_esc(a.section)}` : _esc(a.cls);
+        return `<span class="class-tag">${label}<button type="button" class="class-tag-remove"
+            onclick="removeClassAssignment(${i})" title="Remove">&times;</button></span>`;
+    }).join('');
+}
+function _refreshClassTags() {
+    const el = document.getElementById('f-class-tags');
+    if (el) el.innerHTML = _renderClassTags();
+}
+function toggleClassAssignBox(force) {
+    const box = document.getElementById('f-classassign-box');
+    if (!box) return;
+    const open = (typeof force === 'boolean') ? force : !box.classList.contains('open');
+    box.classList.toggle('open', open);
+}
+function onAssignClassChange() {
+    const clsSel = document.getElementById('f-assign-cls');
+    _fillSectionSelect(document.getElementById('f-assign-sec'), clsSel ? clsSel.value : '', '— Select Class first —');
+}
+function addClassAssignment() {
+    const clsSel = document.getElementById('f-assign-cls');
+    const secSel = document.getElementById('f-assign-sec');
+    _setUploadError('f-assign-error', '');
+    if (!clsSel || !clsSel.value) {
+        _setUploadError('f-assign-error', 'Please select a class.');
+        return;
+    }
+    const cls = clsSel.value;
+    const hasSections = getSectionsFor(cls).length > 0;
+    const section = hasSections ? (secSel ? secSel.value : '') : '';
+    if (hasSections && !section) {
+        _setUploadError('f-assign-error', 'Please select a section.');
+        return;
+    }
+    if (_classAssignments.some(a => a.cls === cls && a.section === section)) {
+        _setUploadError('f-assign-error', 'This class is already assigned.');
+        return;
+    }
+    _classAssignments.push({ cls, section });
+    _refreshClassTags();
+    clsSel.value = '';
+    _fillSectionSelect(secSel, '', '— Select Class first —');
+    toggleClassAssignBox(false);
+}
+function removeClassAssignment(idx) {
+    _classAssignments.splice(idx, 1);
+    _refreshClassTags();
+}
+function readClassAssignments() {
+    return _classAssignments.map(a => a.section ? `${a.cls} - ${a.section}` : a.cls).join(', ');
+}
+
+/* ============================================
+   CLASS INCHARGE TOGGLE
+   ============================================ */
+function buildInchargePicker(existingCls = '', existingSec = '') {
+    _inchargeOn = !!existingCls;
+    _inchargeAssignments = _inchargeOn ? [{ cls: existingCls, section: existingSec || '' }] : [];
+    const classes = getAssignClasses();
+    return `
+    <div class="form-group full-width incharge-group" id="f-incharge-group">
+        <label class="incharge-switch">
+            <input type="checkbox" id="f-incharge-toggle" ${_inchargeOn ? 'checked' : ''} onchange="onInchargeToggle()">
+            <span class="incharge-switch-track"><span class="incharge-switch-thumb"></span></span>
+            <span class="incharge-switch-text">Make Class Incharge</span>
+        </label>
+        <div class="incharge-fields collapsible${_inchargeOn ? ' open' : ''}" id="f-incharge-fields">
+            <div class="class-assign-row">
+                <div>
+                    <span class="assign-select-label">Class</span>
+                    <select id="f-incharge-cls" onchange="onInchargeClsChange()">
+                        <option value="">— Select Class —</option>
+                        ${classes.map(c => `<option value="${_esc(c.name)}"${c.name === existingCls ? ' selected' : ''}>${_esc(c.name)}</option>`).join('')}
+                    </select>
+                </div>
+                <div>
+                    <span class="assign-select-label">Section</span>
+                    <select id="f-incharge-sec" disabled>
+                        <option value="">— Select Class first —</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+    </div>`;
+}
+function wireInchargePicker(existingCls = '', existingSec = '') {
+    if (existingCls) {
+        _fillSectionSelect(document.getElementById('f-incharge-sec'), existingCls, '— Select Class first —');
+        const secSel = document.getElementById('f-incharge-sec');
+        if (secSel && existingSec) secSel.value = existingSec;
+    }
+}
+function onInchargeToggle() {
+    const cb = document.getElementById('f-incharge-toggle');
+    const box = document.getElementById('f-incharge-fields');
+    _inchargeOn = !!(cb && cb.checked);
+    if (box) box.classList.toggle('open', _inchargeOn);
+}
+function onInchargeClsChange() {
+    const clsSel = document.getElementById('f-incharge-cls');
+    _fillSectionSelect(document.getElementById('f-incharge-sec'), clsSel ? clsSel.value : '', '— Select Class first —');
+}
+function readIncharge() {
+    if (!_inchargeOn) return { cls: '', section: '', label: '' };
+    const cls = (document.getElementById('f-incharge-cls') || {}).value || '';
+    const secSel = document.getElementById('f-incharge-sec');
+    const section = (secSel && !secSel.disabled) ? (secSel.value || '') : '';
+    return { cls, section, label: cls ? (section ? `${cls} - ${section}` : cls) : '' };
+}
+
+/* ---- OVERRIDE: renderFormFields ---- */
+function renderFormFields(category) {
+    const grid = document.getElementById('form-dynamic-fields');
+    grid.innerHTML = '';
+
+    const createInput = (id, label, type='text', fullWidth=false, required=true, readonly=false) => `
+        <div class="form-group ${fullWidth ? 'full-width' : ''}">
+            <label for="${id}">${label}</label>
+            <input type="${type}" id="${id}" name="${id}" ${required ? 'required' : ''} ${type === 'number' ? 'min="0"' : ''} ${readonly ? 'readonly' : ''}>
+        </div>`;
+
+    let html = buildPhotoField('');
+
+    if (category === 'Teaching') {
+        html += createInput('f-staff-id', 'Teacher ID', 'text', false, false, true);
+        html += createInput('f-name', 'Teacher Name');
+        html += buildGenderField('Male');
+        html += buildGuardianField('Father', '');
+        html += createInput('f-qualification', 'Qualification');
+        html += createInput('f-subjects', 'Subjects');
+        html += buildClassAssignPicker('');
+        html += buildInchargePicker('', '');
+        html += createInput('f-salary', 'Salary', 'number');
+        html += createInput('f-joined', 'Date Joined', 'date');
+        html += `
+            <div class="form-group full-width">
+                <label for="f-cnic">CNIC (Pakistani 13-digit)</label>
+                ${buildCnicField('f-cnic')}
+            </div>`;
+        html += createInput('f-phone', 'Phone Number');
+        html += createInput('f-address', 'Address', 'text', true);
+    } else {
+        html += createInput('f-staff-id', 'Staff ID', 'text', false, false, true);
+        html += createInput('f-name', 'Staff Name');
+        html += buildGenderField('Male');
+        html += buildGuardianField('Father', '');
+        html += createInput('f-job', 'Job Title');
+        html += createInput('f-startTime', 'Start Time', 'time');
+        html += createInput('f-endTime', 'End Time', 'time');
+        html += createInput('f-salary', 'Salary', 'number');
+        html += `
+            <div class="form-group full-width">
+                <label for="f-cnic">CNIC (Pakistani 13-digit)</label>
+                ${buildCnicField('f-cnic')}
+            </div>`;
+        html += createInput('f-phone', 'Phone Number');
+        html += createInput('f-address', 'Address', 'text', true);
+    }
+
+    html += buildAgreementField(null);
+
+    html += `
+        <div class="form-group security-section-divider full-width">
+            <div class="security-divider-label"><i class="fas fa-shield-alt"></i> Security Deposit (Optional)</div>
+        </div>`;
+    html += createInput('f-security-total', 'Total Security Amount (PKR)', 'number', false, false);
+    html += createInput('f-security-monthly', 'Monthly Deduction (PKR)', 'number', false, false);
+
+    grid.innerHTML = html;
+
+    wirePhotoField();
+    wireAgreementField();
+    wireCnicField('f-cnic');
+    wireInchargePicker();
+    onGenderChange();
+}
+
+/* ---- OVERRIDE: openAddForm ---- */
+function openAddForm() {
+    isEditMode = false;
+    _pendingPhoto = '';
+    _pendingAgreement = null;
+    _classAssignments = [];
+    _inchargeOn = false;
+    const title = currentCategory === 'Teaching' ? 'Add Teacher' : 'Add Non-Teaching Staff';
+    document.getElementById('form-modal-title').textContent = title;
+    renderFormFields(currentCategory);
+    // Show the auto-generated staff ID before saving
+    const idField = document.getElementById('f-staff-id');
+    if (idField) idField.value = generateStaffId();
+    document.getElementById('form-modal').classList.remove('d-none');
+}
+
+/* ---- OVERRIDE: openEditForm ---- */
+function openEditForm() {
+    isEditMode = true;
+    const title = currentCategory === 'Teaching' ? 'Edit Teacher' : 'Edit Non-Teaching Staff';
+    document.getElementById('form-modal-title').textContent = title;
+    renderFormFields(currentCategory);
+
+    const staff = staffData[currentCategory].find(s => s.id === currentProfileId);
+    if (!staff) return;
+
+    // Photo
+    if (staff.photo) {
+        _pendingPhoto = staff.photo;
+        const prev = document.getElementById('f-photo-preview');
+        if (prev) prev.innerHTML = `<img src="${staff.photo}" alt="Staff photo">`;
+    }
+
+    // Agreement
+    if (staff.agreement && staff.agreement.data) {
+        _pendingAgreement = staff.agreement;
+        const nameEl = document.getElementById('f-agreement-name');
+        if (nameEl) nameEl.textContent = staff.agreement.name || 'Agreement file';
+    }
+
+    const cnicInput = document.getElementById('f-cnic');
+    if (cnicInput) cnicInput.value = formatCnic(staff.cnic || '');
+
+    // Show existing staff ID (read-only)
+    const idField = document.getElementById('f-staff-id');
+    if (idField) idField.value = staff.id || '';
+
+    document.getElementById('f-name').value    = staff.name || '';
+    document.getElementById('f-gender').value  = staff.gender || 'Male';
+    document.getElementById('f-salary').value  = staff.salary || '';
+    document.getElementById('f-phone').value   = staff.phone || '';
+    document.getElementById('f-address').value = staff.address || '';
+
+    // Guardian
+    onGenderChange();
+    setGuardianType(staff.guardianType || 'Father');
+    const gName = document.getElementById('f-guardian-name');
+    if (gName) gName.value = staff.guardianName || '';
+
+    if (currentCategory === 'Teaching') {
+        document.getElementById('f-qualification').value = staff.qualification || '';
+        document.getElementById('f-subjects').value = staff.subjects || '';
+        document.getElementById('f-joined').value = staff.joined || '';
+
+        // Class assignment tags
+        const assignGroup = document.getElementById('f-classassign-group');
+        if (assignGroup) {
+            const tmp = document.createElement('div');
+            tmp.innerHTML = buildClassAssignPicker(staff.classAssignments || '');
+            assignGroup.replaceWith(tmp.firstElementChild);
+        }
+
+        // Incharge
+        const inchargeGroup = document.getElementById('f-incharge-group');
+        if (inchargeGroup) {
+            const tmp2 = document.createElement('div');
+            tmp2.innerHTML = buildInchargePicker(staff.assignedClass || '', staff.assignedSection || '');
+            inchargeGroup.replaceWith(tmp2.firstElementChild);
+            wireInchargePicker(staff.assignedClass || '', staff.assignedSection || '');
+        }
+    } else {
+        document.getElementById('f-job').value = staff.job || '';
+        document.getElementById('f-startTime').value = staff.startTime || '';
+        document.getElementById('f-endTime').value = staff.endTime || '';
+    }
+
+    if (staff.securityTotal) document.getElementById('f-security-total').value = staff.securityTotal;
+    if (staff.securityMonthly) document.getElementById('f-security-monthly').value = staff.securityMonthly;
+
+    document.getElementById('form-modal').classList.remove('d-none');
+}
+
+/* ---- OVERRIDE: handleFormSubmit ---- */
+function handleFormSubmit(e) {
+    e.preventDefault();
+
+    const guardianInput = document.getElementById('f-guardian-name');
+
+    let newData = {
+        name: document.getElementById('f-name').value,
+        gender: document.getElementById('f-gender').value,
+        guardianType: _guardianType,
+        guardianName: guardianInput ? guardianInput.value.trim() : '',
+        salary: document.getElementById('f-salary').value,
+        phone: document.getElementById('f-phone').value,
+        address: document.getElementById('f-address').value,
+        photo: _pendingPhoto || '',
+        agreement: _pendingAgreement || null,
+        cnic: readCnicField('f-cnic')
+    };
+    // Backwards compatible alias
+    newData.fatherName = _guardianType === 'Father' ? newData.guardianName : '';
+
+    const secTotal = parseFloat(document.getElementById('f-security-total').value) || 0;
+    const secMonthly = parseFloat(document.getElementById('f-security-monthly').value) || 0;
+    newData.securityTotal = secTotal > 0 ? secTotal : 0;
+    newData.securityMonthly = secTotal > 0 && secMonthly > 0 ? secMonthly : 0;
+    if (!isEditMode) newData.securityCollected = 0;
+
+    if (currentCategory === 'Teaching') {
+        newData.qualification = document.getElementById('f-qualification').value;
+        newData.subjects = document.getElementById('f-subjects').value;
+        newData.joined = document.getElementById('f-joined').value;
+
+        // Class assignment tags
+        newData.classes = readClassAssignments();
+        newData.classAssignments = JSON.stringify(_classAssignments);
+
+        // Class incharge
+        const inc = readIncharge();
+        newData.isClassIncharge = !!inc.label;
+        newData.incharge = inc.label;
+        newData.assignedClass = inc.cls;
+        newData.assignedSection = inc.section;
+        newData.inchargeAssignments = JSON.stringify(inc.label ? [{ cls: inc.cls, section: inc.section }] : []);
+    } else {
+        newData.job = document.getElementById('f-job').value;
+        newData.startTime = document.getElementById('f-startTime').value;
+        newData.endTime = document.getElementById('f-endTime').value;
+    }
+
+    if (isEditMode) {
+        let index = staffData[currentCategory].findIndex(s => s.id === currentProfileId);
+        if (index > -1) {
+            const existing = staffData[currentCategory][index];
+            newData.securityCollected = existing.securityCollected || 0;
+            staffData[currentCategory][index] = { ...existing, ...newData };
+        }
+        showProfileView(currentProfileId, currentCategory);
+    } else {
+        // Add new — use the ID shown in the form if still available, otherwise regenerate
+        const displayedId = document.getElementById('f-staff-id')?.value || '';
+        const allIds = []
+            .concat(staffData['Teaching'] || [])
+            .concat(staffData['Non-Teaching'] || [])
+            .map(s => s.id);
+        newData.id = displayedId && !allIds.includes(displayedId) ? displayedId : generateStaffId();
+        newData.fines = 0;
+        newData.type = currentCategory;
+        staffData[currentCategory].push(newData);
+    }
+
+    const db = getGlobalData();
+    db.staff = staffData;
+    saveGlobalData(db);
+
+    populateDirectory(currentCategory);
+    loadStaffCounts(false);
+    closeFormModal();
+}
+
+/* ---- OVERRIDE: showProfileView (adds guardian, tags, agreement) ---- */
+function showProfileView(staffId, category) {
+    const staff = staffData[category].find(s => s.id === staffId);
+    if (!staff) return;
+
+    currentProfileId = staff.id;
+
+    const backBtn = document.querySelector('.profile-view .back-btn');
+    backBtn.setAttribute('onclick', `showDirectoryView('${category}')`);
+
+    document.getElementById('directory-view').classList.add('d-none');
+    const profileView = document.getElementById('profile-view');
+    profileView.classList.remove('d-none');
+    profileView.classList.add('fade-in');
+    setTimeout(() => profileView.classList.remove('fade-in'), 400);
+
+    const nameParts = (staff.name || '?').split(' ');
+    const initials = (nameParts.length > 1 ? nameParts[0][0] + nameParts[1][0] : nameParts[0][0]).toUpperCase();
+
+    const avatarEl = document.querySelector('.profile-avatar');
+    document.getElementById('profile-initials').textContent = initials;
+    const oldImg = avatarEl.querySelector('img');
+    if (oldImg) oldImg.remove();
+    if (staff.photo) {
+        avatarEl.classList.add('has-photo');
+        const img = document.createElement('img');
+        img.src = staff.photo;
+        img.alt = staff.name || 'Staff photo';
+        avatarEl.appendChild(img);
+    } else {
+        avatarEl.classList.remove('has-photo');
+    }
+
+    document.getElementById('profile-name').textContent = staff.name;
+    document.getElementById('profile-id').textContent = staff.id;
+
+    const grid = document.getElementById('profile-details-grid');
+    grid.innerHTML = '';
+
+    const createItem = (label, val, fullWidth = false) => `
+        <div class="detail-item ${fullWidth ? 'full-width' : ''}">
+            <span class="detail-label">${label}</span>
+            <span class="detail-value">${val || '—'}</span>
+        </div>`;
+
+    const guardianLabel = (staff.guardianType || 'Father') + ' Name';
+
+    const agreementHTML = (staff.agreement && staff.agreement.data)
+        ? `<button type="button" class="btn btn-view-agreement" onclick="openAgreementModal('${_esc(staff.id)}')">
+             <i class="fas fa-file-contract"></i> View Agreement</button>
+           <span class="agreement-file-label">${_esc(staff.agreement.name || 'agreement')}</span>`
+        : `<span class="agreement-none">No agreement uploaded.</span>`;
+
+    if (category === 'Teaching') {
+        let tags = '';
+        try {
+            const arr = JSON.parse(staff.classAssignments || '[]');
+            if (Array.isArray(arr) && arr.length) {
+                tags = `<span class="class-tags readonly">` + arr.map(a =>
+                    `<span class="class-tag static">${_esc(a.section ? `${a.cls} — ${a.section}` : a.cls)}</span>`
+                ).join('') + `</span>`;
+            }
+        } catch (e) {}
+        if (!tags) tags = staff.classes || '';
+
+        grid.innerHTML += createItem('Qualification', staff.qualification);
+        grid.innerHTML += createItem('Subjects', staff.subjects);
+        grid.innerHTML += createItem('Class Assignment', tags, true);
+        grid.innerHTML += createItem('Class Incharge', staff.incharge || 'Not assigned', true);
+        grid.innerHTML += createItem('Gender', staff.gender);
+        grid.innerHTML += createItem(guardianLabel, staff.guardianName || staff.fatherName);
+        grid.innerHTML += createItem('Salary', formatCurrency(staff.salary));
+        grid.innerHTML += createItem('Date Joined', staff.joined);
+        grid.innerHTML += createItem('CNIC', staff.cnic);
+        grid.innerHTML += createItem('Phone Number', staff.phone);
+        grid.innerHTML += createItem('Address', staff.address, true);
+        grid.innerHTML += createItem('Staff Agreement', agreementHTML, true);
+        grid.innerHTML += buildSecurityHTML(staff);
+    } else {
+        grid.innerHTML += createItem('Job Title', staff.job);
+        grid.innerHTML += createItem('Gender', staff.gender);
+        grid.innerHTML += createItem(guardianLabel, staff.guardianName || staff.fatherName);
+        grid.innerHTML += createItem('Salary', formatCurrency(staff.salary));
+        grid.innerHTML += createItem('Start Time', staff.startTime);
+        grid.innerHTML += createItem('End Time', staff.endTime);
+        grid.innerHTML += createItem('CNIC', staff.cnic);
+        grid.innerHTML += createItem('Phone Number', staff.phone);
+        grid.innerHTML += createItem('Address', staff.address, true);
+        grid.innerHTML += createItem('Staff Agreement', agreementHTML, true);
+        grid.innerHTML += buildSecurityHTML(staff);
+    }
+}
+
+
+/* ============================================================
+   ============================================================
+   STAFF AGREEMENT VIEWER — view / print / download / share
+   Declared LAST so it always wins.
+   ============================================================
+   ============================================================ */
+
+let _currentAgreementStaff = null; // { id, category, agreement }
+
+/**
+ * Find a staff record by id across both categories (so the modal
+ * doesn't depend on currentCategory being correct).
+ */
+function _findStaffById(staffId) {
+    const cats = ['Teaching', 'Non-Teaching'];
+    for (const cat of cats) {
+        const list = (staffData && staffData[cat]) || [];
+        const found = list.find(s => s.id === staffId);
+        if (found) return { staff: found, category: cat };
+    }
+    return null;
+}
+
+function openAgreementModal(staffId) {
+    const found = _findStaffById(staffId);
+    if (!found || !found.staff.agreement || !found.staff.agreement.data) return;
+
+    const staff = found.staff;
+    _currentAgreementStaff = { id: staff.id, name: staff.name, agreement: staff.agreement };
+
+    document.getElementById('agreement-modal-title').textContent = `${staff.name} — Staff Agreement`;
+
+    const body = document.getElementById('agreement-modal-body');
+    const isPdf = (staff.agreement.type || '').toLowerCase() === 'application/pdf'
+        || /\.pdf$/i.test(staff.agreement.name || '');
+
+    if (isPdf) {
+        body.innerHTML = `<iframe class="agreement-pdf-frame" id="agreement-pdf-frame" src="${staff.agreement.data}"></iframe>`;
+    } else {
+        body.innerHTML = `<img class="agreement-img-preview" id="agreement-img-preview" src="${staff.agreement.data}" alt="Staff agreement">`;
+    }
+
+    document.getElementById('agreement-modal').classList.remove('d-none');
+}
+
+function closeAgreementModal() {
+    document.getElementById('agreement-modal').classList.add('d-none');
+    document.getElementById('agreement-modal-body').innerHTML = '';
+    _currentAgreementStaff = null;
+}
+
+/**
+ * Convert a base64 data URL into a Blob (used for share/download fallbacks).
+ */
+function _dataUrlToBlob(dataUrl) {
+    const parts = dataUrl.split(',');
+    const meta = parts[0];
+    const mimeMatch = meta.match(/data:([^;]+);/);
+    const mime = mimeMatch ? mimeMatch[1] : 'application/octet-stream';
+    const byteString = atob(parts[1]);
+    const arr = new Uint8Array(byteString.length);
+    for (let i = 0; i < byteString.length; i++) arr[i] = byteString.charCodeAt(i);
+    return new Blob([arr], { type: mime });
+}
+
+/**
+ * Download the currently viewed agreement file to the device.
+ */
+function downloadAgreementFile() {
+    if (!_currentAgreementStaff) return;
+    const { agreement, name } = _currentAgreementStaff;
+    const a = document.createElement('a');
+    a.href = agreement.data;
+    a.download = agreement.name || `${name || 'staff'}-agreement`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+}
+
+/**
+ * Print the agreement — opens a dedicated print window sized to the file
+ * so the rest of the app UI never ends up in the printout.
+ */
+function printAgreement() {
+    if (!_currentAgreementStaff) return;
+    const { agreement, name } = _currentAgreementStaff;
+    const isPdf = (agreement.type || '').toLowerCase() === 'application/pdf'
+        || /\.pdf$/i.test(agreement.name || '');
+
+    const printWin = window.open('', '_blank');
+    if (!printWin) return; // popup blocked
+
+    if (isPdf) {
+        printWin.document.write(`
+            <html><head><title>${_esc(name || 'Staff Agreement')}</title>
+            <style>html,body{margin:0;height:100%;} iframe{border:0;width:100%;height:100%;}</style>
+            </head><body>
+            <iframe src="${agreement.data}" onload="setTimeout(function(){window.focus();window.print();},300)"></iframe>
+            </body></html>`);
+    } else {
+        printWin.document.write(`
+            <html><head><title>${_esc(name || 'Staff Agreement')}</title>
+            <style>
+                html,body{margin:0;padding:0;display:flex;align-items:center;justify-content:center;background:#fff;}
+                img{max-width:100%;max-height:100vh;}
+                @media print { img{width:100%;height:auto;} }
+            </style>
+            </head><body>
+            <img src="${agreement.data}" onload="setTimeout(function(){window.focus();window.print();},300)">
+            </body></html>`);
+    }
+    printWin.document.close();
+}
+
+/**
+ * Share the agreement to WhatsApp (or any installed share target) using
+ * the native Web Share API when available (works on most mobile browsers
+ * and shares the actual file/image). Falls back to opening WhatsApp Web
+ * with a text message plus triggering a download, since browsers cannot
+ * attach a file to wa.me links directly.
+ */
+async function shareAgreementWhatsApp() {
+    if (!_currentAgreementStaff) return;
+    const { agreement, name } = _currentAgreementStaff;
+    const fileName = agreement.name || `${name || 'staff'}-agreement`;
+
+    try {
+        const blob = _dataUrlToBlob(agreement.data);
+        const file = new File([blob], fileName, { type: blob.type });
+
+        if (navigator.canShare && navigator.canShare({ files: [file] }) && navigator.share) {
+            await navigator.share({
+                files: [file],
+                title: `${name || 'Staff'} — Agreement`,
+                text: `Staff agreement for ${name || ''}`
+            });
+            return;
+        }
+    } catch (err) {
+        // fall through to fallback below (user cancel also lands here on some browsers)
+        if (err && err.name === 'AbortError') return; // user cancelled share sheet, do nothing
+    }
+
+    // Fallback: download the file locally and open WhatsApp with a text prompt,
+    // since a plain link cannot carry file bytes into WhatsApp.
+    downloadAgreementFile();
+    const msg = encodeURIComponent(`Staff agreement for ${name || ''} — file downloaded, please attach it in WhatsApp.`);
+    window.open(`https://wa.me/?text=${msg}`, '_blank');
+}
+
+/* ============================================================
+   ============================================================
+   EXPERIENCE CERTIFICATE GENERATOR (Teaching staff only)
+   Builds an A4 certificate from the provided school-letterhead
+   template, auto-filled with staff + school data, gender-aware
+   pronouns, and editable position/date fields. Supports print,
+   PNG download, and WhatsApp share. Declared LAST so it wins.
+   ============================================================
+   ============================================================ */
+
+let _certStaffId = null;
+let _certPosition = 'Teacher';
+
+/**
+ * Pull the school's name & logo for THIS logged-in school. Prioritizes the
+ * authoritative Super Admin record (window.SoftSchoolAdmin.getCurrentSchool(),
+ * set up by access-control.js) — the same source manage-students.js already
+ * uses for prefixes/branding — so certificates always match whatever the
+ * super admin actually configured, instead of stale/guessed localStorage
+ * keys or the demo default. Older fallbacks are kept afterwards purely for
+ * single-school / no-super-admin demo setups. Address & phone aren't shown
+ * anywhere in the app yet, so we ask for them once and remember the answer
+ * in localStorage for next time.
+ */
+function _getSchoolIdentity() {
+    let logo = '';
+    let name = '';
+
+    try {
+        // 1. Authoritative source: the school record from Super Admin, via
+        //    the same window.SoftSchoolAdmin API access-control.js exposes.
+        if (window.SoftSchoolAdmin) {
+            const currentSchool = window.SoftSchoolAdmin.getCurrentSchool();
+            if (currentSchool) {
+                if (currentSchool.logo) logo = currentSchool.logo;
+                if (currentSchool.name) name = currentSchool.name;
+            }
+        }
+
+        // 2. Check Global Data (shared-data.js) — legacy fallback
+        const db = (typeof getGlobalData === 'function') ? getGlobalData() : {};
+
+        // Comprehensive search for logo in the database object
+        if (!logo) {
+            if (db.settings?.schoolLogo) logo = db.settings.schoolLogo;
+            else if (db.schoolLogo) logo = db.schoolLogo;
+            else if (db.config?.logo) logo = db.config.logo;
+        }
+
+        if (!name) {
+            if (db.settings?.schoolName) name = db.settings.schoolName;
+            else if (db.schoolName) name = db.schoolName;
+        }
+
+        // 3. Search LocalStorage directly (older Super Admin builds saved here)
+        if (!logo) {
+            logo = localStorage.getItem('schoolLogo') || 
+                   localStorage.getItem('admin_logo') || 
+                   JSON.parse(localStorage.getItem('school_settings') || '{}').logo;
+        }
+
+    } catch (e) { console.warn("Search interrupted:", e); }
+
+    // 4. Last Resort: Grab it from the actual Header Image on the screen
+    if (!logo) {
+        const headerLogo = document.querySelector('.brand-logo');
+        if (headerLogo && headerLogo.src && !headerLogo.src.includes('placeholder')) {
+            // Check if the source is a valid data string or path
+            logo = headerLogo.src;
+        }
+    }
+
+    const contact = JSON.parse(localStorage.getItem('eduflow-school-contact') || '{"address":"","phone":""}');
+
+    return { 
+        name: name || document.querySelector('.school-name')?.textContent?.trim() || 'ST. LAWRENCE INTERNATIONAL SCHOOL', 
+        logo: logo || '', 
+        address: contact.address, 
+        phone: contact.phone 
+    };
+}
+
+function _saveSchoolContact(address, phone) {
+    try {
+        localStorage.setItem('eduflow-school-contact', JSON.stringify({ address, phone }));
+    } catch (e) { /* ignore */ }
+}
+
+/** Gender-aware pronoun set. */
+function _pronouns(gender) {
+    if (gender === 'Female') return { subj: 'she', obj: 'her', poss: 'her' };
+    if (gender === 'Other') return { subj: 'they', obj: 'them', poss: 'their' };
+    return { subj: 'he', obj: 'him', poss: 'his' };
+}
+
+function _todayLong() {
+    return new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+}
+function _formatDateLong(val) {
+    if (!val) return '—';
+    const d = new Date(val);
+    if (isNaN(d.getTime())) return val; // already a display string
+    return d.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+}
+
+
+/* ---- Logo safety: html2canvas chokes on a missing/blocked logo file.
+   We preload it once, cache it as a data URL, and fall back to an inline
+   SVG crest so the certificate always renders. ---- */
+let _certLogoDataURL = null;
+
+const _CERT_FALLBACK_CREST = `<svg viewBox="0 0 64 64" width="52" height="52" aria-hidden="true">
+  <path d="M32 3 58 12v22c0 15-11 24-26 27C17 58 6 49 6 34V12L32 3z" fill="#2f8f7d"/>
+  <path d="M32 3 58 12v22c0 15-11 24-26 27V3z" fill="#1f6f74"/>
+  <path d="M18 24h13v18H18zM33 24h13v18H33z" fill="#f7faf9"/>
+  <path d="M32 22v20" stroke="#1f6f74" stroke-width="2"/>
+</svg>`;
+window._CERT_FALLBACK_CREST = _CERT_FALLBACK_CREST;
+
+function _preloadCertLogo(src) {
+    _certLogoDataURL = null;
+
+    // Log the actual source found for debugging
+    console.log("Attempting to load certificate logo from:", src);
+
+    if (!src || src === "" || src.includes('placeholder')) {
+        console.warn("Logo source is empty or placeholder. Using fallback crest.");
+        refreshCertificatePreview();
+        return;
+    }
+
+    // If it's Base64 (Data URL), it's safe and fast
+    if (src.startsWith('data:image')) {
+        _certLogoDataURL = src;
+        refreshCertificatePreview();
+        return;
+    }
+
+    // If it's a URL/Path, we must convert it
+    const img = new Image();
+    // This line is vital for ERR_CONNECTION issues
+    img.setAttribute('crossOrigin', 'anonymous'); 
+    
+    img.onload = function() {
+        const canvas = document.createElement('canvas');
+        canvas.width = img.width;
+        canvas.height = img.height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0);
+        try {
+            _certLogoDataURL = canvas.toDataURL('image/png');
+            console.log("Logo successfully converted to DataURL.");
+        } catch (e) {
+            console.error("Canvas export failed. Using raw path.");
+            _certLogoDataURL = src;
+        }
+        refreshCertificatePreview();
+    };
+
+    img.onerror = function() {
+        console.error("Failed to load image resource at:", src);
+        _certLogoDataURL = null; // Show the green SVG shield instead
+        refreshCertificatePreview();
+    };
+
+    // Add a timestamp to bypass browser cache
+    img.src = src + (src.includes('?') ? '&' : '?') + 't=' + new Date().getTime();
+}
+
+/**
+ * Open the certificate modal for a Teaching staff member and render
+ * the first preview using smart defaults pulled from their record.
+ */
+function openCertificateModal() {
+    const staff = staffData['Teaching'].find(s => s.id === currentProfileId);
+    if (!staff) return;
+    _certStaffId = staff.id;
+
+    const school = _getSchoolIdentity();
+    const position = (staff.subjects ? staff.subjects.split(',')[0].trim() + ' Teacher' : 'Teacher');
+    _certPosition = position;
+
+    document.getElementById('certificate-modal-title').textContent = `Experience Certificate — ${staff.name}`;
+
+    // Setup the options fields
+    const opts = document.getElementById('certificate-options');
+    opts.innerHTML = `
+        <div class="form-group">
+            <label for="cert-start">Start Date</label>
+            <input type="date" id="cert-start" value="${_esc(staff.joined || '')}" oninput="refreshCertificatePreview()">
+        </div>
+        <div class="form-group">
+            <label for="cert-end">End Date</label>
+            <input type="date" id="cert-end" value="${_esc(new Date().toISOString().slice(0,10))}" oninput="refreshCertificatePreview()">
+        </div>
+        <div class="form-group full-width">
+            <label for="cert-address">School Address</label>
+            <input type="text" id="cert-address" value="${_esc(school.address)}" placeholder="e.g. 123 Education Lane, City" oninput="refreshCertificatePreview()">
+        </div>
+        <div class="form-group">
+            <label for="cert-phone">School Phone</label>
+            <input type="text" id="cert-phone" value="${_esc(school.phone)}" placeholder="e.g. (555) 123-4567" oninput="refreshCertificatePreview()">
+        </div>
+    `;
+
+    // CRITICAL FIX: Pre-load the logo first, THEN refresh the preview
+    document.getElementById('certificate-modal-body').innerHTML = '<div style="color:white;text-align:center;padding:50px;">Loading Certificate Template...</div>';
+    
+    _preloadCertLogo(school.logo); // This function calls refreshCertificatePreview inside itself
+    document.getElementById('certificate-modal').classList.remove('d-none');
+}
+
+/**
+ * Rebuild the A4 certificate markup from current staff data + the
+ * editable option fields, and persist the school contact details.
+ */
+function refreshCertificatePreview() {
+    const staff = staffData['Teaching'].find(s => s.id === _certStaffId);
+    if (!staff) return;
+
+    const school = _getSchoolIdentity();
+    const p = _pronouns(staff.gender);
+
+    const position = _certPosition || 'Teacher';
+    const startDate = _formatDateLong((document.getElementById('cert-start') || {}).value);
+    const endDate = _formatDateLong((document.getElementById('cert-end') || {}).value);
+    const classes = staff.classes || '';
+    const address = (document.getElementById('cert-address') || {}).value || '';
+    const phone = (document.getElementById('cert-phone') || {}).value || '';
+    _saveSchoolContact(address, phone);
+
+    const guardianType = staff.guardianType || 'Father';
+    const guardianName = staff.guardianName || staff.fatherName || '';
+    const guardianLine = guardianName
+        ? `${guardianType === 'Husband' ? 'w/o' : 's/o'} ${_esc(guardianName)}, `
+        : '';
+
+    const subjectsLine = staff.subjects ? _esc(staff.subjects) : position;
+    const classesLine = classes ? _esc(classes) : '—';
+    const logoSrc = _certLogoDataURL || school.logo || '';
+    const logoHTML = logoSrc
+        ? `<img src="${_esc(logoSrc)}" alt="School logo" onerror="this.outerHTML = _CERT_FALLBACK_CREST;">`
+        : _CERT_FALLBACK_CREST;
+    const contactLines = [address, phone ? `Tel: ${phone}` : ''].filter(Boolean).map(_esc).join('\n');
+
+    const html = `
+    <div class="certificate-page" id="certificate-page">
+        <div class="certificate-border">
+            <div class="corner-flourish corner-tl"></div>
+            <div class="corner-flourish corner-tr"></div>
+            <div class="corner-flourish corner-bl"></div>
+            <div class="corner-flourish corner-br"></div>
+
+            <div class="certificate-header">
+                <div class="certificate-brand">
+                    ${logoHTML}
+                    <div class="certificate-school-name">${_esc(school.name)}</div>
+                </div>
+                <div class="certificate-contact">${contactLines || '&nbsp;'}</div>
+            </div>
+
+            <div class="certificate-divider"></div>
+            <div class="certificate-title">Experience Certificate</div>
+            <div class="certificate-divider"></div>
+
+            <div class="certificate-body">
+                <p>This is to certify that <strong>${_esc(staff.name)}</strong>, ${guardianLine}has served as
+                an <strong>${_esc(position)}</strong> from <strong>${startDate}</strong> to <strong>${endDate}</strong>.</p>
+
+                <p>During ${p.poss} tenure with us, ${p.subj} taught <strong>${subjectsLine}</strong>
+                to classes <strong>${classesLine}</strong>.</p>
+
+                <p>During ${p.poss} employment, we found ${p.obj} to be hardworking, dedicated, punctual, and
+                highly professional. ${p.subj.charAt(0).toUpperCase() + p.subj.slice(1)} possesses excellent
+                classroom management skills and maintains strong professional relationships with students,
+                colleagues, and parents.</p>
+
+                <p>We appreciate ${p.poss} contributions to our institution and wish ${p.obj} all the best
+                and success in future endeavors.</p>
+            </div>
+
+            <div class="certificate-footer">
+                <div>
+                    <div class="certificate-date">Date: ${_todayLong()}</div>
+                    <div class="certificate-corner"></div>
+                </div>
+                <div class="certificate-signature">
+                    <div class="sig-line">&nbsp;</div>
+                    <div>(Name)</div>
+                    <div>(Position)</div>
+                    <div>Principal, ${_esc(school.name)}</div>
+                </div>
+            </div>
+        </div>
+    </div>`;
+
+    document.getElementById('certificate-modal-body').innerHTML = html;
+}
+
+function closeCertificateModal() {
+    document.getElementById('certificate-modal').classList.add('d-none');
+    document.getElementById('certificate-modal-body').innerHTML = '';
+    _certStaffId = null;
+}
+
+/* Self-contained certificate CSS, inlined directly into the print popup.
+   We used to <link> to the app's main manage-staff.css from the popup, but
+   that external load would silently fail in a lot of environments (opening
+   the app as a local file, popups treated as a separate origin, slow/blocked
+   requests, etc). When it failed there was NO styling at all in the popup,
+   which is why the printout came out as plain unstyled text instead of the
+   certificate template. Everything the certificate needs (colors, borders,
+   corner flourishes as inline SVG data-URIs) is self-contained, so inlining
+   it here removes that external dependency completely and makes printing
+   reliable everywhere. Keep this in sync with the .certificate-* rules in
+   manage-staff.css if the certificate design changes. */
+const _CERT_PRINT_CSS = `
+@page { size: A4; margin: 0; }
+html, body {
+    margin: 0;
+    padding: 0;
+    background: #fff;
+    width: 100%;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: Georgia, 'Times New Roman', serif;
+}
+.certificate-page {
+    width: 794px;
+    min-height: 1123px;
+    background: #f7faf9;
+    color: #1a2e2c;
+    font-family: Georgia, 'Times New Roman', serif;
+    height: 1123px;
+    position: relative;
+    box-shadow: none !important;
+    flex-shrink: 0;
+    padding: 34px;
+    box-sizing: border-box;
+    margin: 0 auto;
+    display: flex;
+}
+.certificate-border {
+    border: 3px double #2f7d6b;
+    border-radius: 4px;
+    flex: 1 1 auto;
+    width: 100%;
+    min-height: 0;
+    padding: 46px 56px;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    box-sizing: border-box;
+}
+.certificate-border::before {
+    content: '';
+    position: absolute;
+    inset: 10px;
+    border: 1px solid #2f7d6b;
+    opacity: 0.5;
+    pointer-events: none;
+}
+.corner-flourish {
+    position: absolute;
+    width: 88px;
+    height: 88px;
+    background-image: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20100%20100'%3E%3Cg%20fill='none'%20stroke='%232f7d6b'%20stroke-width='1.3'%3E%3Cpath%20d='M4,4%20Q4,46%2046,46%20Q88,46%2088,4'%20opacity='0.55'/%3E%3Cpath%20d='M4,16%20Q4,58%2058,58%20Q98,58%2098,18'%20opacity='0.3'/%3E%3Cpath%20d='M4,28%20Q4,4%2028,4'%20opacity='0.7'/%3E%3Cpath%20d='M12,4%20Q26,4%2026,18%20Q26,30%2012,28%20Q2,26%206,16%20Q10,8%2018,10'%20opacity='0.6'/%3E%3C/g%3E%3Ccircle%20cx='4'%20cy='4'%20r='2.6'%20fill='%232f7d6b'%20opacity='0.7'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-size: contain;
+    pointer-events: none;
+    z-index: 0;
+}
+.corner-tl { top: 4px; left: 4px; }
+.corner-tr { top: 4px; right: 4px; transform: scaleX(-1); }
+.corner-bl { bottom: 4px; left: 4px; transform: scaleY(-1); }
+.corner-br { bottom: 4px; right: 4px; transform: scale(-1, -1); }
+.certificate-header,
+.certificate-divider,
+.certificate-title,
+.certificate-body,
+.certificate-footer {
+    position: relative;
+    z-index: 1;
+}
+.certificate-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+}
+.certificate-brand {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+}
+.certificate-brand img {
+    width: 56px;
+    height: 56px;
+    object-fit: contain;
+}
+.certificate-school-name {
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    color: #1f4e42;
+    text-transform: uppercase;
+    line-height: 1.25;
+    max-width: 320px;
+}
+.certificate-contact {
+    text-align: right;
+    font-size: 12.5px;
+    color: #2f5b52;
+    line-height: 1.6;
+    white-space: pre-line;
+}
+.certificate-divider {
+    height: 2px;
+    background: #2f7d6b;
+    margin: 22px 0;
+    opacity: 0.7;
+}
+.certificate-title {
+    text-align: center;
+    font-size: 30px;
+    letter-spacing: 3px;
+    font-weight: 700;
+    color: #1f4e42;
+    text-transform: uppercase;
+    margin: 6px 0 22px;
+}
+.certificate-body p {
+    font-size: 15.5px;
+    line-height: 1.9;
+    text-align: justify;
+    text-align-last: center;
+    text-justify: inter-word;
+    word-spacing: 1px;
+    color: #223330;
+    margin: 0 0 20px;
+}
+.certificate-body { flex: 1 1 auto; }
+.certificate-body strong { color: #1f4e42; }
+.certificate-footer {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    margin-top: auto;
+    padding-top: 40px;
+}
+.certificate-date { font-size: 14px; color: #223330; }
+.certificate-signature {
+    text-align: center;
+    font-size: 13px;
+    color: #223330;
+    line-height: 1.5;
+}
+.certificate-signature .sig-line {
+    font-family: 'Brush Script MT', cursive;
+    font-size: 24px;
+    color: #1f4e42;
+    border-bottom: 1px solid #2f7d6b;
+    padding: 0 10px 6px;
+    margin-bottom: 6px;
+    min-width: 180px;
+}
+.certificate-corner {
+    margin-top: 18px;
+    width: 130px;
+    height: 40px;
+    opacity: 0.65;
+    background-image: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20260%2070'%3E%3Cg%20fill='none'%20stroke='%232f7d6b'%20stroke-width='1.4'%3E%3Cpath%20d='M4,50%20Q40,10%2080,40%20Q110,62%20130,35'/%3E%3Cpath%20d='M130,35%20Q150,8%20180,30%20Q210,55%20250,20'/%3E%3Ccircle%20cx='4'%20cy='50'%20r='3'%20fill='%232f7d6b'%20stroke='none'/%3E%3Ccircle%20cx='250'%20cy='20'%20r='3'%20fill='%232f7d6b'%20stroke='none'/%3E%3C/g%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-size: contain;
+    background-position: left center;
+}
+@media print {
+    .certificate-page {
+        width: 210mm;
+        height: 297mm;
+        min-height: 297mm;
+        margin: 0;
+        padding: 10mm;
+        box-shadow: none !important;
+        display: flex;
+    }
+}
+`;
+
+/** Print via a dedicated A4-sized print window (keeps app chrome out of the printout). */
+function printCertificate() {
+    const page = document.getElementById('certificate-page');
+    if (!page) return;
+    const printWin = window.open('', '_blank');
+    if (!printWin) return; // popup blocked
+
+    printWin.document.write(`
+        <html><head><title>Experience Certificate</title>
+        <style>${_CERT_PRINT_CSS}</style>
+        </head><body>${page.outerHTML}</body></html>`);
+    printWin.document.close();
+
+    // No external resources (CSS, fonts, images) are loaded anymore — the
+    // logo is always a data URL/inline SVG and the styles above are inlined
+    // — so we don't need to wait on printWin.onload for a stylesheet fetch.
+    // A short delay is still kept purely to let the popup finish its own
+    // initial layout/paint before the print dialog opens.
+    setTimeout(() => { printWin.focus(); printWin.print(); }, 250);
+}
+
+/** Rasterize the certificate to a PNG blob using html2canvas. */
+async function _renderCertificateBlob() {
+    const page = document.getElementById('certificate-page');
+    if (!page || typeof html2canvas === 'undefined') return null;
+    const canvas = await html2canvas(page, {
+        scale: 2,
+        backgroundColor: '#f7faf9',
+        useCORS: true,
+        allowTaint: false,
+        imageTimeout: 3000,
+        logging: false,
+        // Drop any image that failed to load so html2canvas never errors on it.
+        onclone: (doc) => {
+            doc.querySelectorAll('#certificate-page img').forEach(img => {
+                const ok = img.complete && img.naturalWidth > 0;
+                if (!ok) img.outerHTML = _CERT_FALLBACK_CREST;
+            });
+        }
+    });
+    return new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+}
+
+async function downloadCertificateImage() {
+    const staff = staffData['Teaching'].find(s => s.id === _certStaffId);
+    const blob = await _renderCertificateBlob();
+    if (!blob) return;
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${(staff && staff.name) || 'staff'}-experience-certificate.png`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 4000);
+}
+
+async function shareCertificateWhatsApp() {
+    const staff = staffData['Teaching'].find(s => s.id === _certStaffId);
+    const name = (staff && staff.name) || 'Staff';
+    const blob = await _renderCertificateBlob();
+    if (!blob) return;
+    const fileName = `${name}-experience-certificate.png`;
+
+    try {
+        const file = new File([blob], fileName, { type: 'image/png' });
+        if (navigator.canShare && navigator.canShare({ files: [file] }) && navigator.share) {
+            await navigator.share({
+                files: [file],
+                title: `${name} — Experience Certificate`,
+                text: `Experience certificate for ${name}`
+            });
+            return;
+        }
+    } catch (err) {
+        if (err && err.name === 'AbortError') return; // user cancelled share sheet
+    }
+
+    // Fallback: download locally, then open WhatsApp with a text prompt
+    // (a plain wa.me link can't carry file bytes into WhatsApp).
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = fileName;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 4000);
+    const msg = encodeURIComponent(`Experience certificate for ${name} — file downloaded, please attach it in WhatsApp.`);
+    window.open(`https://wa.me/?text=${msg}`, '_blank');
+}
+
+/* ---- OVERRIDE: showProfileView — reveal the certificate button for Teaching only ---- */
+const _showProfileView_beforeCertificate = showProfileView;
+showProfileView = function(staffId, category) {
+    _showProfileView_beforeCertificate(staffId, category);
+    const certBtn = document.getElementById('generate-certificate-btn');
+    if (!certBtn) return;
+    if (category === 'Teaching') {
+        certBtn.classList.remove('d-none');
+    } else {
+        certBtn.classList.add('d-none');
+    }
+}
+
+/* ============================================
+   STAFF ID GENERATION (linked to access-control.js)
+   Uses the school prefix the Super Admin set, e.g. PSC_S_1, PSC_S_2
+   ============================================ */
+function generateStaffId() {
+    const all = []
+        .concat(staffData['Teaching'] || [])
+        .concat(staffData['Non-Teaching'] || []);
+    const ids = all.map(s => s && s.id).filter(Boolean);
+
+    if (window.SoftSchoolAdmin && typeof window.SoftSchoolAdmin.nextStaffId === 'function') {
+        return window.SoftSchoolAdmin.nextStaffId(ids);
+    }
+
+    // Fallback when no school is registered yet in Super Admin
+    const prefix = 'SCH';
+    const re = new RegExp('^' + prefix + '_S_(\\d+)$', 'i');
+    let max = 0;
+    ids.forEach(id => {
+        const m = re.exec(String(id).trim());
+        if (m) max = Math.max(max, parseInt(m[1], 10) || 0);
+    });
+    return prefix + '_S_' + (max + 1);
 }

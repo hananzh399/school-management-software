@@ -156,13 +156,35 @@
     catch (e) { return 0; }
   }
 
+
+  /* ── STAFF ID PREFIX (from the school's Super Admin prefix) ──
+     Staff IDs look like PREFIX_S_1, PREFIX_S_2 ... where PREFIX is
+     exactly what the super admin typed when adding the school. */
+  function getSchoolPrefix() {
+    const s = getCurrentSchool();
+    const p = (s && s.prefix ? String(s.prefix) : "").trim().toUpperCase();
+    return p || "SCH";
+  }
+
+  function nextStaffId(existingIds) {
+    const prefix = getSchoolPrefix();
+    const re = new RegExp("^" + prefix + "_S_(\\d+)$", "i");
+    let max = 0;
+    (existingIds || []).forEach(function (id) {
+      const m = re.exec(String(id || "").trim());
+      if (m) max = Math.max(max, parseInt(m[1], 10) || 0);
+    });
+    return prefix + "_S_" + (max + 1);
+  }
+
   /* Expose the API for superadmin.js, index.js and this file's own guard */
   window.SoftSchoolAdmin = {
     PLANS: PLANS,
     FEATURES: FEATURES,
     getSchools, saveSchools, getSession, setSession, clearSession,
     addSchool, updateSchool, deleteSchool, getSchoolById,
-    isFeatureLocked, authenticateSchool, getCurrentSchool, studentCount
+    isFeatureLocked, authenticateSchool, getCurrentSchool, studentCount,
+    getSchoolPrefix, nextStaffId
   };
 
   /* ── PAGE GUARD ───────────────────────────────────────────────
@@ -217,6 +239,23 @@
           brandingEl.insertBefore(img, brandingEl.firstChild);
         }
         img.src = school.logo;
+      }
+
+      /* Swap the placeholder icon for the school's actual logo inside the
+         SLC / Character Certificate "crest" circles. These same DOM nodes
+         get cloned verbatim (via outerHTML) when the certificate is printed,
+         so fixing them here also fixes what shows up on the printed page. */
+      if (school.logo) {
+        ["#slc-document .slc-l-logo", "#char-document .char-l-logo"].forEach(sel => {
+          document.querySelectorAll(sel).forEach(el => {
+            el.innerHTML = "";
+            const logoImg = document.createElement("img");
+            logoImg.src = school.logo;
+            logoImg.alt = "School Logo";
+            logoImg.style.cssText = "width:100%;height:100%;object-fit:cover;border-radius:50%;display:block;";
+            el.appendChild(logoImg);
+          });
+        });
       }
 
       /* Hide nav links for locked features */

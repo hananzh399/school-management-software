@@ -11,6 +11,7 @@
     <script>(function(){const t=localStorage.getItem('eduflow-theme')||'dark';document.documentElement.setAttribute('data-theme',t);})()</script>
     <script src="shared-data.js"></script>
     <script src="access-control.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 
 </head>
 <body>
@@ -19,7 +20,7 @@
     <aside id="sidebar" class="sidebar">
         <div class="sidebar-header">
             <div class="brand">
-                <img src="logo-icon.png" alt="SoftSchool Logo" class="brand-logo">
+                <img src="https://via.placeholder.com/40" alt="SoftSchool Logo" class="brand-logo" id="main-logo-img">
                 <span class="brand-name">Soft<strong>School</strong></span>
             </div>
             <button id="close-sidebar" class="close-btn" aria-label="Close sidebar">
@@ -223,6 +224,7 @@
                 </div>
 
                 <div class="profile-actions">
+                    <button class="btn btn-certificate d-none" id="generate-certificate-btn" onclick="openCertificateModal()"><i class="fas fa-certificate"></i> Generate Experience Certificate</button>
                     <button class="btn btn-edit" onclick="openEditForm()"><i class="fas fa-edit"></i> Edit</button>
                     <button class="btn btn-remove" onclick="confirmRemove()"><i class="fas fa-trash-alt"></i> Remove</button>
                 </div>
@@ -238,6 +240,70 @@
                 <div class="modal-actions">
                     <button class="btn btn-cancel" onclick="closeConfirmModal()">Cancel</button>
                     <button class="btn btn-danger" onclick="executeRemove()">Yes, Remove</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- STAFF AGREEMENT VIEW MODAL (Hidden by default) -->
+        <div id="agreement-modal" class="modal-overlay d-none">
+            <div class="modal-content agreement-modal-content">
+                <div class="form-modal-header agreement-modal-header">
+                    <h3 id="agreement-modal-title">Staff Agreement</h3>
+                    <button type="button" class="agreement-close-btn" onclick="closeAgreementModal()" aria-label="Close">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <div class="agreement-modal-body" id="agreement-modal-body">
+                    <!-- Populated by JS: image / pdf preview -->
+                </div>
+                <div class="agreement-modal-footer">
+                    <button type="button" class="btn btn-cancel" onclick="closeAgreementModal()">
+                        <i class="fas fa-times"></i> Close
+                    </button>
+                    <button type="button" class="btn btn-share-whatsapp" onclick="shareAgreementWhatsApp()">
+                        <i class="fab fa-whatsapp"></i> Share
+                    </button>
+                    <button type="button" class="btn btn-download-agreement" onclick="downloadAgreementFile()">
+                        <i class="fas fa-download"></i> Download
+                    </button>
+                    <button type="button" class="btn btn-print-agreement" onclick="printAgreement()">
+                        <i class="fas fa-print"></i> Print
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- EXPERIENCE CERTIFICATE MODAL (Hidden by default) -->
+        <div id="certificate-modal" class="modal-overlay d-none">
+            <div class="modal-content certificate-modal-content">
+                <div class="form-modal-header agreement-modal-header">
+                    <h3 id="certificate-modal-title">Experience Certificate</h3>
+                    <button type="button" class="agreement-close-btn" onclick="closeCertificateModal()" aria-label="Close">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+
+                <div class="certificate-options" id="certificate-options">
+                    <!-- Populated by JS: editable fields (position, dates, school contact) -->
+                </div>
+
+                <div class="certificate-modal-body" id="certificate-modal-body">
+                    <!-- Populated by JS: the A4 certificate preview -->
+                </div>
+
+                <div class="agreement-modal-footer">
+                    <button type="button" class="btn btn-cancel" onclick="closeCertificateModal()">
+                        <i class="fas fa-times"></i> Close
+                    </button>
+                    <button type="button" class="btn btn-share-whatsapp" onclick="shareCertificateWhatsApp()">
+                        <i class="fab fa-whatsapp"></i> Share
+                    </button>
+                    <button type="button" class="btn btn-download-agreement" onclick="downloadCertificateImage()">
+                        <i class="fas fa-download"></i> Download
+                    </button>
+                    <button type="button" class="btn btn-print-agreement" onclick="printCertificate()">
+                        <i class="fas fa-print"></i> Print
+                    </button>
                 </div>
             </div>
         </div>
