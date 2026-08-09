@@ -2321,8 +2321,21 @@ let afmNextRowId = 1;
 let afmCurrentStudent = null;
 
 function findStudentExact(students, studentId, fullName) {
-    // Prefer an exact (id + name) match to disambiguate siblings that
-    // accidentally share an id. Fall back to id only.
+    // BUGFIX — "Student not found" for siblings: once a student is marked
+    // as a sibling, their `id` is overwritten with the SHARED family-group
+    // code (e.g. "001"), which every sibling in that family also has. The
+    // Fees table's buttons (Generate/View Voucher, Pay Bill) pass the
+    // student's `regNo`, which stays unique per student even after they
+    // join a sibling group. Matching on `id` alone therefore fails for any
+    // sibling. regNo is always unique, so check it first.
+    if (studentId) {
+        const byRegNo = students.find(s => String(s.regNo) === String(studentId));
+        if (byRegNo) return byRegNo;
+    }
+
+    // Fall back to an exact (id + name) match to disambiguate siblings that
+    // share an id, then id alone — kept for any legacy callers still
+    // passing a raw id instead of a regNo.
     if (fullName) {
         const exact = students.find(s =>
             String(s.id) === String(studentId) && s.fullName === fullName);
@@ -2876,8 +2889,10 @@ function saveFeesToVoucher() {
     if (gross <= 0) { alert('Please enter valid fee amounts.'); return; }
 
     let students = JSON.parse(localStorage.getItem('edu_students') || '[]');
-    let idx = -1;
-    if (fullName) {
+    // BUGFIX (same as findStudentExact) — regNo stays unique for siblings
+    // even after their `id` is overwritten with the shared family code.
+    let idx = students.findIndex(s => String(s.regNo) === String(studentId));
+    if (idx === -1 && fullName) {
         idx = students.findIndex(s => String(s.id) === String(studentId) && s.fullName === fullName);
     }
     if (idx === -1) idx = students.findIndex(s => String(s.id) === String(studentId));
@@ -3731,7 +3746,10 @@ function ievSave() {
     if (cleanRows.length === 0) { alert('Please add at least one fee row.'); return; }
 
     let students = JSON.parse(localStorage.getItem('edu_students') || '[]');
-    let idx = students.findIndex(s => String(s.id) === String(studentId) && s.fullName === fullName);
+    // BUGFIX (same as findStudentExact) — regNo stays unique for siblings
+    // even after their `id` is overwritten with the shared family code.
+    let idx = students.findIndex(s => String(s.regNo) === String(studentId));
+    if (idx === -1) idx = students.findIndex(s => String(s.id) === String(studentId) && s.fullName === fullName);
     if (idx === -1) idx = students.findIndex(s => String(s.id) === String(studentId));
     if (idx === -1) { alert('Student not found.'); return; }
 
