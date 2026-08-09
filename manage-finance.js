@@ -1942,6 +1942,13 @@ function computeFeeBreakdown(s) {
         tuitionFee, transportFee, otherFee, arrears,
         fineAmount: fineFromBackend,
         activeDiscounts, // Pass the array of individual discounts
+        // Individual discount amounts, exposed so the voucher renderers can
+        // annotate the Tuition/Transport fee lines directly with a small
+        // "(- Rs. X discount)" note, the same bracket style already used
+        // for per-row custom fee discounts.
+        tuitionDiscountAmount: isCustom ? 0 : tDisc,
+        transportDiscountAmount: isCustom ? 0 : trDisc,
+        siblingDiscountAmount: isCustom ? 0 : sibDisc,
         totalDiscounts,
         bulkDiscount,
         isCustom,
@@ -1953,6 +1960,16 @@ function computeFeeBreakdown(s) {
         dueDateStr: new Date(today.getFullYear(), today.getMonth() + 1, vs.dueDayOfMonth).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
         expiryDateStr: new Date(today.getFullYear(), today.getMonth() + 1, vs.expiryDayOfMonth).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
     };
+}
+
+/** Small "(- Rs. X discount)" note appended right after a fee-line label —
+ *  the same visual style already used for per-row custom fee discounts.
+ *  Used to annotate the Tuition Fee / Transport Fee lines directly instead
+ *  of only listing the discount separately further down the voucher. */
+function feeDiscountNote(amount) {
+    const n = Number(amount) || 0;
+    if (n <= 0) return '';
+    return ` <span style="color:#16a34a; font-size:0.75rem;">(- Rs. ${n.toLocaleString()} discount)</span>`;
 }
 
 function buildVoucherHTML(s) {
@@ -1973,33 +1990,46 @@ function buildVoucherHTML(s) {
             const amt = Number(r.amount) || 0;
             const disc = Number(r.discount) || 0;
             const net = Math.max(0, amt - disc);
-            const discNote = disc > 0 ? ` <span style="color:#16a34a; font-size:0.75rem;">(- Rs. ${disc.toLocaleString()} discount)</span>` : '';
+            const discNote = feeDiscountNote(disc);
             return `<tr><td>${escapeHtml(r.description || 'Fee')}${discNote}</td><td>${escapeHtml(r.period || '-')}</td><td>Rs. ${net.toLocaleString()}</td></tr>`;
         }).join('');
         if (f.bulkDiscount > 0) {
             rowsHTML += `<tr class="voucher-row-discount"><td style="padding-left: 20px;">- Bulk Discount</td><td>Concession</td><td>- Rs. ${f.bulkDiscount.toLocaleString()}</td></tr>`;
         }
     } else {
+        // BUGFIX — discounts on standard Tuition/Transport fees were only
+        // ever shown further down in a separate "Applied Concessions"
+        // block, disconnected from the actual fee line. Annotate each fee
+        // line directly with a small bracketed discount note (same style
+        // as custom-row discounts above) so it's obvious at a glance which
+        // fee the concession applies to.
         rowsHTML = `
-            ${f.tuitionFee > 0 ? `<tr><td>Tuition Fee</td><td>${f.monthLabel}</td><td>Rs. ${f.tuitionFee.toLocaleString()}</td></tr>` : ''}
-            ${f.transportFee > 0 ? `<tr><td>Transportation Fee</td><td>${f.monthLabel}</td><td>Rs. ${f.transportFee.toLocaleString()}</td></tr>` : ''}
+            ${f.tuitionFee > 0 ? `<tr><td>Tuition Fee${feeDiscountNote(f.tuitionDiscountAmount)}</td><td>${f.monthLabel}</td><td>Rs. ${f.tuitionFee.toLocaleString()}</td></tr>` : ''}
+            ${f.transportFee > 0 ? `<tr><td>Transportation Fee${feeDiscountNote(f.transportDiscountAmount)}</td><td>${f.monthLabel}</td><td>Rs. ${f.transportFee.toLocaleString()}</td></tr>` : ''}
             ${f.otherFee > 0 ? `<tr><td>Other Charges</td><td>-</td><td>Rs. ${f.otherFee.toLocaleString()}</td></tr>` : ''}
         `;
     }
     rowsHTML += `${f.fineAmount > 0 ? `<tr style="color:#dc2626;"><td><strong>Fine / Penalty</strong></td><td>${s.backendFineReason || 'Disciplinary'}</td><td>Rs. ${f.fineAmount.toLocaleString()}</td></tr>` : ''}`;
 
-    // 2. Build Specific Discounts Section
-    if (f.activeDiscounts.length > 0) {
-        rowsHTML += `<tr class="voucher-row-discount" style="background: rgba(21, 128, 61, 0.03);"><td colspan="3" style="font-size: 0.7rem; font-weight: 700; text-transform: uppercase; color: #64748b; padding-top: 10px;">Applied Concessions</td></tr>`;
-        
-        f.activeDiscounts.forEach(d => {
-            rowsHTML += `
-                <tr class="voucher-row-discount">
-                    <td style="padding-left: 20px;">- ${d.label}</td>
-                    <td>Concession</td>
-                    <td>- Rs. ${d.amount.toLocaleString()}</td>
-                </tr>`;
-        });
+    // 2. Build Specific Discounts Section — Tuition/Transport are now
+    // annotated inline on their own fee line above, so only list discounts
+    // that aren't tied to one specific fee line (e.g. Sibling Discount)
+    // here. The highlighted TOTAL DISCOUNT row still reflects the full
+    // combined discount so the on-page arithmetic always adds up.
+    const remainingDiscounts = f.activeDiscounts.filter(d => d.label !== 'Tuition Concession' && d.label !== 'Transport Discount');
+    if (f.totalDiscounts > 0) {
+        if (remainingDiscounts.length > 0) {
+            rowsHTML += `<tr class="voucher-row-discount" style="background: rgba(21, 128, 61, 0.03);"><td colspan="3" style="font-size: 0.7rem; font-weight: 700; text-transform: uppercase; color: #64748b; padding-top: 10px;">Applied Concessions</td></tr>`;
+
+            remainingDiscounts.forEach(d => {
+                rowsHTML += `
+                    <tr class="voucher-row-discount">
+                        <td style="padding-left: 20px;">- ${d.label}</td>
+                        <td>Concession</td>
+                        <td>- Rs. ${d.amount.toLocaleString()}</td>
+                    </tr>`;
+            });
+        }
 
         // 3. Highlighted Total Discount Row
         rowsHTML += `
@@ -4721,6 +4751,12 @@ function buildFamilyVoucherHTML(studentsGroup) {
     const famTag = (guardianName || 'FAM').replace(/[^a-zA-Z0-9]/g, '').toUpperCase().slice(0, 6) || 'FAM';
     const challanNo = `FV-${famTag}-${today.getFullYear()}${String(today.getMonth() + 1).padStart(2, '0')}`;
 
+    // Shared family/sibling-group code (e.g. "001") — every member of this
+    // group carries it on both `siblingGroupId` and `id`. Shown in the
+    // voucher meta row alongside the Challan No. so parents/staff can see
+    // at a glance which family group this combined voucher belongs to.
+    const siblingId = studentsGroup[0].siblingGroupId || studentsGroup[0].id || '-';
+
     const breakdowns = studentsGroup.map(s => ({ student: s, f: computeFeeBreakdown(s) }));
     const dueDateStr = breakdowns[0].f.dueDateStr;
     const expiryDateStr = breakdowns[0].f.expiryDateStr;
@@ -4741,16 +4777,18 @@ function buildFamilyVoucherHTML(studentsGroup) {
                 // BUGFIX — per-row discount was applied to the net amount but never
                 // actually shown anywhere on the Family Voucher, so it looked like
                 // the discount "didn't work". Mirror buildVoucherHTML's discount note.
-                const discNote = disc > 0 ? ` <span style="color:#16a34a; font-size:0.72rem;">(- Rs. ${disc.toLocaleString()} discount)</span>` : '';
+                const discNote = feeDiscountNote(disc);
                 return `<tr><td>${escapeHtml(r.description || 'Fee')}${discNote}</td><td>${escapeHtml(r.period || '-')}</td><td>Rs. ${net.toLocaleString()}</td></tr>`;
             }).join('');
             if (f.bulkDiscount > 0) {
                 rowsHTML += `<tr class="voucher-row-discount"><td style="padding-left:20px;">- Bulk Discount</td><td>Concession</td><td>- Rs. ${f.bulkDiscount.toLocaleString()}</td></tr>`;
             }
         } else {
+            // Same inline bracket treatment as buildVoucherHTML — the fee line
+            // itself shows the concession that applies to it.
             rowsHTML = `
-                ${f.tuitionFee > 0 ? `<tr><td>Tuition Fee</td><td>${f.monthLabel}</td><td>Rs. ${f.tuitionFee.toLocaleString()}</td></tr>` : ''}
-                ${f.transportFee > 0 ? `<tr><td>Transportation Fee</td><td>${f.monthLabel}</td><td>Rs. ${f.transportFee.toLocaleString()}</td></tr>` : ''}
+                ${f.tuitionFee > 0 ? `<tr><td>Tuition Fee${feeDiscountNote(f.tuitionDiscountAmount)}</td><td>${f.monthLabel}</td><td>Rs. ${f.tuitionFee.toLocaleString()}</td></tr>` : ''}
+                ${f.transportFee > 0 ? `<tr><td>Transportation Fee${feeDiscountNote(f.transportDiscountAmount)}</td><td>${f.monthLabel}</td><td>Rs. ${f.transportFee.toLocaleString()}</td></tr>` : ''}
                 ${f.otherFee > 0 ? `<tr><td>Other Charges</td><td>-</td><td>Rs. ${f.otherFee.toLocaleString()}</td></tr>` : ''}
             `;
         }
@@ -4761,10 +4799,20 @@ function buildFamilyVoucherHTML(studentsGroup) {
         if (f.monthlyFineTotal > 0) {
             rowsHTML += `<tr style="color:#dc2626;"><td>Disciplinary Fines</td><td>${escapeHtml(f.fineDetails || '')}</td><td>Rs. ${f.monthlyFineTotal.toLocaleString()}</td></tr>`;
         }
-        if (f.activeDiscounts.length > 0) {
-            f.activeDiscounts.forEach(d => {
+        // Tuition/Transport concessions are now shown inline on their fee
+        // line above — only list discounts not tied to one specific fee
+        // (e.g. Sibling Discount) here, same as buildVoucherHTML.
+        const remainingDiscounts = f.activeDiscounts.filter(d => d.label !== 'Tuition Concession' && d.label !== 'Transport Discount');
+        if (remainingDiscounts.length > 0) {
+            remainingDiscounts.forEach(d => {
                 rowsHTML += `<tr class="voucher-row-discount"><td style="padding-left:20px;">- ${d.label}</td><td>Concession</td><td>- Rs. ${d.amount.toLocaleString()}</td></tr>`;
             });
+        }
+        // Highlighted total-discount row, same as the individual voucher —
+        // reflects ALL discounts (inline + listed) so the child block's
+        // own arithmetic still adds up at a glance.
+        if (f.totalDiscounts > 0) {
+            rowsHTML += `<tr style="background: #f0fdf4; color: #166534; border-top: 1px solid #bbf7d0;"><td><strong>TOTAL DISCOUNT</strong></td><td>-</td><td><strong>- Rs. ${f.totalDiscounts.toLocaleString()}</strong></td></tr>`;
         }
         if (f.arrears > 0) {
             rowsHTML += `<tr class="voucher-row-arrears"><td><strong>Previous Arrears</strong></td><td>Balance B/F</td><td>Rs. ${f.arrears.toLocaleString()}</td></tr>`;
@@ -4808,8 +4856,9 @@ function buildFamilyVoucherHTML(studentsGroup) {
                 </div>
             </div>
 
-            <div class="voucher-meta-row">
+            <div class="voucher-meta-row voucher-meta-row-family">
                 <div><span>Challan No.</span><strong>${challanNo}</strong></div>
+                <div><span>Sibling ID</span><strong>${escapeHtml(String(siblingId))}</strong></div>
                 <div><span>Issue Date</span><strong>${dateStr}</strong></div>
                 <div><span>Due Date</span><strong>${dueDateStr}</strong></div>
                 <div><span>Expiry Date</span><strong>${expiryDateStr}</strong></div>

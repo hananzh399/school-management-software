@@ -1307,6 +1307,12 @@
     margin-bottom: 12px;
 }
 
+/* Family/Sibling Voucher meta row has one extra field (Sibling ID)
+   alongside Challan No., Issue/Due/Expiry Date — 5 fields total. */
+.voucher-meta-row.voucher-meta-row-family {
+    grid-template-columns: repeat(5, 1fr);
+}
+
 .voucher-meta-row div {
     display: flex;
     flex-direction: column;
