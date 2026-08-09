@@ -198,6 +198,15 @@ let voOrphanFilterActive = false;
 
 document.addEventListener('DOMContentLoaded', () => {
 
+    // Update the header brand logo (and any other .brand-logo instances)
+    // from the logged-in school's saved logo, instead of leaving the
+    // static placeholder image in the markup. Keeps this page in sync
+    // with the same behavior manage-staff.js applies.
+    const headerLogoUrl = getSchoolLogoUrl();
+    if (headerLogoUrl && !headerLogoUrl.includes('logo-icon.png')) {
+        document.querySelectorAll('.brand-logo').forEach(img => { img.src = headerLogoUrl; });
+    }
+
     // UI References: Navigation & Layout
     const sidebar        = document.getElementById('sidebar');
     const openSidebarBtn = document.getElementById('open-sidebar');

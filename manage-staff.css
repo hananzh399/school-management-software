@@ -2156,8 +2156,12 @@ body {
 .brand-logo {
     width: 38px;
     height: 38px;
-    object-fit: contain;
+    object-fit: cover;
+    border-radius: 50%;
     flex-shrink: 0;
+    background: #fff;
+    border: 2px solid rgba(23, 113, 106, 0.35);
+    box-shadow: 0 2px 8px rgba(23, 113, 106, 0.25);
 }
 
 .brand-name {
@@ -2739,12 +2743,48 @@ body {
 .certificate-brand {
     display: flex;
     align-items: center;
-    gap: 14px;
+    gap: 16px;
+}
+.certificate-logo-wrap {
+    position: relative;
+    flex-shrink: 0;
+    width: 56px;
+    height: 56px;
 }
 .certificate-brand img {
     width: 56px;
     height: 56px;
-    object-fit: contain;
+    object-fit: cover;
+    border-radius: 50%;
+    background: #fff;
+    border: 2px solid #fff;
+    box-shadow: 0 4px 14px rgba(47, 125, 107, 0.35);
+    position: relative;
+    z-index: 1;
+    display: block;
+}
+.certificate-logo-ring {
+    position: absolute;
+    top: -4px;
+    left: -4px;
+    width: 64px;
+    height: 64px;
+    border-radius: 50%;
+    border: 2px solid rgba(47, 125, 107, 0.35);
+    pointer-events: none;
+}
+.certificate-logo-fallback {
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    background: #f2f8f6;
+    border: 2px solid #fff;
+    box-shadow: 0 4px 14px rgba(47, 125, 107, 0.35);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    z-index: 1;
 }
 .certificate-school-name {
     font-size: 22px;
@@ -2753,7 +2793,7 @@ body {
     color: #1f4e42;
     text-transform: uppercase;
     line-height: 1.25;
-    max-width: 320px;
+    white-space: nowrap;
 }
 .certificate-contact {
     text-align: right;

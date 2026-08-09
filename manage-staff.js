@@ -8,17 +8,17 @@ document.addEventListener('DOMContentLoaded', () => {
     initSidebar();
     initDate();
     loadStaffCounts();
-});
 
-
- // NEW: Update UI Logo from Settings immediately
-    const school = _getSchoolIdentity();
-    const logos = document.querySelectorAll('.brand-logo');
-    logos.forEach(img => {
-        if (school.logo && !school.logo.includes('logo-icon.png')) {
-            img.src = school.logo;
+    // Update the header brand logo (and any other .brand-logo instances)
+    // from the logged-in school's saved logo, instead of leaving the
+    // static placeholder image in the markup.
+    const headerSchool = _getSchoolIdentity();
+    document.querySelectorAll('.brand-logo').forEach(img => {
+        if (headerSchool.logo && !headerSchool.logo.includes('logo-icon.png')) {
+            img.src = headerSchool.logo;
         }
     });
+});
 
 /* ============================================
    THEME TOGGLE
@@ -2408,12 +2408,12 @@ function _formatDateLong(val) {
    SVG crest so the certificate always renders. ---- */
 let _certLogoDataURL = null;
 
-const _CERT_FALLBACK_CREST = `<svg viewBox="0 0 64 64" width="52" height="52" aria-hidden="true">
+const _CERT_FALLBACK_CREST = `<div class="certificate-logo-fallback"><svg viewBox="0 0 64 64" width="34" height="34" aria-hidden="true">
   <path d="M32 3 58 12v22c0 15-11 24-26 27C17 58 6 49 6 34V12L32 3z" fill="#2f8f7d"/>
   <path d="M32 3 58 12v22c0 15-11 24-26 27V3z" fill="#1f6f74"/>
   <path d="M18 24h13v18H18zM33 24h13v18H33z" fill="#f7faf9"/>
   <path d="M32 22v20" stroke="#1f6f74" stroke-width="2"/>
-</svg>`;
+</svg></div>`;
 window._CERT_FALLBACK_CREST = _CERT_FALLBACK_CREST;
 
 function _preloadCertLogo(src) {
@@ -2492,14 +2492,6 @@ function openCertificateModal() {
             <label for="cert-end">End Date</label>
             <input type="date" id="cert-end" value="${_esc(new Date().toISOString().slice(0,10))}" oninput="refreshCertificatePreview()">
         </div>
-        <div class="form-group full-width">
-            <label for="cert-address">School Address</label>
-            <input type="text" id="cert-address" value="${_esc(school.address)}" placeholder="e.g. 123 Education Lane, City" oninput="refreshCertificatePreview()">
-        </div>
-        <div class="form-group">
-            <label for="cert-phone">School Phone</label>
-            <input type="text" id="cert-phone" value="${_esc(school.phone)}" placeholder="e.g. (555) 123-4567" oninput="refreshCertificatePreview()">
-        </div>
     `;
 
     // CRITICAL FIX: Pre-load the logo first, THEN refresh the preview
@@ -2524,9 +2516,6 @@ function refreshCertificatePreview() {
     const startDate = _formatDateLong((document.getElementById('cert-start') || {}).value);
     const endDate = _formatDateLong((document.getElementById('cert-end') || {}).value);
     const classes = staff.classes || '';
-    const address = (document.getElementById('cert-address') || {}).value || '';
-    const phone = (document.getElementById('cert-phone') || {}).value || '';
-    _saveSchoolContact(address, phone);
 
     const guardianType = staff.guardianType || 'Father';
     const guardianName = staff.guardianName || staff.fatherName || '';
@@ -2537,10 +2526,15 @@ function refreshCertificatePreview() {
     const subjectsLine = staff.subjects ? _esc(staff.subjects) : position;
     const classesLine = classes ? _esc(classes) : '—';
     const logoSrc = _certLogoDataURL || school.logo || '';
-    const logoHTML = logoSrc
+    const logoInner = logoSrc
         ? `<img src="${_esc(logoSrc)}" alt="School logo" onerror="this.outerHTML = _CERT_FALLBACK_CREST;">`
         : _CERT_FALLBACK_CREST;
-    const contactLines = [address, phone ? `Tel: ${phone}` : ''].filter(Boolean).map(_esc).join('\n');
+    const logoHTML = `<div class="certificate-logo-wrap">${logoInner}<div class="certificate-logo-ring"></div></div>`;
+
+    // Keep the school name on a single line: shrink the font size a bit for
+    // longer names instead of letting it wrap under the logo.
+    const nameLen = (school.name || '').length;
+    const nameFontSize = nameLen > 42 ? 14 : nameLen > 34 ? 16 : nameLen > 26 ? 19 : 22;
 
     const html = `
     <div class="certificate-page" id="certificate-page">
@@ -2553,9 +2547,8 @@ function refreshCertificatePreview() {
             <div class="certificate-header">
                 <div class="certificate-brand">
                     ${logoHTML}
-                    <div class="certificate-school-name">${_esc(school.name)}</div>
+                    <div class="certificate-school-name" style="font-size:${nameFontSize}px;">${_esc(school.name)}</div>
                 </div>
-                <div class="certificate-contact">${contactLines || '&nbsp;'}</div>
             </div>
 
             <div class="certificate-divider"></div>
@@ -2692,12 +2685,48 @@ html, body {
 .certificate-brand {
     display: flex;
     align-items: center;
-    gap: 14px;
+    gap: 16px;
+}
+.certificate-logo-wrap {
+    position: relative;
+    flex-shrink: 0;
+    width: 56px;
+    height: 56px;
 }
 .certificate-brand img {
     width: 56px;
     height: 56px;
-    object-fit: contain;
+    object-fit: cover;
+    border-radius: 50%;
+    background: #fff;
+    border: 2px solid #fff;
+    box-shadow: 0 4px 14px rgba(47, 125, 107, 0.35);
+    position: relative;
+    z-index: 1;
+    display: block;
+}
+.certificate-logo-ring {
+    position: absolute;
+    top: -4px;
+    left: -4px;
+    width: 64px;
+    height: 64px;
+    border-radius: 50%;
+    border: 2px solid rgba(47, 125, 107, 0.35);
+    pointer-events: none;
+}
+.certificate-logo-fallback {
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    background: #f2f8f6;
+    border: 2px solid #fff;
+    box-shadow: 0 4px 14px rgba(47, 125, 107, 0.35);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    z-index: 1;
 }
 .certificate-school-name {
     font-size: 22px;
@@ -2706,7 +2735,7 @@ html, body {
     color: #1f4e42;
     text-transform: uppercase;
     line-height: 1.25;
-    max-width: 320px;
+    white-space: nowrap;
 }
 .certificate-contact {
     text-align: right;
