@@ -2860,13 +2860,10 @@ if (certUploadInput) {
                 <td style="text-align:center;">
                     <div class="vo-action-btn-group">
                         <button class="btn-icon vo-view" onclick="viewFullProfile('${s.regNo}')" title="View Profile">
-                            <i class="fas fa-eye"></i><span>View</span>
-                        </button>
-                        <button class="btn-icon print-admission" onclick="printAdmissionFormForStudent('${s.regNo}')" title="Print Admission Form">
-                            <i class="fas fa-file-signature"></i><span>Admission</span>
+                            <i class="fas fa-eye"></i>
                         </button>
                         <button class="btn-icon print-record" onclick="printStudentRecordForStudent('${s.regNo}')" title="Print Student Record">
-                            <i class="fas fa-print"></i><span>Record</span>
+                            <i class="fas fa-print"></i>
                         </button>
                     </div>
                 </td>
@@ -3150,12 +3147,14 @@ if (certUploadInput) {
                     <td><span class="class-chip">${sec}</span></td>
                     <td>${dateVal}</td>
                     <td style="text-align:center;">
-                        <button class="btn-icon view" onclick="viewFullProfile('${s.regNo}')" title="View Profile">
-                            <i class="fas fa-eye"></i>
-                        </button>
-                        ${kind === 'dropped' ? `<button class="btn-icon reactivate" onclick="reactivateStudent('${s.regNo}')" title="Reactivate Student">
-                            <i class="fas fa-user-check"></i>
-                        </button>` : ''}
+                        <div class="vo-action-btn-group">
+                            <button class="btn-icon vo-view" onclick="viewFullProfile('${s.regNo}')" title="View Profile">
+                                <i class="fas fa-eye"></i>
+                            </button>
+                            ${kind === 'dropped' ? `<button class="btn-icon archive-reactivate" onclick="reactivateStudent('${s.regNo}')" title="Reactivate Student">
+                                <i class="fas fa-user-check"></i>
+                            </button>` : ''}
+                        </div>
                     </td>
                 </tr>`;
         }).join('');
@@ -3325,23 +3324,28 @@ if (certUploadInput) {
             showToast("Error", "Could not find that student to delete.", "danger");
             return;
         }
-        const regNo = db[index].regNo;
-        db.splice(index, 1);
+
+        // Soft-delete in place — mirrors exactly how graduation works (status
+        // flips to 'graduated' without removing the row). Previously this used
+        // db.splice() to erase the record from local storage completely, which
+        // meant the student vanished everywhere — including Archive Center →
+        // Dropped Out — until the next successful backend sync quietly brought
+        // them back (since the server's DELETE endpoint only soft-deletes too).
+        // Setting status here immediately and consistently files them under
+        // Dropped Out, with no dependency on backend connectivity or timing.
+        const student = db[index];
+        const regNo   = student.regNo;
+        student.status      = 'dropped';
+        student.droppedDate = new Date().toISOString().slice(0, 10);
         saveDatabase(db);
 
-        showToast("Success", "Student removed from the database", "success");
+        showToast("Success", "Student removed from the active roster and moved to Archive Center → Dropped Out.", "success");
         closeModal('student-modal');
         updateDashboardStats();
         renderStudentTable();
         if (typeof renderViewOnlyTable === 'function') renderViewOnlyTable();
+        if (typeof renderArchiveDroppedTable === 'function') renderArchiveDroppedTable();
 
-        // NOTE: StudentController's DELETE endpoint is a SOFT delete — it sets
-        // status = "dropped" rather than removing the MySQL row. That's fine for
-        // the Archive Center's "dropped" list, but it means this record will
-        // still be pulled back down by syncWithBackend() (as status "dropped"),
-        // not truly erased from the database. If you want this button to
-        // permanently delete the row, add a hard-delete repository method and
-        // call studentRepository.delete(s) instead of s.setStatus("dropped").
         try {
             if (regNo) await apiDeleteStudent(regNo);
         } catch (err) {
@@ -4028,6 +4032,14 @@ function slcFillFromStudent(s) {
     const schoolEl = document.querySelector('.school-name');
     if (schoolEl) setText('slc-school-name', schoolEl.textContent);
 
+    // Use the school's actual uploaded logo (same one used on printed certificates)
+    // instead of the generic placeholder icon, so the preview matches the real school.
+    const slcLogoEl = document.getElementById('slc-l-logo');
+    if (slcLogoEl) {
+        const slcLogoUrl = getSchoolLogoUrl();
+        slcLogoEl.innerHTML = slcLogoUrl ? `<img src="${slcLogoUrl}" alt="School Logo">` : '<i class="fas fa-graduation-cap"></i>';
+    }
+
     // Compose the beautiful bottom paragraph from real student details
     const recordEl = document.getElementById('slc-record-para');
     if (recordEl) {
@@ -4122,7 +4134,7 @@ function printSLC() {
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:'Cormorant Garamond',Georgia,serif;background:#eef2f7;padding:24px;display:flex;justify-content:center;align-items:center;min-height:100vh}
-.slc-cert-outer.slc-landscape{position:relative;background:#fff;width:1050px;height:740px;overflow:hidden;box-shadow:0 12px 40px rgba(15,23,42,.18);border-radius:6px;color:#0f172a}
+.slc-cert-outer.slc-landscape{position:relative;background:#fff;width:280mm;height:193mm;overflow:hidden;box-shadow:0 12px 40px rgba(15,23,42,.18);border-radius:6px;color:#0f172a}
 
 /* Decorative blue geometric corner shapes (like reference) */
 .slc-geo{position:absolute;background:#3b6fb8;z-index:0}
@@ -4137,13 +4149,14 @@ body{font-family:'Cormorant Garamond',Georgia,serif;background:#eef2f7;padding:2
 
 .slc-inner{position:relative;z-index:2;background:#fff;margin:46px;height:calc(100% - 92px);padding:32px 56px 72px;display:flex;flex-direction:column}
 
-.slc-l-header{display:flex;align-items:center;gap:18px;padding-bottom:14px;border-bottom:1px solid #e2e8f0}
-.slc-l-logo{width:54px;height:54px;border-radius:50%;background:linear-gradient(135deg,#2c5797,#3b6fb8);color:#fff;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;box-shadow:0 4px 14px rgba(59,111,184,.4)}
-.slc-l-school-block{flex:1;text-align:center}
-.slc-l-school-name{font-family:'Cormorant Garamond',serif;font-size:22px;font-weight:700;letter-spacing:.18em;color:#0f172a;text-transform:uppercase}
-.slc-l-school-meta{margin-top:4px;font-family:'Inter',sans-serif;font-size:11px;color:#64748b;letter-spacing:.04em}
+.slc-l-header{display:flex;align-items:center;gap:12px;padding-bottom:14px;border-bottom:1px solid #e2e8f0}
+.slc-l-logo{width:60px;height:60px;border-radius:50%;background:linear-gradient(135deg,#2c5797,#3b6fb8);color:#fff;display:flex;align-items:center;justify-content:center;font-size:24px;flex-shrink:0;box-shadow:0 4px 14px rgba(59,111,184,.4);overflow:hidden}
+.slc-l-logo img{width:100%;height:100%;object-fit:cover;border-radius:50%}
+.slc-l-school-block{flex:1;min-width:0;text-align:center}
+.slc-l-school-name{font-family:'Cormorant Garamond',serif;font-size:26px;font-weight:700;letter-spacing:.03em;color:#1e293b;text-transform:uppercase;line-height:1.2;word-spacing:.1em}
+.slc-l-school-meta{margin-top:5px;font-family:'Inter',sans-serif;font-size:11.5px;color:#475569;letter-spacing:.03em;font-weight:500}
 .slc-l-dot{margin:0 8px;color:#cbd5e1}
-.slc-l-serial{text-align:right;flex-shrink:0;font-family:'Inter',sans-serif}
+.slc-l-serial{text-align:right;flex-shrink:0;min-width:60px;font-family:'Inter',sans-serif}
 .slc-l-serial-label{font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:#94a3b8}
 .slc-l-serial-value{font-size:13px;font-weight:700;color:#2c5797;margin-top:2px}
 
@@ -4177,9 +4190,9 @@ body{font-family:'Cormorant Garamond',Georgia,serif;background:#eef2f7;padding:2
 .slc-l-stamp-ring span{font-size:8px;font-weight:700;letter-spacing:.12em;line-height:1.2}
 
 @media print{
-  html,body{padding:0;margin:0;background:#fff;width:100%;height:100%}
+  html,body{padding:0;margin:0;background:#fff;width:100%;height:100%;overflow:hidden}
   @page{size:A4 landscape;margin:6mm}
-  .slc-cert-outer.slc-landscape{box-shadow:none;border-radius:0;margin:0 auto;page-break-after:avoid;page-break-inside:avoid}
+  .slc-cert-outer.slc-landscape{box-shadow:none;border-radius:0;margin:0 auto;page-break-after:avoid;page-break-before:avoid;page-break-inside:avoid;break-inside:avoid}
 }
 </style>
 </head>
@@ -4366,6 +4379,14 @@ function charFillFromStudent(s) {
     setText('char-school-name', schoolName);
     setText('char-taught-at', schoolName);
 
+    // Use the school's actual uploaded logo, same as the SLC preview/print output,
+    // instead of always showing the generic placeholder icon.
+    const charLogoEl = document.getElementById('char-l-logo');
+    if (charLogoEl) {
+        const charLogoUrl = getSchoolLogoUrl();
+        charLogoEl.innerHTML = charLogoUrl ? `<img src="${charLogoUrl}" alt="School Logo">` : '<i class="fas fa-graduation-cap"></i>';
+    }
+
     // Remember for conduct re-render & print
     window.__charCurrentName     = studentName;
     window.__charCurrentStudent  = s;
@@ -4478,20 +4499,22 @@ function printCharCert() {
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:'Cormorant Garamond',Georgia,serif;background:#eef2f7;padding:24px;display:flex;justify-content:center;align-items:center;min-height:100vh}
-.char-cert-outer{position:relative;background:#fff;width:760px;min-height:980px;overflow:hidden;box-shadow:0 12px 40px rgba(15,23,42,.18);border-radius:4px;color:#0f172a;margin:0 auto}
+.char-cert-outer{position:relative;background:#fff;width:188mm;height:270mm;overflow:hidden;box-shadow:0 12px 40px rgba(15,23,42,.18);border-radius:4px;color:#0f172a;margin:0 auto}
 .char-geo{position:absolute;width:0;height:0;z-index:1}
 .char-geo-tl{top:0;left:0;border-top:170px solid #c8a753;border-right:170px solid transparent}
 .char-geo-bl{bottom:0;left:0;border-bottom:170px solid #1a2744;border-right:170px solid transparent}
 .char-geo-tr{top:0;right:0;border-top:130px solid #1a2744;border-left:130px solid transparent}
 .char-geo-br{bottom:0;right:0;border-bottom:130px solid #c8a753;border-left:130px solid transparent}
 .char-border-frame{position:absolute;inset:26px;border:2px solid #c8a753;z-index:2;pointer-events:none}
-.char-inner{position:relative;z-index:3;padding:64px 64px 50px;display:flex;flex-direction:column;align-items:center;text-align:center;height:100%}
-.char-l-header{display:flex;align-items:center;gap:14px;width:100%;margin-bottom:18px}
-.char-l-logo{width:46px;height:46px;border-radius:50%;background:linear-gradient(135deg,#1a2744,#3b6fb8);color:#fff;display:flex;align-items:center;justify-content:center;font-size:19px;flex-shrink:0;box-shadow:0 4px 14px rgba(26,39,68,.35)}
-.char-l-school-block{flex:1;text-align:center}
-.char-l-school-meta{margin-top:3px;font-family:'Inter',sans-serif;font-size:10.5px;color:#64748b;letter-spacing:.04em}
+.char-inner{position:relative;z-index:3;margin:26px;height:calc(100% - 52px);background:#fff;padding:38px 46px 40px;display:flex;flex-direction:column;align-items:center;text-align:center}
+.char-l-header{display:flex;align-items:center;gap:12px;width:100%;margin-bottom:18px;padding-bottom:14px;border-bottom:1px solid #e2e8f0}
+.char-l-logo{width:60px;height:60px;border-radius:50%;background:linear-gradient(135deg,#1a2744,#3b6fb8);color:#fff;display:flex;align-items:center;justify-content:center;font-size:24px;flex-shrink:0;box-shadow:0 4px 14px rgba(26,39,68,.35);overflow:hidden}
+.char-l-logo img{width:100%;height:100%;object-fit:cover;border-radius:50%}
+.char-l-logo-spacer{width:60px;flex-shrink:0}
+.char-l-school-block{flex:1;min-width:0;text-align:center}
+.char-l-school-meta{margin-top:5px;font-family:'Inter',sans-serif;font-size:11.5px;color:#475569;letter-spacing:.03em;font-weight:500}
 .char-l-dot{margin:0 8px;color:#cbd5e1}
-.char-school-name{font-family:'Inter',sans-serif;font-size:11px;letter-spacing:.18em;color:#64748b;text-transform:uppercase;margin-bottom:0}
+.char-school-name{font-family:'Cormorant Garamond',serif;font-size:26px;font-weight:700;letter-spacing:.03em;color:#1a2744;text-transform:uppercase;margin-bottom:0;line-height:1.2;word-spacing:.1em}
 .char-certify-line{font-family:'Cormorant Garamond',serif;font-size:15px;font-style:italic;color:#475569;margin-bottom:18px}
 .char-title{font-family:'Great Vibes',cursive;font-size:54px;color:#1a2744;line-height:1;margin-bottom:4px}
 .char-subtitle{font-family:'Inter',sans-serif;font-size:20px;font-weight:700;letter-spacing:.1em;color:#c8a753;text-transform:uppercase;margin-bottom:18px}
@@ -4511,9 +4534,9 @@ body{font-family:'Cormorant Garamond',Georgia,serif;background:#eef2f7;padding:2
 .char-sig-line{width:200px;height:1px;background:#334155;margin:0 auto 8px}
 .char-sig-title{font-family:'Inter',sans-serif;font-size:12px;font-weight:700;color:#0f172a;text-transform:uppercase;letter-spacing:.06em}
 @media print{
-  html,body{padding:0;margin:0;background:#fff;width:100%;height:100%}
+  html,body{padding:0;margin:0;background:#fff;width:100%;height:100%;overflow:hidden}
   @page{size:A4 portrait;margin:6mm}
-  .char-cert-outer{box-shadow:none;border-radius:0;margin:0 auto;page-break-after:avoid;page-break-inside:avoid}
+  .char-cert-outer{box-shadow:none;border-radius:0;margin:0 auto;page-break-after:avoid;page-break-before:avoid;page-break-inside:avoid;break-inside:avoid}
 }
 </style>
 </head>
