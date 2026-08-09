@@ -1239,6 +1239,15 @@ let currentVoucherFineReason = '';
 // hidden whenever this is true — see openVoucherEditModal().
 let currentVoucherIsFamily = false;
 
+// When the inline editor is opened for ONE child from inside a Family
+// Voucher, these remember which student originally anchored that family
+// group (i.e. the student viewVoucher() was called with) so Save can
+// rebuild the same combined Family Voucher afterwards instead of dropping
+// the admin into that one child's single voucher. Cleared whenever the
+// editor is opened from a normal (non-family) voucher.
+let ievFamilyReturnId = null;
+let ievFamilyReturnName = null;
+
 async function viewVoucher(studentId, fullName, isPaidBill = false) {
     // 1. Validation
     if (!studentId || studentId === "null") {
@@ -1256,6 +1265,28 @@ async function viewVoucher(studentId, fullName, isPaidBill = false) {
     }
 
     const monthKey = getCurrentMonthKey();
+
+    // 2c. LOADING STATE — show the modal immediately with a spinner instead of
+    // leaving the user staring at the previous voucher (or a blank overlay)
+    // while the backend status fetch below resolves. The real markup replaces
+    // this once buildVoucherHTML()/buildFamilyVoucherHTML() finish.
+    const renderTargetLoading = document.getElementById('voucher-render-target');
+    const modalOverlayLoading = document.getElementById('voucher-modal-overlay');
+    if (renderTargetLoading) {
+        renderTargetLoading.innerHTML = `
+            <div class="voucher-loading-state">
+                <i class="fas fa-spinner fa-spin voucher-loading-spinner"></i>
+                <span>Loading voucher…</span>
+            </div>`;
+    }
+    if (modalOverlayLoading) modalOverlayLoading.style.display = 'flex';
+    // Disable the action buttons while the voucher is still loading so the
+    // user can't print/share/edit a voucher that isn't rendered yet.
+    ['edit-voucher-btn', 'share-voucher-btn'].forEach(id => {
+        const btn = document.getElementById(id);
+        if (btn) btn.disabled = true;
+    });
+    document.querySelectorAll('.voucher-modal-actions .btn-primary').forEach(btn => btn.disabled = true);
 
     // 2b. SIBLING DETECTION — mirrors the "Combine siblings into one Family
     // Voucher" behavior already used by the Print flow (see
@@ -1319,8 +1350,14 @@ async function viewVoucher(studentId, fullName, isPaidBill = false) {
             const editBtn = document.getElementById('edit-voucher-btn');
             if (editBtn) {
                 editBtn.style.display = 'none';
+                editBtn.disabled = false;
                 editBtn.setAttribute('data-paid-locked', isPaidBill ? '1' : '0');
             }
+            // Voucher finished rendering — re-enable Print/Share now that
+            // there's actual content to act on.
+            const shareBtnF = document.getElementById('share-voucher-btn');
+            if (shareBtnF) shareBtnF.disabled = false;
+            document.querySelectorAll('.voucher-modal-actions .btn-primary').forEach(btn => btn.disabled = false);
             return;
         }
 
@@ -1374,22 +1411,62 @@ async function viewVoucher(studentId, fullName, isPaidBill = false) {
         const editBtn = document.getElementById('edit-voucher-btn');
         if (editBtn) {
             editBtn.style.display = isPaidBill ? 'none' : 'inline-flex';
+            editBtn.disabled = false;
             editBtn.setAttribute('data-paid-locked', isPaidBill ? '1' : '0');
         }
+        // Voucher finished rendering — re-enable Print/Share now that
+        // there's actual content to act on.
+        const shareBtn = document.getElementById('share-voucher-btn');
+        if (shareBtn) shareBtn.disabled = false;
+        document.querySelectorAll('.voucher-modal-actions .btn-primary').forEach(btn => btn.disabled = false);
 
     } catch (err) {
         console.error("Voucher Rendering Error:", err);
         alert("Failed to sync with the server. The voucher might show outdated information.");
+        // Don't leave the modal stuck on the loading spinner if something
+        // above threw before the voucher HTML was rendered.
+        const rt = document.getElementById('voucher-render-target');
+        if (rt && rt.querySelector('.voucher-loading-state')) {
+            rt.innerHTML = `
+                <div class="voucher-loading-state">
+                    <i class="fas fa-exclamation-triangle" style="color:#dc2626;"></i>
+                    <span>Couldn't load the voucher. Please close and try again.</span>
+                </div>`;
+        }
+        ['edit-voucher-btn', 'share-voucher-btn'].forEach(id => {
+            const btn = document.getElementById(id);
+            if (btn) btn.disabled = false;
+        });
+        document.querySelectorAll('.voucher-modal-actions .btn-primary').forEach(btn => btn.disabled = false);
     }
 }
 
 function openVoucherEditModal() {
     const editBtn = document.getElementById('edit-voucher-btn');
     if (editBtn && editBtn.getAttribute('data-paid-locked') === '1') return; // Paid bills cannot be edited
-    if (currentVoucherIsFamily) return; // Family Vouchers combine multiple students — nothing to edit here
+    if (currentVoucherIsFamily) return; // Family Vouchers combine multiple students — use the per-child pencil icon instead (see editFamilyVoucherChild)
+    // Opened from a normal, single-student voucher — make sure no stale
+    // "return to family" state carries over from a previous session.
+    ievFamilyReturnId = null;
+    ievFamilyReturnName = null;
     if (currentVoucherStudentId) {
         openInlineVoucherEditor(currentVoucherStudentId, currentVoucherStudentName);
     }
+}
+
+// BUGFIX — "Edit Voucher doesn't work on a Family Voucher": the top Edit
+// button is intentionally hidden for combined Family Vouchers (the inline
+// editor only ever knew how to edit one student), which left admins with
+// no way at all to correct a single child's fees on a combined voucher.
+// Each child's block in buildFamilyVoucherHTML() now has its own pencil
+// icon that calls this — it opens the same inline editor for just that
+// child, and remembers which student the Family Voucher was opened with
+// so Save can rebuild the combined view again afterwards.
+function editFamilyVoucherChild(childId, childName) {
+    if (!childId) { alert('Student not found.'); return; }
+    ievFamilyReturnId = currentVoucherStudentId;
+    ievFamilyReturnName = currentVoucherStudentName;
+    openInlineVoucherEditor(childId, childName);
 }
 
 function closeVoucherModal() {
@@ -1415,6 +1492,13 @@ function shareVoucherOnline() {
         const copies = target.querySelectorAll('.voucher-copy');
         if (copies[0]) copies[0].style.display = 'none';
 
+        // BUGFIX (Family Voucher edit): the per-child pencil icon is a screen-only
+        // control (see .voucher-child-edit-btn) — @media print hides it for actual
+        // printing, but html2canvas doesn't honor print media rules, so without this
+        // it would otherwise show up baked into the shared/downloaded image.
+        const editBtns = target.querySelectorAll('.voucher-child-edit-btn');
+        editBtns.forEach(b => b.style.display = 'none');
+
         html2canvas(target, {
             scale: 2,
             useCORS: true,
@@ -1422,6 +1506,7 @@ function shareVoucherOnline() {
             logging: false
         }).then(canvas => {
             if (copies[0]) copies[0].style.display = '';
+            editBtns.forEach(b => b.style.display = '');
 
             const students = JSON.parse(localStorage.getItem('edu_students') || '[]');
             const student  = findStudentExact(students, currentVoucherStudentId, currentVoucherStudentName);
@@ -1456,6 +1541,7 @@ function shareVoucherOnline() {
             }, 'image/png');
         }).catch(() => {
             if (copies[0]) copies[0].style.display = '';
+            editBtns.forEach(b => b.style.display = '');
             _showShareToast('Image capture failed. Try Print instead.');
         });
     }
@@ -1486,7 +1572,7 @@ function _showShareToast(message) {
 }
 
 /* ===================== DUAL-COPY PRINT LAYOUT ENGINE ===================== */
-const PV_MARGIN_MM = 10;
+const PV_MARGIN_MM = 12;
 const PV_GAP_MM = 20;
 const PV_PAGE_W_MM = 210;
 const PV_PAGE_H_MM = 297;
@@ -1496,23 +1582,42 @@ const PV_LANDSCAPE_CONTENT_W = PV_PAGE_H_MM - 2 * PV_MARGIN_MM;
 const PV_LANDSCAPE_CONTENT_H = PV_PAGE_W_MM - 2 * PV_MARGIN_MM;
 const PV_MIN_SCALE = 0.55;
 // Extra clearance kept free at the bottom/right of the usable area so the
-// second (bottom) copy never rides right up against the page edge — real
-// printers, and the gap between our off-screen measurement and the actual
-// print render, both eat a few mm that @page margin alone doesn't cover.
-const PV_SAFETY_MM = 8;
+// second (bottom) copy — and specifically its closing note + signature line —
+// never rides into the page edge. Covers two things CSS alone can't measure:
+// the gap between our off-screen measurement and the real print render, and
+// the browser's own default print header/footer (date/URL/page-number),
+// which is drawn inside the page margin and can eat into it if the margin
+// is too tight. If this runs out, even by a hair, the browser silently
+// spills the remainder onto a genuinely blank next page that shows nothing
+// but its own header line — so this is kept generous on purpose.
+const PV_SAFETY_MM = 20;
+// A screen (off-screen measurer) render and the browser's actual print
+// render aren't pixel-identical — print font metrics, sub-pixel rounding,
+// etc. can make the real thing a couple of percent taller than what we
+// measured. Treating every measurement as this much bigger than it really
+// is means a voucher that's right on the edge gets shifted into the
+// shrink-to-fit path (with real headroom) instead of being printed at full
+// size with zero margin for error.
+const PV_RENDER_VARIANCE = 1.035;
+
 const PV_PORTRAIT_FIT_H = PV_PORTRAIT_CONTENT_H - PV_SAFETY_MM;
 const PV_LANDSCAPE_FIT_W = PV_LANDSCAPE_CONTENT_W - PV_SAFETY_MM;
 const PV_LANDSCAPE_FIT_H = PV_LANDSCAPE_CONTENT_H - PV_SAFETY_MM;
 
 function pvPxToMm(px) { return px * 25.4 / 96; }
 
-/** Undoes any scale-wrapping from a previous run so preparePrintLayout()
- *  can be called repeatedly (e.g. once explicitly + once on 'beforeprint')
- *  without stacking transforms. */
+/** Undoes any scale-wrapping / per-copy shrinking from a previous run so
+ *  preparePrintLayout() can be called repeatedly (e.g. once explicitly +
+ *  once on 'beforeprint') without stacking transforms. */
 function pvResetScaling(printArea) {
     printArea.querySelectorAll('.voucher-sheet').forEach(sheet => {
         sheet.style.marginLeft = '';
         sheet.style.marginRight = '';
+    });
+    printArea.querySelectorAll('.voucher-copy').forEach(copy => {
+        copy.style.transform = '';
+        copy.style.transformOrigin = '';
+        copy.style.width = '';
     });
     printArea.querySelectorAll('.pv-scale-wrap').forEach(wrap => {
         const sheet = wrap.querySelector(':scope > .voucher-sheet');
@@ -1524,16 +1629,169 @@ function pvResetScaling(printArea) {
         }
         wrap.remove();
     });
+    printArea.querySelectorAll('.pv-copy-scale-wrap').forEach(wrap => {
+        const copy = wrap.querySelector(':scope > .voucher-copy');
+        if (copy) {
+            copy.style.transform = '';
+            copy.style.transformOrigin = '';
+            copy.style.width = '';
+            wrap.parentNode.insertBefore(copy, wrap);
+        }
+        wrap.remove();
+    });
 }
 
-/** Measures the tallest/widest .voucher-copy currently queued for print and
- *  decides page orientation + copy layout so both the School and Student
- *  copies always land on ONE physical sheet — first by choosing
- *  stack/side-by-side/portrait-landscape, and if the natural size still
- *  overflows, by shrinking the whole two-copy block (via a fixed-size
- *  wrapper + transform: scale) so the browser never silently spills onto
- *  a second print page. Runs automatically right before every
- *  window.print() call, so no manual "pages per sheet" setting is needed. */
+/** Measures one .voucher-copy (School/Student copy, or one child copy of a
+ *  Family Voucher) off-screen and returns its natural size in millimetres. */
+function pvMeasureCopy(measurer, copyEl) {
+    const clone = copyEl.cloneNode(true);
+    clone.style.margin = '0';
+    clone.style.transform = 'none';
+    measurer.innerHTML = '';
+    measurer.appendChild(clone);
+    const rect = clone.getBoundingClientRect();
+    return { h: pvPxToMm(rect.height), w: pvPxToMm(rect.width) };
+}
+
+/** Lays out ONE voucher sheet (its School Copy + Student/Family copies) so
+ *  they always land on a single physical A4 page — first by trying to
+ *  stack (or, for a lone single-voucher print job, sit side-by-side in
+ *  landscape) at full size, then by shrinking the whole block to fit, and
+ *  finally — only if even a shrunk block would be unreadable — by giving
+ *  each copy its OWN dedicated page. In that last case every copy is still
+ *  individually measured and scaled down if needed, so a copy can never
+ *  itself spill a line onto a second sheet of paper.
+ *
+ *  Each voucher's .voucher-sheet is laid out independently (not against a
+ *  batch-wide measurement) — this is what stops one oversized Family
+ *  Voucher from forcing every other, shorter voucher in the same print run
+ *  to shrink or split unnecessarily, and vice versa. */
+function pvLayoutSheet(sheet, measurer, allowLandscape) {
+    const copies = Array.from(sheet.children).filter(el => el.classList.contains('voucher-copy'));
+    sheet.classList.remove('pv-stack', 'pv-side-by-side', 'pv-separate');
+    if (copies.length === 0) return 'portrait';
+
+    let maxH = 0, maxW = 0;
+    copies.forEach(copy => {
+        const { h, w } = pvMeasureCopy(measurer, copy);
+        if (h > maxH) maxH = h;
+        if (w > maxW) maxW = w;
+    });
+    // Pad the measurement itself (see PV_RENDER_VARIANCE) so every fit
+    // decision below already has real headroom, not just a hair's width.
+    maxH *= PV_RENDER_VARIANCE;
+    maxW *= PV_RENDER_VARIANCE;
+
+    const gapTotal = PV_GAP_MM * (copies.length - 1);
+    const stackedHmm = maxH * copies.length + gapTotal;
+    const sideBySideWmm = maxW * copies.length + gapTotal;
+
+    let orientation = 'portrait', layoutClass = 'pv-stack', scale = 1, boxWmm = maxW, boxHmm = stackedHmm;
+
+    if (stackedHmm <= PV_PORTRAIT_FIT_H) {
+        // Fits stacked on a single portrait page at full size, with clearance to spare.
+        orientation = 'portrait';
+        layoutClass = 'pv-stack';
+    } else {
+        const fitsLandscapeNatural = allowLandscape && sideBySideWmm <= PV_LANDSCAPE_FIT_W && maxH <= PV_LANDSCAPE_FIT_H;
+        const scalePortrait = PV_PORTRAIT_FIT_H / stackedHmm;
+        const scaleLandscape = allowLandscape ? Math.min(PV_LANDSCAPE_FIT_W / sideBySideWmm, PV_LANDSCAPE_FIT_H / maxH) : 0;
+
+        if (fitsLandscapeNatural) {
+            // Fits side-by-side on a single landscape page at full size.
+            orientation = 'landscape';
+            layoutClass = 'pv-side-by-side';
+            boxWmm = sideBySideWmm;
+            boxHmm = maxH;
+        } else if (scalePortrait >= PV_MIN_SCALE && scalePortrait >= scaleLandscape) {
+            // Shrink-to-fit on portrait keeps every copy stacked and legible.
+            orientation = 'portrait';
+            layoutClass = 'pv-stack';
+            scale = scalePortrait;
+        } else if (scaleLandscape >= PV_MIN_SCALE) {
+            // Shrink-to-fit on landscape keeps every copy side-by-side.
+            orientation = 'landscape';
+            layoutClass = 'pv-side-by-side';
+            scale = scaleLandscape;
+            boxWmm = sideBySideWmm;
+            boxHmm = maxH;
+        } else {
+            // Even shrunk it would be too small to read — give each copy its own page instead.
+            orientation = 'portrait';
+            layoutClass = 'pv-separate';
+        }
+    }
+
+    sheet.classList.add(layoutClass);
+
+    // Portrait prints: Student Copy on top, School Copy at the bottom.
+    // (Landscape side-by-side keeps School left / Student right.)
+    if (orientation === 'portrait' && layoutClass !== 'pv-side-by-side') {
+        const studentCopy = copies.find(el => el.querySelector('.voucher-copy-tag.tag-green'));
+        if (studentCopy && sheet.firstElementChild !== studentCopy) {
+            sheet.insertBefore(studentCopy, sheet.firstElementChild);
+        }
+    }
+
+    if (layoutClass === 'pv-separate') {
+        // Splitting onto separate pages only solves the problem if each
+        // individual copy also fits within ONE page on its own — a tall
+        // Family Voucher copy (many children) can still be taller than a
+        // full page by itself. Re-measure and scale each copy independently
+        // so no copy ever breaks across two sheets of paper.
+        copies.forEach(copy => {
+            const raw = pvMeasureCopy(measurer, copy);
+            const copyHmm = raw.h * PV_RENDER_VARIANCE;
+            const copyWmm = raw.w * PV_RENDER_VARIANCE;
+            const fitScale = Math.min(1, PV_PORTRAIT_FIT_H / copyHmm, PV_PORTRAIT_CONTENT_W / copyWmm);
+            if (fitScale < 0.999) {
+                const wrap = document.createElement('div');
+                wrap.className = 'pv-copy-scale-wrap';
+                wrap.style.width = (copyWmm * fitScale) + 'mm';
+                wrap.style.height = (copyHmm * fitScale) + 'mm';
+                wrap.style.margin = '0 auto';
+                copy.parentNode.insertBefore(wrap, copy);
+                wrap.appendChild(copy);
+                copy.style.width = copyWmm + 'mm';
+                copy.style.transform = `scale(${fitScale})`;
+                copy.style.transformOrigin = 'top left';
+            }
+        });
+        return orientation;
+    }
+
+    // Horizontally center the block on the page. When the block is at full
+    // natural size it already spans the page's printable width, so this
+    // only visibly kicks in once the content is scaled down.
+    if (scale < 0.999) {
+        const wrap = document.createElement('div');
+        wrap.className = 'pv-scale-wrap';
+        wrap.style.width = (boxWmm * scale) + 'mm';
+        wrap.style.height = (boxHmm * scale) + 'mm';
+        wrap.style.margin = '0 auto';
+        sheet.parentNode.insertBefore(wrap, sheet);
+        wrap.appendChild(sheet);
+        sheet.style.width = boxWmm + 'mm';
+        sheet.style.transform = `scale(${scale})`;
+        sheet.style.transformOrigin = 'top left';
+    } else {
+        sheet.style.marginLeft = 'auto';
+        sheet.style.marginRight = 'auto';
+    }
+
+    return orientation;
+}
+
+/** Decides page orientation + per-voucher layout so every voucher — a
+ *  regular single voucher or a combined Family Voucher — always prints its
+ *  School Copy and Student Copy on ONE physical A4 sheet, with no line
+ *  ever spilling onto a following page; if a voucher is simply too tall to
+ *  share one page even shrunk, its two copies are each given their own
+ *  dedicated page instead. Runs automatically right before every
+ *  window.print() call (see the 'beforeprint' listener below and the
+ *  explicit calls in each print* function), so nobody ever has to open the
+ *  browser's print dialog and manually fix paper size, margins, orientation,
+ *  or "pages per sheet" — it's already correct by the time the dialog opens. */
 function preparePrintLayout() {
     const printArea = document.getElementById('voucher-print-area');
     if (!printArea) return;
@@ -1541,92 +1799,27 @@ function preparePrintLayout() {
     pvResetScaling(printArea);
 
     const sheets = Array.from(printArea.querySelectorAll('.voucher-sheet'));
-    const copies = Array.from(printArea.querySelectorAll('.voucher-copy'));
-    if (sheets.length === 0 || copies.length === 0) return;
-
-    sheets.forEach(s => s.classList.remove('pv-stack', 'pv-side-by-side', 'pv-separate'));
+    if (sheets.length === 0) return;
 
     const measurer = document.createElement('div');
     measurer.style.cssText = `position:fixed; top:0; left:-10000px; visibility:hidden; width:${PV_PORTRAIT_CONTENT_W}mm;`;
     document.body.appendChild(measurer);
 
-    let maxH = 0, maxW = 0;
-    copies.forEach(copy => {
-        const clone = copy.cloneNode(true);
-        clone.style.margin = '0';
-        clone.style.transform = 'none';
-        measurer.innerHTML = '';
-        measurer.appendChild(clone);
-        const rect = clone.getBoundingClientRect();
-        if (rect.height > maxH) maxH = rect.height;
-        if (rect.width > maxW) maxW = rect.width;
-    });
-    document.body.removeChild(measurer);
-
-    const copyHmm = pvPxToMm(maxH);
-    const copyWmm = pvPxToMm(maxW);
-    const stackedHmm = copyHmm * 2 + PV_GAP_MM;
-    const sideBySideWmm = copyWmm * 2 + PV_GAP_MM;
-
-    let orientation, layoutClass, scale = 1, boxWmm = copyWmm, boxHmm = stackedHmm;
-
-    if (stackedHmm <= PV_PORTRAIT_FIT_H) {
-        // Fits stacked on a single portrait page at full size, with clearance to spare.
-        orientation = 'portrait';
-        layoutClass = 'pv-stack';
-    } else {
-        const fitsLandscapeNatural = sideBySideWmm <= PV_LANDSCAPE_FIT_W && copyHmm <= PV_LANDSCAPE_FIT_H;
-        const scalePortrait = PV_PORTRAIT_FIT_H / stackedHmm;
-        const scaleLandscape = Math.min(PV_LANDSCAPE_FIT_W / sideBySideWmm, PV_LANDSCAPE_FIT_H / copyHmm);
-
-        if (fitsLandscapeNatural) {
-            // Fits side-by-side on a single landscape page at full size.
-            orientation = 'landscape';
-            layoutClass = 'pv-side-by-side';
-            boxWmm = sideBySideWmm;
-            boxHmm = copyHmm;
-        } else if (scalePortrait >= PV_MIN_SCALE && scalePortrait >= scaleLandscape) {
-            // Shrink-to-fit on portrait keeps both copies stacked and legible.
-            orientation = 'portrait';
-            layoutClass = 'pv-stack';
-            scale = scalePortrait;
-        } else if (scaleLandscape >= PV_MIN_SCALE) {
-            // Shrink-to-fit on landscape keeps both copies side-by-side.
-            orientation = 'landscape';
-            layoutClass = 'pv-side-by-side';
-            scale = scaleLandscape;
-            boxWmm = sideBySideWmm;
-            boxHmm = copyHmm;
-        } else {
-            // Even shrunk it would be too small to read — give each copy its own page.
-            orientation = 'portrait';
-            layoutClass = 'pv-separate';
-        }
-    }
-
+    // Every voucher already starts on its own fresh page (see the
+    // '.print-page-break' divs printStudentsSequentially() inserts between
+    // students), so each .voucher-sheet's layout can be decided completely
+    // independently of every other one in the batch. A single-voucher print
+    // job (exactly one sheet — e.g. printing/previewing one student or one
+    // family) is free to switch the whole page to landscape if that fits
+    // better; a multi-voucher batch keeps every sheet in portrait so the
+    // whole job shares one consistent, correctly-sized page.
+    const allowLandscape = sheets.length === 1;
+    let orientation = 'portrait';
     sheets.forEach(sheet => {
-        sheet.classList.add(layoutClass);
-        if (layoutClass === 'pv-separate') return;
-
-        // Horizontally center the block on the page. When the block is at
-        // full natural size it already spans the page's printable width, so
-        // this only visibly kicks in once the content is scaled down.
-        if (scale < 0.999) {
-            const wrap = document.createElement('div');
-            wrap.className = 'pv-scale-wrap';
-            wrap.style.width = (boxWmm * scale) + 'mm';
-            wrap.style.height = (boxHmm * scale) + 'mm';
-            wrap.style.margin = '0 auto';
-            sheet.parentNode.insertBefore(wrap, sheet);
-            wrap.appendChild(sheet);
-            sheet.style.width = boxWmm + 'mm';
-            sheet.style.transform = `scale(${scale})`;
-            sheet.style.transformOrigin = 'top left';
-        } else {
-            sheet.style.marginLeft = 'auto';
-            sheet.style.marginRight = 'auto';
-        }
+        if (pvLayoutSheet(sheet, measurer, allowLandscape) === 'landscape') orientation = 'landscape';
     });
+
+    document.body.removeChild(measurer);
 
     let styleTag = document.getElementById('pv-dynamic-page-style');
     if (!styleTag) {
@@ -1636,7 +1829,7 @@ function preparePrintLayout() {
     }
     styleTag.textContent = `@media print { @page { size: A4 ${orientation} !important; margin: ${PV_MARGIN_MM}mm !important; } }`;
 
-    return { orientation, layoutClass, scale };
+    return { orientation };
 }
 window.addEventListener('beforeprint', preparePrintLayout);
 
@@ -1878,7 +2071,7 @@ function buildVoucherHTML(s) {
             </table>
 
             <div class="voucher-footer">
-                <div class="voucher-note"><i class="fas fa-info-circle"></i> Please clear dues by the due date to avoid late fees.</div>
+                <div class="voucher-note"><i class="fas fa-info-circle"></i> ${s.voucherNote ? escapeHtml(s.voucherNote) : 'Please clear dues by the due date to avoid late fees.'}</div>
                 <div class="voucher-signature">
                     <div class="sig-line"></div>
                     <span>Principal / Accounts</span>
@@ -3566,6 +3759,19 @@ function ievSave() {
     }
 
     closeInlineVoucherEditor();
+
+    // If this edit was opened from inside a Family Voucher (via the
+    // per-child pencil icon), reopen THAT combined voucher — re-detecting
+    // siblings from the anchor student — instead of dropping the admin
+    // into the single child's voucher they just edited.
+    if (ievFamilyReturnId) {
+        const returnId = ievFamilyReturnId, returnName = ievFamilyReturnName;
+        ievFamilyReturnId = null;
+        ievFamilyReturnName = null;
+        viewVoucher(returnId, returnName);
+        return;
+    }
+
     // Re-open the read-only voucher with the new values.
     viewVoucher(studentId, fullName);
 }
@@ -4514,7 +4720,11 @@ function buildFamilyVoucherHTML(studentsGroup) {
                 const amt = Number(r.amount) || 0;
                 const disc = Number(r.discount) || 0;
                 const net = Math.max(0, amt - disc);
-                return `<tr><td>${escapeHtml(r.description || 'Fee')}</td><td>${escapeHtml(r.period || '-')}</td><td>Rs. ${net.toLocaleString()}</td></tr>`;
+                // BUGFIX — per-row discount was applied to the net amount but never
+                // actually shown anywhere on the Family Voucher, so it looked like
+                // the discount "didn't work". Mirror buildVoucherHTML's discount note.
+                const discNote = disc > 0 ? ` <span style="color:#16a34a; font-size:0.72rem;">(- Rs. ${disc.toLocaleString()} discount)</span>` : '';
+                return `<tr><td>${escapeHtml(r.description || 'Fee')}${discNote}</td><td>${escapeHtml(r.period || '-')}</td><td>Rs. ${net.toLocaleString()}</td></tr>`;
             }).join('');
             if (f.bulkDiscount > 0) {
                 rowsHTML += `<tr class="voucher-row-discount"><td style="padding-left:20px;">- Bulk Discount</td><td>Concession</td><td>- Rs. ${f.bulkDiscount.toLocaleString()}</td></tr>`;
@@ -4542,15 +4752,21 @@ function buildFamilyVoucherHTML(studentsGroup) {
             rowsHTML += `<tr class="voucher-row-arrears"><td><strong>Previous Arrears</strong></td><td>Balance B/F</td><td>Rs. ${f.arrears.toLocaleString()}</td></tr>`;
         }
 
+        const childId = s.id || s.regNo || '';
+        const childName = s.fullName || s.name || '';
         return `
             <div class="voucher-child-block">
                 <div class="voucher-child-header">
                     <span class="voucher-child-index">${idx + 1}</span>
                     <div class="voucher-child-info">
-                        <strong>${escapeHtml(s.fullName || s.name || '')}</strong>
+                        <strong>${escapeHtml(childName)}</strong>
                         <span>${escapeHtml(f.regNo)} &middot; Class ${escapeHtml(s.studentClass || '-')}</span>
                     </div>
                     <div class="voucher-child-subtotal">Rs. ${f.voucherTotal.toLocaleString()}</div>
+                    <button type="button" class="voucher-child-edit-btn no-print" title="Edit ${escapeForAttr(childName)}'s voucher"
+                        onclick="editFamilyVoucherChild('${escapeForAttr(childId)}','${escapeForAttr(childName)}')">
+                        <i class="fas fa-pen"></i>
+                    </button>
                 </div>
                 <table class="voucher-fee-table voucher-child-table">
                     <thead><tr><th>Description</th><th>Period</th><th>Amount</th></tr></thead>

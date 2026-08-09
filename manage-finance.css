@@ -1616,6 +1616,33 @@
     white-space: nowrap;
 }
 
+/* Per-child "edit this student's fees" pencil inside a Family Voucher —
+   see editFamilyVoucherChild() in manage-finance.js. Screen-only: hidden
+   in print via the .no-print rule below so it never shows up on the
+   printed/shared voucher. */
+.voucher-child-edit-btn {
+    flex-shrink: 0;
+    width: 26px;
+    height: 26px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    border-radius: 7px;
+    background: #fff;
+    color: #3498db;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+    cursor: pointer;
+    font-size: 0.72rem;
+    transition: background 0.15s ease, color 0.15s ease, transform 0.15s ease;
+}
+
+.voucher-child-edit-btn:hover {
+    background: #3498db;
+    color: #fff;
+    transform: translateY(-1px);
+}
+
 .voucher-child-table {
     margin-bottom: 0;
 }
@@ -1655,11 +1682,13 @@
     flex: 1 1 0;
     min-width: 0;
 }
-.voucher-sheet.pv-separate > .voucher-copy {
+.voucher-sheet.pv-separate > .voucher-copy,
+.voucher-sheet.pv-separate > .pv-copy-scale-wrap {
     break-after: page;
     page-break-after: always;
 }
-.voucher-sheet.pv-separate > .voucher-copy:last-child {
+.voucher-sheet.pv-separate > .voucher-copy:last-child,
+.voucher-sheet.pv-separate > .pv-copy-scale-wrap:last-child {
     break-after: auto;
     page-break-after: auto;
 }
@@ -1675,6 +1704,16 @@
     margin: 0 auto;
 }
 
+/* Per-copy shrink wrapper — used only in "pv-separate" mode (each copy on
+   its own page) when a single copy is, by itself, still taller than one
+   full A4 page. Sized exactly to the scaled copy by preparePrintLayout()
+   in JS, same reasoning as .pv-scale-wrap above, so that copy's whole
+   height is guaranteed to fit on the one page it now has to itself. */
+.pv-copy-scale-wrap {
+    overflow: hidden;
+    margin: 0 auto;
+}
+
 @media print {
     html, body {
         background: none !important;
@@ -1685,6 +1724,21 @@
     }
     #voucher-print-area, #voucher-print-area * {
         visibility: visible;
+    }
+    /* visibility:hidden (above) only hides content visually — it does NOT
+       remove it from the page flow, so the rest of the dashboard (sidebar,
+       the currently-open finance page, its cards/tables) still occupies
+       its full normal height during print. #voucher-print-area is pulled
+       out of flow via position:absolute below, so none of that leftover
+       height is needed for it — left alone it just adds one or more
+       trailing, genuinely blank pages after the voucher. display:none
+       fully removes it from layout instead, so the printed page count
+       matches the voucher content exactly. */
+    #sidebar {
+        display: none !important;
+    }
+    .main-content > *:not(#voucher-print-area) {
+        display: none !important;
     }
     #voucher-print-area {
         display: block !important;
@@ -1707,7 +1761,21 @@
         break-inside: avoid;
         page-break-inside: avoid;
     }
+    .pv-copy-scale-wrap {
+        break-inside: avoid;
+        page-break-inside: avoid;
+    }
+    /* Interactive-only controls (e.g. the per-child edit pencil on Family
+       Vouchers) must never show up on the printed/shared voucher. */
+    .no-print {
+        display: none !important;
+    }
     .voucher-child-block {
+        break-inside: avoid;
+        page-break-inside: avoid;
+    }
+    .voucher-footer,
+    .voucher-fee-table tfoot {
         break-inside: avoid;
         page-break-inside: avoid;
     }
@@ -5220,6 +5288,33 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 }
 @media (max-width: 560px) {
     .vp-summary-grid { grid-template-columns: 1fr; }
+}
+
+.voucher-modal-actions button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    pointer-events: none;
+}
+
+/* ---- Voucher preview loading state ---- */
+.voucher-loading-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+    padding: 70px 28px;
+    text-align: center;
+    color: var(--text-secondary);
+}
+.voucher-loading-state .voucher-loading-spinner {
+    font-size: 2.2rem;
+    color: #6366f1;
+}
+.voucher-loading-state span {
+    font-size: 0.92rem;
+    font-weight: 500;
+    color: var(--text-secondary);
 }
 
 /* ---- Background/batch progress modal ---- */
