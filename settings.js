@@ -8,6 +8,7 @@ const LATEFEE_KEY     = 'edu_latefee_config';
 const TEACHERS_KEY    = 'edu_teacher_configs';
 const NONTEACHING_KEY = 'edu_nonteaching_configs';
 const VARIABLES_KEY   = 'edu_pay_variables';
+const SCHOOL_INFO_KEY  = 'edu_school_info';
 
 // ── Pending delete state ─────────────────────
 let _pendingDeleteEl   = null;
@@ -46,6 +47,19 @@ const DEFAULT_VARIABLES = {
   penaltyType:    'percent',
   penaltyValue:   3,
   bonus:          1000,
+};
+
+// School / contact details, used anywhere the school's identity is printed
+// (certificates, ID cards, student lists, fee vouchers, reports).
+const DEFAULT_SCHOOL_INFO = {
+  name:      '',
+  address:   '',
+  phone:     '',
+  phoneAlt:  '',
+  email:     '',
+  website:   '',
+  principal: '',
+  regNo:     '',
 };
 
 const CLASS_ICONS  = ['fa-chalkboard','fa-book','fa-pencil-alt','fa-star','fa-medal','fa-award','fa-graduation-cap','fa-bookmark'];
@@ -164,11 +178,9 @@ function injectAbsenceBadge(card, salary, penaltyType, penaltyValue, staffId) {
 // ═══════════════════════════════════════════════
 document.addEventListener('DOMContentLoaded', () => {
   initDarkMode();
+  loadSchoolInfo();
   loadClasses();
   loadLateFee();
-  loadTeachers();
-  loadNonTeaching();
-  updateStaffCounts();
   loadVariables();
   wirePayVariableLiveSync();
   syncCardsFromVariables();
@@ -371,6 +383,38 @@ function updateSectionsCount(cardEl) {
 function addClassCard() {
   appendClassCard('', 0, 0, true, []);
   document.querySelector('.class-grid').lastElementChild.querySelector('.class-name-input').focus();
+}
+
+// ═══════════════════════════════════════════════
+//  SCHOOL INFO / CONTACT DETAILS
+// ═══════════════════════════════════════════════
+function loadSchoolInfo() {
+  const saved = JSON.parse(localStorage.getItem(SCHOOL_INFO_KEY)) || DEFAULT_SCHOOL_INFO;
+  document.getElementById('school-name').value      = saved.name      || '';
+  document.getElementById('school-address').value   = saved.address   || '';
+  document.getElementById('school-phone').value      = saved.phone     || '';
+  document.getElementById('school-phone-alt').value  = saved.phoneAlt  || '';
+  document.getElementById('school-email').value      = saved.email     || '';
+  document.getElementById('school-website').value    = saved.website   || '';
+  document.getElementById('school-principal').value  = saved.principal || '';
+  document.getElementById('school-reg-no').value     = saved.regNo     || '';
+}
+
+function collectSchoolInfo() {
+  return {
+    name:      document.getElementById('school-name').value.trim(),
+    address:   document.getElementById('school-address').value.trim(),
+    phone:     document.getElementById('school-phone').value.trim(),
+    phoneAlt:  document.getElementById('school-phone-alt').value.trim(),
+    email:     document.getElementById('school-email').value.trim(),
+    website:   document.getElementById('school-website').value.trim(),
+    principal: document.getElementById('school-principal').value.trim(),
+    regNo:     document.getElementById('school-reg-no').value.trim(),
+  };
+}
+
+function saveSchoolInfo() {
+  localStorage.setItem(SCHOOL_INFO_KEY, JSON.stringify(collectSchoolInfo()));
 }
 
 // ═══════════════════════════════════════════════
@@ -761,59 +805,8 @@ function saveAll() {
   };
   localStorage.setItem(LATEFEE_KEY, JSON.stringify(lateFee));
 
-  // — Teachers —
-  const teacherCards  = document.querySelectorAll('#teacher-grid .teacher-card');
-  const teachers      = [];
-  const sharedList    = getSharedTeachers();
-  const sharedById    = {};
-  if (sharedList) sharedList.forEach(s => { sharedById[s.id] = s; });
-  const updatedShared = [];
-
-  teacherCards.forEach(card => {
-    const name  = card.querySelector('.teacher-name-input').value.trim();
-    const subj  = card.querySelector('.teacher-subject-input').value.trim();
-    const sal   = parseFloat(card.querySelector('.teacher-salary').value)        || 0;
-    const ptype = card.querySelector('.teacher-penalty-type').value;
-    const pval  = parseFloat(card.querySelector('.teacher-penalty-value').value) || 0;
-    const bon   = parseFloat(card.querySelector('.teacher-bonus').value)         || 0;
-    if (!name) return;
-
-    const ptCust = card.dataset.penaltyTypeCustom === '1';
-    const pvCust = card.dataset.penaltyValueCustom === '1';
-    const bnCust = card.dataset.bonusCustom === '1';
-    teachers.push({
-      name, subject: subj, salary: sal,
-      penaltyType:  ptCust ? ptype : null,
-      penaltyValue: pvCust ? pval  : null,
-      bonus:        bnCust ? bon   : null,
-    });
-
-    if (sharedList) {
-      const staffId = card.dataset.staffId;
-      const base = (staffId && sharedById[staffId]) ? sharedById[staffId] : {
-        id: 'TCH-' + Math.floor(1000 + Math.random() * 9000),
-        qualification: '', classes: '', incharge: '',
-        gender: 'Other', joined: new Date().toISOString().slice(0, 10),
-        cnic: '', phone: '', address: '', fines: 0,
-        securityTotal: 0, securityMonthly: 0, securityCollected: 0,
-      };
-      updatedShared.push({
-        ...base,
-        name,
-        subjects: subj,
-        type: 'Teaching',
-        salary: sal,
-        penaltyType:  ptCust ? ptype : null,
-        penaltyValue: pvCust ? pval  : null,
-        bonus:        bnCust ? bon   : null,
-      });
-    }
-  });
-  localStorage.setItem(TEACHERS_KEY, JSON.stringify(teachers));
-  if (sharedList) setSharedTeachers(updatedShared);
-
-  // — Non-Teaching Staff —
-  saveNonTeaching();
+  // — School Info —
+  saveSchoolInfo();
 
   // — Variables —
   const vars = {
@@ -834,15 +827,12 @@ function resetSettings() {
   if (!confirm('Reset all settings to defaults?')) return;
   localStorage.removeItem(CLASSES_KEY);
   localStorage.removeItem(LATEFEE_KEY);
-  localStorage.removeItem(TEACHERS_KEY);
-  localStorage.removeItem(NONTEACHING_KEY);
   localStorage.removeItem(VARIABLES_KEY);
+  localStorage.removeItem(SCHOOL_INFO_KEY);
   loadClasses();
   loadLateFee();
-  loadTeachers();
-  loadNonTeaching();
   loadVariables();
-  updateStaffCounts();
+  loadSchoolInfo();
   showToast('Settings reset to defaults.', 'success');
 }
 

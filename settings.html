@@ -58,7 +58,7 @@
       </button>
       <div class="header-title">
         <h1>System Configuration</h1>
-        <p>Manage classes, fees, fines &amp; staff</p>
+        <p>Manage school info, classes, fees, fines &amp; pay variables</p>
       </div>
     </div>
     <div class="header-actions">
@@ -75,14 +75,14 @@
 
     <!-- TABS -->
     <div class="page-tabs">
-      <button class="tab-btn active" onclick="switchTab('classes', this)">
+      <button class="tab-btn active" onclick="switchTab('schoolinfo', this)">
+        <i class="fas fa-school"></i> School Info
+      </button>
+      <button class="tab-btn" onclick="switchTab('classes', this)">
         <i class="fas fa-chalkboard-teacher"></i> Classes &amp; Fees
       </button>
       <button class="tab-btn" onclick="switchTab('latefee', this)">
         <i class="fas fa-hourglass-half"></i> Late Fee
-      </button>
-      <button class="tab-btn" onclick="switchTab('staff', this)">
-        <i class="fas fa-users"></i> Staff
       </button>
       <button class="tab-btn" onclick="switchTab('variables', this)">
         <i class="fas fa-sliders-h"></i> Pay Variables
@@ -92,8 +92,74 @@
       </button>
     </div>
 
-    <!-- ═══════════════════ TAB: CLASSES ═══════════════════ -->
-    <div class="tab-panel active" id="tab-classes">
+    <!-- ═══════════════════ TAB: SCHOOL INFO ═══════════════════ -->
+    <div class="tab-panel active" id="tab-schoolinfo">
+      <div class="section-card">
+        <div class="section-header">
+          <div class="section-header-info">
+            <h2><i class="fas fa-school"></i> School &amp; Contact Details</h2>
+            <p>This information is used wherever the school's identity is printed — certificates, ID cards, student lists, fee vouchers and reports.</p>
+          </div>
+        </div>
+
+        <div class="variables-panel">
+
+          <div class="var-item" style="max-width:100%;">
+            <label>School Name</label>
+            <input type="text" id="school-name" class="var-input" placeholder="e.g. SoftSchool Academy">
+            <div class="var-hint">Printed as the main heading on certificates, vouchers and student lists.</div>
+          </div>
+
+          <div class="var-item" style="max-width:100%;">
+            <label>School Address</label>
+            <textarea id="school-address" class="var-input" rows="3" placeholder="Street, area, city, postal code"></textarea>
+            <div class="var-hint">Full postal address shown on official documents.</div>
+          </div>
+
+          <div class="school-info-grid">
+            <div class="var-item">
+              <label>Contact Phone</label>
+              <input type="tel" id="school-phone" class="var-input" placeholder="e.g. 041-1234567">
+              <div class="var-hint">Primary phone number for parents and visitors.</div>
+            </div>
+
+            <div class="var-item">
+              <label>Alternate / WhatsApp Number</label>
+              <input type="tel" id="school-phone-alt" class="var-input" placeholder="Optional">
+              <div class="var-hint">Shown alongside the primary number where space allows.</div>
+            </div>
+
+            <div class="var-item">
+              <label>Email Address</label>
+              <input type="email" id="school-email" class="var-input" placeholder="e.g. info@softschool.edu.pk">
+              <div class="var-hint">Used for official correspondence and document footers.</div>
+            </div>
+
+            <div class="var-item">
+              <label>Website</label>
+              <input type="text" id="school-website" class="var-input" placeholder="Optional, e.g. www.softschool.edu.pk">
+              <div class="var-hint">Shown on certificates and prospectuses if provided.</div>
+            </div>
+
+            <div class="var-item">
+              <label>Principal / Head Name</label>
+              <input type="text" id="school-principal" class="var-input" placeholder="Optional">
+              <div class="var-hint">Used for the signatory line on certificates.</div>
+            </div>
+
+            <div class="var-item">
+              <label>Registration / EMIS No.</label>
+              <input type="text" id="school-reg-no" class="var-input" placeholder="Optional">
+              <div class="var-hint">Official registration number, if your board requires one.</div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════════ TAB: CLASSES ═══════════════════ (was "active" by default, now School Info is) -->
+    <div class="tab-panel" id="tab-classes">
       <div class="section-card">
         <div class="section-header">
           <div class="section-header-info">
@@ -185,77 +251,9 @@
       </div>
     </div>
 
-    <!-- ═══════════════════ TAB: STAFF ═══════════════════ -->
-    <div class="tab-panel" id="tab-staff">
-      <div class="section-card">
-        <div class="section-header">
-          <div class="section-header-info">
-            <h2><i class="fas fa-users"></i> Staff Management</h2>
-            <p>Manage your teaching and non-teaching staff. Search, add, edit salaries, leave penalties, and bonuses.</p>
-          </div>
-        </div>
-
-        <!-- Absence fine info banner -->
-        <div class="absence-link-banner">
-          <i class="fas fa-link"></i>
-          <span>Absence deductions are automatically calculated from <strong>daily attendance records</strong>. When staff is marked absent, the fine is computed using the penalty settings below and reflected in payroll.</span>
-          <a href="attendance.html" class="absence-link-btn"><i class="fas fa-clipboard-check"></i> Go to Attendance</a>
-        </div>
-
-        <!-- Staff sub-tabs -->
-        <div class="staff-subtabs">
-          <button class="staff-subtab-btn active" onclick="switchStaffSub('teaching', this)">
-            <i class="fas fa-chalkboard-teacher"></i> Teaching Staff
-            <span class="staff-count" id="teaching-count">0</span>
-          </button>
-          <button class="staff-subtab-btn" onclick="switchStaffSub('nonteaching', this)">
-            <i class="fas fa-user-cog"></i> Non-Teaching Staff
-            <span class="staff-count" id="nonteaching-count">0</span>
-          </button>
-        </div>
-
-        <!-- TEACHING STAFF SUB-PANEL -->
-        <div class="staff-subpanel active" id="staff-sub-teaching">
-          <div class="staff-toolbar">
-            <div class="staff-search-wrap">
-              <i class="fas fa-search"></i>
-              <input type="text" id="teaching-search" class="staff-search-input"
-                     placeholder="Search teaching staff by name or subject..."
-                     oninput="filterStaff('teaching', this.value)">
-            </div>
-          </div>
-          <div class="teacher-grid" id="teacher-grid">
-            <!-- injected by JS -->
-          </div>
-          <div class="staff-empty" id="teaching-empty" style="display:none;">
-            <i class="fas fa-user-slash"></i>
-            <p>No teaching staff match your search.</p>
-          </div>
-        </div>
-
-        <!-- NON-TEACHING STAFF SUB-PANEL -->
-        <div class="staff-subpanel" id="staff-sub-nonteaching">
-          <div class="staff-toolbar">
-            <div class="staff-search-wrap">
-              <i class="fas fa-search"></i>
-              <input type="text" id="nonteaching-search" class="staff-search-input"
-                     placeholder="Search non-teaching staff by name or role..."
-                     oninput="filterStaff('nonteaching', this.value)">
-            </div>
-            <button class="btn-primary" onclick="addNonTeachingCard()">
-              <i class="fas fa-plus"></i> Add Staff
-            </button>
-          </div>
-          <div class="teacher-grid" id="nonteaching-grid">
-            <!-- injected by JS -->
-          </div>
-          <div class="staff-empty" id="nonteaching-empty" style="display:none;">
-            <i class="fas fa-user-slash"></i>
-            <p>No non-teaching staff match your search.</p>
-          </div>
-        </div>
-      </div>
-    </div>
+    <!-- Staff Management tab removed from Settings — staff records (incl. salary) are now
+         managed on the Staff Management page. This page keeps only the global Pay Variables
+         (default leave penalty & bonus) below. -->
 
     <!-- ═══════════════════ TAB: PAY VARIABLES ═══════════════════ -->
     <div class="tab-panel" id="tab-variables">

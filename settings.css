@@ -609,6 +609,15 @@ body {
 }
 .var-input:focus { border-color: var(--green); box-shadow: 0 0 0 3px var(--green-light); }
 .var-hint { font-size: 12px; color: var(--text-muted); }
+textarea.var-input { resize: vertical; min-height: 70px; font-family: 'Inter', sans-serif; }
+
+/* ── SCHOOL INFO GRID ────────────────────── */
+.school-info-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 20px 24px;
+}
+.school-info-grid .var-item { max-width: 100%; }
 
 /* ── TEACHER CARDS ───────────────────────── */
 .teacher-grid {
