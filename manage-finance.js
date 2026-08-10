@@ -1040,10 +1040,47 @@ function _classDisplayLabel(name) {
 }
 
 /**
+ * BUGFIX — "Pending always shows 0": Pending used to be computed as
+ * `totalGenerated - totalCollected`, where totalGenerated only counted
+ * vouchers that had ALREADY been generated for the current month. Until an
+ * admin actually clicks "Generate Monthly Fees" for the new month,
+ * totalGenerated is 0 for everyone — so Pending showed Rs. 0 even when
+ * dozens of students had real outstanding balances (unpaid arrears from
+ * prior months, or this month's fee simply not yet invoiced). That made the
+ * figure look "stuck at 0" essentially all the time except in the brief
+ * window right after a bulk-generate.
+ *
+ * Fix: compute Pending the same way the Fee Defaulters page already does —
+ * per student, using the LIVE voucher total (computeFeeBreakdown, which
+ * already folds in real-time arrears whether or not this month's voucher
+ * has been generated yet) minus whatever that student has actually paid
+ * this month. Summing that across every billable student gives a true
+ * real-time "Pending" figure that never depends on the Generate button
+ * having been clicked.
+ */
+function _computeRealtimePendingTotal(students) {
+    const monthKey = getCurrentMonthKey();
+    let total = 0;
+    students.forEach(s => {
+        if (!isStudentBillable(s)) return;
+        let feeTotal = 0;
+        try { feeTotal = computeFeeBreakdown(s).voucherTotal; } catch (e) { feeTotal = Number(s.standardFee) || 0; }
+        const payments = Array.isArray(s.feePayments) ? s.feePayments : [];
+        const paidThisMonth = payments
+            .filter(p => p.monthKey === monthKey)
+            .reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
+        total += Math.max(0, feeTotal - paidThisMonth);
+    });
+    return total;
+}
+
+/**
  * Computes and paints the three header stat cards on the "Manage Student
- * Fees" page for THE CURRENT MONTH ONLY: Fee Generated (sum of this month's
- * generated voucher totals), Collected (sum of payments recorded against
- * this month), and Pending (the difference, floored at 0).
+ * Fees" page for THE CURRENT MONTH: Fee Generated (sum of this month's
+ * generated voucher totals — an invoicing figure), Collected (sum of
+ * payments recorded against this month), and Pending (the real-time total
+ * still owed across every billable student — see _computeRealtimePendingTotal
+ * above; independent of whether "Generate Monthly Fees" has run yet).
  * Called every time renderClassCardGrid() runs — i.e. on page load, class
  * navigation, and right after a voucher is generated or a payment is
  * recorded — so the figures always reflect the current month automatically
@@ -1076,7 +1113,11 @@ function updateFeeStatsHeader() {
         }, 0);
     } catch (e) { totalCollected = 0; }
 
-    const totalPending = Math.max(0, totalGenerated - totalCollected);
+    let totalPending = 0;
+    try {
+        const allStudents = JSON.parse(localStorage.getItem('edu_students') || '[]');
+        totalPending = _computeRealtimePendingTotal(allStudents);
+    } catch (e) { totalPending = 0; }
 
     genEl.textContent = `Rs. ${totalGenerated.toLocaleString()}`;
     colEl.textContent = `Rs. ${totalCollected.toLocaleString()}`;
@@ -1124,7 +1165,12 @@ function updateClassFeeStats(className) {
         }, 0);
     } catch (e) { totalCollected = 0; }
 
-    const totalPending = Math.max(0, totalGenerated - totalCollected);
+    let totalPending = 0;
+    try {
+        const classStudents = JSON.parse(localStorage.getItem('edu_students') || '[]')
+            .filter(s => s.studentClass === className);
+        totalPending = _computeRealtimePendingTotal(classStudents);
+    } catch (e) { totalPending = 0; }
 
     genEl.textContent = `Rs. ${totalGenerated.toLocaleString()}`;
     colEl.textContent = `Rs. ${totalCollected.toLocaleString()}`;
@@ -1891,8 +1937,20 @@ function computeFeeBreakdown(s) {
     // Now, when a custom edited breakdown exists, it fully replaces the base
     // tuition/transport/other charges for the total calculation, while fines
     // and arrears keep being layered on top exactly as before.
+    // BUGFIX — "discount/custom voucher edits carry into next month": the
+    // custom rows and one-time discount saved via "Add to Voucher" used to
+    // stay flagged active (`voucherCustomFees === true`) until the admin
+    // actually clicked "Generate Monthly Fees" for the new month — but that
+    // click can happen days after the calendar rolls over. In that gap,
+    // every live read of the voucher (Pay Fee screen, print preview, the
+    // fee table) still applied LAST month's one-time discount/custom rows
+    // as if they belonged to the new month too. `voucherCustomFeesMonth`
+    // (stamped by saveFeesToVoucher) records which month a saved edit
+    // actually belongs to, so it only ever applies for that one month —
+    // regardless of when "Generate" is eventually clicked.
     let customRows = null;
-    if (s.voucherCustomFees === true) {
+    const customEditIsCurrentMonth = !s.voucherCustomFeesMonth || s.voucherCustomFeesMonth === getCurrentMonthKey();
+    if (s.voucherCustomFees === true && customEditIsCurrentMonth) {
         try {
             const parsed = JSON.parse(s.otherFeesData || '[]');
             if (Array.isArray(parsed) && parsed.length > 0) customRows = parsed;
@@ -1942,13 +2000,6 @@ function computeFeeBreakdown(s) {
         tuitionFee, transportFee, otherFee, arrears,
         fineAmount: fineFromBackend,
         activeDiscounts, // Pass the array of individual discounts
-        // Individual discount amounts, exposed so the voucher renderers can
-        // annotate the Tuition/Transport fee lines directly with a small
-        // "(- Rs. X discount)" note, the same bracket style already used
-        // for per-row custom fee discounts.
-        tuitionDiscountAmount: isCustom ? 0 : tDisc,
-        transportDiscountAmount: isCustom ? 0 : trDisc,
-        siblingDiscountAmount: isCustom ? 0 : sibDisc,
         totalDiscounts,
         bulkDiscount,
         isCustom,
@@ -1960,16 +2011,6 @@ function computeFeeBreakdown(s) {
         dueDateStr: new Date(today.getFullYear(), today.getMonth() + 1, vs.dueDayOfMonth).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
         expiryDateStr: new Date(today.getFullYear(), today.getMonth() + 1, vs.expiryDayOfMonth).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
     };
-}
-
-/** Small "(- Rs. X discount)" note appended right after a fee-line label —
- *  the same visual style already used for per-row custom fee discounts.
- *  Used to annotate the Tuition Fee / Transport Fee lines directly instead
- *  of only listing the discount separately further down the voucher. */
-function feeDiscountNote(amount) {
-    const n = Number(amount) || 0;
-    if (n <= 0) return '';
-    return ` <span style="color:#16a34a; font-size:0.75rem;">(- Rs. ${n.toLocaleString()} discount)</span>`;
 }
 
 function buildVoucherHTML(s) {
@@ -1990,46 +2031,33 @@ function buildVoucherHTML(s) {
             const amt = Number(r.amount) || 0;
             const disc = Number(r.discount) || 0;
             const net = Math.max(0, amt - disc);
-            const discNote = feeDiscountNote(disc);
+            const discNote = disc > 0 ? ` <span style="color:#16a34a; font-size:0.75rem;">(- Rs. ${disc.toLocaleString()} discount)</span>` : '';
             return `<tr><td>${escapeHtml(r.description || 'Fee')}${discNote}</td><td>${escapeHtml(r.period || '-')}</td><td>Rs. ${net.toLocaleString()}</td></tr>`;
         }).join('');
         if (f.bulkDiscount > 0) {
             rowsHTML += `<tr class="voucher-row-discount"><td style="padding-left: 20px;">- Bulk Discount</td><td>Concession</td><td>- Rs. ${f.bulkDiscount.toLocaleString()}</td></tr>`;
         }
     } else {
-        // BUGFIX — discounts on standard Tuition/Transport fees were only
-        // ever shown further down in a separate "Applied Concessions"
-        // block, disconnected from the actual fee line. Annotate each fee
-        // line directly with a small bracketed discount note (same style
-        // as custom-row discounts above) so it's obvious at a glance which
-        // fee the concession applies to.
         rowsHTML = `
-            ${f.tuitionFee > 0 ? `<tr><td>Tuition Fee${feeDiscountNote(f.tuitionDiscountAmount)}</td><td>${f.monthLabel}</td><td>Rs. ${f.tuitionFee.toLocaleString()}</td></tr>` : ''}
-            ${f.transportFee > 0 ? `<tr><td>Transportation Fee${feeDiscountNote(f.transportDiscountAmount)}</td><td>${f.monthLabel}</td><td>Rs. ${f.transportFee.toLocaleString()}</td></tr>` : ''}
+            ${f.tuitionFee > 0 ? `<tr><td>Tuition Fee</td><td>${f.monthLabel}</td><td>Rs. ${f.tuitionFee.toLocaleString()}</td></tr>` : ''}
+            ${f.transportFee > 0 ? `<tr><td>Transportation Fee</td><td>${f.monthLabel}</td><td>Rs. ${f.transportFee.toLocaleString()}</td></tr>` : ''}
             ${f.otherFee > 0 ? `<tr><td>Other Charges</td><td>-</td><td>Rs. ${f.otherFee.toLocaleString()}</td></tr>` : ''}
         `;
     }
     rowsHTML += `${f.fineAmount > 0 ? `<tr style="color:#dc2626;"><td><strong>Fine / Penalty</strong></td><td>${s.backendFineReason || 'Disciplinary'}</td><td>Rs. ${f.fineAmount.toLocaleString()}</td></tr>` : ''}`;
 
-    // 2. Build Specific Discounts Section — Tuition/Transport are now
-    // annotated inline on their own fee line above, so only list discounts
-    // that aren't tied to one specific fee line (e.g. Sibling Discount)
-    // here. The highlighted TOTAL DISCOUNT row still reflects the full
-    // combined discount so the on-page arithmetic always adds up.
-    const remainingDiscounts = f.activeDiscounts.filter(d => d.label !== 'Tuition Concession' && d.label !== 'Transport Discount');
-    if (f.totalDiscounts > 0) {
-        if (remainingDiscounts.length > 0) {
-            rowsHTML += `<tr class="voucher-row-discount" style="background: rgba(21, 128, 61, 0.03);"><td colspan="3" style="font-size: 0.7rem; font-weight: 700; text-transform: uppercase; color: #64748b; padding-top: 10px;">Applied Concessions</td></tr>`;
-
-            remainingDiscounts.forEach(d => {
-                rowsHTML += `
-                    <tr class="voucher-row-discount">
-                        <td style="padding-left: 20px;">- ${d.label}</td>
-                        <td>Concession</td>
-                        <td>- Rs. ${d.amount.toLocaleString()}</td>
-                    </tr>`;
-            });
-        }
+    // 2. Build Specific Discounts Section
+    if (f.activeDiscounts.length > 0) {
+        rowsHTML += `<tr class="voucher-row-discount" style="background: rgba(21, 128, 61, 0.03);"><td colspan="3" style="font-size: 0.7rem; font-weight: 700; text-transform: uppercase; color: #64748b; padding-top: 10px;">Applied Concessions</td></tr>`;
+        
+        f.activeDiscounts.forEach(d => {
+            rowsHTML += `
+                <tr class="voucher-row-discount">
+                    <td style="padding-left: 20px;">- ${d.label}</td>
+                    <td>Concession</td>
+                    <td>- Rs. ${d.amount.toLocaleString()}</td>
+                </tr>`;
+        });
 
         // 3. Highlighted Total Discount Row
         rowsHTML += `
@@ -2351,21 +2379,8 @@ let afmNextRowId = 1;
 let afmCurrentStudent = null;
 
 function findStudentExact(students, studentId, fullName) {
-    // BUGFIX — "Student not found" for siblings: once a student is marked
-    // as a sibling, their `id` is overwritten with the SHARED family-group
-    // code (e.g. "001"), which every sibling in that family also has. The
-    // Fees table's buttons (Generate/View Voucher, Pay Bill) pass the
-    // student's `regNo`, which stays unique per student even after they
-    // join a sibling group. Matching on `id` alone therefore fails for any
-    // sibling. regNo is always unique, so check it first.
-    if (studentId) {
-        const byRegNo = students.find(s => String(s.regNo) === String(studentId));
-        if (byRegNo) return byRegNo;
-    }
-
-    // Fall back to an exact (id + name) match to disambiguate siblings that
-    // share an id, then id alone — kept for any legacy callers still
-    // passing a raw id instead of a regNo.
+    // Prefer an exact (id + name) match to disambiguate siblings that
+    // accidentally share an id. Fall back to id only.
     if (fullName) {
         const exact = students.find(s =>
             String(s.id) === String(studentId) && s.fullName === fullName);
@@ -2701,7 +2716,13 @@ function openAddToVoucherModal(studentId, fullName, editMode) {
     // seed from the standard fee profile.
     let savedFees = [];
     try { savedFees = JSON.parse(student.otherFeesData || '[]'); } catch(e) { savedFees = []; }
-    const hasSaved = student.voucherCustomFees === true && Array.isArray(savedFees) && savedFees.length > 0;
+    // Only re-seed from a saved custom voucher if it actually belongs to THIS
+    // month (see computeFeeBreakdown's voucherCustomFeesMonth check) — otherwise
+    // reopening this modal in a new month would pre-fill last month's one-time
+    // discount as if the admin were applying it again, defeating the "one
+    // month only" fix.
+    const savedIsCurrentMonth = !student.voucherCustomFeesMonth || student.voucherCustomFeesMonth === getCurrentMonthKey();
+    const hasSaved = student.voucherCustomFees === true && savedIsCurrentMonth && Array.isArray(savedFees) && savedFees.length > 0;
 
     if (hasSaved) {
         savedFees.forEach(fee => {
@@ -2919,10 +2940,8 @@ function saveFeesToVoucher() {
     if (gross <= 0) { alert('Please enter valid fee amounts.'); return; }
 
     let students = JSON.parse(localStorage.getItem('edu_students') || '[]');
-    // BUGFIX (same as findStudentExact) — regNo stays unique for siblings
-    // even after their `id` is overwritten with the shared family code.
-    let idx = students.findIndex(s => String(s.regNo) === String(studentId));
-    if (idx === -1 && fullName) {
+    let idx = -1;
+    if (fullName) {
         idx = students.findIndex(s => String(s.id) === String(studentId) && s.fullName === fullName);
     }
     if (idx === -1) idx = students.findIndex(s => String(s.id) === String(studentId));
@@ -2949,6 +2968,11 @@ function saveFeesToVoucher() {
     students[idx].otherFeesData = JSON.stringify(newFeeEntries);
     students[idx].voucherBulkDiscount = bulkDisc;
     students[idx].voucherCustomFees = true;
+    // Stamp which month this custom edit/discount belongs to, so it only
+    // ever applies to THIS month's voucher (see computeFeeBreakdown) — a
+    // discount typed in for August must not silently still be applied when
+    // September's voucher is viewed/paid, even before "Generate" is clicked.
+    students[idx].voucherCustomFeesMonth = getCurrentMonthKey();
     students[idx].voucherNote = noteEl ? noteEl.value.trim() : '';
 
     localStorage.setItem('edu_students', JSON.stringify(students));
@@ -3776,10 +3800,7 @@ function ievSave() {
     if (cleanRows.length === 0) { alert('Please add at least one fee row.'); return; }
 
     let students = JSON.parse(localStorage.getItem('edu_students') || '[]');
-    // BUGFIX (same as findStudentExact) — regNo stays unique for siblings
-    // even after their `id` is overwritten with the shared family code.
-    let idx = students.findIndex(s => String(s.regNo) === String(studentId));
-    if (idx === -1) idx = students.findIndex(s => String(s.id) === String(studentId) && s.fullName === fullName);
+    let idx = students.findIndex(s => String(s.id) === String(studentId) && s.fullName === fullName);
     if (idx === -1) idx = students.findIndex(s => String(s.id) === String(studentId));
     if (idx === -1) { alert('Student not found.'); return; }
 
@@ -3789,6 +3810,10 @@ function ievSave() {
     // store every editable row as an "additional fee" entry.
     students[idx].otherFeesData      = JSON.stringify(cleanRows);
     students[idx].voucherCustomFees  = true;
+    // Stamp the month this edit belongs to (see computeFeeBreakdown) so it
+    // expires on its own once the calendar moves to a new month, instead of
+    // silently still applying to next month's voucher before "Generate" runs.
+    students[idx].voucherCustomFeesMonth = getCurrentMonthKey();
     // Reset any prior bulk discount — per-row discounts now drive the math.
     students[idx].voucherBulkDiscount = 0;
     // Persist editable arrears + voucher note
@@ -4232,11 +4257,35 @@ function computeOutstandingArrears(student) {
     // represents the full running balance up to that point.
     const last = priorRecords[priorRecords.length - 1];
     const billed = Number(last.snapshot && last.snapshot.voucherTotal) || 0;
-    const paidForThatMonth = payments
-        .filter(p => p.monthKey === last.monthKey)
+
+    // BUGFIX — "arrears logic": payments were only counted against a prior
+    // voucher when `p.monthKey === last.monthKey` — i.e. only if the payment
+    // was recorded in the exact same calendar month the voucher was FOR.
+    // But a payment's monthKey is always stamped with whatever month it was
+    // PAID in (see saveSimpleStudentFeePayment), not the month it's settling.
+    // A student catching up late — e.g. paying off March's unpaid voucher
+    // while making the payment in April, before April's voucher has even
+    // been generated — had that payment tagged monthKey="April", which never
+    // matched March's voucher record. The payment was effectively invisible
+    // to this calculation, so March's FULL bill kept re-appearing as
+    // "arrears" even though the student had already paid it. The same thing
+    // happened if the admin skipped generating a voucher for a month
+    // entirely — any payment made during the skipped month couldn't match
+    // any voucher's monthKey at all.
+    // Fix: count every payment made from the moment the last voucher was
+    // generated up to now — regardless of which calendar month it happened
+    // to be recorded under — since there is only ever one open balance (the
+    // last generated voucher) for a student to be paying down at a time.
+    const lastGeneratedAt = last.generatedAt ? new Date(last.generatedAt).getTime() : 0;
+    const paidSinceLastVoucher = payments
+        .filter(p => {
+            if (!p.date) return p.monthKey === last.monthKey; // legacy records with no timestamp
+            const paidAt = new Date(p.date).getTime();
+            return !isNaN(paidAt) && paidAt >= lastGeneratedAt;
+        })
         .reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
 
-    return Math.max(0, billed - paidForThatMonth);
+    return Math.max(0, billed - paidSinceLastVoucher);
 }
 
 /**
@@ -4269,6 +4318,7 @@ function startFreshVoucherMonth(studentId, fullName, arrears) {
     students[idx].voucherCustomFees = false;
     students[idx].otherFeesData = '[]';
     students[idx].voucherBulkDiscount = 0;
+    students[idx].voucherCustomFeesMonth = null;
     localStorage.setItem('edu_students', JSON.stringify(students));
 }
 
@@ -4327,6 +4377,7 @@ function recordVoucherGeneration(student, source = 'individual') {
     student.voucherCustomFees = false;
     student.otherFeesData = '[]';
     student.voucherBulkDiscount = 0;
+    student.voucherCustomFeesMonth = null;
     startFreshVoucherMonth(studentId, student.fullName, rolledArrears);
 
     // Snapshot pulls straight from the existing, untouched calculation engine
@@ -4751,12 +4802,6 @@ function buildFamilyVoucherHTML(studentsGroup) {
     const famTag = (guardianName || 'FAM').replace(/[^a-zA-Z0-9]/g, '').toUpperCase().slice(0, 6) || 'FAM';
     const challanNo = `FV-${famTag}-${today.getFullYear()}${String(today.getMonth() + 1).padStart(2, '0')}`;
 
-    // Shared family/sibling-group code (e.g. "001") — every member of this
-    // group carries it on both `siblingGroupId` and `id`. Shown in the
-    // voucher meta row alongside the Challan No. so parents/staff can see
-    // at a glance which family group this combined voucher belongs to.
-    const siblingId = studentsGroup[0].siblingGroupId || studentsGroup[0].id || '-';
-
     const breakdowns = studentsGroup.map(s => ({ student: s, f: computeFeeBreakdown(s) }));
     const dueDateStr = breakdowns[0].f.dueDateStr;
     const expiryDateStr = breakdowns[0].f.expiryDateStr;
@@ -4777,18 +4822,16 @@ function buildFamilyVoucherHTML(studentsGroup) {
                 // BUGFIX — per-row discount was applied to the net amount but never
                 // actually shown anywhere on the Family Voucher, so it looked like
                 // the discount "didn't work". Mirror buildVoucherHTML's discount note.
-                const discNote = feeDiscountNote(disc);
+                const discNote = disc > 0 ? ` <span style="color:#16a34a; font-size:0.72rem;">(- Rs. ${disc.toLocaleString()} discount)</span>` : '';
                 return `<tr><td>${escapeHtml(r.description || 'Fee')}${discNote}</td><td>${escapeHtml(r.period || '-')}</td><td>Rs. ${net.toLocaleString()}</td></tr>`;
             }).join('');
             if (f.bulkDiscount > 0) {
                 rowsHTML += `<tr class="voucher-row-discount"><td style="padding-left:20px;">- Bulk Discount</td><td>Concession</td><td>- Rs. ${f.bulkDiscount.toLocaleString()}</td></tr>`;
             }
         } else {
-            // Same inline bracket treatment as buildVoucherHTML — the fee line
-            // itself shows the concession that applies to it.
             rowsHTML = `
-                ${f.tuitionFee > 0 ? `<tr><td>Tuition Fee${feeDiscountNote(f.tuitionDiscountAmount)}</td><td>${f.monthLabel}</td><td>Rs. ${f.tuitionFee.toLocaleString()}</td></tr>` : ''}
-                ${f.transportFee > 0 ? `<tr><td>Transportation Fee${feeDiscountNote(f.transportDiscountAmount)}</td><td>${f.monthLabel}</td><td>Rs. ${f.transportFee.toLocaleString()}</td></tr>` : ''}
+                ${f.tuitionFee > 0 ? `<tr><td>Tuition Fee</td><td>${f.monthLabel}</td><td>Rs. ${f.tuitionFee.toLocaleString()}</td></tr>` : ''}
+                ${f.transportFee > 0 ? `<tr><td>Transportation Fee</td><td>${f.monthLabel}</td><td>Rs. ${f.transportFee.toLocaleString()}</td></tr>` : ''}
                 ${f.otherFee > 0 ? `<tr><td>Other Charges</td><td>-</td><td>Rs. ${f.otherFee.toLocaleString()}</td></tr>` : ''}
             `;
         }
@@ -4799,20 +4842,10 @@ function buildFamilyVoucherHTML(studentsGroup) {
         if (f.monthlyFineTotal > 0) {
             rowsHTML += `<tr style="color:#dc2626;"><td>Disciplinary Fines</td><td>${escapeHtml(f.fineDetails || '')}</td><td>Rs. ${f.monthlyFineTotal.toLocaleString()}</td></tr>`;
         }
-        // Tuition/Transport concessions are now shown inline on their fee
-        // line above — only list discounts not tied to one specific fee
-        // (e.g. Sibling Discount) here, same as buildVoucherHTML.
-        const remainingDiscounts = f.activeDiscounts.filter(d => d.label !== 'Tuition Concession' && d.label !== 'Transport Discount');
-        if (remainingDiscounts.length > 0) {
-            remainingDiscounts.forEach(d => {
+        if (f.activeDiscounts.length > 0) {
+            f.activeDiscounts.forEach(d => {
                 rowsHTML += `<tr class="voucher-row-discount"><td style="padding-left:20px;">- ${d.label}</td><td>Concession</td><td>- Rs. ${d.amount.toLocaleString()}</td></tr>`;
             });
-        }
-        // Highlighted total-discount row, same as the individual voucher —
-        // reflects ALL discounts (inline + listed) so the child block's
-        // own arithmetic still adds up at a glance.
-        if (f.totalDiscounts > 0) {
-            rowsHTML += `<tr style="background: #f0fdf4; color: #166534; border-top: 1px solid #bbf7d0;"><td><strong>TOTAL DISCOUNT</strong></td><td>-</td><td><strong>- Rs. ${f.totalDiscounts.toLocaleString()}</strong></td></tr>`;
         }
         if (f.arrears > 0) {
             rowsHTML += `<tr class="voucher-row-arrears"><td><strong>Previous Arrears</strong></td><td>Balance B/F</td><td>Rs. ${f.arrears.toLocaleString()}</td></tr>`;
@@ -4856,9 +4889,8 @@ function buildFamilyVoucherHTML(studentsGroup) {
                 </div>
             </div>
 
-            <div class="voucher-meta-row voucher-meta-row-family">
+            <div class="voucher-meta-row">
                 <div><span>Challan No.</span><strong>${challanNo}</strong></div>
-                <div><span>Sibling ID</span><strong>${escapeHtml(String(siblingId))}</strong></div>
                 <div><span>Issue Date</span><strong>${dateStr}</strong></div>
                 <div><span>Due Date</span><strong>${dueDateStr}</strong></div>
                 <div><span>Expiry Date</span><strong>${expiryDateStr}</strong></div>
