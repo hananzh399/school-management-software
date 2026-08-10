@@ -3,6 +3,241 @@
  * Handles: sidebar toggle, counter animation, ripple, date display
  */
 
+// ============================================================================
+// PLAN ENFORCEMENT — feature locks + subscription expiry (mirrors the same
+// block in manage-students.js so both pages behave identically). Driven by
+// the School record Super Admin configured for this school: `locks` and
+// `expiryDate`. Staff has no numeric usage limit (School has no
+// staffLimit field), so there's no limit banner here — just feature locks
+// and the expiry badge.
+// ============================================================================
+
+/** Days before School.expiryDate the blinking subscription badge starts showing. */
+const STAFF_EXPIRY_WARNING_DAYS = 30;
+
+/** The logged-in school's record (School.java shape, via access-control.js). */
+function getCurrentSchoolRecord() {
+    try {
+        if (window.SoftSchoolAdmin) return window.SoftSchoolAdmin.getCurrentSchool();
+    } catch (e) { /* ignore — demo / no session */ }
+    return null;
+}
+
+/**
+ * True if ANY of a comma-separated list of feature keys is locked for this
+ * school. Delegates to SoftSchoolAdmin.isFeatureLocked (access-control.js) —
+ * the same check every other page uses.
+ */
+function isFeatureLocked(keysCsv) {
+    const school = getCurrentSchoolRecord();
+    if (!school) return false;
+    const keys = String(keysCsv || '').split(',').map(k => k.trim().toLowerCase()).filter(Boolean);
+    if (window.SoftSchoolAdmin && typeof window.SoftSchoolAdmin.isFeatureLocked === 'function') {
+        return keys.some(k => window.SoftSchoolAdmin.isFeatureLocked(school, k));
+    }
+    // Fallback if access-control.js somehow isn't loaded.
+    const raw = String(school.locks || '');
+    const locked = new Set(raw.split(',').map(k => k.trim().toLowerCase()).filter(Boolean));
+    return keys.some(k => locked.has(k));
+}
+
+/**
+ * Blur/fade every data-feature element locked for this plan — currently
+ * just the Staff Agreement upload (data-feature="staff_agreement_pic" in
+ * buildAgreementField()), matching the "staff_agreement_pic" key in
+ * superadmin.js's FEATURES catalog. Since the form markup is rebuilt from
+ * scratch every time openAddForm()/openEditForm() runs, this needs to be
+ * re-applied after every renderFormFields() call, not just once on load.
+ */
+function applyFeatureLocks() {
+    document.querySelectorAll('[data-feature]').forEach(el => {
+        if (!isFeatureLocked(el.dataset.feature)) return;
+        el.classList.add('feature-locked');
+        el.setAttribute('data-tooltip', 'Not available in this plan');
+        el.onclick = null;
+        el.addEventListener('click', e => { e.preventDefault(); e.stopPropagation(); }, true);
+        el.querySelectorAll('input, button, select, textarea').forEach(ctrl => { ctrl.disabled = true; });
+    });
+}
+
+/**
+ * Small blinking badge, fixed to the corner of the viewport, warning that
+ * the school's subscription is about to expire. Identical logic to
+ * manage-students.js's renderSubscriptionExpiryBadge() so the warning is
+ * consistent everywhere in the app.
+ */
+function renderSubscriptionExpiryBadge() {
+    const badge = document.getElementById('subscription-expiry-badge');
+    const text  = document.getElementById('subscription-expiry-text');
+    if (!badge || !text) return;
+
+    const school = getCurrentSchoolRecord();
+    if (!school || !school.expiryDate) { badge.style.display = 'none'; return; }
+
+    const expiry = new Date(school.expiryDate + 'T00:00:00');
+    if (isNaN(expiry.getTime())) { badge.style.display = 'none'; return; }
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const daysLeft = Math.ceil((expiry - today) / (1000 * 60 * 60 * 24));
+
+    if (daysLeft < 0) {
+        text.textContent = 'Subscription expired';
+        badge.style.display = 'flex';
+    } else if (daysLeft <= STAFF_EXPIRY_WARNING_DAYS) {
+        text.textContent = daysLeft === 0
+            ? 'Subscription expires today'
+            : `Subscription expires in ${daysLeft} day${daysLeft === 1 ? '' : 's'}`;
+        badge.style.display = 'flex';
+    } else {
+        badge.style.display = 'none';
+    }
+}
+
+// ============================================================================
+// BACKEND SYNC — StaffController.java exposes CRUD under this base, scoped
+// by schoolId exactly like StudentController does for students (see
+// manage-students.js's identical apiRequest/toApiPayload/syncWithBackend).
+// ============================================================================
+const STAFF_API_BASE = 'http://localhost:8080/api/staff';
+
+/**
+ * The logged-in school's real School ID (School.schoolId, e.g. "SS_77_1") —
+ * StaffController scopes every read/write by this value. Returns '' when no
+ * school session exists (demo / superadmin mode) — callers should treat
+ * that as "can't sync yet".
+ */
+function getCurrentSchoolId() {
+    const school = getCurrentSchoolRecord();
+    return (school && school.schoolId) ? school.schoolId : '';
+}
+
+const STAFF_NUMERIC_FIELDS = ['salary', 'securityTotal', 'securityCollected', 'securityMonthly', 'fines'];
+
+/** Thin fetch() wrapper that throws a readable error on non-2xx responses. */
+async function staffApiRequest(method, url, body) {
+    const res = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: body !== undefined ? JSON.stringify(body) : undefined
+    });
+    if (!res.ok) {
+        const text = await res.text().catch(() => '');
+        throw new Error(`${method} ${url} -> ${res.status} ${text}`);
+    }
+    const contentType = res.headers.get('content-type') || '';
+    return contentType.includes('application/json') ? res.json() : null;
+}
+
+/**
+ * Build a payload safe to POST to the Spring Boot API.
+ * - Renames the frontend's display `id` (e.g. "PSC_S_1") to `staffId` — the
+ *   Java Staff entity's `id` is an auto-generated Long primary key, so
+ *   sending the string under `id` would fail deserialization. The backend
+ *   re-associates the correct row using (schoolId, staffId) — see
+ *   StaffController.save().
+ * - Packs the `agreement` object ({name, type, data}) into a single JSON
+ *   string column (agreementData), since Staff has no nested-object column.
+ * - Stamps schoolId so every school's staff stay in their own records.
+ * - Coerces numeric-looking strings into real numbers for the Double fields.
+ */
+function toApiStaffPayload(staffObj) {
+    const payload = Object.assign({}, staffObj);
+    payload.staffId = payload.id;
+    delete payload.id;
+
+    payload.agreementData = payload.agreement ? JSON.stringify(payload.agreement) : null;
+    delete payload.agreement;
+
+    STAFF_NUMERIC_FIELDS.forEach(f => {
+        if (payload[f] !== undefined && payload[f] !== null && payload[f] !== '') {
+            const n = parseFloat(payload[f]);
+            payload[f] = isNaN(n) ? 0 : n;
+        }
+    });
+
+    payload.schoolId = getCurrentSchoolId();
+    return payload;
+}
+
+/** Turn a Staff row from the backend back into the shape the frontend uses everywhere. */
+function fromApiStaffRecord(row) {
+    const staff = Object.assign({}, row);
+    staff.id = row.staffId;
+    delete staff.staffId;
+    delete staff.schoolId;
+
+    if (row.agreementData) {
+        try { staff.agreement = JSON.parse(row.agreementData); } catch (e) { staff.agreement = null; }
+    } else {
+        staff.agreement = null;
+    }
+    delete staff.agreementData;
+
+    // Recompute the display-only alias the form still reads in a couple of places.
+    staff.fatherName = staff.guardianType === 'Father' ? (staff.guardianName || '') : '';
+
+    return staff;
+}
+
+/** Save (create or update) a staff member in MySQL. Fire-and-forget from the caller's point of view. */
+async function apiSaveStaff(staffObj) {
+    const saved = await staffApiRequest('POST', STAFF_API_BASE, toApiStaffPayload(staffObj));
+    return saved ? fromApiStaffRecord(saved) : null;
+}
+
+/** Remove a staff member on the backend. */
+function apiDeleteStaff(staffId) {
+    const schoolId = getCurrentSchoolId();
+    return staffApiRequest('DELETE', `${STAFF_API_BASE}/${encodeURIComponent(staffId)}?schoolId=${encodeURIComponent(schoolId)}`);
+}
+
+/**
+ * Pull the current staff roster from MySQL on page load and refresh the
+ * shared localStorage store so counts/directory reflect the database
+ * instead of whatever was last cached in the browser. Server rows are
+ * merged ON TOP OF the local cache (matched by id) so nothing local-only
+ * gets wiped, then re-split into the Teaching / Non-Teaching buckets
+ * shared-data.js expects (mirrors syncWithBackend() in manage-students.js).
+ */
+async function syncStaffWithBackend() {
+    try {
+        const schoolId = getCurrentSchoolId();
+        if (!schoolId) {
+            // No school session (demo / superadmin preview) — nothing to
+            // scope the request to, so stay on the local cache instead of
+            // sending a schoolId-less request the backend will reject.
+            console.warn('syncStaffWithBackend: no logged-in school, staying on local cache.');
+            return;
+        }
+        const serverRows = await staffApiRequest('GET', `${STAFF_API_BASE}?schoolId=${encodeURIComponent(schoolId)}`);
+        if (!Array.isArray(serverRows)) return;
+
+        const db = getGlobalData();
+        const localById = new Map(
+            [].concat(db.staff['Teaching'] || [], db.staff['Non-Teaching'] || []).map(s => [s.id, s])
+        );
+
+        const merged = serverRows.map(fromApiStaffRecord).map(srv =>
+            Object.assign({}, localById.get(srv.id) || {}, srv)
+        );
+
+        db.staff['Teaching']     = merged.filter(s => s.type !== 'Non-Teaching');
+        db.staff['Non-Teaching'] = merged.filter(s => s.type === 'Non-Teaching');
+        saveGlobalData(db);
+
+        staffData = db.staff;
+        loadStaffCounts(false);
+        if (currentCategory && !document.getElementById('directory-view').classList.contains('d-none')) {
+            populateDirectory(currentCategory);
+        }
+    } catch (err) {
+        // Backend not reachable (e.g. Spring Boot not running) — keep working
+        // off the local cache instead of breaking the page.
+        console.warn('syncStaffWithBackend: could not reach the server, using local cache.', err.message);
+    }
+}
+
 document.addEventListener('DOMContentLoaded', () => {
     initTheme();
     initSidebar();
@@ -18,6 +253,14 @@ document.addEventListener('DOMContentLoaded', () => {
             img.src = headerSchool.logo;
         }
     });
+
+    // Pull the live roster from MySQL as soon as the page loads, so the
+    // counters/directory reflect the database instead of a stale local cache.
+    syncStaffWithBackend();
+
+    // ── PLAN ENFORCEMENT: initial pass ──────────────────────────────────
+    applyFeatureLocks();
+    renderSubscriptionExpiryBadge();
 });
 
 /* ============================================
@@ -402,13 +645,21 @@ function closeConfirmModal() {
 }
 
 function executeRemove() {
+    const removedId = currentProfileId;
+
     // Remove from array
-    staffData[currentCategory] = staffData[currentCategory].filter(s => s.id !== currentProfileId);
+    staffData[currentCategory] = staffData[currentCategory].filter(s => s.id !== removedId);
     
     // Save to global state
     const db = getGlobalData();
     db.staff = staffData;
     saveGlobalData(db);
+
+    // Mirror the delete to MySQL (fire-and-forget, same pattern as the save above).
+    if (getCurrentSchoolId()) {
+        apiDeleteStaff(removedId).catch(err =>
+            console.warn('apiDeleteStaff failed, removal kept locally only:', err.message));
+    }
 
     // Update counts silently
     loadStaffCounts(false);
@@ -1490,7 +1741,7 @@ function _fillSectionSelect(secSel, clsName, placeholder) {
 }
 
 /* ============================================
-   FILE UPLOADS — 200KB LIMIT
+   FILE UPLOADS — 200KB LIMIT (non-image files, e.g. PDF agreements)
    ============================================ */
 function _setUploadError(errorElId, msg) {
     const el = document.getElementById(errorElId);
@@ -1503,6 +1754,87 @@ function _isOverLimit(file) {
 }
 function _kb(bytes) {
     return Math.round(bytes / 1024) + 'KB';
+}
+
+/* ============================================
+   IMAGE AUTO-OPTIMIZATION — every uploaded photo/agreement image is
+   re-encoded client-side to land at ~TARGET_IMAGE_BYTES (40KB) before it's
+   ever turned into a data URL, so what actually gets stored in the DB
+   (Staff.photo / agreement.data, both LONGTEXT) is always small — no more
+   raw multi-MB camera photos bloating the staff table.
+   ============================================ */
+const TARGET_IMAGE_BYTES  = 40 * 1024;  // ~40KB target for stored images
+const MAX_IMAGE_DIMENSION = 900;        // starting max width/height (px) before compression
+
+function _loadImageFromFile(file) {
+    return new Promise((resolve, reject) => {
+        const url = URL.createObjectURL(file);
+        const img = new Image();
+        img.onload = () => { URL.revokeObjectURL(url); resolve(img); };
+        img.onerror = (err) => { URL.revokeObjectURL(url); reject(err); };
+        img.src = url;
+    });
+}
+
+// Approximate decoded byte size of a base64 data URL (base64 is ~4/3 the size of the raw bytes)
+function _dataURLBytes(dataURL) {
+    const base64 = (dataURL.split(',')[1]) || '';
+    return Math.floor(base64.length * 3 / 4);
+}
+
+/**
+ * Compress an image File down to roughly `targetBytes` by iteratively
+ * lowering JPEG quality and, if quality alone isn't enough, shrinking the
+ * pixel dimensions and trying again. Resolves to a JPEG data URL string.
+ */
+async function compressImageToTarget(file, targetBytes = TARGET_IMAGE_BYTES) {
+    const img = await _loadImageFromFile(file);
+
+    let width  = img.naturalWidth  || img.width;
+    let height = img.naturalHeight || img.height;
+
+    if (Math.max(width, height) > MAX_IMAGE_DIMENSION) {
+        const scale = MAX_IMAGE_DIMENSION / Math.max(width, height);
+        width  = Math.round(width  * scale);
+        height = Math.round(height * scale);
+    }
+
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+
+    let bestDataURL = '';
+    let totalAttempts = 0;
+    const MAX_ATTEMPTS = 25;
+
+    while (totalAttempts < MAX_ATTEMPTS && width >= 40 && height >= 40) {
+        canvas.width = width;
+        canvas.height = height;
+        // JPEG has no alpha channel — flatten transparent PNGs onto white first
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, width, height);
+        ctx.drawImage(img, 0, 0, width, height);
+
+        let quality = 0.85;
+        let hitTarget = false;
+        while (quality >= 0.1 && totalAttempts < MAX_ATTEMPTS) {
+            bestDataURL = canvas.toDataURL('image/jpeg', quality);
+            totalAttempts++;
+            if (_dataURLBytes(bestDataURL) <= targetBytes) {
+                hitTarget = true;
+                break;
+            }
+            quality -= 0.1;
+        }
+
+        if (hitTarget) return bestDataURL;
+
+        // Still too big even at lowest quality — shrink dimensions and retry
+        width  = Math.round(width  * 0.8);
+        height = Math.round(height * 0.8);
+    }
+
+    // Best effort: return whatever the smallest attempt produced
+    return bestDataURL;
 }
 
 /* ---- Staff photo (override) ---- */
@@ -1518,7 +1850,7 @@ function buildPhotoField(existing = '') {
             <label for="f-photo" class="btn-photo-pick"><i class="fas fa-camera"></i> Choose Photo</label>
             <input type="file" id="f-photo" accept="image/*">
             <button type="button" class="btn-photo-remove" onclick="clearStaffPhoto()"><i class="fas fa-times"></i> Remove</button>
-            <div class="upload-hint">JPG / PNG — max 200KB</div>
+            <div class="upload-hint">JPG / PNG — auto-optimized to ~40KB</div>
             <div class="upload-error" id="f-photo-error"></div>
         </div>
     </div>`;
@@ -1526,22 +1858,25 @@ function buildPhotoField(existing = '') {
 function wirePhotoField() {
     const input = document.getElementById('f-photo');
     if (!input) return;
-    input.addEventListener('change', (e) => {
+    input.addEventListener('change', async (e) => {
         _setUploadError('f-photo-error', '');
         const file = e.target.files && e.target.files[0];
         if (!file) return;
-        if (_isOverLimit(file)) {
+        if (!/^image\//.test(file.type)) {
             input.value = '';
-            _setUploadError('f-photo-error', `File too large (${_kb(file.size)}). Maximum size is 200KB.`);
+            _setUploadError('f-photo-error', 'Please choose an image file (JPG or PNG).');
             return;
         }
-        const reader = new FileReader();
-        reader.onload = (ev) => {
-            _pendingPhoto = ev.target.result;
-            const prev = document.getElementById('f-photo-preview');
+        const prev = document.getElementById('f-photo-preview');
+        if (prev) prev.innerHTML = `<i class="fas fa-spinner fa-spin"></i>`;
+        try {
+            _pendingPhoto = await compressImageToTarget(file);
             if (prev) prev.innerHTML = `<img src="${_pendingPhoto}" alt="Staff photo">`;
-        };
-        reader.readAsDataURL(file);
+        } catch (err) {
+            input.value = '';
+            if (prev) prev.innerHTML = '<i class="fas fa-user"></i>';
+            _setUploadError('f-photo-error', 'Could not process that image. Please try another file.');
+        }
     });
 }
 function clearStaffPhoto() {
@@ -1557,7 +1892,7 @@ function clearStaffPhoto() {
 function buildAgreementField(existing = null) {
     _pendingAgreement = existing || null;
     return `
-    <div class="form-group full-width agreement-upload-group">
+    <div class="form-group full-width agreement-upload-group" data-feature="staff_agreement_pic">
         <label>Staff Agreement</label>
         <div class="agreement-row">
             <label for="f-agreement" class="btn-photo-pick"><i class="fas fa-file-upload"></i> Choose File</label>
@@ -1565,24 +1900,46 @@ function buildAgreementField(existing = null) {
             <span class="agreement-file-name" id="f-agreement-name">${_pendingAgreement ? _esc(_pendingAgreement.name) : 'No file selected'}</span>
             <button type="button" class="btn-photo-remove" onclick="clearStaffAgreement()"><i class="fas fa-times"></i> Remove</button>
         </div>
-        <div class="upload-hint">PDF, JPG or PNG — max 200KB</div>
+        <div class="upload-hint">PDF (max 200KB), or JPG/PNG — auto-optimized to ~40KB</div>
         <div class="upload-error" id="f-agreement-error"></div>
     </div>`;
 }
 function wireAgreementField() {
     const input = document.getElementById('f-agreement');
     if (!input) return;
-    input.addEventListener('change', (e) => {
+    input.addEventListener('change', async (e) => {
         _setUploadError('f-agreement-error', '');
         const file = e.target.files && e.target.files[0];
         if (!file) return;
 
-        const okType = file.type === 'application/pdf' || /^image\//.test(file.type);
-        if (!okType) {
+        const isImage = /^image\//.test(file.type);
+        const isPdf = file.type === 'application/pdf';
+        if (!isImage && !isPdf) {
             input.value = '';
             _setUploadError('f-agreement-error', 'Unsupported file type. Upload a PDF or an image.');
             return;
         }
+
+        const nameEl = document.getElementById('f-agreement-name');
+
+        if (isImage) {
+            // Agreement photos (e.g. a snapped picture of a signed page) get
+            // the same auto-optimization as the staff photo.
+            if (nameEl) nameEl.textContent = 'Optimizing…';
+            try {
+                const data = await compressImageToTarget(file);
+                _pendingAgreement = { name: file.name, type: 'image/jpeg', data };
+                if (nameEl) nameEl.textContent = file.name;
+            } catch (err) {
+                input.value = '';
+                if (nameEl) nameEl.textContent = 'No file selected';
+                _setUploadError('f-agreement-error', 'Could not process that image. Please try another file.');
+            }
+            return;
+        }
+
+        // PDF — not something we can safely re-encode client-side, so keep
+        // the existing hard size cap instead of trying to compress it.
         if (_isOverLimit(file)) {
             input.value = '';
             _setUploadError('f-agreement-error', `File too large (${_kb(file.size)}). Maximum size is 200KB.`);
@@ -1591,7 +1948,6 @@ function wireAgreementField() {
         const reader = new FileReader();
         reader.onload = (ev) => {
             _pendingAgreement = { name: file.name, type: file.type, data: ev.target.result };
-            const nameEl = document.getElementById('f-agreement-name');
             if (nameEl) nameEl.textContent = file.name;
         };
         reader.readAsDataURL(file);
@@ -1880,6 +2236,11 @@ function renderFormFields(category) {
     wireCnicField('f-cnic');
     wireInchargePicker();
     onGenderChange();
+
+    // Re-apply plan feature locks — this markup (incl. the Staff Agreement
+    // upload, data-feature="staff_agreement_pic") is rebuilt from scratch
+    // every time this function runs, so the lock has to be re-applied too.
+    applyFeatureLocks();
 }
 
 /* ---- OVERRIDE: openAddForm ---- */
@@ -2047,6 +2408,16 @@ function handleFormSubmit(e) {
     const db = getGlobalData();
     db.staff = staffData;
     saveGlobalData(db);
+
+    // Push the full, merged record to MySQL (fire-and-forget — the UI
+    // already reflects the change from localStorage above, and
+    // syncStaffWithBackend() will reconcile on next page load either way).
+    const savedId = isEditMode ? currentProfileId : newData.id;
+    const finalRecord = staffData[currentCategory].find(s => s.id === savedId);
+    if (finalRecord && getCurrentSchoolId()) {
+        apiSaveStaff(finalRecord).catch(err =>
+            console.warn('apiSaveStaff failed, change kept locally only:', err.message));
+    }
 
     populateDirectory(currentCategory);
     loadStaffCounts(false);

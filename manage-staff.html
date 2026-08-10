@@ -20,7 +20,7 @@
     <aside id="sidebar" class="sidebar">
         <div class="sidebar-header">
             <div class="brand">
-                <img src="https://via.placeholder.com/40" alt="SoftSchool Logo" class="brand-logo" id="main-logo-img">
+                <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Crect width='40' height='40' rx='8' fill='%232f7d6b'/%3E%3Ctext x='50%25' y='55%25' font-family='Arial,sans-serif' font-size='16' font-weight='700' fill='%23fff' text-anchor='middle' dominant-baseline='middle'%3ESS%3C/text%3E%3C/svg%3E" alt="SoftSchool Logo" class="brand-logo" id="main-logo-img">
                 <span class="brand-name">Soft<strong>School</strong></span>
             </div>
             <button id="close-sidebar" class="close-btn" aria-label="Close sidebar">
@@ -329,6 +329,14 @@
         </div>
 
     </main>
+
+    <!-- SUBSCRIPTION EXPIRY WARNING — fixed-position, doesn't affect page layout.
+         Shown by renderSubscriptionExpiryBadge() in manage-staff.js starting
+         30 days before School.expiryDate. Same markup as manage-students.html. -->
+    <div id="subscription-expiry-badge" class="subscription-expiry-badge" style="display:none;">
+        <i class="fas fa-triangle-exclamation"></i>
+        <span id="subscription-expiry-text"></span>
+    </div>
 
     <script src="shared-data.js"></script>
     <script src="manage-staff.js"></script>

@@ -3,6 +3,95 @@
    Dark Theme + Glassmorphism + Animtions
    ============================================ */
 
+/* ============================================
+   PLAN ENFORCEMENT — feature locks + subscription
+   expiry badge. Same rules as manage-students.css
+   (kept identical so both pages look consistent).
+   Driven by manage-staff.js (School.locks / expiryDate)
+   ============================================ */
+
+/* -- Locked feature (card/section blocked by Super Admin's plan) -- */
+[data-feature].feature-locked {
+    position: relative;
+    filter: blur(2px) grayscale(55%);
+    opacity: 0.5;
+    cursor: not-allowed !important;
+}
+[data-feature].feature-locked:hover {
+    filter: blur(1.5px) grayscale(55%);
+    opacity: 0.6;
+    transform: none !important;
+}
+[data-feature].feature-locked::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    left: 50%;
+    bottom: 100%;
+    transform: translateX(-50%) translateY(-6px);
+    background: #111827;
+    color: #f8fafc;
+    padding: 7px 14px;
+    border-radius: 8px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.2px;
+    white-space: nowrap;
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35);
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transition: opacity 0.18s ease, transform 0.18s ease;
+    z-index: 60;
+}
+[data-feature].feature-locked::before {
+    content: '';
+    position: absolute;
+    left: 50%;
+    bottom: 100%;
+    transform: translateX(-50%) translateY(6px);
+    border: 6px solid transparent;
+    border-top-color: #111827;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.18s ease;
+    z-index: 60;
+}
+[data-feature].feature-locked:hover::after,
+[data-feature].feature-locked:hover::before {
+    opacity: 1;
+    visibility: visible;
+    transform: translateX(-50%) translateY(-14px);
+}
+[data-feature].feature-locked:hover::before { transform: translateX(-50%) translateY(-2px); }
+
+/* -- Subscription expiry badge — fixed position, never shifts page layout -- */
+.subscription-expiry-badge {
+    position: fixed;
+    right: 22px;
+    bottom: 22px;
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    max-width: 270px;
+    padding: 10px 16px;
+    background: #ef4444;
+    color: #fff;
+    border-radius: 999px;
+    font-size: 0.78rem;
+    font-weight: 700;
+    box-shadow: 0 8px 24px rgba(239, 68, 68, 0.4);
+    animation: expiryBlink 1.4s ease-in-out infinite;
+}
+.subscription-expiry-badge i { font-size: 0.9rem; }
+@keyframes expiryBlink {
+    0%, 100% { opacity: 1; box-shadow: 0 8px 24px rgba(239, 68, 68, 0.45); }
+    50%      { opacity: 0.55; box-shadow: 0 8px 30px rgba(239, 68, 68, 0.75); }
+}
+@media (max-width: 640px) {
+    .subscription-expiry-badge { right: 14px; bottom: 14px; max-width: 220px; font-size: 0.72rem; }
+}
+
 /* --- RESET & VARIABLES --- */
 *,
 *::before,
