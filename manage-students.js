@@ -160,6 +160,21 @@ function getSchoolPrefix() {
 const SYSTEM_PREFIX = getSchoolPrefix();
 
 /**
+ * The logged-in school's real School ID (School.schoolId, e.g. "SS_77_1") —
+ * NOT the display prefix above. StudentController scopes every read/write by
+ * this value (schools only ever see their own students), so every call to
+ * the backend API must send it. Returns '' when no school session exists
+ * (demo / superadmin mode) — callers should treat that as "can't sync yet".
+ */
+function getCurrentSchoolId() {
+    if (window.SoftSchoolAdmin) {
+        const school = window.SoftSchoolAdmin.getCurrentSchool();
+        if (school && school.schoolId) return school.schoolId;
+    }
+    return '';
+}
+
+/**
  * Read the logged-in school's logo (Base64 data URL, set in Super Admin →
  * school → "School logo") for use in print-ready documents that build their
  * own standalone HTML (Admission Form, Student Record, Student List Report).
@@ -197,15 +212,6 @@ let updOrphanFilterActive = false;
 let voOrphanFilterActive = false;
 
 document.addEventListener('DOMContentLoaded', () => {
-
-    // Update the header brand logo (and any other .brand-logo instances)
-    // from the logged-in school's saved logo, instead of leaving the
-    // static placeholder image in the markup. Keeps this page in sync
-    // with the same behavior manage-staff.js applies.
-    const headerLogoUrl = getSchoolLogoUrl();
-    if (headerLogoUrl && !headerLogoUrl.includes('logo-icon.png')) {
-        document.querySelectorAll('.brand-logo').forEach(img => { img.src = headerLogoUrl; });
-    }
 
     // UI References: Navigation & Layout
     const sidebar        = document.getElementById('sidebar');
@@ -266,6 +272,18 @@ document.addEventListener('DOMContentLoaded', () => {
     const annualFundAmount  = document.getElementById('annual-fund-amount');
 
     // (Orphan filter state now declared at top-level scope — see above)
+
+    // Plan-enforcement constants (used by renderPlanLimitBanners/checkExpiry,
+    // called from updateDashboardStats() below during initial page load) —
+    // declared here, before that first call, so they're not still in the
+    // temporal dead zone when referenced. They used to live further down
+    // near the plan-enforcement block, which is fine for function
+    // declarations (hoisted) but NOT for const/let: those stay unusable
+    // until the line that declares them actually runs.
+    /** How many free slots remain before the "getting close to the limit" warning shows. */
+    const LIMIT_WARNING_THRESHOLD = 5;
+    /** Days before School.expiryDate the blinking subscription badge starts showing. */
+    const EXPIRY_WARNING_DAYS = 30;
 
     // ── 1. CORE SYSTEM INITIALIZATION ───────────────────────────────────────
 
@@ -341,6 +359,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (modalId === 'student-modal') {
             const isEdit = editIdHidden.value !== "";
+            if (!isEdit && !canAdmitNewStudent()) {
+                showToast("Limit Reached", `Your plan allows up to ${getStudentLimit()} active students. Upgrade your plan to register more.`, "danger");
+                return;
+            }
             if (!isEdit) {
                 admissionForm.reset();
                 editIdHidden.value = "";
@@ -966,6 +988,10 @@ if (certUploadInput) {
                 payload[f] = isNaN(n) ? 0 : n;
             }
         });
+        // StudentController rejects any write without schoolId — always stamp
+        // the logged-in school's real ID on the way out, regardless of what
+        // (if anything) was already on the local record.
+        payload.schoolId = getCurrentSchoolId();
         return payload;
     }
 
@@ -991,7 +1017,8 @@ if (certUploadInput) {
 
     /** Remove a student on the backend (StudentController does a soft delete — status -> "dropped"). */
     function apiDeleteStudent(regNo) {
-        return apiRequest('DELETE', `${API_BASE}/${encodeURIComponent(regNo)}`);
+        const schoolId = getCurrentSchoolId();
+        return apiRequest('DELETE', `${API_BASE}/${encodeURIComponent(regNo)}?schoolId=${encodeURIComponent(schoolId)}`);
     }
 
     /**
@@ -1007,7 +1034,15 @@ if (certUploadInput) {
      */
     async function syncWithBackend() {
         try {
-            const serverStudents = await apiRequest('GET', API_BASE);
+            const schoolId = getCurrentSchoolId();
+            if (!schoolId) {
+                // No school session (demo / superadmin preview) — nothing to
+                // scope the request to, so skip the call instead of sending
+                // a schoolId-less request the backend will always reject.
+                console.warn('syncWithBackend: no logged-in school, staying on local cache.');
+                return;
+            }
+            const serverStudents = await apiRequest('GET', `${API_BASE}?schoolId=${encodeURIComponent(schoolId)}`);
             if (!Array.isArray(serverStudents)) return;
 
             const local        = getDatabase();
@@ -1076,6 +1111,10 @@ if (certUploadInput) {
             }
         } else {
             // NEW ADMISSION
+            if (!canAdmitNewStudent()) {
+                showToast("Limit Reached", `Your plan allows up to ${getStudentLimit()} active students. Upgrade your plan to register more.`, "danger");
+                return;
+            }
             const matchedStudent = findGuardianMatch(studentData, db);
             if (matchedStudent) {
                 showSiblingDialog(matchedStudent.fullName, studentData, db, matchedStudent);
@@ -2869,10 +2908,13 @@ if (certUploadInput) {
                 <td style="text-align:center;">
                     <div class="vo-action-btn-group">
                         <button class="btn-icon vo-view" onclick="viewFullProfile('${s.regNo}')" title="View Profile">
-                            <i class="fas fa-eye"></i>
+                            <i class="fas fa-eye"></i><span>View</span>
+                        </button>
+                        <button class="btn-icon print-admission" onclick="printAdmissionFormForStudent('${s.regNo}')" title="Print Admission Form">
+                            <i class="fas fa-file-signature"></i><span>Admission</span>
                         </button>
                         <button class="btn-icon print-record" onclick="printStudentRecordForStudent('${s.regNo}')" title="Print Student Record">
-                            <i class="fas fa-print"></i>
+                            <i class="fas fa-print"></i><span>Record</span>
                         </button>
                     </div>
                 </td>
@@ -2953,9 +2995,29 @@ if (certUploadInput) {
             return;
         }
 
+        const db = getDatabase();
+
+        // How many of the selected students are being promoted OUT of the
+        // school's last configured class — those are the ones that will land
+        // in the Archive Center as "graduated", so they're what counts against
+        // the plan's archiveStudentLimit.
+        const willGraduateCount = db.filter(s =>
+            selectedRegNos.includes(s.regNo) && !getNextClass(s.studentClass)
+        ).length;
+
+        if (willGraduateCount > 0 && !canArchiveMoreStudents(willGraduateCount)) {
+            const limit = getArchiveLimit();
+            const used  = getGraduatedStudents().length + getDroppedStudents().length;
+            showToast(
+                "Archive Limit Reached",
+                `This would move ${willGraduateCount} student(s) into the archive, but your plan only allows ${limit} archived students (currently ${used}). Deselect some students or upgrade your plan.`,
+                "danger"
+            );
+            return;
+        }
+
         if (!confirm(`Promote ${selectedRegNos.length} selected student(s) to their next class?`)) return;
 
-        const db = getDatabase();
         const todayISO = new Date().toISOString().slice(0, 10);
         const thisYear = new Date().getFullYear();
         let promotedCount = 0;
@@ -3156,14 +3218,12 @@ if (certUploadInput) {
                     <td><span class="class-chip">${sec}</span></td>
                     <td>${dateVal}</td>
                     <td style="text-align:center;">
-                        <div class="vo-action-btn-group">
-                            <button class="btn-icon vo-view" onclick="viewFullProfile('${s.regNo}')" title="View Profile">
-                                <i class="fas fa-eye"></i>
-                            </button>
-                            ${kind === 'dropped' ? `<button class="btn-icon archive-reactivate" onclick="reactivateStudent('${s.regNo}')" title="Reactivate Student">
-                                <i class="fas fa-user-check"></i>
-                            </button>` : ''}
-                        </div>
+                        <button class="btn-icon view" onclick="viewFullProfile('${s.regNo}')" title="View Profile">
+                            <i class="fas fa-eye"></i>
+                        </button>
+                        ${kind === 'dropped' ? `<button class="btn-icon reactivate" onclick="reactivateStudent('${s.regNo}')" title="Reactivate Student">
+                            <i class="fas fa-user-check"></i>
+                        </button>` : ''}
                     </td>
                 </tr>`;
         }).join('');
@@ -3325,6 +3385,13 @@ if (certUploadInput) {
     // ── 9. DELETE STUDENT ────────────────────────────────────────────────────
 
     window.deleteRecord = async function(studentId) {
+        // Dropping a student moves them into the Archive Center ("dropped"),
+        // so it counts against the plan's archiveStudentLimit just like a
+        // graduation does.
+        if (!canArchiveMoreStudents(1)) {
+            showToast("Archive Limit Reached", `Your plan allows up to ${getArchiveLimit()} archived students. Upgrade your plan to remove more students.`, "danger");
+            return;
+        }
         if (!confirm("Are you sure you want to remove this student from the Database?")) return;
 
         const db    = getDatabase();
@@ -3333,28 +3400,23 @@ if (certUploadInput) {
             showToast("Error", "Could not find that student to delete.", "danger");
             return;
         }
-
-        // Soft-delete in place — mirrors exactly how graduation works (status
-        // flips to 'graduated' without removing the row). Previously this used
-        // db.splice() to erase the record from local storage completely, which
-        // meant the student vanished everywhere — including Archive Center →
-        // Dropped Out — until the next successful backend sync quietly brought
-        // them back (since the server's DELETE endpoint only soft-deletes too).
-        // Setting status here immediately and consistently files them under
-        // Dropped Out, with no dependency on backend connectivity or timing.
-        const student = db[index];
-        const regNo   = student.regNo;
-        student.status      = 'dropped';
-        student.droppedDate = new Date().toISOString().slice(0, 10);
+        const regNo = db[index].regNo;
+        db.splice(index, 1);
         saveDatabase(db);
 
-        showToast("Success", "Student removed from the active roster and moved to Archive Center → Dropped Out.", "success");
+        showToast("Success", "Student removed from the database", "success");
         closeModal('student-modal');
         updateDashboardStats();
         renderStudentTable();
         if (typeof renderViewOnlyTable === 'function') renderViewOnlyTable();
-        if (typeof renderArchiveDroppedTable === 'function') renderArchiveDroppedTable();
 
+        // NOTE: StudentController's DELETE endpoint is a SOFT delete — it sets
+        // status = "dropped" rather than removing the MySQL row. That's fine for
+        // the Archive Center's "dropped" list, but it means this record will
+        // still be pulled back down by syncWithBackend() (as status "dropped"),
+        // not truly erased from the database. If you want this button to
+        // permanently delete the row, add a hard-delete repository method and
+        // call studentRepository.delete(s) instead of s.setStatus("dropped").
         try {
             if (regNo) await apiDeleteStudent(regNo);
         } catch (err) {
@@ -3787,6 +3849,197 @@ if (certUploadInput) {
         if (countTotal)  countTotal.innerText  = total;
         if (countMale)   countMale.innerText   = males;
         if (countFemale) countFemale.innerText = females;
+
+        // Keep the plan's usage banners / locked-out "New Admission" card in
+        // sync every time the roster changes (see PLAN ENFORCEMENT block below).
+        renderPlanLimitBanners();
+    }
+
+    // ============================================================================
+    // PLAN ENFORCEMENT — feature locks, student/archive limits, subscription expiry
+    // ----------------------------------------------------------------------------
+    // Driven entirely by the School record Super Admin configured for this school
+    // (School.java / SchoolAuthController.SchoolPublicView): `locks`,
+    // `studentLimit`, `archiveStudentLimit`, `expiryDate`.
+    //
+    // FEATURE LOCKS: whole-module locks (the "students" key locking this entire
+    // page) are already enforced by access-control.js's page guard, which
+    // redirects away before this file even runs if Student Management itself is
+    // locked. The only feature key from access-control.js's real FEATURES
+    // catalog (SSA.FEATURES, extended in superadmin.js) that applies to
+    // something INSIDE this page is "bform_pic" (Student B-Form Picture), tagged
+    // on the #bform-upload-group wrapper below via data-feature="bform_pic".
+    // Lock-checking itself is delegated to window.SoftSchoolAdmin.isFeatureLocked
+    // (the same function every other page uses) so this page never drifts out of
+    // sync with the real catalog.
+    //
+    // USAGE LIMITS: studentLimit caps ACTIVE students, archiveStudentLimit caps
+    // graduated+dropped students. Either can be left blank/0 on the school or
+    // plan to mean "unlimited".
+    // ============================================================================
+
+    function getCurrentSchoolRecord() {
+        try {
+            if (window.SoftSchoolAdmin) return window.SoftSchoolAdmin.getCurrentSchool();
+        } catch (e) { /* ignore — demo / no session */ }
+        return null;
+    }
+
+    /**
+     * True if ANY of a comma-separated list of feature keys is locked for this
+     * school. Delegates to SoftSchoolAdmin.isFeatureLocked (access-control.js) —
+     * the same check every other page uses — so this stays correct even if that
+     * function's normalization logic (array vs comma-string locks, blocked
+     * status, etc.) changes later.
+     */
+    function isFeatureLocked(keysCsv) {
+        const school = getCurrentSchoolRecord();
+        if (!school) return false;
+        const keys = String(keysCsv || '').split(',').map(k => k.trim().toLowerCase()).filter(Boolean);
+        if (window.SoftSchoolAdmin && typeof window.SoftSchoolAdmin.isFeatureLocked === 'function') {
+            return keys.some(k => window.SoftSchoolAdmin.isFeatureLocked(school, k));
+        }
+        // Fallback if access-control.js somehow isn't loaded.
+        const raw = String(school.locks || '');
+        const locked = new Set(raw.split(',').map(k => k.trim().toLowerCase()).filter(Boolean));
+        return keys.some(k => locked.has(k));
+    }
+
+    /** Active-student cap from the school record. null = unlimited. */
+    function getStudentLimit() {
+        const school = getCurrentSchoolRecord();
+        const n = school ? Number(school.studentLimit) : NaN;
+        return (Number.isFinite(n) && n > 0) ? n : null;
+    }
+    /** Archived-student (graduated + dropped) cap from the school record. null = unlimited. */
+    function getArchiveLimit() {
+        const school = getCurrentSchoolRecord();
+        const n = school ? Number(school.archiveStudentLimit) : NaN;
+        return (Number.isFinite(n) && n > 0) ? n : null;
+    }
+
+    /** Is there room to register one more ACTIVE student right now? */
+    function canAdmitNewStudent() {
+        const limit = getStudentLimit();
+        return limit === null || getActiveDatabase().length < limit;
+    }
+    /** Is there room to move `count` more students into the archive (graduated/dropped)? */
+    function canArchiveMoreStudents(count) {
+        const limit = getArchiveLimit();
+        if (limit === null) return true;
+        const used = getGraduatedStudents().length + getDroppedStudents().length;
+        return (used + (count || 1)) <= limit;
+    }
+
+    /**
+     * Blur/fade every data-feature element that Super Admin has locked for this
+     * plan, strip its click handler, and wire up the "Not available in this
+     * plan" hover tooltip via the data-tooltip attribute (see CSS). Runs once
+     * on load — the lock list doesn't change without a fresh page/session.
+     */
+    function applyFeatureLocks() {
+        document.querySelectorAll('[data-feature]').forEach(el => {
+            if (!isFeatureLocked(el.dataset.feature)) return;
+            el.classList.add('feature-locked');
+            el.setAttribute('data-tooltip', 'Not available in this plan');
+            el.onclick = null; // strip any inline onclick="..." on the element itself
+            el.addEventListener('click', e => { e.preventDefault(); e.stopPropagation(); }, true);
+            // Also disable any real form controls nested inside (e.g. the file
+            // input in #bform-upload-group) so the lock can't be bypassed by
+            // interacting with the control directly rather than the wrapper.
+            el.querySelectorAll('input, button, select, textarea').forEach(ctrl => {
+                ctrl.disabled = true;
+            });
+        });
+    }
+
+    /**
+     * Refresh the two usage-limit banners (active-student cap on the Manage
+     * Students home, archive cap on the Archive Center) and grey out "New
+     * Admission" once the active-student cap is hit. Called after every
+     * roster mutation via updateDashboardStats().
+     */
+    function renderPlanLimitBanners() {
+        const studentBanner = document.getElementById('student-limit-banner');
+        if (studentBanner) {
+            const limit = getStudentLimit();
+            const used  = getActiveDatabase().length;
+            if (limit === null) {
+                studentBanner.style.display = 'none';
+            } else {
+                const remaining = limit - used;
+                if (remaining <= 0) {
+                    studentBanner.className   = 'plan-limit-banner danger';
+                    studentBanner.innerHTML   = `<i class="fas fa-ban"></i> Student limit reached (${used}/${limit}). Upgrade your plan to register more students.`;
+                    studentBanner.style.display = 'flex';
+                } else if (remaining <= LIMIT_WARNING_THRESHOLD) {
+                    studentBanner.className   = 'plan-limit-banner warning';
+                    studentBanner.innerHTML   = `<i class="fas fa-triangle-exclamation"></i> Only ${remaining} student slot${remaining === 1 ? '' : 's'} left before you reach your plan's limit of ${limit}.`;
+                    studentBanner.style.display = 'flex';
+                } else {
+                    studentBanner.style.display = 'none';
+                }
+            }
+        }
+
+        const archiveBanner = document.getElementById('archive-limit-banner');
+        if (archiveBanner) {
+            const limit = getArchiveLimit();
+            const used  = getGraduatedStudents().length + getDroppedStudents().length;
+            if (limit === null) {
+                archiveBanner.style.display = 'none';
+            } else {
+                const remaining = limit - used;
+                if (remaining <= 0) {
+                    archiveBanner.className   = 'plan-limit-banner danger';
+                    archiveBanner.innerHTML   = `<i class="fas fa-ban"></i> Archive limit reached (${used}/${limit}). No more students can be graduated or dropped until you upgrade your plan.`;
+                    archiveBanner.style.display = 'flex';
+                } else if (remaining <= LIMIT_WARNING_THRESHOLD) {
+                    archiveBanner.className   = 'plan-limit-banner warning';
+                    archiveBanner.innerHTML   = `<i class="fas fa-triangle-exclamation"></i> Only ${remaining} archive slot${remaining === 1 ? '' : 's'} left before you reach your plan's limit of ${limit}.`;
+                    archiveBanner.style.display = 'flex';
+                } else {
+                    archiveBanner.style.display = 'none';
+                }
+            }
+        }
+
+        // Grey out "New Admission" once the active-student cap is hit — separate
+        // class from .feature-locked so it's never confused with a Super-Admin lock.
+        const addCard = document.getElementById('card-add-student');
+        if (addCard) addCard.classList.toggle('feature-locked-limit', !canAdmitNewStudent());
+    }
+
+    /**
+     * Small blinking badge, fixed to the corner of the viewport (doesn't shift
+     * any layout), warning that the school's subscription is about to expire.
+     */
+    function renderSubscriptionExpiryBadge() {
+        const badge = document.getElementById('subscription-expiry-badge');
+        const text  = document.getElementById('subscription-expiry-text');
+        if (!badge || !text) return;
+
+        const school = getCurrentSchoolRecord();
+        if (!school || !school.expiryDate) { badge.style.display = 'none'; return; }
+
+        const expiry = new Date(school.expiryDate + 'T00:00:00');
+        if (isNaN(expiry.getTime())) { badge.style.display = 'none'; return; }
+
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const daysLeft = Math.ceil((expiry - today) / (1000 * 60 * 60 * 24));
+
+        if (daysLeft < 0) {
+            text.textContent = 'Subscription expired';
+            badge.style.display = 'flex';
+        } else if (daysLeft <= EXPIRY_WARNING_DAYS) {
+            text.textContent = daysLeft === 0
+                ? 'Subscription expires today'
+                : `Subscription expires in ${daysLeft} day${daysLeft === 1 ? '' : 's'}`;
+            badge.style.display = 'flex';
+        } else {
+            badge.style.display = 'none';
+        }
     }
 
     function showToast(title, body, type = "success") {
@@ -3849,6 +4102,11 @@ if (certUploadInput) {
             e.target.value = f;
         });
     });
+
+    // ── PLAN ENFORCEMENT: initial pass ──────────────────────────────────────
+    applyFeatureLocks();
+    renderPlanLimitBanners();
+    renderSubscriptionExpiryBadge();
 
 }); // End DOMContentLoaded
 
@@ -4041,14 +4299,6 @@ function slcFillFromStudent(s) {
     const schoolEl = document.querySelector('.school-name');
     if (schoolEl) setText('slc-school-name', schoolEl.textContent);
 
-    // Use the school's actual uploaded logo (same one used on printed certificates)
-    // instead of the generic placeholder icon, so the preview matches the real school.
-    const slcLogoEl = document.getElementById('slc-l-logo');
-    if (slcLogoEl) {
-        const slcLogoUrl = getSchoolLogoUrl();
-        slcLogoEl.innerHTML = slcLogoUrl ? `<img src="${slcLogoUrl}" alt="School Logo">` : '<i class="fas fa-graduation-cap"></i>';
-    }
-
     // Compose the beautiful bottom paragraph from real student details
     const recordEl = document.getElementById('slc-record-para');
     if (recordEl) {
@@ -4143,7 +4393,7 @@ function printSLC() {
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:'Cormorant Garamond',Georgia,serif;background:#eef2f7;padding:24px;display:flex;justify-content:center;align-items:center;min-height:100vh}
-.slc-cert-outer.slc-landscape{position:relative;background:#fff;width:280mm;height:193mm;overflow:hidden;box-shadow:0 12px 40px rgba(15,23,42,.18);border-radius:6px;color:#0f172a}
+.slc-cert-outer.slc-landscape{position:relative;background:#fff;width:1050px;height:740px;overflow:hidden;box-shadow:0 12px 40px rgba(15,23,42,.18);border-radius:6px;color:#0f172a}
 
 /* Decorative blue geometric corner shapes (like reference) */
 .slc-geo{position:absolute;background:#3b6fb8;z-index:0}
@@ -4158,14 +4408,13 @@ body{font-family:'Cormorant Garamond',Georgia,serif;background:#eef2f7;padding:2
 
 .slc-inner{position:relative;z-index:2;background:#fff;margin:46px;height:calc(100% - 92px);padding:32px 56px 72px;display:flex;flex-direction:column}
 
-.slc-l-header{display:flex;align-items:center;gap:12px;padding-bottom:14px;border-bottom:1px solid #e2e8f0}
-.slc-l-logo{width:60px;height:60px;border-radius:50%;background:linear-gradient(135deg,#2c5797,#3b6fb8);color:#fff;display:flex;align-items:center;justify-content:center;font-size:24px;flex-shrink:0;box-shadow:0 4px 14px rgba(59,111,184,.4);overflow:hidden}
-.slc-l-logo img{width:100%;height:100%;object-fit:cover;border-radius:50%}
-.slc-l-school-block{flex:1;min-width:0;text-align:center}
-.slc-l-school-name{font-family:'Cormorant Garamond',serif;font-size:26px;font-weight:700;letter-spacing:.03em;color:#1e293b;text-transform:uppercase;line-height:1.2;word-spacing:.1em}
-.slc-l-school-meta{margin-top:5px;font-family:'Inter',sans-serif;font-size:11.5px;color:#475569;letter-spacing:.03em;font-weight:500}
+.slc-l-header{display:flex;align-items:center;gap:18px;padding-bottom:14px;border-bottom:1px solid #e2e8f0}
+.slc-l-logo{width:54px;height:54px;border-radius:50%;background:linear-gradient(135deg,#2c5797,#3b6fb8);color:#fff;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;box-shadow:0 4px 14px rgba(59,111,184,.4)}
+.slc-l-school-block{flex:1;text-align:center}
+.slc-l-school-name{font-family:'Cormorant Garamond',serif;font-size:22px;font-weight:700;letter-spacing:.18em;color:#0f172a;text-transform:uppercase}
+.slc-l-school-meta{margin-top:4px;font-family:'Inter',sans-serif;font-size:11px;color:#64748b;letter-spacing:.04em}
 .slc-l-dot{margin:0 8px;color:#cbd5e1}
-.slc-l-serial{text-align:right;flex-shrink:0;min-width:60px;font-family:'Inter',sans-serif}
+.slc-l-serial{text-align:right;flex-shrink:0;font-family:'Inter',sans-serif}
 .slc-l-serial-label{font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:#94a3b8}
 .slc-l-serial-value{font-size:13px;font-weight:700;color:#2c5797;margin-top:2px}
 
@@ -4199,9 +4448,9 @@ body{font-family:'Cormorant Garamond',Georgia,serif;background:#eef2f7;padding:2
 .slc-l-stamp-ring span{font-size:8px;font-weight:700;letter-spacing:.12em;line-height:1.2}
 
 @media print{
-  html,body{padding:0;margin:0;background:#fff;width:100%;height:100%;overflow:hidden}
+  html,body{padding:0;margin:0;background:#fff;width:100%;height:100%}
   @page{size:A4 landscape;margin:6mm}
-  .slc-cert-outer.slc-landscape{box-shadow:none;border-radius:0;margin:0 auto;page-break-after:avoid;page-break-before:avoid;page-break-inside:avoid;break-inside:avoid}
+  .slc-cert-outer.slc-landscape{box-shadow:none;border-radius:0;margin:0 auto;page-break-after:avoid;page-break-inside:avoid}
 }
 </style>
 </head>
@@ -4388,14 +4637,6 @@ function charFillFromStudent(s) {
     setText('char-school-name', schoolName);
     setText('char-taught-at', schoolName);
 
-    // Use the school's actual uploaded logo, same as the SLC preview/print output,
-    // instead of always showing the generic placeholder icon.
-    const charLogoEl = document.getElementById('char-l-logo');
-    if (charLogoEl) {
-        const charLogoUrl = getSchoolLogoUrl();
-        charLogoEl.innerHTML = charLogoUrl ? `<img src="${charLogoUrl}" alt="School Logo">` : '<i class="fas fa-graduation-cap"></i>';
-    }
-
     // Remember for conduct re-render & print
     window.__charCurrentName     = studentName;
     window.__charCurrentStudent  = s;
@@ -4508,22 +4749,20 @@ function printCharCert() {
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:'Cormorant Garamond',Georgia,serif;background:#eef2f7;padding:24px;display:flex;justify-content:center;align-items:center;min-height:100vh}
-.char-cert-outer{position:relative;background:#fff;width:188mm;height:270mm;overflow:hidden;box-shadow:0 12px 40px rgba(15,23,42,.18);border-radius:4px;color:#0f172a;margin:0 auto}
+.char-cert-outer{position:relative;background:#fff;width:760px;min-height:980px;overflow:hidden;box-shadow:0 12px 40px rgba(15,23,42,.18);border-radius:4px;color:#0f172a;margin:0 auto}
 .char-geo{position:absolute;width:0;height:0;z-index:1}
 .char-geo-tl{top:0;left:0;border-top:170px solid #c8a753;border-right:170px solid transparent}
 .char-geo-bl{bottom:0;left:0;border-bottom:170px solid #1a2744;border-right:170px solid transparent}
 .char-geo-tr{top:0;right:0;border-top:130px solid #1a2744;border-left:130px solid transparent}
 .char-geo-br{bottom:0;right:0;border-bottom:130px solid #c8a753;border-left:130px solid transparent}
 .char-border-frame{position:absolute;inset:26px;border:2px solid #c8a753;z-index:2;pointer-events:none}
-.char-inner{position:relative;z-index:3;margin:26px;height:calc(100% - 52px);background:#fff;padding:38px 46px 40px;display:flex;flex-direction:column;align-items:center;text-align:center}
-.char-l-header{display:flex;align-items:center;gap:12px;width:100%;margin-bottom:18px;padding-bottom:14px;border-bottom:1px solid #e2e8f0}
-.char-l-logo{width:60px;height:60px;border-radius:50%;background:linear-gradient(135deg,#1a2744,#3b6fb8);color:#fff;display:flex;align-items:center;justify-content:center;font-size:24px;flex-shrink:0;box-shadow:0 4px 14px rgba(26,39,68,.35);overflow:hidden}
-.char-l-logo img{width:100%;height:100%;object-fit:cover;border-radius:50%}
-.char-l-logo-spacer{width:60px;flex-shrink:0}
-.char-l-school-block{flex:1;min-width:0;text-align:center}
-.char-l-school-meta{margin-top:5px;font-family:'Inter',sans-serif;font-size:11.5px;color:#475569;letter-spacing:.03em;font-weight:500}
+.char-inner{position:relative;z-index:3;padding:64px 64px 50px;display:flex;flex-direction:column;align-items:center;text-align:center;height:100%}
+.char-l-header{display:flex;align-items:center;gap:14px;width:100%;margin-bottom:18px}
+.char-l-logo{width:46px;height:46px;border-radius:50%;background:linear-gradient(135deg,#1a2744,#3b6fb8);color:#fff;display:flex;align-items:center;justify-content:center;font-size:19px;flex-shrink:0;box-shadow:0 4px 14px rgba(26,39,68,.35)}
+.char-l-school-block{flex:1;text-align:center}
+.char-l-school-meta{margin-top:3px;font-family:'Inter',sans-serif;font-size:10.5px;color:#64748b;letter-spacing:.04em}
 .char-l-dot{margin:0 8px;color:#cbd5e1}
-.char-school-name{font-family:'Cormorant Garamond',serif;font-size:26px;font-weight:700;letter-spacing:.03em;color:#1a2744;text-transform:uppercase;margin-bottom:0;line-height:1.2;word-spacing:.1em}
+.char-school-name{font-family:'Inter',sans-serif;font-size:11px;letter-spacing:.18em;color:#64748b;text-transform:uppercase;margin-bottom:0}
 .char-certify-line{font-family:'Cormorant Garamond',serif;font-size:15px;font-style:italic;color:#475569;margin-bottom:18px}
 .char-title{font-family:'Great Vibes',cursive;font-size:54px;color:#1a2744;line-height:1;margin-bottom:4px}
 .char-subtitle{font-family:'Inter',sans-serif;font-size:20px;font-weight:700;letter-spacing:.1em;color:#c8a753;text-transform:uppercase;margin-bottom:18px}
@@ -4543,9 +4782,9 @@ body{font-family:'Cormorant Garamond',Georgia,serif;background:#eef2f7;padding:2
 .char-sig-line{width:200px;height:1px;background:#334155;margin:0 auto 8px}
 .char-sig-title{font-family:'Inter',sans-serif;font-size:12px;font-weight:700;color:#0f172a;text-transform:uppercase;letter-spacing:.06em}
 @media print{
-  html,body{padding:0;margin:0;background:#fff;width:100%;height:100%;overflow:hidden}
+  html,body{padding:0;margin:0;background:#fff;width:100%;height:100%}
   @page{size:A4 portrait;margin:6mm}
-  .char-cert-outer{box-shadow:none;border-radius:0;margin:0 auto;page-break-after:avoid;page-break-before:avoid;page-break-inside:avoid;break-inside:avoid}
+  .char-cert-outer{box-shadow:none;border-radius:0;margin:0 auto;page-break-after:avoid;page-break-inside:avoid}
 }
 </style>
 </head>

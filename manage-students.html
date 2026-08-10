@@ -18,7 +18,7 @@
     <aside id="sidebar" class="sidebar">
         <div class="sidebar-header">
             <div class="brand">
-                <img src="https://via.placeholder.com/40" alt="SoftSchool Logo" class="brand-logo" id="main-logo-img">
+                <!-- <img src="logo-icon.png" alt="SoftSchool Logo" class="brand-logo"> -->
                 <span class="brand-name">Soft<strong>School</strong></span>
             </div>
             <button id="close-sidebar" class="close-btn" aria-label="Close sidebar">
@@ -52,10 +52,6 @@
             <a href="manage-finance.html" class="nav-link">
                 <i class="fas fa-file-invoice-dollar"></i>
                 <span>Fees &amp; Finance</span>
-            </a>
-            <a href="reports.html" class="nav-link">
-                <i class="fas fa-chart-pie"></i>
-                <span>Reports &amp; Analytics</span>
             </a>
             <a href="settings.html" class="nav-link">
                 <i class="fas fa-cog"></i>
@@ -129,6 +125,9 @@
                     </div>
                 </div>
             </div>
+            <!-- Populated by renderPlanLimitBanners() in manage-students.js when the
+                 school is close to / at its plan's active-student limit. -->
+            <div id="student-limit-banner" class="plan-limit-banner" style="display:none;"></div>
         </section>
 
         <!-- MANAGEMENT CARDS SECTION -->
@@ -289,6 +288,10 @@
                 </div>
                 <p class="cert-page-subtitle">Browse graduated and dropped-out student records.</p>
             </div>
+
+            <!-- Populated by renderPlanLimitBanners() in manage-students.js when the
+                 school is close to / at its plan's archive-student limit. -->
+            <div id="archive-limit-banner" class="plan-limit-banner" style="display:none;"></div>
 
             <!-- STAGE: HUB (2 cards) -->
             <div id="archive-stage-hub" class="msc-stage">
@@ -570,7 +573,7 @@
                         </div>
                         <input type="text" id="mail-address" name="mailingAddress" placeholder="House #, Street, City" required>
                     </div>
-                    <div class="form-input-group full-span">
+                    <div class="form-input-group full-span" id="bform-upload-group" data-feature="bform_pic">
                         <label>Certificate / B-Form Upload</label>
                         <div class="certificate-upload-zone">
                             <i class="fas fa-cloud-upload-alt"></i>
@@ -956,6 +959,10 @@
                                 <div id="slc-search-results" class="slc-dropdown"></div>
                             </div>
                         </div>
+                        <div class="slc-control-group slc-tel-group">
+                            <label class="slc-control-label"><i class="fas fa-phone"></i> School Telephone</label>
+                            <input type="text" id="slc-school-tel-input" class="slc-search-input" placeholder="e.g. +92 51 1234567" value="+92 51 1234567" oninput="document.getElementById('slc-school-tel').textContent=this.value">
+                        </div>
                     </div>
                     <div class="slc-manual-row">
                         <div class="slc-manual-note"><i class="fas fa-info-circle"></i> Or enter details manually if student not in database</div>
@@ -1003,11 +1010,16 @@
                         <!-- INNER CONTENT -->
                         <div class="slc-inner">
 
-                            <!-- HEADER: Logo + School -->
+                            <!-- HEADER: Logo + School + Tel -->
                             <div class="slc-l-header">
-                                <div class="slc-l-logo" id="slc-l-logo"><i class="fas fa-graduation-cap"></i></div>
+                                <div class="slc-l-logo"><i class="fas fa-graduation-cap"></i></div>
                                 <div class="slc-l-school-block">
                                     <div class="slc-l-school-name" id="slc-school-name">ST. LAWRENCE INTERNATIONAL SCHOOL</div>
+                                    <div class="slc-l-school-meta">
+                                        <span><i class="fas fa-map-marker-alt"></i> Islamabad, Pakistan</span>
+                                        <span class="slc-l-dot">&bull;</span>
+                                        <span><i class="fas fa-phone"></i> <span id="slc-school-tel">+92 51 1234567</span></span>
+                                    </div>
                                 </div>
                                 <div class="slc-l-serial">
                                     <div class="slc-l-serial-label">Cert. No.</div>
@@ -1107,6 +1119,10 @@
                                 <option value="bad">Bad</option>
                             </select>
                         </div>
+                        <div class="slc-control-group slc-tel-group">
+                            <label class="slc-control-label"><i class="fas fa-phone"></i> School Telephone</label>
+                            <input type="text" id="char-school-tel-input" class="slc-search-input" placeholder="e.g. +92 51 1234567" value="+92 51 1234567" oninput="document.getElementById('char-school-tel').textContent=this.value">
+                        </div>
                     </div>
                     <div class="slc-manual-row">
                         <div class="slc-manual-note"><i class="fas fa-info-circle"></i> Or enter details manually if student not in database</div>
@@ -1162,13 +1178,17 @@
                         <!-- INNER CONTENT -->
                         <div class="char-inner">
 
-                            <!-- HEADER: Logo + School Name -->
+                            <!-- HEADER: Logo + School Name + Tel -->
                             <div class="char-l-header">
-                                <div class="char-l-logo" id="char-l-logo"><i class="fas fa-graduation-cap"></i></div>
+                                <div class="char-l-logo"><i class="fas fa-graduation-cap"></i></div>
                                 <div class="char-l-school-block">
                                     <div class="char-school-name" id="char-school-name">ST. LAWRENCE INTERNATIONAL SCHOOL</div>
+                                    <div class="char-l-school-meta">
+                                        <span><i class="fas fa-map-marker-alt"></i> Islamabad, Pakistan</span>
+                                        <span class="char-l-dot">&bull;</span>
+                                        <span><i class="fas fa-phone"></i> <span id="char-school-tel">+92 51 1234567</span></span>
+                                    </div>
                                 </div>
-                                <div class="char-l-logo-spacer" aria-hidden="true"></div>
                             </div>
 
                             <p class="char-certify-line">Has demonstrated good character as set forth in the</p>
@@ -1243,6 +1263,14 @@
             <img id="cert-viewer-image" class="cert-viewer-image" alt="Certificate / B-Form" style="display:none;">
             <iframe id="cert-viewer-pdf" class="cert-viewer-pdf" style="display:none;" title="Certificate / B-Form PDF"></iframe>
         </div>
+    </div>
+
+    <!-- SUBSCRIPTION EXPIRY WARNING — fixed-position, doesn't affect page layout.
+         Shown by renderSubscriptionExpiryBadge() in manage-students.js starting
+         30 days before School.expiryDate. -->
+    <div id="subscription-expiry-badge" class="subscription-expiry-badge" style="display:none;">
+        <i class="fas fa-triangle-exclamation"></i>
+        <span id="subscription-expiry-text"></span>
     </div>
 
     <script src="shared-data.js"></script>

@@ -527,6 +527,162 @@ body {
 /* ============================================
    STATS OVERVIEW
    ============================================ */
+/* ============================================
+   PLAN ENFORCEMENT — feature locks, usage-limit
+   banners, subscription-expiry badge
+   Driven by manage-students.js (School.locks /
+   studentLimit / archiveStudentLimit / expiryDate)
+   ============================================ */
+
+/* -- Locked feature (card blocked by Super Admin's plan) -- */
+[data-feature].feature-locked {
+    position: relative;
+    filter: blur(2px) grayscale(55%);
+    opacity: 0.5;
+    cursor: not-allowed !important;
+}
+[data-feature].feature-locked:hover {
+    filter: blur(1.5px) grayscale(55%);
+    opacity: 0.6;
+    transform: none !important;
+}
+[data-feature].feature-locked .card-glow { display: none !important; }
+[data-feature].feature-locked::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    left: 50%;
+    bottom: 100%;
+    transform: translateX(-50%) translateY(-6px);
+    background: #111827;
+    color: #f8fafc;
+    padding: 7px 14px;
+    border-radius: 8px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.2px;
+    white-space: nowrap;
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35);
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transition: opacity 0.18s ease, transform 0.18s ease;
+    z-index: 60;
+}
+[data-feature].feature-locked::before {
+    content: '';
+    position: absolute;
+    left: 50%;
+    bottom: 100%;
+    transform: translateX(-50%) translateY(6px);
+    border: 6px solid transparent;
+    border-top-color: #111827;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.18s ease;
+    z-index: 60;
+}
+[data-feature].feature-locked:hover::after,
+[data-feature].feature-locked:hover::before {
+    opacity: 1;
+    visibility: visible;
+    transform: translateX(-50%) translateY(-14px);
+}
+[data-feature].feature-locked:hover::before { transform: translateX(-50%) translateY(-2px); }
+
+/* Card blurred because a numeric usage limit (not a plan lock) was hit —
+   e.g. "New Admission" once the active-student cap is reached. Same look,
+   separate class so it never gets confused with a Super-Admin feature lock. */
+[data-feature].feature-locked-limit {
+    position: relative;
+    filter: blur(2px) grayscale(55%);
+    opacity: 0.5;
+    cursor: not-allowed !important;
+}
+[data-feature].feature-locked-limit .card-glow { display: none !important; }
+[data-feature].feature-locked-limit::after {
+    content: 'Plan limit reached';
+    position: absolute;
+    left: 50%;
+    bottom: 100%;
+    transform: translateX(-50%) translateY(-6px);
+    background: var(--accent-danger);
+    color: #fff;
+    padding: 7px 14px;
+    border-radius: 8px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    white-space: nowrap;
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35);
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transition: opacity 0.18s ease, transform 0.18s ease;
+    z-index: 60;
+}
+[data-feature].feature-locked-limit:hover::after {
+    opacity: 1;
+    visibility: visible;
+    transform: translateX(-50%) translateY(-14px);
+}
+
+/* -- Usage-limit banners (student cap / archive cap) -- */
+.plan-limit-banner {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-top: 18px;
+    padding: 13px 18px;
+    border-radius: var(--radius-sm);
+    font-size: 0.88rem;
+    font-weight: 600;
+    line-height: 1.4;
+    border: 1px solid;
+    animation: limitBannerIn 0.25s ease;
+}
+.plan-limit-banner i { font-size: 1.05rem; flex-shrink: 0; }
+.plan-limit-banner.warning {
+    background: rgba(245, 158, 11, 0.1);
+    border-color: rgba(245, 158, 11, 0.4);
+    color: var(--accent-warning);
+}
+.plan-limit-banner.danger {
+    background: rgba(239, 68, 68, 0.1);
+    border-color: rgba(239, 68, 68, 0.4);
+    color: var(--accent-danger);
+}
+@keyframes limitBannerIn {
+    from { opacity: 0; transform: translateY(-6px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+/* -- Subscription expiry badge — fixed position, never shifts page layout -- */
+.subscription-expiry-badge {
+    position: fixed;
+    right: 22px;
+    bottom: 22px;
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    max-width: 270px;
+    padding: 10px 16px;
+    background: var(--accent-danger);
+    color: #fff;
+    border-radius: 999px;
+    font-size: 0.78rem;
+    font-weight: 700;
+    box-shadow: 0 8px 24px rgba(239, 68, 68, 0.4);
+    animation: expiryBlink 1.4s ease-in-out infinite;
+}
+.subscription-expiry-badge i { font-size: 0.9rem; }
+@keyframes expiryBlink {
+    0%, 100% { opacity: 1; box-shadow: 0 8px 24px rgba(239, 68, 68, 0.45); }
+    50%      { opacity: 0.55; box-shadow: 0 8px 30px rgba(239, 68, 68, 0.75); }
+}
+@media (max-width: 640px) {
+    .subscription-expiry-badge { right: 14px; bottom: 14px; max-width: 220px; font-size: 0.72rem; }
+}
+
 .stats-overview-section {
     position: relative;
     z-index: 1;
@@ -1951,53 +2107,80 @@ select option {
 }
 
 /* =============================================
-   VIEW DATABASE TABLE & ARCHIVE CENTER — action buttons
-   Scoped to .vo-action-btn-group but restyled to match
-   the plain square icon-only buttons used on the
-   Update Database table (.action-btn-group .btn-icon).
+   VIEW DATABASE TABLE — labeled action buttons
+   (View / Print Admission Form / Print Student Record)
+   Scoped to .vo-action-btn-group so the plain icon-only
+   buttons used elsewhere (Update Database table, etc.)
+   are unaffected.
    ============================================= */
 .vo-action-btn-group {
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    flex-wrap: nowrap;
+    flex-wrap: wrap;
     justify-content: center;
-    white-space: nowrap;
 }
 
 .vo-action-btn-group .btn-icon {
-    width: 34px;
-    height: 34px;
-    padding: 0;
-    border-radius: 8px;
+    width: auto;
+    height: 32px;
+    padding: 0 11px;
+    border-radius: 7px;
     display: inline-flex;
     align-items: center;
-    justify-content: center;
-    font-size: 13px;
+    gap: 6px;
+    font-size: 11.5px;
+    font-weight: 600;
 }
 
+.vo-action-btn-group .btn-icon span {
+    white-space: nowrap;
+}
+
+.vo-action-btn-group .btn-icon i {
+    font-size: 12px;
+}
+
+.vo-action-btn-group .btn-icon.vo-view {
+    background: rgba(59, 130, 246, 0.1);
+    border-color: rgba(59, 130, 246, 0.28);
+    color: #60a5fa;
+}
 .vo-action-btn-group .btn-icon.vo-view:hover {
-    background: rgba(59, 130, 246, 0.12);
-    border-color: rgba(59, 130, 246, 0.3);
-    color: var(--accent-primary-light);
-    transform: scale(1.1);
+    background: rgba(59, 130, 246, 0.2);
+    border-color: rgba(59, 130, 246, 0.45);
+    color: #93c5fd;
+    transform: translateY(-1px);
 }
 
-.vo-action-btn-group .btn-icon.archive-reactivate {
-    margin-left: 6px;
-}
-.vo-action-btn-group .btn-icon.archive-reactivate:hover {
-    background: rgba(16, 185, 129, 0.12);
-    border-color: rgba(16, 185, 129, 0.3);
-    color: #10b981;
-    transform: scale(1.1);
-}
-
-.vo-action-btn-group .btn-icon.print-record:hover {
-    background: rgba(20, 184, 166, 0.12);
-    border-color: rgba(20, 184, 166, 0.3);
+.vo-action-btn-group .btn-icon.print-admission {
+    margin-left: 0;
+    background: rgba(20, 184, 166, 0.1);
+    border-color: rgba(20, 184, 166, 0.28);
     color: #2dd4bf;
-    transform: scale(1.1);
+}
+.vo-action-btn-group .btn-icon.print-admission:hover {
+    background: rgba(20, 184, 166, 0.2);
+    border-color: rgba(20, 184, 166, 0.45);
+    color: #5eead4;
+    transform: translateY(-1px);
+}
+
+.vo-action-btn-group .btn-icon.print-record {
+    background: rgba(46, 139, 87, 0.12);
+    border-color: rgba(46, 139, 87, 0.32);
+    color: #34d399;
+}
+.vo-action-btn-group .btn-icon.print-record:hover {
+    background: rgba(46, 139, 87, 0.22);
+    border-color: rgba(46, 139, 87, 0.5);
+    color: #6ee7b7;
+    transform: translateY(-1px);
+}
+
+@media (max-width: 900px) {
+    .vo-action-btn-group .btn-icon span { display: none; }
+    .vo-action-btn-group .btn-icon { width: 32px; padding: 0; justify-content: center; }
 }
 
 @media (max-width: 600px) {
@@ -3661,14 +3844,13 @@ select option {
 
 #slc-preview .slc-inner{position:relative;z-index:2;background:#fff;margin:46px;height:calc(100% - 92px);padding:32px 56px 72px;display:flex;flex-direction:column}
 
-#slc-preview .slc-l-header{display:flex;align-items:center;gap:12px;padding-bottom:14px;border-bottom:1px solid #e2e8f0}
-#slc-preview .slc-l-logo{width:60px;height:60px;border-radius:50%;background:linear-gradient(135deg,#2c5797,#3b6fb8);color:#fff;display:flex;align-items:center;justify-content:center;font-size:24px;flex-shrink:0;box-shadow:0 4px 14px rgba(59,111,184,.4);overflow:hidden}
-#slc-preview .slc-l-logo img{width:100%;height:100%;object-fit:cover;border-radius:50%}
-#slc-preview .slc-l-school-block{flex:1;min-width:0;text-align:center}
-#slc-preview .slc-l-school-name{font-family:'Cormorant Garamond',serif;font-size:clamp(17px,2.4vw,26px);font-weight:700;letter-spacing:.03em;color:#1e293b;text-transform:uppercase;line-height:1.2;word-spacing:.1em}
-#slc-preview .slc-l-school-meta{margin-top:5px;font-family:'Inter',sans-serif;font-size:11.5px;color:#475569;letter-spacing:.03em;font-weight:500}
+#slc-preview .slc-l-header{display:flex;align-items:center;gap:18px;padding-bottom:14px;border-bottom:1px solid #e2e8f0}
+#slc-preview .slc-l-logo{width:54px;height:54px;border-radius:50%;background:linear-gradient(135deg,#2c5797,#3b6fb8);color:#fff;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;box-shadow:0 4px 14px rgba(59,111,184,.4)}
+#slc-preview .slc-l-school-block{flex:1;text-align:center}
+#slc-preview .slc-l-school-name{font-family:'Cormorant Garamond',serif;font-size:22px;font-weight:700;letter-spacing:.18em;color:#0f172a;text-transform:uppercase}
+#slc-preview .slc-l-school-meta{margin-top:4px;font-family:'Inter',sans-serif;font-size:11px;color:#64748b;letter-spacing:.04em}
 #slc-preview .slc-l-dot{margin:0 8px;color:#cbd5e1}
-#slc-preview .slc-l-serial{text-align:right;flex-shrink:0;min-width:60px;font-family:'Inter',sans-serif}
+#slc-preview .slc-l-serial{text-align:right;flex-shrink:0;font-family:'Inter',sans-serif}
 #slc-preview .slc-l-serial-label{font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:#94a3b8}
 #slc-preview .slc-l-serial-value{font-size:13px;font-weight:700;color:#2c5797;margin-top:2px}
 
@@ -3716,17 +3898,15 @@ select option {
 
 .char-border-frame{position:absolute;inset:26px;border:2px solid #c8a753;z-index:2;pointer-events:none;}
 
-.char-inner{position:relative;z-index:3;margin:26px;height:calc(100% - 52px);background:#fff;padding:38px 46px 40px;display:flex;flex-direction:column;align-items:center;text-align:center;}
+.char-inner{position:relative;z-index:3;padding:64px 64px 50px;display:flex;flex-direction:column;align-items:center;text-align:center;height:100%;}
 
-.char-l-header{display:flex;align-items:center;gap:12px;width:100%;margin-bottom:18px;padding-bottom:14px;border-bottom:1px solid #e2e8f0;}
-.char-l-logo{width:60px;height:60px;border-radius:50%;background:linear-gradient(135deg,#1a2744,#3b6fb8);color:#fff;display:flex;align-items:center;justify-content:center;font-size:24px;flex-shrink:0;box-shadow:0 4px 14px rgba(26,39,68,.35);overflow:hidden;}
-.char-l-logo img{width:100%;height:100%;object-fit:cover;border-radius:50%;}
-.char-l-logo-spacer{width:60px;flex-shrink:0;}
-.char-l-school-block{flex:1;min-width:0;text-align:center;}
-.char-l-school-meta{margin-top:5px;font-family:'Inter',sans-serif;font-size:11.5px;color:#475569;letter-spacing:.03em;font-weight:500;}
+.char-l-header{display:flex;align-items:center;gap:14px;width:100%;margin-bottom:18px;}
+.char-l-logo{width:46px;height:46px;border-radius:50%;background:linear-gradient(135deg,#1a2744,#3b6fb8);color:#fff;display:flex;align-items:center;justify-content:center;font-size:19px;flex-shrink:0;box-shadow:0 4px 14px rgba(26,39,68,.35);}
+.char-l-school-block{flex:1;text-align:center;}
+.char-l-school-meta{margin-top:3px;font-family:'Inter',sans-serif;font-size:10.5px;color:#64748b;letter-spacing:.04em;}
 .char-l-dot{margin:0 8px;color:#cbd5e1;}
 
-.char-school-name{font-family:'Cormorant Garamond',serif;font-size:clamp(17px,2.4vw,26px);font-weight:700;letter-spacing:.03em;color:#1a2744;text-transform:uppercase;margin-bottom:0;line-height:1.2;word-spacing:.1em;}
+.char-school-name{font-family:'Inter',sans-serif;font-size:11px;letter-spacing:.18em;color:#64748b;text-transform:uppercase;margin-bottom:0;}
 
 .char-certify-line{font-family:'Cormorant Garamond',serif;font-size:15px;font-style:italic;color:#475569;margin-bottom:18px;}
 
@@ -4174,12 +4354,8 @@ select option {
 .brand-logo {
     width: 38px;
     height: 38px;
-    object-fit: cover;
-    border-radius: 50%;
+    object-fit: contain;
     flex-shrink: 0;
-    background: #fff;
-    border: 2px solid rgba(23, 113, 106, 0.35);
-    box-shadow: 0 2px 8px rgba(23, 113, 106, 0.25);
 }
 
 .brand-name {
