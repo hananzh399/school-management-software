@@ -78,6 +78,23 @@
     box-shadow: 0 4px 14px rgba(23, 113, 106, 0.35);
 }
 
+.month-filter-select {
+    background: var(--bg-card);
+    border: 1px solid var(--border-subtle);
+    color: var(--text-primary);
+    font-family: inherit;
+    font-size: 12.5px;
+    font-weight: 600;
+    padding: 9px 14px;
+    border-radius: var(--radius-md);
+    cursor: pointer;
+}
+
+#period-range-label {
+    color: var(--text-primary);
+    font-weight: 700;
+}
+
 /* ---------- Extra stat-pill icon for expenses ---------- */
 .stat-pill-icon.icon-expense-pill {
     background: rgba(239, 68, 68, 0.12);
@@ -86,6 +103,166 @@
 
 .reports-stats-strip {
     margin-bottom: 20px;
+}
+
+/* ---------- Quick links row (jump to other modules) ---------- */
+.quick-links-row {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 14px;
+    max-width: 1200px;
+    margin: 0 auto 20px;
+    position: relative;
+    z-index: 1;
+}
+
+.quick-link-card {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: var(--bg-card);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-md);
+    padding: 14px 16px;
+    text-decoration: none;
+    color: inherit;
+    transition: all var(--transition);
+    box-shadow: var(--shadow-card);
+}
+
+.quick-link-card:hover {
+    transform: translateY(-2px);
+    border-color: rgba(23, 113, 106, 0.4);
+    box-shadow: 0 10px 24px rgba(23, 113, 106, 0.16);
+}
+
+.ql-icon {
+    width: 38px;
+    height: 38px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 15px;
+    flex-shrink: 0;
+}
+
+.ql-students { background: rgba(59, 130, 246, 0.12); color: #3b82f6; }
+.ql-dropped { background: rgba(239, 68, 68, 0.12); color: #ef4444; }
+.ql-finance { background: rgba(245, 158, 11, 0.12); color: #f59e0b; }
+
+.ql-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+    flex: 1;
+}
+
+.ql-value {
+    font-size: 16px;
+    font-weight: 800;
+    letter-spacing: -0.2px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.ql-label {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.ql-arrow {
+    font-size: 11px;
+    color: var(--text-muted);
+    flex-shrink: 0;
+    transition: transform var(--transition);
+}
+
+.quick-link-card:hover .ql-arrow {
+    transform: translateX(3px);
+    color: #17716A;
+}
+
+/* ---------- Clickable stat pills ---------- */
+.stat-pill-link {
+    text-decoration: none;
+    color: inherit;
+    position: relative;
+    cursor: pointer;
+}
+
+.stat-pill-link:hover {
+    transform: translateY(-2px);
+}
+
+.stat-pill-trend {
+    margin-left: auto;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 3px 7px;
+    border-radius: 999px;
+    white-space: nowrap;
+}
+
+.stat-pill-trend:empty { display: none; }
+
+.stat-pill-trend.trend-up { background: rgba(16, 185, 129, 0.12); color: #10b981; }
+.stat-pill-trend.trend-down { background: rgba(239, 68, 68, 0.12); color: #ef4444; }
+.stat-pill-trend.trend-flat { background: rgba(148, 163, 184, 0.14); color: var(--text-muted); }
+
+/* ---------- Card header extras ---------- */
+.card-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.card-link-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    border-radius: 8px;
+    background: rgba(23, 113, 106, 0.1);
+    color: #17716A;
+    font-size: 11px;
+    text-decoration: none;
+    transition: all var(--transition);
+    flex-shrink: 0;
+}
+
+.card-link-btn:hover {
+    background: #17716A;
+    color: #ffffff;
+}
+
+.header-subtag {
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    color: var(--text-muted);
+    background: rgba(148, 163, 184, 0.14);
+    padding: 2px 7px;
+    border-radius: 999px;
+    margin-left: 8px;
+    vertical-align: middle;
+}
+
+.chart-foot-note {
+    margin-top: 10px;
+    font-size: 10.5px;
+    color: var(--text-muted);
+    text-align: left;
+    line-height: 1.5;
 }
 
 /* ---------- Charts grid ---------- */
@@ -160,16 +337,120 @@
 }
 
 .chart-legend .legend-dot {
-    width: 9px;
-    height: 9px;
-    border-radius: 50%;
+    width: 10px;
+    height: 10px;
+    border-radius: 3px;
     flex-shrink: 0;
+    box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.04);
 }
 
 .chart-legend .legend-value {
     color: var(--text-primary);
     font-weight: 800;
     white-space: nowrap;
+}
+
+/* ---------- Pending fees list ---------- */
+.pending-list {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin: 0 0 14px;
+    padding: 0;
+}
+
+.pending-list li {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 10px 12px;
+    border-radius: var(--radius-md);
+    background: rgba(239, 68, 68, 0.06);
+    border: 1px solid rgba(239, 68, 68, 0.12);
+}
+
+.pending-list .pending-name {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.pending-list .pending-name strong {
+    font-size: 12.5px;
+    font-weight: 700;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.pending-list .pending-name span {
+    font-size: 11px;
+    color: var(--text-secondary);
+}
+
+.pending-list .pending-amount {
+    font-size: 13px;
+    font-weight: 800;
+    color: #ef4444;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.pending-list .pending-empty {
+    background: transparent;
+    border: none;
+    justify-content: center;
+    color: var(--text-muted);
+    font-style: italic;
+    font-size: 12.5px;
+}
+
+.view-all-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    font-weight: 700;
+    color: #17716A;
+    text-decoration: none;
+}
+
+.view-all-link:hover { text-decoration: underline; }
+
+/* ---------- Payroll snapshot ---------- */
+.payroll-snapshot {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin: 0 0 14px;
+    padding: 0;
+}
+
+.payroll-snapshot li {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    padding: 10px 12px;
+    border-radius: var(--radius-md);
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid var(--border-subtle);
+}
+
+[data-theme="light"] .payroll-snapshot li {
+    background: rgba(0, 0, 0, 0.02);
+}
+
+.payroll-snapshot li span:last-child {
+    color: var(--text-primary);
+    font-weight: 800;
 }
 
 /* ---------- Transactions table ---------- */
@@ -264,6 +545,41 @@
 .txn-type-badge.expense { background: rgba(239, 68, 68, 0.12); color: #ef4444; }
 .txn-type-badge.bonus { background: rgba(245, 158, 11, 0.12); color: #f59e0b; }
 
+.txn-filter-select {
+    background: var(--bg-card);
+    border: 1px solid var(--border-subtle);
+    color: var(--text-secondary);
+    font-family: inherit;
+    font-size: 12px;
+    font-weight: 600;
+    padding: 6px 10px;
+    border-radius: var(--radius-md);
+    cursor: pointer;
+}
+
+.txn-export-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    border: 1px solid var(--border-subtle);
+    background: transparent;
+    color: var(--text-secondary);
+    font-family: inherit;
+    font-size: 12px;
+    font-weight: 700;
+    padding: 6px 12px;
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    transition: all var(--transition);
+    white-space: nowrap;
+}
+
+.txn-export-btn:hover {
+    color: #ffffff;
+    background: #17716A;
+    border-color: #17716A;
+}
+
 .empty-row {
     text-align: center;
     color: var(--text-muted);
@@ -274,6 +590,10 @@
 /* ---------- Responsive ---------- */
 @media (max-width: 900px) {
     .reports-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .quick-links-row {
         grid-template-columns: 1fr;
     }
 }
@@ -288,6 +608,10 @@
         width: 100%;
     }
 
+    .month-filter-select {
+        width: 100%;
+    }
+
     .period-btn {
         flex: 1;
         text-align: center;
@@ -295,6 +619,16 @@
 
     .chart-wrap {
         height: 220px;
+    }
+
+    .dash-card-header {
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+
+    .card-header-actions {
+        width: 100%;
+        justify-content: space-between;
     }
 }
 

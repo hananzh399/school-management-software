@@ -1,13 +1,17 @@
 /**
  * EDUFLOW PRO - REPORTS & ANALYTICS
  * Reads the same LocalStorage data sources used by the rest of the app
- * (fee payments, expenses, bonuses, fines, attendance marks) and renders
- * period-based charts (Week / Month / Year) + a recent transactions feed.
+ * (fee payments, expenses, bonuses, fines, attendance marks, staff records)
+ * and renders period-based charts (Week / Month / Year), cross-module
+ * quick links, class-level breakdowns, and a recent transactions feed.
  * No other page's data is modified — this page is read-only.
  */
 
 let currentPeriod = 'month';
-let charts = { revExp: null, attendance: null, expenseBreak: null, feeStatus: null };
+let currentMonthValue = ''; // 'YYYY-MM', set in initMonthFilter()
+let currentTxnFilter = 'all';
+let allPeriodTxnRows = []; // full (unsliced) set of transactions for the active period+filter, used by CSV export
+let charts = { revExp: null, attendance: null, expenseBreak: null, feeStatus: null, classPerf: null };
 
 document.addEventListener('DOMContentLoaded', () => {
     initTheme();
@@ -15,6 +19,8 @@ document.addEventListener('DOMContentLoaded', () => {
     initNavSearch();
     initDate();
     initPeriodSwitch();
+    initMonthFilter();
+    initTxnControls();
     renderReports();
 
     // Live-refresh if data changes in another tab, same pattern as main.js
@@ -112,8 +118,94 @@ function initPeriodSwitch() {
         wrap.querySelectorAll('.period-btn').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
         currentPeriod = btn.dataset.period;
+        updateMonthFilterVisibility();
         renderReports();
     });
+    updateMonthFilterVisibility();
+}
+
+function updateMonthFilterVisibility() {
+    const sel = document.getElementById('month-filter');
+    if (sel) sel.style.display = currentPeriod === 'month' ? '' : 'none';
+}
+
+/* ============================================
+   MONTH FILTER (populates last 12 months, most recent first)
+   ============================================ */
+function initMonthFilter() {
+    const sel = document.getElementById('month-filter');
+    if (!sel) return;
+
+    const now = new Date();
+    const options = [];
+    for (let i = 0; i < 12; i++) {
+        const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+        const value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+        const label = d.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+        options.push({ value, label });
+    }
+
+    currentMonthValue = options[0].value; // current month by default
+    sel.innerHTML = options.map(o => `<option value="${o.value}">${o.label}</option>`).join('');
+    sel.value = currentMonthValue;
+
+    sel.addEventListener('change', () => {
+        currentMonthValue = sel.value;
+        renderReports();
+    });
+}
+
+/* ============================================
+   TRANSACTIONS: FILTER + EXPORT CONTROLS
+   ============================================ */
+function initTxnControls() {
+    const filterEl = document.getElementById('txn-filter');
+    if (filterEl) {
+        filterEl.addEventListener('change', () => {
+            currentTxnFilter = filterEl.value;
+            renderReports();
+        });
+    }
+
+    const exportBtn = document.getElementById('txn-export-btn');
+    if (exportBtn) {
+        exportBtn.addEventListener('click', exportTransactionsCSV);
+    }
+}
+
+function exportTransactionsCSV() {
+    if (!allPeriodTxnRows.length) {
+        alert('No transactions to export for the current period / filter.');
+        return;
+    }
+    const header = ['Date', 'Type', 'Description', 'Direction', 'Amount (RS)'];
+    const lines = [header.join(',')];
+    allPeriodTxnRows.forEach(r => {
+        const row = [
+            r.date.toLocaleDateString('en-CA'), // YYYY-MM-DD, unambiguous in CSV
+            r.typeLabel,
+            csvEscape(r.desc),
+            r.direction === 'in' ? 'Income' : 'Expense',
+            Math.round(r.amount)
+        ];
+        lines.push(row.join(','));
+    });
+    const csvContent = lines.join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `transactions-${currentPeriod}-${toDateKey(new Date())}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+}
+
+function csvEscape(str) {
+    const s = str == null ? '' : String(str);
+    if (/[",\n]/.test(s)) return '"' + s.replace(/"/g, '""') + '"';
+    return s;
 }
 
 /* ============================================
@@ -201,46 +293,97 @@ function getAttendanceForDate(dateKey) {
 }
 
 /* ============================================
-   PERIOD BUCKETS
+   CLASS-LEVEL ATTENDANCE READER
+   Attendance is stored per class per day as
+   eduflow_att_<date>_<className> — the class name
+   is the tail of the key itself.
+   ============================================ */
+function getClassAttendanceForRange(buckets) {
+    const dateKeys = new Set();
+    buckets.forEach(b => b.days.forEach(d => dateKeys.add(toDateKey(d))));
+
+    const map = {}; // className -> { present, total }
+    dateKeys.forEach(dateKey => {
+        const prefix = 'eduflow_att_' + dateKey + '_';
+        for (let key in localStorage) {
+            if (!key.startsWith(prefix)) continue;
+            const className = key.slice(prefix.length);
+            try {
+                const payload = JSON.parse(localStorage.getItem(key));
+                if (!payload || !payload.records) continue;
+                if (!map[className]) map[className] = { present: 0, total: 0 };
+                Object.values(payload.records).forEach(r => {
+                    map[className].total++;
+                    if (r.status === 'present') map[className].present++;
+                });
+            } catch (e) { /* skip malformed */ }
+        }
+    });
+    return map;
+}
+
+/* ============================================
+   PERIOD BUCKETS (calendar-accurate)
    ============================================ */
 function toDateKey(d) { return d.toISOString().slice(0, 10); }
 
-function getBuckets(period) {
+function getBuckets(period, monthValue) {
     const buckets = [];
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
     if (period === 'week') {
-        for (let i = 6; i >= 0; i--) {
-            const d = new Date(today);
-            d.setDate(d.getDate() - i);
+        // Calendar week (Mon–Sun) containing today, not a trailing 7-day window.
+        const dow = today.getDay(); // 0 = Sun ... 6 = Sat
+        const diffToMonday = (dow === 0 ? -6 : 1 - dow);
+        const monday = new Date(today);
+        monday.setDate(monday.getDate() + diffToMonday);
+        for (let i = 0; i < 7; i++) {
+            const d = new Date(monday);
+            d.setDate(d.getDate() + i);
             const end = new Date(d); end.setHours(23, 59, 59, 999);
             buckets.push({ label: d.toLocaleDateString('en-US', { weekday: 'short' }), start: new Date(d), end, days: [new Date(d)] });
         }
-    } else if (period === 'month') {
-        for (let i = 3; i >= 0; i--) {
-            const end = new Date(today); end.setDate(end.getDate() - i * 7);
-            const start = new Date(end); start.setDate(start.getDate() - 6);
-            const endOfDay = new Date(end); endOfDay.setHours(23, 59, 59, 999);
-            const days = [];
-            for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) days.push(new Date(d));
-            buckets.push({ label: `Week ${4 - i}`, start, end: endOfDay, days });
+    } else { // month — the specific calendar month picked in the month filter (defaults to current month)
+        let year = today.getFullYear(), month = today.getMonth();
+        if (monthValue) {
+            const [y, m] = monthValue.split('-').map(Number);
+            if (!isNaN(y) && !isNaN(m)) { year = y; month = m - 1; }
         }
-    } else { // year
-        for (let i = 11; i >= 0; i--) {
-            const d = new Date(today.getFullYear(), today.getMonth() - i, 1);
-            const start = new Date(d.getFullYear(), d.getMonth(), 1);
-            const end = new Date(d.getFullYear(), d.getMonth() + 1, 0, 23, 59, 59, 999);
+        const monthStart = new Date(year, month, 1);
+        const monthEnd = new Date(year, month + 1, 0, 23, 59, 59, 999);
+        let weekIdx = 1;
+        for (let d = new Date(monthStart); d <= monthEnd; d.setDate(d.getDate() + 7)) {
+            const bStart = new Date(d);
+            let bEnd = new Date(d); bEnd.setDate(bEnd.getDate() + 6);
+            if (bEnd > monthEnd) bEnd = new Date(monthEnd);
+            const bEndOfDay = new Date(bEnd); bEndOfDay.setHours(23, 59, 59, 999);
             const days = [];
-            for (let day = new Date(start); day <= end && day <= today; day.setDate(day.getDate() + 1)) days.push(new Date(day));
-            buckets.push({ label: d.toLocaleDateString('en-US', { month: 'short' }), start, end, days });
+            for (let day = new Date(bStart); day <= bEnd; day.setDate(day.getDate() + 1)) days.push(new Date(day));
+            buckets.push({ label: `Week ${weekIdx}`, start: bStart, end: bEndOfDay, days });
+            weekIdx++;
         }
     }
     return buckets;
 }
 
+/**
+ * Returns the immediately-preceding period of equal length, used for
+ * period-over-period trend comparisons (e.g. this week vs last week).
+ */
+function getPreviousRange(periodStart, periodEnd) {
+    const durationMs = periodEnd.getTime() - periodStart.getTime() + 1;
+    const prevEnd = new Date(periodStart.getTime() - 1);
+    const prevStart = new Date(periodStart.getTime() - durationMs);
+    return { start: prevStart, end: prevEnd };
+}
+
 function sumInRange(events, start, end) {
     return events.reduce((sum, e) => (e.date >= start && e.date <= end) ? sum + e.amount : sum, 0);
+}
+
+function countDaysInRange(start, end) {
+    return Math.max(1, Math.round((end.getTime() - start.getTime()) / 86400000) + 1);
 }
 
 /* ============================================
@@ -251,12 +394,91 @@ function cssVar(name) {
 }
 
 /* ============================================
+   CHART RENDER SAFETY WRAPPER
+   Prevents one bad chart (bad data, DOM not ready, etc.) from throwing
+   and silently skipping every chart rendered after it. Also surfaces a
+   visible message — instead of a blank canvas — if Chart.js itself
+   never loaded (e.g. CDN blocked by network/ad-blocker).
+   ============================================ */
+let chartLibWarningShown = false;
+function safeRenderChart(name, fn) {
+    if (typeof Chart === 'undefined') {
+        console.error(`[Reports] Chart.js is not loaded — cannot render "${name}".`);
+        if (!chartLibWarningShown) {
+            chartLibWarningShown = true;
+            document.querySelectorAll('.chart-wrap').forEach(wrap => {
+                if (wrap.querySelector('canvas')) {
+                    const warn = document.createElement('p');
+                    warn.className = 'chart-empty-note';
+                    warn.style.display = 'block';
+                    warn.textContent = 'Charts failed to load (Chart.js did not load — check your network/ad-blocker and refresh).';
+                    wrap.after(warn);
+                }
+            });
+        }
+        return;
+    }
+    try {
+        fn();
+    } catch (err) {
+        console.error(`[Reports] Failed to render chart "${name}":`, err);
+    }
+}
+
+function setText(id, val) {
+    const el = document.getElementById(id);
+    if (el) el.textContent = val;
+}
+
+/* ============================================
+   TREND BADGE HELPER
+   goodDirection: 'up' (higher = better, e.g. revenue) or 'down' (lower = better, e.g. expenses)
+   ============================================ */
+function renderTrendBadge(elId, current, previous, goodDirection) {
+    const el = document.getElementById(elId);
+    if (!el) return;
+
+    if (previous <= 0 && current <= 0) { el.textContent = ''; el.className = 'stat-pill-trend'; return; }
+    if (previous <= 0 && current > 0) {
+        el.innerHTML = '<i class="fas fa-arrow-up"></i> New';
+        el.className = 'stat-pill-trend ' + (goodDirection === 'up' ? 'trend-up' : 'trend-down');
+        return;
+    }
+
+    const pctChange = ((current - previous) / Math.abs(previous)) * 100;
+    const rounded = Math.round(Math.abs(pctChange));
+    const increased = pctChange > 0.5;
+    const decreased = pctChange < -0.5;
+
+    if (!increased && !decreased) {
+        el.innerHTML = '<i class="fas fa-minus"></i> Flat';
+        el.className = 'stat-pill-trend trend-flat';
+        return;
+    }
+
+    const isGood = (increased && goodDirection === 'up') || (decreased && goodDirection === 'down');
+    el.innerHTML = `<i class="fas fa-arrow-${increased ? 'up' : 'down'}"></i> ${rounded}%`;
+    el.className = 'stat-pill-trend ' + (isGood ? 'trend-up' : 'trend-down');
+}
+
+/* ============================================
    MAIN RENDER
    ============================================ */
 function renderReports() {
-    const buckets = getBuckets(currentPeriod);
+    const buckets = getBuckets(currentPeriod, currentMonthValue);
     const periodStart = buckets[0].start;
     const periodEnd = buckets[buckets.length - 1].end;
+    const prevRange = getPreviousRange(periodStart, periodEnd);
+
+    const labelEl = document.getElementById('period-range-label');
+    if (labelEl) {
+        if (currentPeriod === 'week') {
+            labelEl.textContent = '· ' + periodStart.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) +
+                ' – ' + periodEnd.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+        } else {
+            labelEl.textContent = '· ' + periodStart.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+        }
+    }
 
     const feePayments = getAllFeePayments();
     const otherExpenses = getAllOtherExpenses();
@@ -264,7 +486,14 @@ function renderReports() {
     const studentFines = getAllStudentFines();
     const staffFines = getAllStaffFines();
 
-    // ---------- Per-bucket revenue / expense series ----------
+    // ---------- Staff payroll (used to prorate salary cost into the period) ----------
+    const db = safeParse('eduflow-db', { staff: { Teaching: [], 'Non-Teaching': [] } });
+    const teaching = (db.staff && db.staff['Teaching']) || [];
+    const nonTeaching = (db.staff && db.staff['Non-Teaching']) || [];
+    const totalSalaries = [...teaching, ...nonTeaching].reduce((s, m) => s + (Number(m.salary) || 0), 0);
+    const dailySalaryRate = totalSalaries / 30; // monthly payroll prorated to a daily rate
+
+    // ---------- Per-bucket revenue / expense series (salary-aware) ----------
     const revenueSeries = buckets.map(b =>
         sumInRange(feePayments, b.start, b.end) +
         sumInRange(studentFines, b.start, b.end) +
@@ -272,12 +501,25 @@ function renderReports() {
     );
     const expenseSeries = buckets.map(b =>
         sumInRange(otherExpenses, b.start, b.end) +
-        sumInRange(staffBonus, b.start, b.end)
+        sumInRange(staffBonus, b.start, b.end) +
+        dailySalaryRate * b.days.length
     );
 
     const periodRevenue = revenueSeries.reduce((a, b) => a + b, 0);
     const periodExpense = expenseSeries.reduce((a, b) => a + b, 0);
     const netFlow = periodRevenue - periodExpense;
+
+    // ---------- Previous-period comparison (trend badges) ----------
+    const prevRevenue =
+        sumInRange(feePayments, prevRange.start, prevRange.end) +
+        sumInRange(studentFines, prevRange.start, prevRange.end) +
+        sumInRange(staffFines, prevRange.start, prevRange.end);
+    const prevDays = countDaysInRange(prevRange.start, prevRange.end);
+    const prevExpense =
+        sumInRange(otherExpenses, prevRange.start, prevRange.end) +
+        sumInRange(staffBonus, prevRange.start, prevRange.end) +
+        dailySalaryRate * prevDays;
+    const prevNetFlow = prevRevenue - prevExpense;
 
     setText('rp-total-revenue', 'RS ' + Math.round(periodRevenue).toLocaleString());
     setText('rp-total-expense', 'RS ' + Math.round(periodExpense).toLocaleString());
@@ -285,6 +527,10 @@ function renderReports() {
 
     const netFlowEl = document.getElementById('rp-net-flow');
     if (netFlowEl) netFlowEl.style.color = netFlow >= 0 ? '#10b981' : '#ef4444';
+
+    renderTrendBadge('rp-revenue-trend', periodRevenue, prevRevenue, 'up');
+    renderTrendBadge('rp-expense-trend', periodExpense, prevExpense, 'down');
+    renderTrendBadge('rp-netflow-trend', netFlow, prevNetFlow, 'up');
 
     const trendBadge = document.getElementById('rp-trend-badge');
     if (trendBadge) {
@@ -325,11 +571,24 @@ function renderReports() {
         : 0;
     setText('rp-avg-attendance', avgOverall + '%');
 
+    // Previous-period attendance average, for the trend badge
+    let prevAvgOverall = 0;
+    {
+        const prevDayList = [];
+        for (let d = new Date(prevRange.start); d <= prevRange.end; d.setDate(d.getDate() + 1)) prevDayList.push(new Date(d));
+        let pSumS = 0, pCountS = 0, pSumSt = 0, pCountSt = 0;
+        prevDayList.forEach(day => {
+            const rec = getAttendanceForDate(toDateKey(day));
+            if (rec.totalStudents > 0) { pSumS += Math.round((rec.presentStudents / rec.totalStudents) * 100); pCountS++; }
+            if (rec.totalStaff > 0) { pSumSt += Math.round((rec.presentStaff / rec.totalStaff) * 100); pCountSt++; }
+        });
+        const pAvgS = pCountS ? pSumS / pCountS : 0;
+        const pAvgSt = pCountSt ? pSumSt / pCountSt : 0;
+        prevAvgOverall = (pCountS || pCountSt) ? Math.round((pAvgS * (pCountS ? 1 : 0) + pAvgSt * (pCountSt ? 1 : 0)) / ((pCountS ? 1 : 0) + (pCountSt ? 1 : 0) || 1)) : 0;
+    }
+    renderTrendBadge('rp-attendance-trend', avgOverall, prevAvgOverall, 'up');
+
     // ---------- Expense breakdown (whole-of-record totals, matches Fees & Finance) ----------
-    const db = safeParse('eduflow-db', { staff: { Teaching: [], 'Non-Teaching': [] } });
-    const teaching = (db.staff && db.staff['Teaching']) || [];
-    const nonTeaching = (db.staff && db.staff['Non-Teaching']) || [];
-    const totalSalaries = [...teaching, ...nonTeaching].reduce((s, m) => s + (Number(m.salary) || 0), 0);
     const totalBonusAll = staffBonus.reduce((s, b) => s + b.amount, 0);
     const totalOtherAll = otherExpenses.reduce((s, e) => s + e.amount, 0);
 
@@ -342,24 +601,137 @@ function renderReports() {
     });
     const pending = Math.max(0, expected - collected);
 
-    // ---------- Render charts ----------
-    renderRevExpChart(buckets.map(b => b.label), revenueSeries, expenseSeries);
-    renderAttendanceChart(buckets.map(b => b.label), attendanceStudentSeries, attendanceStaffSeries);
-    renderExpenseBreakdown(totalSalaries, totalBonusAll, totalOtherAll);
-    renderFeeStatus(collected, pending);
+    // ---------- Render core charts ----------
+    // Each call is isolated: if one chart throws (bad data, DOM timing, etc.)
+    // it's logged and skipped instead of silently halting every chart after it.
+    safeRenderChart('Revenue vs Expenses', () => renderRevExpChart(buckets.map(b => b.label), revenueSeries, expenseSeries));
+    safeRenderChart('Attendance Trend', () => renderAttendanceChart(buckets.map(b => b.label), attendanceStudentSeries, attendanceStaffSeries));
+    safeRenderChart('Expense Breakdown', () => renderExpenseBreakdown(totalSalaries, totalBonusAll, totalOtherAll));
+    safeRenderChart('Fee Collection Status', () => renderFeeStatus(collected, pending));
 
     document.getElementById('chart-revenue-expense-empty').style.display =
         (periodRevenue === 0 && periodExpense === 0) ? 'block' : 'none';
     document.getElementById('chart-attendance-trend-empty').style.display =
         attendanceHasAnyData ? 'none' : 'block';
 
+    // ---------- Class Performance ----------
+    safeRenderChart('Class Performance', () => renderClassPerformance(buckets, students));
+
+    // ---------- Top Pending Fees ----------
+    renderPendingFees(students);
+
+    // ---------- Payroll snapshot ----------
+    const periodBonus = sumInRange(staffBonus, periodStart, periodEnd);
+    setText('pr-teaching-count', teaching.length);
+    setText('pr-nonteaching-count', nonTeaching.length);
+    setText('pr-monthly-payroll', 'RS ' + Math.round(totalSalaries).toLocaleString());
+    setText('pr-period-bonus', 'RS ' + Math.round(periodBonus).toLocaleString());
+
+    // ---------- Quick links row ----------
+    renderQuickLinks(students);
+
     // ---------- Transactions table ----------
     renderTransactions(feePayments, otherExpenses, staffBonus, studentFines, staffFines, periodStart, periodEnd);
 }
 
-function setText(id, val) {
-    const el = document.getElementById(id);
-    if (el) el.textContent = val;
+/* ============================================
+   CHART THEME
+   A palette derived from the app's own brand teal (#17716A)
+   instead of generic off-the-shelf chart colors, plus shared
+   gradient/tooltip helpers so every chart feels like one system.
+   ============================================ */
+const CHART_PALETTE = {
+    teal: '#17716A',       // brand primary — revenue, collected, present
+    tealLight: '#2dd4bf',  // brand accent — highlights, secondary teal series
+    rose: '#f43f5e',       // expenses, pending-negative
+    amber: '#f59e0b',      // staff / bonuses
+    indigo: '#6366f1',     // tertiary contrast series
+    slate: '#94a3b8'       // neutral / empty state
+};
+
+function chartTheme() {
+    return {
+        grid: cssVar('--border-subtle') || 'rgba(255,255,255,0.06)',
+        text: cssVar('--text-secondary') || '#8892a8',
+        cardBg: cssVar('--bg-card') || '#161b22',
+        textPrimary: cssVar('--text-primary') || '#e6edf3'
+    };
+}
+
+function hexToRgba(hex, alpha) {
+    const h = hex.replace('#', '');
+    const r = parseInt(h.substring(0, 2), 16), g = parseInt(h.substring(2, 4), 16), b = parseInt(h.substring(4, 6), 16);
+    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
+/** Vertical gradient for bar fills — solid at top, fading toward the baseline. */
+function barGradient(color) {
+    return (context) => {
+        const { chart } = context;
+        const { ctx, chartArea } = chart;
+        if (!chartArea) return hexToRgba(color, 0.85);
+        const gradient = ctx.createLinearGradient(0, chartArea.top, 0, chartArea.bottom);
+        gradient.addColorStop(0, hexToRgba(color, 0.95));
+        gradient.addColorStop(1, hexToRgba(color, 0.55));
+        return gradient;
+    };
+}
+
+/** Soft vertical gradient for line-chart area fills. */
+function lineFillGradient(color) {
+    return (context) => {
+        const { chart } = context;
+        const { ctx, chartArea } = chart;
+        if (!chartArea) return hexToRgba(color, 0.15);
+        const gradient = ctx.createLinearGradient(0, chartArea.top, 0, chartArea.bottom);
+        gradient.addColorStop(0, hexToRgba(color, 0.32));
+        gradient.addColorStop(1, hexToRgba(color, 0.02));
+        return gradient;
+    };
+}
+
+/** Shared tooltip look — rounded card, brand accent border, point-style swatches. */
+function tooltipStyle(theme) {
+    return {
+        enabled: true,
+        backgroundColor: theme.cardBg,
+        titleColor: theme.textPrimary,
+        bodyColor: theme.text,
+        borderColor: hexToRgba(CHART_PALETTE.teal, 0.4),
+        borderWidth: 1,
+        cornerRadius: 10,
+        padding: 10,
+        boxPadding: 4,
+        displayColors: true,
+        usePointStyle: true,
+        titleFont: { family: 'Inter', size: 12, weight: '700' },
+        bodyFont: { family: 'Inter', size: 12, weight: '600' }
+    };
+}
+
+/** Draws a total value + label centered inside a doughnut's cutout. */
+function centerTextPlugin(getLines) {
+    return {
+        id: 'centerText',
+        afterDraw(chart) {
+            const { ctx, chartArea } = chart;
+            if (!chartArea) return;
+            const lines = getLines();
+            if (!lines) return;
+            const cx = (chartArea.left + chartArea.right) / 2;
+            const cy = (chartArea.top + chartArea.bottom) / 2;
+            ctx.save();
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillStyle = lines.valueColor;
+            ctx.font = "800 17px Inter, sans-serif";
+            ctx.fillText(lines.value, cx, cy - 9);
+            ctx.fillStyle = lines.labelColor;
+            ctx.font = "600 10px Inter, sans-serif";
+            ctx.fillText(lines.label, cx, cy + 11);
+            ctx.restore();
+        }
+    };
 }
 
 /* ============================================
@@ -369,8 +741,7 @@ function renderRevExpChart(labels, revenue, expense) {
     const ctx = document.getElementById('chart-revenue-expense');
     if (!ctx || typeof Chart === 'undefined') return;
 
-    const gridColor = cssVar('--border-subtle') || 'rgba(255,255,255,0.06)';
-    const textColor = cssVar('--text-secondary') || '#8892a8';
+    const theme = chartTheme();
 
     if (charts.revExp) charts.revExp.destroy();
     charts.revExp = new Chart(ctx, {
@@ -378,20 +749,22 @@ function renderRevExpChart(labels, revenue, expense) {
         data: {
             labels,
             datasets: [
-                { label: 'Revenue', data: revenue, backgroundColor: '#10b981', borderRadius: 6, maxBarThickness: 34 },
-                { label: 'Expenses', data: expense, backgroundColor: '#ef4444', borderRadius: 6, maxBarThickness: 34 }
+                { label: 'Revenue', data: revenue, backgroundColor: barGradient(CHART_PALETTE.teal), borderRadius: 8, borderSkipped: false, maxBarThickness: 30, categoryPercentage: 0.62, barPercentage: 0.9 },
+                { label: 'Expenses', data: expense, backgroundColor: barGradient(CHART_PALETTE.rose), borderRadius: 8, borderSkipped: false, maxBarThickness: 30, categoryPercentage: 0.62, barPercentage: 0.9 }
             ]
         },
         options: {
             responsive: true,
             maintainAspectRatio: false,
+            animation: { duration: 650, easing: 'easeOutQuart' },
+            interaction: { mode: 'index', intersect: false },
             plugins: {
-                legend: { labels: { color: textColor, font: { family: 'Inter', size: 11.5, weight: '600' }, usePointStyle: true, pointStyle: 'circle' } },
-                tooltip: { callbacks: { label: (c) => ` ${c.dataset.label}: RS ${Number(c.parsed.y).toLocaleString()}` } }
+                legend: { labels: { color: theme.text, font: { family: 'Inter', size: 11.5, weight: '600' }, usePointStyle: true, pointStyle: 'circle', padding: 16 } },
+                tooltip: { ...tooltipStyle(theme), callbacks: { label: (c) => ` ${c.dataset.label}: RS ${Math.round(c.parsed.y).toLocaleString()}` } }
             },
             scales: {
-                x: { grid: { display: false }, ticks: { color: textColor, font: { size: 11 } } },
-                y: { grid: { color: gridColor }, ticks: { color: textColor, font: { size: 11 }, callback: v => v >= 1000 ? (v / 1000) + 'k' : v } }
+                x: { grid: { display: false }, ticks: { color: theme.text, font: { size: 11 } } },
+                y: { grid: { color: theme.grid }, border: { display: false }, ticks: { color: theme.text, font: { size: 11 }, callback: v => v >= 1000 ? (v / 1000) + 'k' : v } }
             }
         }
     });
@@ -404,8 +777,7 @@ function renderAttendanceChart(labels, studentPct, staffPct) {
     const ctx = document.getElementById('chart-attendance-trend');
     if (!ctx || typeof Chart === 'undefined') return;
 
-    const gridColor = cssVar('--border-subtle') || 'rgba(255,255,255,0.06)';
-    const textColor = cssVar('--text-secondary') || '#8892a8';
+    const theme = chartTheme();
 
     if (charts.attendance) charts.attendance.destroy();
     charts.attendance = new Chart(ctx, {
@@ -414,27 +786,101 @@ function renderAttendanceChart(labels, studentPct, staffPct) {
             labels,
             datasets: [
                 {
-                    label: 'Students', data: studentPct, borderColor: '#3b82f6',
-                    backgroundColor: 'rgba(59,130,246,0.12)', fill: true, tension: 0.35,
-                    spanGaps: true, pointRadius: 3, pointBackgroundColor: '#3b82f6'
+                    label: 'Students', data: studentPct, borderColor: CHART_PALETTE.teal, borderWidth: 2.5,
+                    backgroundColor: lineFillGradient(CHART_PALETTE.teal), fill: true, tension: 0.4,
+                    spanGaps: true, pointRadius: 3, pointHoverRadius: 6, pointBackgroundColor: theme.cardBg,
+                    pointBorderColor: CHART_PALETTE.teal, pointBorderWidth: 2
                 },
                 {
-                    label: 'Staff', data: staffPct, borderColor: '#f59e0b',
-                    backgroundColor: 'rgba(245,158,11,0.12)', fill: true, tension: 0.35,
-                    spanGaps: true, pointRadius: 3, pointBackgroundColor: '#f59e0b'
+                    label: 'Staff', data: staffPct, borderColor: CHART_PALETTE.amber, borderWidth: 2.5,
+                    backgroundColor: lineFillGradient(CHART_PALETTE.amber), fill: true, tension: 0.4,
+                    spanGaps: true, pointRadius: 3, pointHoverRadius: 6, pointBackgroundColor: theme.cardBg,
+                    pointBorderColor: CHART_PALETTE.amber, pointBorderWidth: 2
                 }
             ]
         },
         options: {
             responsive: true,
             maintainAspectRatio: false,
+            animation: { duration: 650, easing: 'easeOutQuart' },
+            interaction: { mode: 'index', intersect: false },
             plugins: {
-                legend: { labels: { color: textColor, font: { family: 'Inter', size: 11.5, weight: '600' }, usePointStyle: true, pointStyle: 'circle' } },
-                tooltip: { callbacks: { label: (c) => ` ${c.dataset.label}: ${c.parsed.y === null ? 'No data' : c.parsed.y + '%'}` } }
+                legend: { labels: { color: theme.text, font: { family: 'Inter', size: 11.5, weight: '600' }, usePointStyle: true, pointStyle: 'circle', padding: 16 } },
+                tooltip: { ...tooltipStyle(theme), callbacks: { label: (c) => ` ${c.dataset.label}: ${c.parsed.y === null ? 'No data' : c.parsed.y + '%'}` } }
             },
             scales: {
-                x: { grid: { display: false }, ticks: { color: textColor, font: { size: 11 } } },
-                y: { min: 0, max: 100, grid: { color: gridColor }, ticks: { color: textColor, font: { size: 11 }, callback: v => v + '%' } }
+                x: { grid: { display: false }, ticks: { color: theme.text, font: { size: 11 } } },
+                y: { min: 0, max: 100, grid: { color: theme.grid }, border: { display: false }, ticks: { color: theme.text, font: { size: 11 }, callback: v => v + '%' } }
+            }
+        }
+    });
+}
+
+/* ============================================
+   CHART: Class Performance (grouped bar)
+   Attendance % (period) vs Fee Collected % (all-time)
+   ============================================ */
+function renderClassPerformance(buckets, students) {
+    const attMap = getClassAttendanceForRange(buckets);
+
+    const feeMap = {}; // className -> { expected, collected }
+    students.forEach(s => {
+        const cls = s.studentClass || 'Unassigned';
+        if (!feeMap[cls]) feeMap[cls] = { expected: 0, collected: 0 };
+        feeMap[cls].expected += (Number(s.standardFee) || 0) + (Number(s.transportFee) || 0);
+        (s.feePayments || []).forEach(p => { feeMap[cls].collected += Number(p.amount) || 0; });
+    });
+
+    const classNames = Array.from(new Set([...Object.keys(attMap), ...Object.keys(feeMap)]))
+        .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+
+    const badge = document.getElementById('rp-class-count-badge');
+    if (badge) badge.textContent = `${classNames.length} class${classNames.length === 1 ? '' : 'es'}`;
+
+    const emptyNote = document.getElementById('chart-class-performance-empty');
+    const ctx = document.getElementById('chart-class-performance');
+    if (!ctx || typeof Chart === 'undefined') return;
+
+    if (classNames.length === 0) {
+        if (emptyNote) emptyNote.style.display = 'block';
+        if (charts.classPerf) { charts.classPerf.destroy(); charts.classPerf = null; }
+        return;
+    }
+    if (emptyNote) emptyNote.style.display = 'none';
+
+    const attendanceData = classNames.map(c => {
+        const a = attMap[c];
+        return a && a.total > 0 ? Math.round((a.present / a.total) * 100) : 0;
+    });
+    const feeData = classNames.map(c => {
+        const f = feeMap[c];
+        return f && f.expected > 0 ? Math.round((f.collected / f.expected) * 100) : 0;
+    });
+
+    const theme = chartTheme();
+
+    if (charts.classPerf) charts.classPerf.destroy();
+    charts.classPerf = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: classNames,
+            datasets: [
+                { label: 'Attendance % (period)', data: attendanceData, backgroundColor: barGradient(CHART_PALETTE.indigo), borderRadius: 6, borderSkipped: false, maxBarThickness: 24 },
+                { label: 'Fee Collected % (all-time)', data: feeData, backgroundColor: barGradient(CHART_PALETTE.teal), borderRadius: 6, borderSkipped: false, maxBarThickness: 24 }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            animation: { duration: 650, easing: 'easeOutQuart' },
+            interaction: { mode: 'index', intersect: false },
+            plugins: {
+                legend: { labels: { color: theme.text, font: { family: 'Inter', size: 11.5, weight: '600' }, usePointStyle: true, pointStyle: 'circle', padding: 16 } },
+                tooltip: { ...tooltipStyle(theme), callbacks: { label: (c) => ` ${c.dataset.label}: ${c.parsed.y}%` } }
+            },
+            scales: {
+                x: { grid: { display: false }, ticks: { color: theme.text, font: { size: 11 } } },
+                y: { min: 0, max: 100, grid: { color: theme.grid }, border: { display: false }, ticks: { color: theme.text, font: { size: 11 }, callback: v => v + '%' } }
             }
         }
     });
@@ -447,24 +893,32 @@ function renderExpenseBreakdown(salaries, bonus, other) {
     const ctx = document.getElementById('chart-expense-breakdown');
     if (!ctx || typeof Chart === 'undefined') return;
 
+    const theme = chartTheme();
     const data = [salaries, bonus, other];
     const labels = ['Base Salaries', 'Staff Bonuses', 'Other Expenses'];
-    const colors = ['#3b82f6', '#f59e0b', '#ef4444'];
+    const colors = [CHART_PALETTE.indigo, CHART_PALETTE.amber, CHART_PALETTE.rose];
     const total = data.reduce((a, b) => a + b, 0);
 
     if (charts.expenseBreak) charts.expenseBreak.destroy();
     charts.expenseBreak = new Chart(ctx, {
         type: 'doughnut',
-        data: { labels, datasets: [{ data: total > 0 ? data : [1, 0, 0], backgroundColor: total > 0 ? colors : ['rgba(148,163,184,0.25)'], borderWidth: 0 }] },
+        data: { labels, datasets: [{ data: total > 0 ? data : [1, 0, 0], backgroundColor: total > 0 ? colors : [hexToRgba(CHART_PALETTE.slate, 0.25)], borderWidth: 3, borderColor: theme.cardBg, hoverOffset: 6, borderRadius: 4 }] },
         options: {
             responsive: true,
             maintainAspectRatio: false,
-            cutout: '68%',
+            cutout: '72%',
+            animation: { duration: 650, easing: 'easeOutQuart' },
             plugins: {
                 legend: { display: false },
-                tooltip: { enabled: total > 0, callbacks: { label: (c) => ` RS ${Number(c.raw).toLocaleString()}` } }
+                tooltip: { ...tooltipStyle(theme), enabled: total > 0, callbacks: { label: (c) => ` RS ${Number(c.raw).toLocaleString()}` } }
             }
-        }
+        },
+        plugins: [centerTextPlugin(() => ({
+            value: total > 0 ? 'RS ' + (total >= 1000 ? Math.round(total / 1000) + 'k' : Math.round(total)) : '—',
+            label: 'Total Spend',
+            valueColor: theme.textPrimary,
+            labelColor: theme.text
+        }))]
     });
 
     renderLegend('legend-expense-breakdown', labels, data, colors, total);
@@ -477,24 +931,33 @@ function renderFeeStatus(collected, pending) {
     const ctx = document.getElementById('chart-fee-status');
     if (!ctx || typeof Chart === 'undefined') return;
 
+    const theme = chartTheme();
     const data = [collected, pending];
     const labels = ['Collected', 'Pending'];
-    const colors = ['#10b981', '#f59e0b'];
+    const colors = [CHART_PALETTE.teal, CHART_PALETTE.amber];
     const total = data.reduce((a, b) => a + b, 0);
+    const collectedPct = total > 0 ? Math.round((collected / total) * 100) : 0;
 
     if (charts.feeStatus) charts.feeStatus.destroy();
     charts.feeStatus = new Chart(ctx, {
         type: 'doughnut',
-        data: { labels, datasets: [{ data: total > 0 ? data : [1, 0], backgroundColor: total > 0 ? colors : ['rgba(148,163,184,0.25)'], borderWidth: 0 }] },
+        data: { labels, datasets: [{ data: total > 0 ? data : [1, 0], backgroundColor: total > 0 ? colors : [hexToRgba(CHART_PALETTE.slate, 0.25)], borderWidth: 3, borderColor: theme.cardBg, hoverOffset: 6, borderRadius: 4 }] },
         options: {
             responsive: true,
             maintainAspectRatio: false,
-            cutout: '68%',
+            cutout: '72%',
+            animation: { duration: 650, easing: 'easeOutQuart' },
             plugins: {
                 legend: { display: false },
-                tooltip: { enabled: total > 0, callbacks: { label: (c) => ` RS ${Number(c.raw).toLocaleString()}` } }
+                tooltip: { ...tooltipStyle(theme), enabled: total > 0, callbacks: { label: (c) => ` RS ${Number(c.raw).toLocaleString()}` } }
             }
-        }
+        },
+        plugins: [centerTextPlugin(() => ({
+            value: total > 0 ? collectedPct + '%' : '—',
+            label: 'Collected',
+            valueColor: theme.textPrimary,
+            labelColor: theme.text
+        }))]
     });
 
     renderLegend('legend-fee-status', labels, data, colors, total);
@@ -513,6 +976,89 @@ function renderLegend(elId, labels, data, colors, total) {
 }
 
 /* ============================================
+   TOP PENDING FEES LIST
+   ============================================ */
+function renderPendingFees(students) {
+    const list = document.getElementById('pending-fees-list');
+    if (!list) return;
+
+    const rows = students.map(s => {
+        const expected = (Number(s.standardFee) || 0) + (Number(s.transportFee) || 0);
+        const collected = (s.feePayments || []).reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
+        const pendingAmt = Math.max(0, expected - collected);
+        return {
+            name: s.fullName || 'Unnamed Student',
+            cls: `${s.studentClass || '—'}${s.section ? ' - ' + s.section : ''}`,
+            pending: pendingAmt
+        };
+    }).filter(r => r.pending > 0).sort((a, b) => b.pending - a.pending).slice(0, 5);
+
+    if (rows.length === 0) {
+        list.innerHTML = '<li class="pending-empty">No pending fees — everything is collected.</li>';
+        return;
+    }
+
+    list.innerHTML = rows.map(r => `
+        <li>
+            <span class="pending-name">
+                <strong>${escapeHtml(r.name)}</strong>
+                <span>${escapeHtml(r.cls)}</span>
+            </span>
+            <span class="pending-amount">RS ${Math.round(r.pending).toLocaleString()}</span>
+        </li>
+    `).join('');
+}
+
+/* ============================================
+   QUICK LINKS ROW (cross-module snapshot)
+   ============================================ */
+/**
+ * A student record may store its enrollment / dropout dates under different
+ * field names depending on how manage-students.js writes them. We try the
+ * common candidates in order and use whichever is present.
+ */
+function pickDate(obj, keys) {
+    for (const k of keys) {
+        if (obj && obj[k]) {
+            const d = new Date(obj[k]);
+            if (!isNaN(d)) return d;
+        }
+    }
+    return null;
+}
+
+function isDroppedStudent(s) {
+    const status = (s.status || s.enrollmentStatus || '').toString().toLowerCase();
+    return s.isDropped === true || s.dropped === true || status === 'dropped' || status === 'inactive';
+}
+
+function renderQuickLinks(students) {
+    const now = new Date();
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+
+    const addedThisMonth = students.filter(s => {
+        const d = pickDate(s, ['admissionDate', 'dateOfAdmission', 'joiningDate', 'enrollmentDate', 'dateAdded', 'createdAt']);
+        return d && d >= monthStart && d <= monthEnd;
+    }).length;
+    setText('ql-students-added-count', addedThisMonth);
+
+    const droppedThisMonth = students.filter(s => {
+        if (!isDroppedStudent(s)) return false;
+        const d = pickDate(s, ['dropDate', 'dateDropped', 'leftDate', 'deactivatedAt', 'statusChangedAt']);
+        return d ? (d >= monthStart && d <= monthEnd) : true; // no drop date on record: still count it
+    }).length;
+    setText('ql-students-dropped-count', droppedThisMonth);
+
+    const pendingCount = students.filter(s => {
+        const expected = (Number(s.standardFee) || 0) + (Number(s.transportFee) || 0);
+        const collected = (s.feePayments || []).reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
+        return expected - collected > 0;
+    }).length;
+    setText('ql-pending-count', pendingCount);
+}
+
+/* ============================================
    RECENT TRANSACTIONS TABLE
    ============================================ */
 function renderTransactions(feePayments, otherExpenses, staffBonus, studentFines, staffFines, periodStart, periodEnd) {
@@ -524,8 +1070,13 @@ function renderTransactions(feePayments, otherExpenses, staffBonus, studentFines
     otherExpenses.forEach(e => rows.push({ date: e.date, type: 'expense', typeLabel: 'Expense', desc: e.label, amount: e.amount, direction: 'out' }));
     staffBonus.forEach(e => rows.push({ date: e.date, type: 'bonus', typeLabel: 'Bonus Paid', desc: e.label, amount: e.amount, direction: 'out' }));
 
-    const inPeriod = rows.filter(r => r.date >= periodStart && r.date <= periodEnd);
+    let inPeriod = rows.filter(r => r.date >= periodStart && r.date <= periodEnd);
+    if (currentTxnFilter !== 'all') {
+        inPeriod = inPeriod.filter(r => r.type === currentTxnFilter);
+    }
     inPeriod.sort((a, b) => b.date - a.date);
+
+    allPeriodTxnRows = inPeriod; // full set, used by CSV export
     const shown = inPeriod.slice(0, 15);
 
     const tbody = document.getElementById('txn-tbody');

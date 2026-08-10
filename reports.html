@@ -103,45 +103,77 @@
         <section class="reports-toolbar">
             <div class="reports-title">
                 <h2><i class="fas fa-chart-pie"></i> Reports &amp; Analytics</h2>
-                <p>Expenses, payments &amp; attendance at a glance</p>
+                <p>Expenses, payments &amp; attendance at a glance <span id="period-range-label"></span></p>
             </div>
             <div class="period-switch" id="period-switch">
                 <button class="period-btn" data-period="week">This Week</button>
-                <button class="period-btn active" data-period="month">This Month</button>
-                <button class="period-btn" data-period="year">This Year</button>
+                <button class="period-btn active" data-period="month">By Month</button>
             </div>
+            <select id="month-filter" class="month-filter-select" aria-label="Select month"></select>
+        </section>
+
+        <!-- QUICK JUMP LINKS TO OTHER MODULES -->
+        <section class="quick-links-row" id="quick-links-row">
+            <a href="manage-students.html" class="quick-link-card">
+                <div class="ql-icon ql-students"><i class="fas fa-user-plus"></i></div>
+                <div class="ql-info">
+                    <span class="ql-value" id="ql-students-added-count">0</span>
+                    <span class="ql-label">Students Added This Month</span>
+                </div>
+                <i class="fas fa-arrow-right ql-arrow"></i>
+            </a>
+            <a href="manage-students.html" class="quick-link-card">
+                <div class="ql-icon ql-dropped"><i class="fas fa-user-minus"></i></div>
+                <div class="ql-info">
+                    <span class="ql-value" id="ql-students-dropped-count">0</span>
+                    <span class="ql-label">Students Dropped This Month</span>
+                </div>
+                <i class="fas fa-arrow-right ql-arrow"></i>
+            </a>
+            <a href="manage-finance.html" class="quick-link-card">
+                <div class="ql-icon ql-finance"><i class="fas fa-file-invoice-dollar"></i></div>
+                <div class="ql-info">
+                    <span class="ql-value" id="ql-pending-count">0</span>
+                    <span class="ql-label">Students w/ Pending Fees</span>
+                </div>
+                <i class="fas fa-arrow-right ql-arrow"></i>
+            </a>
         </section>
 
         <!-- SUMMARY STAT STRIP -->
         <section class="quick-stats-strip reports-stats-strip">
-            <div class="stat-pill">
+            <a href="manage-finance.html" class="stat-pill stat-pill-link">
                 <div class="stat-pill-icon icon-present-students"><i class="fas fa-arrow-trend-up"></i></div>
                 <div class="stat-pill-info">
                     <span class="stat-pill-value" id="rp-total-revenue">RS 0</span>
                     <span class="stat-pill-label">Revenue (Period)</span>
                 </div>
-            </div>
-            <div class="stat-pill">
+                <span class="stat-pill-trend" id="rp-revenue-trend"></span>
+            </a>
+            <a href="manage-finance.html" class="stat-pill stat-pill-link">
                 <div class="stat-pill-icon icon-expense-pill"><i class="fas fa-arrow-trend-down"></i></div>
                 <div class="stat-pill-info">
                     <span class="stat-pill-value" id="rp-total-expense">RS 0</span>
                     <span class="stat-pill-label">Expenses (Period)</span>
                 </div>
-            </div>
-            <div class="stat-pill">
+                <span class="stat-pill-trend" id="rp-expense-trend"></span>
+            </a>
+            <a href="manage-finance.html" class="stat-pill stat-pill-link">
                 <div class="stat-pill-icon icon-staff"><i class="fas fa-scale-balanced"></i></div>
                 <div class="stat-pill-info">
                     <span class="stat-pill-value" id="rp-net-flow">RS 0</span>
                     <span class="stat-pill-label">Net Cash Flow</span>
                 </div>
-            </div>
-            <div class="stat-pill">
+                <span class="stat-pill-trend" id="rp-netflow-trend"></span>
+            </a>
+            <a href="attendance.html" class="stat-pill stat-pill-link">
                 <div class="stat-pill-icon icon-students"><i class="fas fa-user-check"></i></div>
                 <div class="stat-pill-info">
                     <span class="stat-pill-value" id="rp-avg-attendance">0%</span>
                     <span class="stat-pill-label">Avg Attendance</span>
                 </div>
-            </div>
+                <span class="stat-pill-trend" id="rp-attendance-trend"></span>
+            </a>
         </section>
 
         <!-- CHARTS GRID -->
@@ -151,13 +183,17 @@
             <div class="dash-card report-card chart-card-wide">
                 <div class="dash-card-header">
                     <h3><span class="card-icon icon-revenue"><i class="fas fa-chart-column"></i></span> Revenue vs Expenses</h3>
-                    <span class="trend neutral" id="rp-trend-badge"><i class="fas fa-circle" style="font-size:7px;"></i> Live</span>
+                    <div class="card-header-actions">
+                        <span class="trend neutral" id="rp-trend-badge"><i class="fas fa-circle" style="font-size:7px;"></i> Live</span>
+                        <a href="manage-finance.html" class="card-link-btn" title="Open Fees &amp; Finance"><i class="fas fa-up-right-from-square"></i></a>
+                    </div>
                 </div>
                 <div class="dash-card-body">
                     <div class="chart-wrap">
                         <canvas id="chart-revenue-expense"></canvas>
                     </div>
                     <p class="chart-empty-note" id="chart-revenue-expense-empty" style="display:none;">No financial activity recorded for this period yet.</p>
+                    <p class="chart-foot-note">Expenses include prorated staff salaries, bonuses &amp; recorded operational costs for the selected period.</p>
                 </div>
             </div>
 
@@ -165,6 +201,9 @@
             <div class="dash-card report-card chart-card-wide">
                 <div class="dash-card-header">
                     <h3><span class="card-icon icon-attendance"><i class="fas fa-clipboard-check"></i></span> Attendance Trend</h3>
+                    <div class="card-header-actions">
+                        <a href="attendance.html" class="card-link-btn" title="Open Attendance"><i class="fas fa-up-right-from-square"></i></a>
+                    </div>
                 </div>
                 <div class="dash-card-body">
                     <div class="chart-wrap">
@@ -174,23 +213,44 @@
                 </div>
             </div>
 
+            <!-- Class Performance -->
+            <div class="dash-card report-card chart-card-wide">
+                <div class="dash-card-header">
+                    <h3><span class="card-icon icon-students"><i class="fas fa-layer-group"></i></span> Class Performance</h3>
+                    <div class="card-header-actions">
+                        <span class="trend neutral" id="rp-class-count-badge">0 classes</span>
+                        <a href="manage-students.html" class="card-link-btn" title="Open Student Management"><i class="fas fa-up-right-from-square"></i></a>
+                    </div>
+                </div>
+                <div class="dash-card-body">
+                    <div class="chart-wrap">
+                        <canvas id="chart-class-performance"></canvas>
+                    </div>
+                    <p class="chart-empty-note" id="chart-class-performance-empty" style="display:none;">No class data available yet.</p>
+                    <p class="chart-foot-note">Attendance % is for the selected period. Fee Collected % is all-time against expected tuition + transport fees.</p>
+                </div>
+            </div>
+
             <!-- Expense Breakdown -->
             <div class="dash-card report-card">
                 <div class="dash-card-header">
                     <h3><span class="card-icon icon-expense"><i class="fas fa-chart-pie"></i></span> Expense Breakdown</h3>
+                    <a href="manage-finance.html" class="card-link-btn" title="Open Fees &amp; Finance"><i class="fas fa-up-right-from-square"></i></a>
                 </div>
                 <div class="dash-card-body">
                     <div class="chart-wrap chart-wrap-donut">
                         <canvas id="chart-expense-breakdown"></canvas>
                     </div>
                     <ul class="chart-legend" id="legend-expense-breakdown"></ul>
+                    <p class="chart-foot-note">Whole-of-record totals (not period-limited) — salaries reflect current monthly payroll.</p>
                 </div>
             </div>
 
             <!-- Fee Collection Status -->
             <div class="dash-card report-card">
                 <div class="dash-card-header">
-                    <h3><span class="card-icon icon-profit"><i class="fas fa-wallet"></i></span> Fee Collection Status</h3>
+                    <h3><span class="card-icon icon-profit"><i class="fas fa-wallet"></i></span> Fee Collection Status <span class="header-subtag">All-Time</span></h3>
+                    <a href="manage-finance.html" class="card-link-btn" title="Open Fees &amp; Finance"><i class="fas fa-up-right-from-square"></i></a>
                 </div>
                 <div class="dash-card-body">
                     <div class="chart-wrap chart-wrap-donut">
@@ -202,11 +262,59 @@
 
         </section>
 
+        <!-- PENDING FEES + STAFF PAYROLL SNAPSHOT -->
+        <section class="reports-grid">
+
+            <!-- Top Pending Fees -->
+            <div class="dash-card report-card">
+                <div class="dash-card-header">
+                    <h3><span class="card-icon icon-expense-pill"><i class="fas fa-triangle-exclamation"></i></span> Top Pending Fees</h3>
+                    <a href="manage-finance.html" class="card-link-btn" title="Open Fees &amp; Finance"><i class="fas fa-up-right-from-square"></i></a>
+                </div>
+                <div class="dash-card-body">
+                    <ul class="pending-list" id="pending-fees-list">
+                        <li class="pending-empty">No pending fees — everything is collected.</li>
+                    </ul>
+                    <a href="manage-finance.html" class="view-all-link">View all in Fees &amp; Finance <i class="fas fa-arrow-right"></i></a>
+                </div>
+            </div>
+
+            <!-- Staff Payroll Snapshot -->
+            <div class="dash-card report-card">
+                <div class="dash-card-header">
+                    <h3><span class="card-icon icon-staff"><i class="fas fa-sack-dollar"></i></span> Payroll Snapshot</h3>
+                    <a href="manage-staff.html" class="card-link-btn" title="Open Staff Management"><i class="fas fa-up-right-from-square"></i></a>
+                </div>
+                <div class="dash-card-body">
+                    <ul class="payroll-snapshot" id="payroll-snapshot-list">
+                        <li><span>Teaching Staff</span><span id="pr-teaching-count">0</span></li>
+                        <li><span>Non-Teaching Staff</span><span id="pr-nonteaching-count">0</span></li>
+                        <li><span>Monthly Payroll (Base)</span><span id="pr-monthly-payroll">RS 0</span></li>
+                        <li><span>Bonuses (Period)</span><span id="pr-period-bonus">RS 0</span></li>
+                    </ul>
+                    <a href="manage-staff.html" class="view-all-link">View all in Staff Management <i class="fas fa-arrow-right"></i></a>
+                </div>
+            </div>
+
+        </section>
+
         <!-- RECENT TRANSACTIONS -->
         <section class="dash-card report-card transactions-card">
             <div class="dash-card-header">
                 <h3><span class="card-icon icon-revenue"><i class="fas fa-receipt"></i></span> Recent Transactions</h3>
-                <span class="trend neutral" id="rp-txn-count">0 records</span>
+                <div class="card-header-actions">
+                    <span class="trend neutral" id="rp-txn-count">0 records</span>
+                    <select id="txn-filter" class="txn-filter-select" aria-label="Filter transactions by type">
+                        <option value="all">All Types</option>
+                        <option value="fee">Fee Payments</option>
+                        <option value="fine-in">Fines Collected</option>
+                        <option value="expense">Expenses</option>
+                        <option value="bonus">Bonuses</option>
+                    </select>
+                    <button id="txn-export-btn" class="txn-export-btn" type="button" title="Export visible transactions as CSV">
+                        <i class="fas fa-file-arrow-down"></i> Export CSV
+                    </button>
+                </div>
             </div>
             <div class="dash-card-body">
                 <div class="table-scroll">
@@ -229,7 +337,7 @@
 
     </main>
 
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script>
+    <script src="chart.umd.js"></script>
     <script src="shared-data.js"></script>
     <script src="reports.js"></script>
 </body>
