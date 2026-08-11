@@ -66,6 +66,111 @@ const CLASS_ICONS  = ['fa-chalkboard','fa-book','fa-pencil-alt','fa-star','fa-me
 const CLASS_COLORS = ['#1a9e6e','#3b82f6','#8b5cf6','#f59e0b','#ef4444','#06b6d4'];
 
 // ═══════════════════════════════════════════════
+//  BACKEND API  (SchoolSettingsController)
+// ═══════════════════════════════════════════════
+// Same-origin relative path — works when this page is served by the same
+// Spring Boot app / behind the same reverse proxy as the API. Point this
+// at an absolute URL (e.g. 'http://localhost:8080/api/settings') if the
+// frontend and backend are hosted separately.
+const SETTINGS_API_BASE = 'http://localhost:8080/api/settings';
+
+// Last-known settings row fetched from the backend (the single source of truth).
+let _serverSettings = null;
+
+async function apiRequest(url, options = {}) {
+  const res = await fetch(url, {
+    headers: { 'Content-Type': 'application/json' },
+    ...options,
+  });
+  if (!res.ok) {
+    const body = await res.text().catch(() => '');
+    throw new Error(`${options.method || 'GET'} ${url} failed (${res.status}) ${body}`);
+  }
+  const ct = res.headers.get('content-type') || '';
+  return ct.includes('application/json') ? res.json() : null;
+}
+
+const apiGetSettings   = ()        => apiRequest(SETTINGS_API_BASE);
+const apiSaveAll       = (payload) => apiRequest(SETTINGS_API_BASE, { method: 'PUT', body: JSON.stringify(payload) });
+const apiSaveTiming    = (payload) => apiRequest(`${SETTINGS_API_BASE}/timing`, { method: 'PUT', body: JSON.stringify(payload) });
+const apiResetSettings = ()        => apiRequest(`${SETTINGS_API_BASE}/reset`, { method: 'POST' });
+
+// ── Shape converters: backend (SchoolSettings.ClassFee) <-> frontend (name/sections[]) ──
+function _classesApiToLocal(apiClasses) {
+  return (Array.isArray(apiClasses) ? apiClasses : []).map(c => ({
+    name:     c.className || '',
+    fee:      c.fee  != null ? c.fee  : 0,
+    fund:     c.fund != null ? c.fund : 0,
+    sections: (c.sections || '').split(',').map(s => s.trim()).filter(Boolean),
+  }));
+}
+
+function _classesLocalToApi(localClasses) {
+  return (localClasses || []).map(c => ({
+    className: c.name,
+    fee:       c.fee,
+    fund:      c.fund,
+    sections:  (c.sections || []).join(','),
+  }));
+}
+
+/**
+ * Mirrors a SchoolSettings row from the backend into the existing
+ * localStorage keys so the rest of the page (and other pages that read
+ * these same keys, e.g. teacher pay defaults) keep working unchanged —
+ * the backend is the source of truth, localStorage is just the cache.
+ */
+function _mirrorServerSettingsToLocalStorage(s) {
+  if (!s) return;
+
+  localStorage.setItem(SCHOOL_INFO_KEY, JSON.stringify({
+    name:      s.schoolName      || '',
+    address:   s.schoolAddress   || '',
+    phone:     s.schoolPhone     || '',
+    phoneAlt:  s.schoolPhoneAlt  || '',
+    email:     s.schoolEmail     || '',
+    website:   s.schoolWebsite   || '',
+    principal: s.schoolPrincipal || '',
+    regNo:     s.schoolRegNo     || '',
+  }));
+
+  localStorage.setItem(LATEFEE_KEY, JSON.stringify({
+    enabled:     s.lateFeeEnabled !== false,
+    deadlineDay: s.lateFeeDeadlineDay,
+    type:        s.lateFeeType,
+    amount:      s.lateFeeAmount,
+    grace:       s.lateFeeGrace,
+  }));
+
+  localStorage.setItem(VARIABLES_KEY, JSON.stringify({
+    penaltyType:  s.payPenaltyType,
+    penaltyValue: s.payPenaltyValue,
+    bonus:        s.payBonus,
+  }));
+
+  localStorage.setItem(CLASSES_KEY, JSON.stringify(_classesApiToLocal(s.classes)));
+
+  localStorage.setItem('edu_attendance_timing', JSON.stringify({
+    first:  { hour: s.autosave1Hour, minute: s.autosave1Minute, meridiem: s.autosave1Meridiem, enabled: s.autosave1Enabled },
+    second: { hour: s.autosave2Hour, minute: s.autosave2Minute, meridiem: s.autosave2Meridiem, enabled: s.autosave2Enabled },
+  }));
+}
+
+/** Fetches the settings row from the backend and caches it locally. */
+async function loadSettingsFromServer() {
+  try {
+    const s = await apiGetSettings();
+    _serverSettings = s;
+    _mirrorServerSettingsToLocalStorage(s);
+    return s;
+  } catch (err) {
+    console.warn('[Settings] Could not load settings from the server, falling back to local cache.', err);
+    showToast('Could not reach the server — showing locally cached settings.', 'error');
+    return null;
+  }
+}
+
+// ═══════════════════════════════════════════════
 //  DARK MODE
 // ═══════════════════════════════════════════════
 function toggleDarkMode() {
@@ -176,14 +281,20 @@ function injectAbsenceBadge(card, salary, penaltyType, penaltyValue, staffId) {
 // ═══════════════════════════════════════════════
 //  INIT
 // ═══════════════════════════════════════════════
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
   initDarkMode();
+
+  // Fetch the settings row from the backend first, then render every tab
+  // from that (mirrored into localStorage as a cache along the way).
+  await loadSettingsFromServer();
+
   loadSchoolInfo();
   loadClasses();
   loadLateFee();
   loadVariables();
   wirePayVariableLiveSync();
   syncCardsFromVariables();
+  renderAttendanceTiming();
 
   // Sync penalty prefix in variables panel
   document.getElementById('var-penalty-type').addEventListener('change', function () {
@@ -772,9 +883,9 @@ function _sanitizeStaffBuckets() {
 }
 
 // ═══════════════════════════════════════════════
-//  SAVE ALL
+//  SAVE ALL  (PUT /api/settings)
 // ═══════════════════════════════════════════════
-function saveAll() {
+async function saveAll() {
   // — Classes —
   const cards   = document.querySelectorAll('.class-card');
   const classes = [];
@@ -793,7 +904,6 @@ function saveAll() {
     });
     if (name) classes.push({ name, fee, fund, sections: uniqueSections });
   });
-  localStorage.setItem(CLASSES_KEY, JSON.stringify(classes));
 
   // — Late Fee —
   const lateFee = {
@@ -803,37 +913,75 @@ function saveAll() {
     amount:      parseFloat(document.getElementById('latefee-amount').value) || 0,
     grace:       parseInt(document.getElementById('latefee-grace').value, 10) || 0,
   };
-  localStorage.setItem(LATEFEE_KEY, JSON.stringify(lateFee));
 
   // — School Info —
-  saveSchoolInfo();
+  const schoolInfo = collectSchoolInfo();
 
-  // — Variables —
+  // — Pay Variables —
   const vars = {
     penaltyType:  document.getElementById('var-penalty-type').value,
     penaltyValue: parseFloat(document.getElementById('var-penalty-value').value) || 0,
     bonus:        parseFloat(document.getElementById('var-bonus').value)          || 0,
   };
-  localStorage.setItem(VARIABLES_KEY, JSON.stringify(vars));
 
-  showBadge();
-  showToast('All configurations saved successfully.', 'success');
+  // Build the payload exactly matching the SchoolSettings entity fields.
+  const payload = {
+    schoolName:      schoolInfo.name,
+    schoolAddress:   schoolInfo.address,
+    schoolPhone:     schoolInfo.phone,
+    schoolPhoneAlt:  schoolInfo.phoneAlt,
+    schoolEmail:     schoolInfo.email,
+    schoolWebsite:   schoolInfo.website,
+    schoolPrincipal: schoolInfo.principal,
+    schoolRegNo:     schoolInfo.regNo,
+
+    lateFeeEnabled:     lateFee.enabled,
+    lateFeeDeadlineDay: lateFee.deadlineDay,
+    lateFeeType:        lateFee.type,
+    lateFeeAmount:      lateFee.amount,
+    lateFeeGrace:       lateFee.grace,
+
+    payPenaltyType:  vars.penaltyType,
+    payPenaltyValue: vars.penaltyValue,
+    payBonus:        vars.bonus,
+
+    classes: _classesLocalToApi(classes),
+  };
+
+  try {
+    const saved = await apiSaveAll(payload);
+    _serverSettings = saved;
+    _mirrorServerSettingsToLocalStorage(saved); // keep local cache + other pages in sync
+
+    showBadge();
+    showToast('All configurations saved successfully.', 'success');
+  } catch (err) {
+    console.error('[Settings] Save All failed:', err);
+    showToast('Could not save to the server. Check your connection and try again.', 'error');
+  }
 }
 
 // ═══════════════════════════════════════════════
-//  RESET
+//  RESET  (POST /api/settings/reset)
 // ═══════════════════════════════════════════════
-function resetSettings() {
+async function resetSettings() {
   if (!confirm('Reset all settings to defaults?')) return;
-  localStorage.removeItem(CLASSES_KEY);
-  localStorage.removeItem(LATEFEE_KEY);
-  localStorage.removeItem(VARIABLES_KEY);
-  localStorage.removeItem(SCHOOL_INFO_KEY);
-  loadClasses();
-  loadLateFee();
-  loadVariables();
-  loadSchoolInfo();
-  showToast('Settings reset to defaults.', 'success');
+  try {
+    const fresh = await apiResetSettings();
+    _serverSettings = fresh;
+    _mirrorServerSettingsToLocalStorage(fresh);
+
+    loadClasses();
+    loadLateFee();
+    loadVariables();
+    loadSchoolInfo();
+    renderAttendanceTiming();
+
+    showToast('Settings reset to defaults.', 'success');
+  } catch (err) {
+    console.error('[Settings] Reset failed:', err);
+    showToast('Could not reset settings on the server.', 'error');
+  }
 }
 
 // ═══════════════════════════════════════════════
@@ -1178,14 +1326,35 @@ function _readTimingSlot(prefix) {
   return { hour: h, minute: m, meridiem: mer, enabled: en };
 }
 
-function saveAttendanceTiming() {
+async function saveAttendanceTiming() {
   const status = document.getElementById('timing-status');
+  let timing;
   try {
-    const timing = {
+    timing = {
       first:  _readTimingSlot('autosave1'),
       second: _readTimingSlot('autosave2'),
     };
+  } catch (e) {
+    if (status) status.textContent = '⚠ ' + e.message;
+    return;
+  }
+
+  const payload = {
+    autosave1Hour:     timing.first.hour,
+    autosave1Minute:   timing.first.minute,
+    autosave1Meridiem: timing.first.meridiem,
+    autosave1Enabled:  timing.first.enabled,
+    autosave2Hour:     timing.second.hour,
+    autosave2Minute:   timing.second.minute,
+    autosave2Meridiem: timing.second.meridiem,
+    autosave2Enabled:  timing.second.enabled,
+  };
+
+  try {
+    const saved = await apiSaveTiming(payload);
+    _serverSettings = saved;
     localStorage.setItem(ATT_TIMING_KEY, JSON.stringify(timing));
+
     if (status) {
       status.textContent = '✓ Saved. Auto-save times updated.';
       setTimeout(() => (status.textContent = ''), 2500);
@@ -1199,6 +1368,7 @@ function saveAttendanceTiming() {
     if (typeof showToast === 'function') showToast('Attendance timings saved.', 'success');
   } catch (e) {
     if (status) status.textContent = '⚠ ' + e.message;
+    if (typeof showToast === 'function') showToast('Could not save timings to the server.', 'error');
   }
 }
 
@@ -1269,12 +1439,13 @@ async function runStaffAttendanceAutoSave(label, slot) {
 }
 
 // Hook into DOM ready — render inputs and start schedulers
-document.addEventListener('DOMContentLoaded', () => {
-  renderAttendanceTiming();
-  // NOTE: actually *executing* the auto-save (clicking the real Save
-  // buttons and writing attendance to the database) now happens over in
-  // attendance.js, which reads this same ATT_TIMING_KEY
-  // ('edu_attendance_timing') value. That keeps a single source of truth:
-  // whatever time is set here in Settings is exactly what the Attendance
-  // page acts on.
-});
+// NOTE: renderAttendanceTiming() is called from the main DOMContentLoaded
+// handler above, after loadSettingsFromServer() resolves, so the Timing
+// tab reflects the backend rather than a possibly-stale local cache.
+//
+// Actually *executing* the auto-save (clicking the real Save buttons and
+// writing attendance to the database) still happens over in attendance.js,
+// which reads this same 'edu_attendance_timing' localStorage key. That
+// keeps a single source of truth: whatever time is saved here in Settings
+// (to the backend, and mirrored to that key) is exactly what the
+// Attendance page acts on.
