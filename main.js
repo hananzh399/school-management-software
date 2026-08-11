@@ -10,10 +10,17 @@ document.addEventListener('DOMContentLoaded', () => {
     calculateAndLoadDashboardData();
     // Add this inside DOMContentLoaded in index.js
 window.addEventListener('storage', (e) => {
-    if (['edu_students', 'eduflow-db', 'eduflow-student-fines',
+    if (!e.key) return;
+    const watchedKeys = ['edu_students', 'eduflow-db', 'eduflow-student-fines',
          'eduflow-staff-fines', 'eduflow-staff-bonus', 'eduflow-other-expenses',
          'edu_staff', 'eduflow-staff-advances', 'edu_latefee_config',
-         'edu_attendance', 'eduflow-attendance-records', 'eduflow-custom-fees'].includes(e.key)) {
+         'eduflow-custom-fees'];
+    // Attendance keys are per-class/per-day (eduflow_att_<date>_<class>) and
+    // per-day for staff (eduflow_staff_att_<date>), so match by prefix
+    // instead of an exact key — otherwise a saved attendance sheet in
+    // another tab would never refresh this dashboard.
+    const isAttendanceKey = e.key.startsWith('eduflow_att_') || e.key.startsWith('eduflow_staff_att_');
+    if (watchedKeys.includes(e.key) || isAttendanceKey) {
         calculateAndLoadDashboardData();
     }
 });
@@ -170,43 +177,48 @@ function calculateAndLoadDashboardData() {
 /* ============================================
    TODAY'S ATTENDANCE
    ============================================
-   Looks for attendance data under 'edu_attendance', keyed by date
-   (YYYY-MM-DD) with the shape:
-   { "2026-07-01": { students: { studentId: true/false, ... },
-                      staff:    { staffId: true/false, ... } } }
-   Also supports a flat record list under 'eduflow-attendance-records':
-   [{ date: "2026-07-01", type: "student"|"staff", present: true/false }, ...]
-   If your attendance.html page (once built) writes to either of these
-   keys/shapes, this card updates automatically — no other changes needed.
+   Reads the real data written by attendance.html/attendance.js:
+     - Student attendance is saved per class per day under
+       'eduflow_att_<YYYY-MM-DD>_<className>', shape:
+       { date, class, records: { <regNo>: { status: "present"|"absent"|"leave" } } }
+     - Staff attendance is saved once per day under
+       'eduflow_staff_att_<YYYY-MM-DD>', shape:
+       { date, records: { <staffId>: { status: "present"|"absent"|"leave" } } }
+   This scans every class key for today and the single staff key for
+   today, so the dashboard reflects whatever's actually been marked.
    ============================================ */
 function getTodayAttendance() {
     const todayKey = new Date().toISOString().split('T')[0];
+    let presentStudents = 0;
+    let presentStaff = 0;
+    let hasData = false;
 
-    // Format 1: unified object keyed by date
+    // Student attendance — one key per class, all prefixed with today's date
+    const studentPrefix = `eduflow_att_${todayKey}_`;
+    for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (!key || !key.startsWith(studentPrefix)) continue;
+        try {
+            const payload = JSON.parse(localStorage.getItem(key) || 'null');
+            const records = (payload && payload.records) || {};
+            Object.values(records).forEach(rec => {
+                hasData = true;
+                if (rec && rec.status === 'present') presentStudents++;
+            });
+        } catch (e) { /* ignore malformed data */ }
+    }
+
+    // Staff attendance — single key for today
     try {
-        const store = JSON.parse(localStorage.getItem('edu_attendance') || '{}');
-        const today = store[todayKey];
-        if (today && (today.students || today.staff)) {
-            const studentVals = today.students ? Object.values(today.students) : [];
-            const staffVals = today.staff ? Object.values(today.staff) : [];
-            const presentStudents = studentVals.filter(v => v === true || v === 'present').length;
-            const presentStaff = staffVals.filter(v => v === true || v === 'present').length;
-            return { presentStudents, presentStaff, hasData: true };
-        }
+        const staffPayload = JSON.parse(localStorage.getItem(`eduflow_staff_att_${todayKey}`) || 'null');
+        const staffRecords = (staffPayload && staffPayload.records) || {};
+        Object.values(staffRecords).forEach(rec => {
+            hasData = true;
+            if (rec && rec.status === 'present') presentStaff++;
+        });
     } catch (e) { /* ignore malformed data */ }
 
-    // Format 2: flat record array
-    try {
-        const records = JSON.parse(localStorage.getItem('eduflow-attendance-records') || '[]');
-        const todays = records.filter(r => r.date === todayKey);
-        if (todays.length) {
-            const presentStudents = todays.filter(r => r.type === 'student' && (r.status === 'present' || r.present === true)).length;
-            const presentStaff = todays.filter(r => r.type === 'staff' && (r.status === 'present' || r.present === true)).length;
-            return { presentStudents, presentStaff, hasData: true };
-        }
-    } catch (e) { /* ignore malformed data */ }
-
-    return { presentStudents: 0, presentStaff: 0, hasData: false };
+    return { presentStudents, presentStaff, hasData };
 }
 
 function loadAttendanceData(totalStudents, totalStaff) {
