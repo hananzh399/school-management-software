@@ -157,7 +157,7 @@ async function loadDashboardFromBackend() {
     loadAttendanceData(data.realStudentCount || 0, totalStaff, data.todayAttendance);
 }
 
-   ============================================ */
+   
 
 function loadAttendanceData(totalStudents, totalStaff, attendanceData) {
     const presentStudents = attendanceData ? attendanceData.presentStudents : 0;
