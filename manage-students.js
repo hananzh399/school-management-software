@@ -10,7 +10,7 @@
  * 2. Real-time Age & Financial Calculations
  * 3. Base64 Image Processing for Photos & Documents
  * 4. Advanced Search & Filtering
- * 5. Data Persistence via LocalStorage
+ * 5. Data Persistence via Backend API (Spring Boot / MySQL)
  * 6. Responsive UI Controllers & Modal Architecture
  * 7. Sibling Detection & Shared Sibling-Group IDs
  * ============================================================================
@@ -1065,17 +1065,19 @@ if (certUploadInput) {
         ) || null;
     }
 
+    /**
+     * Backend is the single source of truth — no localStorage cache anymore.
+     * getDatabase() simply reads the in-memory mirror (API_STUDENTS), which is
+     * populated by syncWithBackend() on page load and kept current by every
+     * apiSaveStudent()/apiDeleteStudent() call. saveDatabase() only updates
+     * that in-memory mirror; callers are responsible for also pushing the
+     * change to the backend (apiSaveStudent/apiDeleteStudent) where needed.
+     */
     function getDatabase() {
-        try {
-            return JSON.parse(localStorage.getItem(DB_KEY) || '[]');
-        } catch (e) {
-            console.error('Failed to read student database from localStorage', e);
-            return [];
-        }
+        return Array.isArray(API_STUDENTS) ? API_STUDENTS : [];
     }
     function saveDatabase(d)  {
-        localStorage.setItem(DB_KEY, JSON.stringify(d));
-        API_STUDENTS = d; // keep the in-memory mirror in sync too
+        API_STUDENTS = d; // in-memory mirror only — backend is the real store
     }
 
     // ── ARCHIVE HELPERS ──────────────────────────────────────────────────────
@@ -1151,15 +1153,16 @@ if (certUploadInput) {
     }
 
     /**
-     * Pull the current roster from MySQL on page load and refresh localStorage
-     * so every view (dashboard counters, tables, archive) reflects the database
-     * instead of whatever was last cached in the browser.
+     * Pull the current roster from MySQL on page load and refresh the
+     * in-memory mirror (API_STUDENTS) so every view (dashboard counters,
+     * tables, archive) reflects the database instead of stale in-page state.
      *
-     * Server rows are merged ON TOP OF the local cache (matched by regNo) so
-     * frontend-only bookkeeping the Student entity doesn't persist yet
-     * (isSibling / siblingGroupId / hasSiblings / booksFee / booksDiscount /
-     * annualFundEnabled) isn't wiped out every time this runs. If you want
-     * those to be fully server-backed too, add matching columns to Student.java.
+     * Server rows are merged ON TOP OF whatever is currently in memory
+     * (matched by regNo) so frontend-only bookkeeping the Student entity
+     * doesn't persist yet (isSibling / siblingGroupId / hasSiblings /
+     * booksFee / booksDiscount / annualFundEnabled) isn't wiped out every
+     * time this runs. If you want those to be fully server-backed too, add
+     * matching columns to Student.java.
      */
     async function syncWithBackend() {
         try {
@@ -4336,7 +4339,7 @@ function slcSearchStudents() {
     dropdown.innerHTML = '';
     if (!query) { dropdown.classList.remove('open'); return; }
 
-    const students = JSON.parse(localStorage.getItem(DB_KEY) || '[]');
+    const students = getDatabase();
     let matches;
 
     if (query.includes('~')) {
@@ -4650,7 +4653,7 @@ function charSearchStudents() {
     dropdown.innerHTML = '';
     if (!query) { dropdown.classList.remove('open'); return; }
 
-    const students = JSON.parse(localStorage.getItem(DB_KEY) || '[]');
+    const students = getDatabase();
     let matches;
 
     if (query.includes('~')) {
@@ -5059,7 +5062,7 @@ function showDataIOStatus(message, type) {
 }
 
 /* ============================================================
-   EXPORT — Build a formatted xlsx workbook from localStorage
+   EXPORT — Build a formatted xlsx workbook from the backend database
    Includes: Student Photos, B-Form Images, Full Discount Breakdown
    ============================================================ */
 
@@ -5184,7 +5187,7 @@ async function exportStudentsToExcel() {
         return;
     }
 
-    const students = JSON.parse(localStorage.getItem(DB_KEY) || '[]');
+    const students = getDatabase();
     if (!students.length) {
         showDataIOStatus('No student records found to export.', 'error');
         return;
@@ -5538,7 +5541,7 @@ async function exportStudentsToExcel() {
 }
 
 /* ============================================================
-   IMPORT — Read xlsx and merge into localStorage
+   IMPORT — Read xlsx and merge into the backend database
    ============================================================ */
 function importStudentsFromExcel(event) {
     if (typeof XLSX === 'undefined') {
@@ -5552,7 +5555,7 @@ function importStudentsFromExcel(event) {
     showDataIOStatus('Reading file… please wait.', 'info');
 
     const reader = new FileReader();
-    reader.onload = function(e) {
+    reader.onload = async function(e) {
         try {
             const data    = new Uint8Array(e.target.result);
             const wb      = XLSX.read(data, { type: 'array' });
@@ -5568,8 +5571,8 @@ function importStudentsFromExcel(event) {
             }
 
             /* Map header names back to our student object keys.
-               IMPORTANT: keys here must match what the form saves to localStorage,
-               i.e. the HTML input[name] attributes — not display aliases.
+               IMPORTANT: keys here must match what the form saves to the
+               backend, i.e. the HTML input[name] attributes — not display aliases.
                This list must stay in sync with the `dirHeaders` array in
                exportStudentsToExcel(); a mismatch here is what causes fields to
                come back blank (showing "Select…" / "Not Provided") after import. */
@@ -5621,8 +5624,9 @@ function importStudentsFromExcel(event) {
                 july:7, august:8, september:9, october:10, november:11, december:12
             };
 
-            const existing  = JSON.parse(localStorage.getItem(DB_KEY) || '[]');
+            const existing  = getDatabase();
             const existingRegNos = new Set(existing.map(s => s.regNo || s.id).filter(Boolean));
+            const newlyAdded = [];
 
             let added = 0, skipped = 0;
             rows.forEach(row => {
@@ -5672,17 +5676,35 @@ function importStudentsFromExcel(event) {
 
                 existing.push(student);
                 existingRegNos.add(regNo);
+                newlyAdded.push(student);
                 added++;
             });
 
-            localStorage.setItem(DB_KEY, JSON.stringify(existing));
+            /* Push every newly-imported student to the backend (MySQL) via the
+               same apiSaveStudent() path the admission form uses — imports used
+               to only ever land in localStorage and never reached the server. */
+            let failedCount = 0;
+            for (const student of newlyAdded) {
+                try {
+                    const saved = await apiSaveStudent(student);
+                    if (saved) Object.assign(student, saved, { id: student.id });
+                } catch (err) {
+                    failedCount++;
+                    console.error('Backend sync failed (import) for', student.regNo || student.id, err);
+                }
+            }
+
+            saveDatabase(existing);
 
             /* Reset file input so same file can be re-imported if needed */
             event.target.value = '';
 
+            const failureNote = failedCount > 0
+                ? ` ${failedCount} record(s) couldn't be saved to the server — check your connection and re-import if needed.`
+                : '';
             showDataIOStatus(
-                `Import complete! <strong>${added} new record(s)</strong> added. ${skipped > 0 ? `${skipped} row(s) skipped (already exist or missing required fields).` : ''}`,
-                'success'
+                `Import complete! <strong>${added} new record(s)</strong> added. ${skipped > 0 ? `${skipped} row(s) skipped (already exist or missing required fields).` : ''}${failureNote}`,
+                failedCount > 0 ? 'error' : 'success'
             );
 
             /* Refresh counters if visible */
