@@ -2468,3 +2468,24 @@ section[id], div[id] { scroll-margin-top: 96px; }
   .legal-hero { padding: 120px 1.4rem 40px; }
   .legal-body { padding: 44px 1.4rem 60px; }
 }
+/* ── REGISTRATION MODAL ── */
+.register-intro {
+  font-size: 0.85rem;
+  color: var(--ink-soft);
+  text-align: center;
+  margin: -0.2rem 0 1.2rem;
+  line-height: 1.55;
+}
+.register-hint {
+  font-size: 0.75rem;
+  color: var(--ink-faint);
+  margin-top: 6px;
+  letter-spacing: 0.01em;
+}
+#regCode {
+  letter-spacing: 0.18em;
+  text-transform: lowercase;
+}
+#registerModal .btn-login {
+  margin-top: 0.4rem;
+}

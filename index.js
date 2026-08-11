@@ -92,7 +92,7 @@ function togglePw() {
 }
 
 /* ── LOGIN FORM ── */
-function handleLogin(e) {
+async function handleLogin(e) {
   e.preventDefault();
   const phone = document.getElementById("phone");
   const pass = document.getElementById("password");
@@ -134,33 +134,33 @@ function handleLogin(e) {
   btn.disabled = true;
   btn.style.opacity = "0.8";
 
-  setTimeout(() => {
-    btn.textContent = origText;
-    btn.disabled = false;
-    btn.style.opacity = "";
+  const result = await SoftSchoolAuth.authenticate(phone.value.trim(), pass.value);
 
-    const result = window.SoftSchoolAdmin
-      ? window.SoftSchoolAdmin.authenticateSchool(phone.value, pass.value)
-      : { ok: false, reason: "not_found" };
+  btn.textContent = origText;
+  btn.disabled = false;
+  btn.style.opacity = "";
 
-    if (!result.ok) {
-      if (result.reason === "blocked") {
-        showToast("Your school's access has been suspended. Please contact support.", "error");
-      } else {
-        showToast("Invalid username or password.", "error");
-      }
-      pass.classList.add("error");
-      phone.closest(".login-card").classList.add("shake");
-      phone.closest(".login-card").addEventListener("animationend", () => {
-        phone.closest(".login-card").classList.remove("shake");
-      }, { once: true });
-      return;
+  if (!result.ok) {
+    if (result.reason === "blocked") {
+      showToast("Your school's access has been suspended. Please contact support.", "error");
+    } else if (result.reason === "expired") {
+      showToast("Your school's plan has expired. Please contact support to renew.", "error");
+    } else if (result.reason === "network") {
+      showToast(result.message, "error");
+    } else {
+      showToast("Invalid username or password.", "error");
     }
+    pass.classList.add("error");
+    phone.closest(".login-card").classList.add("shake");
+    phone.closest(".login-card").addEventListener("animationend", () => {
+      phone.closest(".login-card").classList.remove("shake");
+    }, { once: true });
+    return;
+  }
 
-    window.SoftSchoolAdmin.setSession(result.school.id);
-    showToast("Redirecting to your dashboard…", "success");
-    setTimeout(() => { window.location.href = "main.html"; }, 900);
-  }, 1400);
+  SoftSchoolAuth.startSession(result);
+  showToast("Redirecting to your dashboard…", "success");
+  setTimeout(() => { window.location.href = "main.html"; }, 900);
 }
 
 /* ════════════════════════════════════════
@@ -343,6 +343,262 @@ function closeVideo() {
 
 function closeVideoOutside(e) {
   if (e.target === document.getElementById("videoModal")) closeVideo();
+}
+
+
+/* ════════════════════════════════════════
+   SCHOOL REGISTRATION + LOGIN (real backend)
+   ────────────────────────────────────────
+   Schools register with the School ID and 7-character security code
+   issued from the super admin portal, then set their own username/password.
+   Both are stored on the backend (School.username / School.loginPasswordHash)
+   so the school can log in from any device — not just the one that
+   registered. Talks to the same Spring Boot backend as the super admin
+   portal (see superadmin.js -> API_BASE_URL), just under the public
+   "/api/school" path instead of the admin-only "/api/admin" path.
+   ════════════════════════════════════════ */
+const SoftSchoolAuth = (function () {
+  // Point this at your deployed backend in production, e.g.
+  // "https://api.yourdomain.com/api/school"
+  const API_BASE_URL = "http://localhost:8080/api/school";
+  const SESSION_KEY = "softschool_session";
+  const CODE_RE = /^(?=.*[a-z])(?=.*[0-9])[a-z0-9]{7}$/;
+
+  function isValidCode(code) {
+    return CODE_RE.test(code);
+  }
+
+  async function apiRequest(path, body) {
+    let res;
+    try {
+      res = await fetch(API_BASE_URL + path, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+    } catch (err) {
+      return { ok: false, reason: "network", message: "Couldn't reach the server. Check your connection and try again." };
+    }
+
+    let data = null;
+    try {
+      data = await res.json();
+    } catch (err) {
+      /* empty/non-JSON body */
+    }
+
+    if (!res.ok) {
+      const message = (data && data.error) || "Something went wrong. Please try again.";
+      let reason = "error";
+      if (res.status === 401) reason = "invalid_login";
+      else if (res.status === 403 && message === "blocked") reason = "blocked";
+      else if (res.status === 403 && message === "expired") reason = "expired";
+      else if (res.status === 409) reason = "conflict";
+      return { ok: false, reason: reason, message: message };
+    }
+
+    return { ok: true, school: data };
+  }
+
+  /* schoolId + code = activation key from the super admin portal.
+     username + password = chosen by the school, stored on the backend. */
+  function register({ schoolId, username, password, code }) {
+    return apiRequest("/register", { schoolId, username, password, code });
+  }
+
+  function authenticate(username, password) {
+    return apiRequest("/login", { username, password });
+  }
+
+  function startSession(result) {
+    const payload = {
+      schoolId: result.school ? result.school.schoolId : null,
+      school: result.school || null,
+      at: Date.now(),
+    };
+    /* Prefer access-control.js's setSession so both files always agree on
+       the session shape — but pass it the FULL school object (not just the
+       id) so the page guard on main.html etc. doesn't need a network round
+       trip just to know who's logged in. Falls back to writing localStorage
+       directly if access-control.js isn't loaded for some reason. */
+    if (window.SoftSchoolAdmin && typeof window.SoftSchoolAdmin.setSession === "function" && result.school) {
+      window.SoftSchoolAdmin.setSession(result.school);
+      return;
+    }
+    try {
+      localStorage.setItem(SESSION_KEY, JSON.stringify(payload));
+    } catch (err) {
+      /* ignore — session just won't persist across reloads */
+    }
+  }
+
+  function currentSession() {
+    try {
+      const raw = localStorage.getItem(SESSION_KEY);
+      return raw ? JSON.parse(raw) : null;
+    } catch (err) {
+      return null;
+    }
+  }
+
+  return { register, authenticate, startSession, currentSession, isValidCode };
+})();
+window.SoftSchoolAuth = SoftSchoolAuth;
+
+/* ── REGISTRATION MODAL ── */
+let _regTrap = null;
+let _regLastFocused = null;
+
+function openRegister() {
+  const modal = document.getElementById("registerModal");
+  if (!modal) return;
+  _regLastFocused = document.activeElement;
+  modal.classList.add("open");
+  document.body.style.overflow = "hidden";
+  setTimeout(() => {
+    const first = document.getElementById("regSchoolId");
+    if (first) first.focus();
+  }, 200);
+  if (_regTrap) modal.removeEventListener("keydown", _regTrap);
+  _regTrap = createFocusTrap(modal);
+  modal.addEventListener("keydown", _regTrap);
+}
+
+function closeRegister() {
+  const modal = document.getElementById("registerModal");
+  if (!modal) return;
+  modal.classList.remove("open");
+  document.body.style.overflow = "";
+  if (_regTrap) {
+    modal.removeEventListener("keydown", _regTrap);
+    _regTrap = null;
+  }
+  if (_regLastFocused) {
+    _regLastFocused.focus();
+    _regLastFocused = null;
+  }
+}
+
+function closeRegisterOutside(e) {
+  if (e.target === document.getElementById("registerModal")) closeRegister();
+}
+
+function openRegisterFromGs() {
+  closeGetStarted();
+  setTimeout(openRegister, 180);
+}
+
+function openRegisterFromLogin() {
+  closeLogin();
+  setTimeout(openRegister, 180);
+}
+
+function openLoginFromRegister() {
+  closeRegister();
+  setTimeout(openLogin, 180);
+}
+
+function toggleRegPw(inputId, iconId) {
+  const input = document.getElementById(inputId);
+  const icon = document.getElementById(iconId);
+  if (!input || !icon) return;
+  const show = input.type === "password";
+  input.type = show ? "text" : "password";
+  icon.className = show ? "fas fa-eye-slash" : "fas fa-eye";
+}
+
+function shakeRegisterCard(field) {
+  const card = document.getElementById("registerCard");
+  if (field) field.classList.add("error");
+  if (!card) return;
+  card.classList.add("shake");
+  card.addEventListener("animationend", () => card.classList.remove("shake"), { once: true });
+  if (field) field.focus();
+}
+
+async function handleRegister(e) {
+  e.preventDefault();
+
+  const schoolId = document.getElementById("regSchoolId");
+  const username = document.getElementById("regUsername");
+  const password = document.getElementById("regPassword");
+  const password2 = document.getElementById("regPassword2");
+  const code = document.getElementById("regCode");
+  const btn = document.getElementById("registerBtn");
+
+  [schoolId, username, password, password2, code].forEach((el) => el.classList.remove("error"));
+
+  const schoolIdVal = schoolId.value.trim();
+  const usernameVal = username.value.trim();
+  const codeVal = code.value.trim().toLowerCase();
+
+  if (!schoolIdVal) {
+    showToast("Please enter the School ID given to you.", "error");
+    return shakeRegisterCard(schoolId);
+  }
+  if (usernameVal.length < 4) {
+    showToast("Username must be at least 4 characters.", "error");
+    return shakeRegisterCard(username);
+  }
+  if (/\s/.test(usernameVal)) {
+    showToast("Username cannot contain spaces.", "error");
+    return shakeRegisterCard(username);
+  }
+  if (password.value.length < 6) {
+    showToast("Password must be at least 6 characters.", "error");
+    return shakeRegisterCard(password);
+  }
+  if (password.value !== password2.value) {
+    showToast("Passwords do not match.", "error");
+    return shakeRegisterCard(password2);
+  }
+  if (!SoftSchoolAuth.isValidCode(codeVal)) {
+    showToast("Security code must be 7 characters using lowercase letters and numbers.", "error");
+    return shakeRegisterCard(code);
+  }
+
+  const origText = btn.innerHTML;
+  btn.innerHTML = "Registering…";
+  btn.disabled = true;
+  btn.style.opacity = "0.8";
+
+  const result = await SoftSchoolAuth.register({
+    schoolId: schoolIdVal,
+    username: usernameVal,
+    password: password.value,
+    code: codeVal,
+  });
+
+  btn.innerHTML = origText;
+  btn.disabled = false;
+  btn.style.opacity = "";
+
+  if (!result.ok) {
+    if (result.reason === "conflict" && /already registered/i.test(result.message)) {
+      showToast(result.message, "error");
+      shakeRegisterCard(schoolId);
+    } else if (result.reason === "conflict") {
+      showToast(result.message, "error");
+      shakeRegisterCard(username);
+    } else if (result.reason === "network") {
+      showToast(result.message, "error");
+    } else {
+      showToast(result.message || "School ID or security code is not valid. Please check and try again.", "error");
+      shakeRegisterCard(code);
+    }
+    return;
+  }
+
+  document.getElementById("registerForm").reset();
+  showToast("Registration successful! You can now login.", "success");
+  setTimeout(() => {
+    closeRegister();
+    setTimeout(() => {
+      openLogin();
+      const loginUser = document.getElementById("phone");
+      if (loginUser) loginUser.value = usernameVal;
+    }, 200);
+  }, 900);
 }
 
 /* ── LOGIN MODAL ── */

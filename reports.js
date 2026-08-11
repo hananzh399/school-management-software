@@ -13,6 +13,27 @@ let currentTxnFilter = 'all';
 let allPeriodTxnRows = []; // full (unsliced) set of transactions for the active period+filter, used by CSV export
 let charts = { revExp: null, attendance: null, expenseBreak: null, feeStatus: null, cashFlow: null };
 
+/* ── In-page toast (replaces window.alert) ───────────────────── */
+function showReportsToast(message, type = 'info') {
+    let container = document.getElementById('reports-toast-container');
+    if (!container) {
+        container = document.createElement('div');
+        container.id = 'reports-toast-container';
+        container.className = 'reports-toast-container';
+        document.body.appendChild(container);
+    }
+    const icon = type === 'success' ? 'fa-circle-check' : (type === 'error' ? 'fa-circle-exclamation' : 'fa-circle-info');
+    const toast = document.createElement('div');
+    toast.className = `reports-toast reports-toast-${type}`;
+    toast.innerHTML = `<i class="fas ${icon}"></i><span>${message}</span>`;
+    container.appendChild(toast);
+    requestAnimationFrame(() => toast.classList.add('show'));
+    setTimeout(() => {
+        toast.classList.remove('show');
+        setTimeout(() => toast.remove(), 300);
+    }, 3000);
+}
+
 document.addEventListener('DOMContentLoaded', () => {
     initTheme();
     initSidebar();
@@ -175,7 +196,7 @@ function initTxnControls() {
 
 function exportTransactionsCSV() {
     if (!allPeriodTxnRows.length) {
-        alert('No transactions to export for the current period / filter.');
+        showReportsToast('No transactions to export for the current period / filter.', 'info');
         return;
     }
     const header = ['Date', 'Type', 'Description', 'Direction', 'Amount (RS)'];

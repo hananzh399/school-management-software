@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Soft School | School Management Software</title>
+    <link rel="icon" type="image/png" href="logo-icon.png">
   <meta name="description" content="Soft School is a school management platform for student records, staff management, fees and finance, and attendance — built for administrators, teachers, students, and parents.">
   <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
@@ -45,7 +46,7 @@
       <button class="btn-login-top btn-ripple" onclick="openLogin()" aria-label="Login to dashboard">
         <i class="fas fa-lock"></i> <span>Login</span>
       </button>
-      <a href="https://wa.me/923181909541?text=Hello%20Soft%20School,%20I%20want%20to%20sign%20up!" target="_blank" class="btn-signup-top btn-ripple"><span>Sign Up Now</span></a>
+      <button type="button" class="btn-signup-top btn-ripple" onclick="openRegister()"><span>Sign Up Now</span></button>
       <button class="nav-toggle" id="navToggle" aria-label="Open menu" aria-expanded="false"><i class="fas fa-bars"></i></button>
     </div>
   </div>
@@ -486,7 +487,7 @@
       <h3>Get in touch today</h3>
       <p>Our team replies within minutes on WhatsApp.</p>
 
-      <a href="https://wa.me/923181909541?text=Hello%20Soft%20School,%20I%20want%20to%20become%20part%20of%20your%20family!" target="_blank" class="contact-btn-large">
+      <a href="javascript:void(0)" onclick="openRegister()" class="contact-btn-large">
         <div class="wa-icon-lg"><i class="fab fa-whatsapp"></i></div>
         <div>
           <div>Chat with us on WhatsApp</div>
@@ -647,14 +648,14 @@
     </div>
 
     <div class="gs-options">
-      <a href="https://wa.me/923181909541?text=Hello%20Soft%20School,%20I%20want%20to%20sign%20up!" target="_blank" class="gs-option gs-option-whatsapp">
-        <div class="gs-option-icon gs-icon-green"><i class="fab fa-whatsapp"></i></div>
+      <button type="button" class="gs-option gs-option-whatsapp" onclick="openRegisterFromGs()">
+        <div class="gs-option-icon gs-icon-green"><i class="fas fa-user-plus"></i></div>
         <div class="gs-option-text">
-          <div class="gs-option-title">Sign up via WhatsApp</div>
-          <div class="gs-option-sub">Chat with our team and get onboarded within a week</div>
+          <div class="gs-option-title">Register your school</div>
+          <div class="gs-option-sub">Use the School ID and security code given by Soft School</div>
         </div>
         <i class="fas fa-arrow-right gs-arrow"></i>
-      </a>
+      </button>
 
       <button class="gs-option gs-option-video" onclick="openVideoFromGs()">
         <div class="gs-option-icon gs-icon-teal"><i class="fas fa-play"></i></div>
@@ -804,7 +805,74 @@
       </div>
 
       <div class="login-signup-row">
-        New here? <a href="https://wa.me/923181909541?text=Hello%20Soft%20School,%20I%20want%20to%20sign%20up!" target="_blank" class="btn-signup-login">Sign Up</a>
+        New here? <a href="javascript:void(0)" onclick="openRegisterFromLogin()" class="btn-signup-login">Sign Up</a>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ── REGISTRATION MODAL ── -->
+<div class="modal-overlay" id="registerModal" onclick="closeRegisterOutside(event)">
+  <div class="modal-box login-modal-box">
+    <button class="modal-close" onclick="closeRegister()" aria-label="Close registration"><i class="fas fa-times"></i></button>
+    <div class="login-card" id="registerCard">
+      <div class="login-modal-brand">
+        <img src="logo-icon.png" alt="Soft School" style="height:32px;">
+        <span class="logo-wordmark">Soft<strong>School</strong></span>
+      </div>
+
+      <div class="login-welcome">Register your school</div>
+      <p class="register-intro">Enter the School ID and 7-digit security code provided by Soft School, then choose your login username and password.</p>
+
+      <form id="registerForm" onsubmit="handleRegister(event)" novalidate>
+        <div class="field-group field-group-underline">
+          <div class="field-wrap field-wrap-underline">
+            <i class="fas fa-school field-icon"></i>
+            <input type="text" id="regSchoolId" placeholder="School ID (provided by Soft School)*" required aria-label="School ID">
+          </div>
+        </div>
+
+        <div class="field-group field-group-underline">
+          <div class="field-wrap field-wrap-underline">
+            <i class="fas fa-user field-icon"></i>
+            <input type="text" id="regUsername" placeholder="Choose a Username*" required autocomplete="username" aria-label="Username">
+          </div>
+        </div>
+
+        <div class="field-group field-group-underline">
+          <div class="field-wrap field-wrap-underline">
+            <i class="fas fa-lock field-icon"></i>
+            <input type="password" id="regPassword" placeholder="Choose a Password*" required autocomplete="new-password" aria-label="Password">
+            <button type="button" class="pw-toggle" onclick="toggleRegPw('regPassword','eyeIconReg')" aria-label="Toggle password visibility">
+              <i class="fas fa-eye" id="eyeIconReg"></i>
+            </button>
+          </div>
+        </div>
+
+        <div class="field-group field-group-underline">
+          <div class="field-wrap field-wrap-underline">
+            <i class="fas fa-lock field-icon"></i>
+            <input type="password" id="regPassword2" placeholder="Confirm Password*" required autocomplete="new-password" aria-label="Confirm password">
+            <button type="button" class="pw-toggle" onclick="toggleRegPw('regPassword2','eyeIconReg2')" aria-label="Toggle password visibility">
+              <i class="fas fa-eye" id="eyeIconReg2"></i>
+            </button>
+          </div>
+        </div>
+
+        <div class="field-group field-group-underline">
+          <div class="field-wrap field-wrap-underline">
+            <i class="fas fa-shield-halved field-icon"></i>
+            <input type="text" id="regCode" placeholder="7-digit Security Code*" required maxlength="7" spellcheck="false" autocapitalize="off" aria-label="Security code">
+          </div>
+          <div class="register-hint">7 characters, lowercase letters and numbers only (e.g. a7k2p9x).</div>
+        </div>
+
+        <button type="submit" class="btn-login btn-ripple" id="registerBtn"><i class="fas fa-user-plus"></i> Register</button>
+      </form>
+
+      <div class="login-signup-row">
+        Already registered? <a href="javascript:void(0)" onclick="openLoginFromRegister()" class="btn-signup-login">Login</a>
       </div>
     </div>
   </div>

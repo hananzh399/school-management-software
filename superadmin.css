@@ -260,6 +260,49 @@ table.sa-table { width: 100%; border-collapse: collapse; }
 }
 .sa-credentials-box b { color: var(--teal-800); }
 
+/* Auto-generated credentials note (Add School modal) */
+.sa-autocred-note {
+  display: flex; gap: 12px; align-items: flex-start; background: var(--teal-100);
+  border: 1px solid var(--teal-200); border-radius: var(--radius-sm); padding: 14px 16px; margin-bottom: 16px;
+}
+.sa-autocred-note i { color: var(--teal-600); font-size: 1rem; margin-top: 2px; }
+.sa-autocred-note b { display: block; color: var(--teal-800); font-size: 0.88rem; margin-bottom: 3px; }
+.sa-autocred-note span { display: block; color: var(--ink-soft); font-size: 0.8rem; line-height: 1.45; }
+
+/* One-time security code modal */
+.sa-cred-modal { max-width: 480px; }
+.sa-cred-warning {
+  display: flex; gap: 10px; align-items: flex-start; background: var(--amber-100); color: var(--amber-600);
+  border: 1px solid var(--amber-500); border-radius: var(--radius-sm); padding: 12px 14px;
+  font-size: 0.82rem; line-height: 1.5; margin-bottom: 20px;
+}
+.sa-cred-warning i { margin-top: 2px; }
+.sa-cred-warning strong { color: var(--amber-600); }
+.sa-cred-item { margin-bottom: 16px; }
+.sa-cred-item label { display: block; font-size: 0.78rem; font-weight: 700; color: var(--ink-soft); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 6px; }
+.sa-cred-value {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  background: var(--paper); border: 1.5px solid var(--border); border-radius: var(--radius-sm);
+  padding: 11px 13px; font-size: 0.95rem; font-weight: 700; color: var(--ink);
+}
+.sa-cred-code-box {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  background: var(--teal-900); border-radius: var(--radius-sm); padding: 16px 16px;
+}
+.sa-cred-code {
+  font-family: 'Space Grotesk', monospace; font-size: 1.5rem; font-weight: 700; letter-spacing: 0.18em;
+  color: var(--white);
+}
+.sa-cred-copy-btn {
+  background: var(--teal-600); border: none; color: var(--white); width: 34px; height: 34px; flex-shrink: 0;
+  border-radius: var(--radius-sm); cursor: pointer; font-size: 0.85rem; display: flex; align-items: center; justify-content: center;
+  transition: background .15s;
+}
+.sa-cred-value .sa-cred-copy-btn { background: var(--teal-100); color: var(--teal-700); }
+.sa-cred-value .sa-cred-copy-btn:hover { background: var(--teal-200); }
+.sa-cred-code-box .sa-cred-copy-btn:hover { background: var(--teal-500); }
+.sa-cred-copy-all { width: 100%; justify-content: center; display: flex; align-items: center; gap: 8px; margin-top: 4px; }
+
 .sa-toast-wrap { position: fixed; top: 18px; right: 18px; z-index: 400; display: flex; flex-direction: column; gap: 10px; }
 .sa-toast {
   background: var(--ink); color: white; padding: 12px 18px; border-radius: var(--radius-sm);
@@ -278,4 +321,133 @@ table.sa-table { width: 100%; border-collapse: collapse; }
   .sa-table, .sa-table tbody, .sa-table tr, .sa-table td { display: block; width: 100%; }
   .sa-table tbody tr { border-bottom: 1px solid var(--border); padding: 10px 0; }
   .sa-table tbody td { border: none; padding: 4px 22px; }
+}
+/* ── ADDED: header actions, plan manager, logo editing ─────── */
+.sa-header-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.sa-header-actions .sa-btn-secondary { display: flex; align-items: center; gap: 8px; }
+
+.sa-plan-list-box { margin-top: 18px; border: 1px solid var(--border); border-radius: var(--radius-md); padding: 16px; background: var(--paper); }
+.sa-plan-list-box h4 { font-size: 0.85rem; margin-bottom: 10px; color: var(--ink-soft); }
+.sa-plan-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  background: var(--white); border: 1px solid var(--border); border-radius: var(--radius-sm);
+  padding: 10px 12px; margin-bottom: 8px;
+}
+.sa-plan-row .info { font-size: 0.86rem; }
+.sa-plan-row .info b { display: block; font-size: 0.92rem; }
+.sa-plan-row .info small { color: var(--ink-faint); }
+.sa-plan-row .tag { font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--teal-700); background: var(--teal-100); padding: 4px 8px; border-radius: 999px; }
+.sa-plan-row .del { background: none; border: none; color: var(--red-600); cursor: pointer; font-size: 0.95rem; }
+
+/* ── ADDED: plan share / print controls ───────────────────── */
+.sa-plan-list-head {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 10px; flex-wrap: wrap; margin-bottom: 12px;
+}
+.sa-plan-list-head h4 { margin-bottom: 0; }
+.sa-plan-list-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.sa-mini-btn {
+  background: var(--white); border: 1.5px solid var(--border); color: var(--ink-soft);
+  padding: 7px 12px; border-radius: var(--radius-sm); font-size: 0.78rem; font-weight: 700;
+  cursor: pointer; display: inline-flex; align-items: center; gap: 6px; font-family: inherit;
+}
+.sa-mini-btn:hover { border-color: var(--teal-500); color: var(--teal-700); }
+.sa-mini-btn.whatsapp { border-color: #25D366; color: #128C4B; }
+.sa-mini-btn.whatsapp:hover { background: #E8F9EF; }
+.sa-plan-row .row-actions { display: flex; align-items: center; gap: 6px; }
+.sa-plan-row .icon-btn {
+  background: none; border: 1.5px solid var(--border); border-radius: 8px; cursor: pointer;
+  width: 30px; height: 30px; display: inline-flex; align-items: center; justify-content: center;
+  color: var(--ink-soft); font-size: 0.8rem;
+}
+.sa-plan-row .icon-btn:hover { border-color: var(--teal-500); color: var(--teal-700); }
+.sa-plan-row .icon-btn.wa:hover { border-color: #25D366; color: #128C4B; }
+.sa-plan-row .icon-btn.danger { color: var(--red-600); border-color: #F2D3D3; }
+.sa-plan-row .icon-btn.danger:hover { background: #FBEAEA; }
+
+.sa-plans-empty {
+  padding: 28px 16px; text-align: center; color: var(--ink-faint); font-size: 0.86rem;
+  border: 1.5px dashed var(--border); border-radius: var(--radius-md); background: var(--white);
+}
+.sa-plans-empty i { display: block; font-size: 1.6rem; margin-bottom: 8px; color: var(--teal-200); }
+
+/* ── PRINT SHEET (hidden on screen, shown when printing) ──── */
+#saPrintArea { display: none; }
+@media print {
+  body * { visibility: hidden !important; }
+  #saPrintArea, #saPrintArea * { visibility: visible !important; }
+  #saPrintArea {
+    display: block !important; position: absolute; inset: 0; width: 100%;
+    padding: 24px; background: #fff; color: #000;
+  }
+  .sa-modal-overlay { display: none !important; }
+}
+#saPrintArea .pr-head { text-align: center; margin-bottom: 22px; border-bottom: 2px solid var(--teal-700); padding-bottom: 12px; }
+#saPrintArea .pr-brand { display: flex; align-items: center; justify-content: center; gap: 12px; margin-bottom: 10px; }
+#saPrintArea .pr-logo { height: 52px; width: 52px; border-radius: 12px; object-fit: contain; }
+#saPrintArea .pr-brand-text { text-align: left; }
+#saPrintArea .pr-brand-name { font-family: 'Space Grotesk', sans-serif; font-size: 1.5rem; font-weight: 700; color: var(--teal-800); line-height: 1.1; }
+#saPrintArea .pr-brand-tag { font-size: 0.78rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-soft); }
+#saPrintArea .pr-validity { font-size: 0.76rem; color: var(--amber-600); font-weight: 600; margin-top: 2px; }
+#saPrintArea .pr-foot img { height: 16px; width: 16px; vertical-align: -3px; margin-right: 4px; object-fit: contain; }
+#saPrintArea .pr-head h1 { font-size: 1.5rem; }
+#saPrintArea .pr-head p { font-size: 0.85rem; color: var(--ink-soft); }
+#saPrintArea .pr-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
+#saPrintArea .pr-card { border: 1.5px solid var(--border); border-radius: 12px; padding: 14px 16px; break-inside: avoid; }
+#saPrintArea .pr-card h3 { font-size: 1.05rem; }
+#saPrintArea .pr-card .pr-price { font-size: 1.3rem; font-weight: 800; color: var(--teal-700); }
+#saPrintArea .pr-card .pr-price span { font-size: 0.75rem; font-weight: 500; color: var(--ink-soft); }
+#saPrintArea .pr-card ul { list-style: none; margin-top: 8px; font-size: 0.82rem; }
+#saPrintArea .pr-card ul li { margin-bottom: 4px; }
+#saPrintArea .pr-foot { margin-top: 22px; font-size: 0.78rem; color: var(--ink-soft); text-align: center; }
+
+
+/* ── ANNUAL PLAN VALIDITY / EXPIRY ─────────────────────────── */
+.sa-validity-box {
+  border: 1px solid var(--border); border-left: 4px solid var(--teal-600);
+  border-radius: var(--radius-md); padding: 16px; background: var(--paper); margin-bottom: 18px;
+}
+.sa-validity-box.warn { border-left-color: var(--amber-500); background: #FFF8EC; }
+.sa-validity-box.expired { border-left-color: var(--red-600); background: #FDF0F0; }
+.sa-validity-box h4 { font-size: 0.85rem; margin-bottom: 12px; color: var(--ink-soft); }
+.sa-validity-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+.sa-validity-grid small { display: block; font-size: 0.72rem; color: var(--ink-faint); text-transform: uppercase; letter-spacing: 0.04em; }
+.sa-validity-grid b { font-size: 0.92rem; }
+
+.sa-expiry-overlay { z-index: 400; }
+.sa-expiry-modal { max-width: 560px; }
+.sa-expiry-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+  padding: 12px 14px; border: 1px solid var(--border); border-left: 4px solid var(--amber-500);
+  border-radius: var(--radius-sm); background: var(--paper); margin-bottom: 10px;
+}
+.sa-expiry-row.expired { border-left-color: var(--red-600); background: #FDF0F0; }
+.sa-expiry-row .info b { display: block; font-size: 0.95rem; }
+.sa-expiry-row .info small { font-size: 0.76rem; color: var(--ink-faint); }
+.sa-expiry-row .right { display: flex; align-items: center; gap: 10px; }
+
+/* Reminder banner + popup for the SCHOOL dashboard (plan-expiry.js) */
+.ss-expiry-banner {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  padding: 12px 18px; background: #FFF3DC; color: #7A4B08; border-bottom: 1px solid #F0D7A8;
+  font-size: 0.9rem; font-weight: 600;
+}
+.ss-expiry-banner.expired { background: #FDE7E7; color: #8E2020; border-bottom-color: #F0BDBD; }
+.ss-expiry-overlay {
+  position: fixed; inset: 0; background: rgba(11,43,40,0.45); backdrop-filter: blur(3px);
+  display: none; align-items: center; justify-content: center; z-index: 900; padding: 20px;
+}
+.ss-expiry-overlay.open { display: flex; }
+.ss-expiry-card {
+  background: #fff; border-radius: 24px; max-width: 440px; width: 100%; padding: 28px;
+  text-align: center; box-shadow: 0 30px 60px rgba(0,0,0,0.25);
+}
+.ss-expiry-card img { height: 46px; width: 46px; border-radius: 12px; object-fit: contain; margin-bottom: 10px; }
+.ss-expiry-card h3 { font-family: 'Space Grotesk', sans-serif; font-size: 1.25rem; margin-bottom: 8px; color: #0B2B28; }
+.ss-expiry-card p { font-size: 0.92rem; color: #44615D; margin-bottom: 6px; }
+.ss-expiry-card .ss-days { font-size: 2rem; font-weight: 800; font-family: 'Space Grotesk', sans-serif; color: #C97A1B; }
+.ss-expiry-card.expired .ss-days { color: #C43D3D; }
+.ss-expiry-card button {
+  margin-top: 16px; background: #E0922B; color: #fff; border: none; padding: 11px 22px;
+  border-radius: 10px; font-weight: 700; cursor: pointer; font-size: 0.9rem;
 }

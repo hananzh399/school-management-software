@@ -77,6 +77,38 @@ const SETTINGS_API_BASE = 'http://localhost:8080/api/settings';
 // Last-known settings row fetched from the backend (the single source of truth).
 let _serverSettings = null;
 
+/**
+ * Every settings route is now scoped to a school: /api/settings/{schoolId}...
+ * (see SchoolSettingsController). Pull the logged-in school's schoolId from
+ * the session that access-control.js sets up at login — it embeds the full
+ * backend School record, so `.schoolId` (e.g. "SS_77_12") is always there
+ * by the time this page runs (access-control.js redirects to index.html
+ * first if nobody's logged in).
+ */
+function _getSchoolId() {
+  if (window.SoftSchoolAdmin && typeof window.SoftSchoolAdmin.getCurrentSchool === 'function') {
+    const school = window.SoftSchoolAdmin.getCurrentSchool();
+    if (school && school.schoolId) return school.schoolId;
+  }
+  // Fallback: read the session straight out of localStorage in case
+  // SoftSchoolAdmin isn't available for some reason.
+  try {
+    const session = JSON.parse(localStorage.getItem('softschool_session'));
+    if (session && session.schoolId) return session.schoolId;
+  } catch (e) { /* ignore */ }
+  return null;
+}
+
+/** Builds /api/settings/{schoolId}[suffix], throwing early with a clear
+ *  message instead of letting a bad URL silently 404 against the API. */
+function _settingsUrl(suffix = '') {
+  const schoolId = _getSchoolId();
+  if (!schoolId) {
+    throw new Error('No logged-in school found — please log in again before changing settings.');
+  }
+  return `${SETTINGS_API_BASE}/${encodeURIComponent(schoolId)}${suffix}`;
+}
+
 async function apiRequest(url, options = {}) {
   const res = await fetch(url, {
     headers: { 'Content-Type': 'application/json' },
@@ -90,10 +122,10 @@ async function apiRequest(url, options = {}) {
   return ct.includes('application/json') ? res.json() : null;
 }
 
-const apiGetSettings   = ()        => apiRequest(SETTINGS_API_BASE);
-const apiSaveAll       = (payload) => apiRequest(SETTINGS_API_BASE, { method: 'PUT', body: JSON.stringify(payload) });
-const apiSaveTiming    = (payload) => apiRequest(`${SETTINGS_API_BASE}/timing`, { method: 'PUT', body: JSON.stringify(payload) });
-const apiResetSettings = ()        => apiRequest(`${SETTINGS_API_BASE}/reset`, { method: 'POST' });
+const apiGetSettings   = ()        => apiRequest(_settingsUrl());
+const apiSaveAll       = (payload) => apiRequest(_settingsUrl(), { method: 'PUT', body: JSON.stringify(payload) });
+const apiSaveTiming    = (payload) => apiRequest(_settingsUrl('/timing'), { method: 'PUT', body: JSON.stringify(payload) });
+const apiResetSettings = ()        => apiRequest(_settingsUrl('/reset'), { method: 'POST' });
 
 // ── Shape converters: backend (SchoolSettings.ClassFee) <-> frontend (name/sections[]) ──
 function _classesApiToLocal(apiClasses) {
@@ -965,7 +997,11 @@ async function saveAll() {
 //  RESET  (POST /api/settings/reset)
 // ═══════════════════════════════════════════════
 async function resetSettings() {
-  if (!confirm('Reset all settings to defaults?')) return;
+  const resetConfirmed = await showConfirmDialog(
+    'Reset all settings to defaults?',
+    { title: 'Reset Settings', confirmLabel: 'Reset', danger: false }
+  );
+  if (!resetConfirmed) return;
   try {
     const fresh = await apiResetSettings();
     _serverSettings = fresh;
@@ -1000,6 +1036,45 @@ function showToast(msg, type = 'success') {
   dot.className = 'toast-dot ' + type;
   t.classList.add('show');
   setTimeout(() => t.classList.remove('show'), 3000);
+}
+
+/* ── Generic in-app confirm dialog (replaces window.confirm) ──
+   Reuses the same .modal-overlay / .modal-box visual style as the
+   existing delete-confirmation modal, but as its own overlay so it
+   doesn't interfere with that modal's dedicated click handlers. */
+function showConfirmDialog(message, opts = {}) {
+  return new Promise(resolve => {
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay active';
+    overlay.innerHTML = `
+      <div class="modal-box">
+        <div class="modal-icon"><i class="fas ${opts.danger === false ? 'fa-circle-question' : 'fa-triangle-exclamation'}"></i></div>
+        <h3></h3>
+        <p></p>
+        <div class="modal-actions">
+          <button type="button" class="btn-cancel"></button>
+          <button type="button" class="${opts.danger === false ? 'btn-danger' : 'btn-danger'}"></button>
+        </div>
+      </div>`;
+    overlay.querySelector('h3').textContent = opts.title || 'Please Confirm';
+    overlay.querySelector('p').textContent = message;
+    overlay.querySelector('.btn-cancel').textContent = opts.cancelLabel || 'Cancel';
+    const confirmBtn = overlay.querySelector('.btn-danger');
+    confirmBtn.textContent = opts.confirmLabel || 'Confirm';
+    if (opts.danger === false) {
+      confirmBtn.style.background = 'var(--accent)';
+    }
+
+    document.body.appendChild(overlay);
+
+    function close(result) {
+      overlay.remove();
+      resolve(result);
+    }
+    overlay.querySelector('.btn-cancel').addEventListener('click', () => close(false));
+    confirmBtn.addEventListener('click', () => close(true));
+    overlay.addEventListener('click', e => { if (e.target === overlay) close(false); });
+  });
 }
 
 // ═══════════════════════════════════════════════

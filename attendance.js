@@ -761,10 +761,11 @@ async function loadAttendanceFromDatabase() {
     }
 }
  
-function toast(msg) {
+function toast(msg, type = "success") {
     const t = $("#toast");
     t.textContent = msg;
-    t.classList.remove("hidden");
+    t.classList.remove("hidden", "toast-success", "toast-error", "toast-info");
+    t.classList.add("toast-" + type);
     requestAnimationFrame(() => t.classList.add("show"));
     setTimeout(() => { t.classList.remove("show"); setTimeout(() => t.classList.add("hidden"), 300); }, 2200);
 }
@@ -3186,13 +3187,13 @@ function initCamera() {
         });
 
         if (response.ok) {
-            alert("✅ SUCCESS: Attendance and Photos saved to MySQL!");
+            toast("Attendance and photos saved to database!", "success");
         } else {
-            alert("❌ ERROR: Check the terminal for Java errors.");
+            toast("Could not save — check the server logs.", "error");
         }
     } catch (err) {
         console.error("Connection failed:", err);
-        alert("❌ CRITICAL: Java Backend is not running!");
+        toast("Backend server is not running.", "error");
     }
 }
 

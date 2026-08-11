@@ -32,16 +32,22 @@
     <div class="sa-header-row">
       <div>
         <h1>Schools</h1>
-        <p>Add, manage, and control access for every school using Soft School.</p>
+        <p>Add, manage, and control access for every school using Soft School. All plans are annual (1 year).</p>
       </div>
-      <button class="sa-btn-add" id="btnOpenAddSchool"><i class="fas fa-plus"></i> Add School</button>
+      <div class="sa-header-actions">
+        <button class="sa-btn-secondary" id="btnSharePlansTop"><i class="fab fa-whatsapp"></i> Share Plans</button>
+        <button class="sa-btn-secondary" id="btnPrintPlansTop"><i class="fas fa-print"></i> Print Plans</button>
+        <button class="sa-btn-secondary" id="btnOpenCreatePlan"><i class="fas fa-layer-group"></i> Create Plan</button>
+        <button class="sa-btn-secondary" id="btnOpenManagePlans"><i class="fas fa-pen-to-square"></i> Manage Plans</button>
+        <button class="sa-btn-add" id="btnOpenAddSchool"><i class="fas fa-plus"></i> Add School</button>
+      </div>
     </div>
 
     <div class="sa-stats">
       <div class="sa-stat accent-teal"><div class="num" id="statTotal">0</div><div class="lbl">Total Schools</div></div>
       <div class="sa-stat accent-green"><div class="num" id="statActive">0</div><div class="lbl">Active</div></div>
       <div class="sa-stat accent-coral"><div class="num" id="statBlocked">0</div><div class="lbl">Blocked</div></div>
-      <div class="sa-stat accent-amber"><div class="num" id="statRevenue">Rs 0</div><div class="lbl">Monthly Plan Value</div></div>
+      <div class="sa-stat accent-amber"><div class="num" id="statRevenue">Rs 0</div><div class="lbl">Annual Plan Value</div></div>
     </div>
 
     <div class="sa-panel">
@@ -80,6 +86,14 @@
         </div>
       </div>
 
+      <div class="sa-form-row full sa-field-group">
+        <div>
+          <label>School ID <span style="font-size:0.76rem;font-weight:400;color:var(--ink-faint);">(auto-generated, can't be edited)</span></label>
+          <input type="text" id="newSchoolIdPreview" value="Generating…" disabled>
+          <p class="sa-hint">Assigned automatically when you save — every school gets the next number in the sequence.</p>
+        </div>
+      </div>
+
       <div class="sa-form-row full">
         <div class="sa-field-group">
           <label>School logo</label>
@@ -96,14 +110,13 @@
       </div>
       <div class="sa-plans" id="planCards"></div>
 
-      <div class="sa-form-row">
-        <div class="sa-field-group">
-          <label>Username (for school login)</label>
-          <input type="text" id="newSchoolUsername" placeholder="e.g. greenwood_admin">
-        </div>
-        <div class="sa-field-group">
-          <label>Password</label>
-          <input type="text" id="newSchoolPassword" placeholder="Set a login password">
+      <div class="sa-form-row full">
+        <div class="sa-autocred-note">
+          <i class="fas fa-shield-halved"></i>
+          <div>
+            <b>The login password is generated automatically.</b>
+            <span>Schools don't have a username — they log in with their School ID (shown above) and a permanent 7-character security code (numbers + lowercase letters) created the moment you add this school. Both are shown here right away, and you can view them again any time from this school's management page.</span>
+          </div>
         </div>
       </div>
 
@@ -114,6 +127,12 @@
             <label>Custom student limit</label>
             <input type="number" id="newSchoolStudentLimit" placeholder="Uses plan default">
           </div>
+          <div class="sa-field-group">
+            <label>Custom archive student limit</label>
+            <input type="number" id="newSchoolArchiveLimit" placeholder="Uses plan default">
+          </div>
+        </div>
+        <div class="sa-form-row">
           <div class="sa-field-group">
             <label>Extra features to lock</label>
             <select id="newSchoolExtraLock">
@@ -127,6 +146,47 @@
     <div class="sa-modal-foot">
       <button class="sa-btn-secondary" id="cancelAddSchool">Cancel</button>
       <button class="sa-btn-add" id="saveNewSchool"><i class="fas fa-check"></i> Add School</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════ NEW SCHOOL CREDENTIALS MODAL ══════════════
+     Shown immediately after a school is created. The security
+     code is permanent — it can also be viewed again later from
+     that school's management page. ══════════════ -->
+<div class="sa-modal-overlay" id="credentialsOverlay">
+  <div class="sa-modal sa-cred-modal">
+    <div class="sa-modal-head">
+      <h2><i class="fas fa-key"></i> School added — save these credentials</h2>
+    </div>
+    <div class="sa-modal-body">
+      <div class="sa-cred-warning">
+        <i class="fas fa-triangle-exclamation"></i>
+        This is a <strong>permanent</strong> security code. Copy it now and pass it to the school — you can always come back and view it again from this school's management page.
+      </div>
+
+      <div class="sa-cred-item">
+        <label>School</label>
+        <div class="sa-cred-value" id="credSchoolName">—</div>
+      </div>
+
+      <div class="sa-cred-item">
+        <label>School ID</label>
+        <div class="sa-cred-value" id="credSchoolId">—</div>
+      </div>
+
+      <div class="sa-cred-item">
+        <label>Security code</label>
+        <div class="sa-cred-code-box">
+          <span class="sa-cred-code" id="credSecurityCode">— — — — — — —</span>
+          <button type="button" class="sa-cred-copy-btn" id="copyCredCode" title="Copy security code"><i class="fas fa-copy"></i></button>
+        </div>
+      </div>
+
+      <button type="button" class="sa-btn-secondary sa-cred-copy-all" id="copyCredAll"><i class="fas fa-copy"></i> Copy School ID &amp; code together</button>
+    </div>
+    <div class="sa-modal-foot">
+      <button class="sa-btn-add" id="closeCredentialsModal"><i class="fas fa-check"></i> I've saved this, done</button>
     </div>
   </div>
 </div>
@@ -145,6 +205,82 @@
       <button class="sa-btn-danger" id="deleteSchoolBtn"><i class="fas fa-trash"></i> Delete school</button>
       <button class="sa-btn-secondary" id="closeManageSchool2">Close</button>
       <button class="sa-btn-add" id="saveManageSchool"><i class="fas fa-check"></i> Save changes</button>
+    </div>
+  </div>
+</div>
+
+
+<!-- ══════════════ CREATE / MANAGE PLANS MODAL ══════════════ -->
+<div class="sa-modal-overlay" id="createPlanOverlay">
+  <div class="sa-modal">
+    <div class="sa-modal-head">
+      <h2><i class="fas fa-layer-group"></i> Create a plan</h2>
+      <button class="sa-modal-close" id="closeCreatePlan"><i class="fas fa-times"></i></button>
+    </div>
+    <div class="sa-modal-body">
+      <div class="sa-form-row full sa-field-group">
+        <div>
+          <label>Plan name</label>
+          <input type="text" id="newPlanName" placeholder="e.g. Standard">
+        </div>
+      </div>
+
+      <div class="sa-form-row">
+        <div class="sa-field-group">
+          <label>Amount (Rs / year — annual plan)</label>
+          <input type="number" id="newPlanPrice" min="0" placeholder="e.g. 5000">
+        </div>
+        <div class="sa-field-group">
+          <label>Initial student limit</label>
+          <input type="number" id="newPlanLimit" min="1" placeholder="e.g. 300">
+        </div>
+      </div>
+
+      <div class="sa-form-row">
+        <div class="sa-field-group">
+          <label>Initial archive student limit</label>
+          <input type="number" id="newPlanArchiveLimit" min="0" placeholder="e.g. 500">
+        </div>
+      </div>
+
+      <div class="sa-limits-box">
+        <h4><i class="fas fa-unlock"></i> Features included in this plan — toggle ON to include</h4>
+        <div class="sa-lock-list" id="planFeatureToggles"></div>
+        <p class="sa-hint">Anything left OFF is locked for every school on this plan (you can still fine-tune per school later).</p>
+      </div>
+
+      <div class="sa-plan-list-box">
+        <div class="sa-plan-list-head">
+          <h4><i class="fas fa-list"></i> Your plans</h4>
+          <div class="sa-plan-list-actions">
+            <button type="button" class="sa-mini-btn whatsapp" id="btnShareAllWhatsApp"><i class="fab fa-whatsapp"></i> WhatsApp</button>
+            <button type="button" class="sa-mini-btn" id="btnShareAllOther"><i class="fas fa-share-nodes"></i> Share</button>
+            <button type="button" class="sa-mini-btn" id="btnCopyAllPlans"><i class="fas fa-copy"></i> Copy</button>
+            <button type="button" class="sa-mini-btn" id="btnPrintAllPlans"><i class="fas fa-print"></i> Print</button>
+          </div>
+        </div>
+        <div id="existingPlansList"></div>
+      </div>
+    </div>
+    <div class="sa-modal-foot">
+      <button class="sa-btn-secondary" id="cancelCreatePlan">Cancel</button>
+      <button class="sa-btn-add" id="saveNewPlan"><i class="fas fa-check"></i> Create Plan</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════ VIEW & MANAGE PLANS MODAL ══════════════ -->
+<div class="sa-modal-overlay" id="managePlansOverlay">
+  <div class="sa-modal">
+    <div class="sa-modal-head">
+      <h2 id="managePlansTitle"><i class="fas fa-layer-group"></i> View &amp; manage plans</h2>
+      <button class="sa-modal-close" id="closeManagePlans"><i class="fas fa-times"></i></button>
+    </div>
+    <div class="sa-modal-body" id="managePlansBody">
+      <!-- populated by JS -->
+    </div>
+    <div class="sa-modal-foot" id="managePlansFoot">
+      <button class="sa-btn-secondary" id="closeManagePlans2">Close</button>
     </div>
   </div>
 </div>

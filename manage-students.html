@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Student Management |SoftSchool</title>
+    <link rel="icon" type="image/png" href="logo-icon.png">
     <meta name="description" content="SoftSchool Student Management - Manage student admissions, records and database.">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
@@ -18,7 +19,7 @@
     <aside id="sidebar" class="sidebar">
         <div class="sidebar-header">
             <div class="brand">
-                <!-- <img src="logo-icon.png" alt="SoftSchool Logo" class="brand-logo"> -->
+                <img src="logo-icon.png" alt="SoftSchool Logo" class="brand-logo">
                 <span class="brand-name">Soft<strong>School</strong></span>
             </div>
             <button id="close-sidebar" class="close-btn" aria-label="Close sidebar">
@@ -52,6 +53,10 @@
             <a href="manage-finance.html" class="nav-link">
                 <i class="fas fa-file-invoice-dollar"></i>
                 <span>Fees &amp; Finance</span>
+            </a>
+            <a href="reports.html" class="nav-link">
+                <i class="fas fa-chart-pie"></i>
+                <span>Reports &amp; Analytics</span>
             </a>
             <a href="settings.html" class="nav-link">
                 <i class="fas fa-cog"></i>
@@ -580,6 +585,7 @@
                             <p>Click to upload student certificate (PDF or Image)</p>
                             <input type="file" id="cert-upload" accept="image/*,application/pdf">
                             <input type="hidden" name="certData" id="cert-data">
+                            <p id="cert-upload-status" class="upload-hint" style="display:none;color:var(--text-muted);font-size:0.78rem;margin-top:6px;"><i class="fas fa-check-circle" style="color:#10b981;"></i> <span>A document is already on file. Uploading a new one will replace it.</span></p>
                             <p id="cert-upload-error" class="upload-error-msg" role="alert"><i class="fas fa-circle-exclamation"></i> <span></span></p>
                         </div>
                     </div>
@@ -960,8 +966,11 @@
                             </div>
                         </div>
                         <div class="slc-control-group slc-tel-group">
-                            <label class="slc-control-label"><i class="fas fa-phone"></i> School Telephone</label>
-                            <input type="text" id="slc-school-tel-input" class="slc-search-input" placeholder="e.g. +92 51 1234567" value="+92 51 1234567" oninput="document.getElementById('slc-school-tel').textContent=this.value">
+                            <label class="slc-control-label"><i class="fas fa-phone"></i> School Contact</label>
+                            <div class="slc-search-input" style="display:flex;align-items:center;gap:6px;cursor:default;background:var(--bg-secondary,rgba(120,120,120,0.08));">
+                                <i class="fas fa-lock" style="font-size:11px;opacity:0.6;" title="Set on the Settings page"></i>
+                                <span id="slc-contact-preview" style="font-size:12.5px;">Loaded from Settings</span>
+                            </div>
                         </div>
                     </div>
                     <div class="slc-manual-row">
@@ -1016,9 +1025,9 @@
                                 <div class="slc-l-school-block">
                                     <div class="slc-l-school-name" id="slc-school-name">ST. LAWRENCE INTERNATIONAL SCHOOL</div>
                                     <div class="slc-l-school-meta">
-                                        <span><i class="fas fa-map-marker-alt"></i> Islamabad, Pakistan</span>
+                                        <span><i class="fas fa-map-marker-alt"></i> <span id="slc-school-address">—</span></span>
                                         <span class="slc-l-dot">&bull;</span>
-                                        <span><i class="fas fa-phone"></i> <span id="slc-school-tel">+92 51 1234567</span></span>
+                                        <span><i class="fas fa-phone"></i> <span id="slc-school-tel">—</span></span>
                                     </div>
                                 </div>
                                 <div class="slc-l-serial">
@@ -1120,8 +1129,11 @@
                             </select>
                         </div>
                         <div class="slc-control-group slc-tel-group">
-                            <label class="slc-control-label"><i class="fas fa-phone"></i> School Telephone</label>
-                            <input type="text" id="char-school-tel-input" class="slc-search-input" placeholder="e.g. +92 51 1234567" value="+92 51 1234567" oninput="document.getElementById('char-school-tel').textContent=this.value">
+                            <label class="slc-control-label"><i class="fas fa-phone"></i> School Contact</label>
+                            <div class="slc-search-input" style="display:flex;align-items:center;gap:6px;cursor:default;background:var(--bg-secondary,rgba(120,120,120,0.08));">
+                                <i class="fas fa-lock" style="font-size:11px;opacity:0.6;" title="Set on the Settings page"></i>
+                                <span style="font-size:12.5px;">Loaded from Settings</span>
+                            </div>
                         </div>
                     </div>
                     <div class="slc-manual-row">
@@ -1184,9 +1196,9 @@
                                 <div class="char-l-school-block">
                                     <div class="char-school-name" id="char-school-name">ST. LAWRENCE INTERNATIONAL SCHOOL</div>
                                     <div class="char-l-school-meta">
-                                        <span><i class="fas fa-map-marker-alt"></i> Islamabad, Pakistan</span>
+                                        <span><i class="fas fa-map-marker-alt"></i> <span id="char-school-address">—</span></span>
                                         <span class="char-l-dot">&bull;</span>
-                                        <span><i class="fas fa-phone"></i> <span id="char-school-tel">+92 51 1234567</span></span>
+                                        <span><i class="fas fa-phone"></i> <span id="char-school-tel">—</span></span>
                                     </div>
                                 </div>
                             </div>

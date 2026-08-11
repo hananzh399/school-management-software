@@ -70,11 +70,7 @@ const SETTINGS_CLASSES_KEY = 'edu_class_configs';
 const ALL_STUDENTS_KEY = '__ALL__';
 
 const DEFAULT_CLASS_CONFIGS = [
-    { name: 'Montessori', fee: 3000, fund: 2000, sections: ['A', 'B'] },
-    { name: 'Nursery',    fee: 3500, fund: 2000, sections: ['A', 'B'] },
-    { name: 'Prep',       fee: 4000, fund: 2000, sections: ['A', 'B'] },
-    { name: 'Grade 1',    fee: 4500, fund: 2000, sections: ['A', 'B'] },
-    { name: 'Grade 2',    fee: 4800, fund: 2000, sections: ['A', 'B'] },
+   
 ];
 
 /** Read class configs from settings page (localStorage), with fallback. */
@@ -194,6 +190,47 @@ function getSchoolLogoUrl() {
     return '';
 }
 
+// Settings page persists the school's contact details (address/phone/etc.)
+// to localStorage under this key — see settings.js SCHOOL_INFO_KEY /
+// saveSchoolInfo(). This page only ever READS it; it is never written here.
+const SCHOOL_INFO_KEY = 'edu_school_info';
+
+/** Read the school info object saved by the Settings page, safely. */
+function getSchoolInfo() {
+    try {
+        const raw = localStorage.getItem(SCHOOL_INFO_KEY);
+        const obj = raw ? JSON.parse(raw) : null;
+        return (obj && typeof obj === 'object') ? obj : {};
+    } catch (e) { /* ignore */ }
+    return {};
+}
+
+/**
+ * Read the logged-in school's contact PHONE NUMBER(S) — set on the Settings
+ * page (School Info → Phone / Alternate Phone), never editable from here.
+ * Used to stamp every printed document (Admission Form, Student Record,
+ * Student List Report, School Leaving Certificate, Character Certificate)
+ * with the school's real contact number. Combines the primary and alternate
+ * numbers when both are set; returns '' if neither has been set yet.
+ */
+function getSchoolContactPhone() {
+    const info    = getSchoolInfo();
+    const primary = (info.phone    || '').trim();
+    const alt     = (info.phoneAlt || '').trim();
+    if (primary && alt) return `${primary} / ${alt}`;
+    return primary || alt;
+}
+
+/**
+ * Read the logged-in school's contact ADDRESS — set on the Settings page
+ * (School Info → Address), never editable from here. Used alongside
+ * getSchoolContactPhone() on every printed document so the school's real
+ * address always appears, without this page ever letting anyone change it.
+ */
+function getSchoolContactAddress() {
+    return (getSchoolInfo().address || '').trim();
+}
+
 /** Escape a string for safe use inside a RegExp (prefix may contain odd chars). */
 function escapeRegExp(str) {
     return String(str).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -211,6 +248,79 @@ function escapeRegExp(str) {
 let updOrphanFilterActive = false;
 let voOrphanFilterActive = false;
 
+/* ══════════════════════════════════════════════════════════════
+   IN-APP CONFIRM DIALOG — replaces native window.confirm() with a
+   themed dialog that matches the rest of the app. Self-contained:
+   injects its own markup + styles on first use, so no HTML edits
+   are required. Usage: const ok = await ssConfirm("message", opts)
+   ══════════════════════════════════════════════════════════════ */
+function ssConfirm(message, opts = {}) {
+    if (!document.getElementById('ss-confirm-styles')) {
+        const style = document.createElement('style');
+        style.id = 'ss-confirm-styles';
+        style.textContent = `
+.ss-confirm-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.55);backdrop-filter:blur(3px);display:flex;align-items:center;justify-content:center;z-index:10000;opacity:0;transition:opacity .2s ease;padding:20px;}
+.ss-confirm-overlay.show{opacity:1;}
+.ss-confirm-box{background:var(--bg-card,#1e293b);border:1px solid var(--border-subtle,rgba(148,163,184,.2));border-radius:var(--radius-lg,20px);box-shadow:0 24px 60px rgba(0,0,0,0.4);padding:26px 24px 22px;max-width:380px;width:100%;text-align:center;transform:translateY(14px) scale(.97);transition:transform .2s ease;font-family:inherit;}
+.ss-confirm-overlay.show .ss-confirm-box{transform:translateY(0) scale(1);}
+.ss-confirm-icon{width:52px;height:52px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:20px;margin:0 auto 14px;}
+.ss-confirm-icon.ss-danger{background:rgba(239,68,68,.12);color:#ef4444;}
+.ss-confirm-icon.ss-info{background:rgba(59,130,246,.12);color:#3b82f6;}
+.ss-confirm-title{font-size:16px;font-weight:800;color:var(--text-primary,#e8ecf4);margin-bottom:8px;}
+.ss-confirm-message{font-size:13px;color:var(--text-secondary,#8892a8);line-height:1.55;margin-bottom:20px;white-space:pre-line;}
+.ss-confirm-actions{display:flex;gap:10px;}
+.ss-confirm-btn{flex:1;padding:10px 14px;border-radius:var(--radius-md,12px);font-family:inherit;font-size:13px;font-weight:700;cursor:pointer;border:1px solid var(--border-subtle,rgba(148,163,184,.2));background:transparent;color:var(--text-secondary,#8892a8);transition:all .2s ease;}
+.ss-confirm-btn:hover{background:rgba(255,255,255,.06);}
+[data-theme="light"] .ss-confirm-btn:hover{background:rgba(0,0,0,.04);}
+.ss-confirm-ok{border-color:transparent;background:#17716A;color:#fff;}
+.ss-confirm-ok:hover{background:#145f59;}
+.ss-confirm-ok.ss-danger-btn{background:#ef4444;}
+.ss-confirm-ok.ss-danger-btn:hover{background:#dc2626;}
+@media (max-width:480px){.ss-confirm-box{padding:22px 18px 18px;}}
+`;
+        document.head.appendChild(style);
+    }
+
+    return new Promise(resolve => {
+        const danger = opts.danger !== false;
+        const overlay = document.createElement('div');
+        overlay.className = 'ss-confirm-overlay';
+        overlay.innerHTML = `
+            <div class="ss-confirm-box">
+                <div class="ss-confirm-icon ${danger ? 'ss-danger' : 'ss-info'}">
+                    <i class="fas ${danger ? 'fa-triangle-exclamation' : 'fa-circle-question'}"></i>
+                </div>
+                <h4 class="ss-confirm-title"></h4>
+                <p class="ss-confirm-message"></p>
+                <div class="ss-confirm-actions">
+                    <button type="button" class="ss-confirm-btn ss-confirm-cancel"></button>
+                    <button type="button" class="ss-confirm-btn ss-confirm-ok ${danger ? 'ss-danger-btn' : ''}"></button>
+                </div>
+            </div>`;
+        overlay.querySelector('.ss-confirm-title').textContent = opts.title || 'Please Confirm';
+        overlay.querySelector('.ss-confirm-message').textContent = message;
+        overlay.querySelector('.ss-confirm-cancel').textContent = opts.cancelLabel || 'Cancel';
+        overlay.querySelector('.ss-confirm-ok').textContent = opts.confirmLabel || 'Confirm';
+
+        document.body.appendChild(overlay);
+        requestAnimationFrame(() => overlay.classList.add('show'));
+
+        function close(result) {
+            overlay.classList.remove('show');
+            setTimeout(() => overlay.remove(), 200);
+            document.removeEventListener('keydown', escHandler);
+            resolve(result);
+        }
+        function escHandler(e) { if (e.key === 'Escape') close(false); }
+
+        overlay.querySelector('.ss-confirm-cancel').addEventListener('click', () => close(false));
+        overlay.querySelector('.ss-confirm-ok').addEventListener('click', () => close(true));
+        overlay.addEventListener('click', e => { if (e.target === overlay) close(false); });
+        document.addEventListener('keydown', escHandler);
+    });
+}
+window.ssConfirm = ssConfirm;
+
 document.addEventListener('DOMContentLoaded', () => {
 
     // UI References: Navigation & Layout
@@ -225,6 +335,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const studentPhotoInput= document.getElementById('student-photo');
     const certUploadInput  = document.getElementById('cert-upload');
     const certDataHidden   = document.getElementById('cert-data');
+    const certUploadStatus = document.getElementById('cert-upload-status');
     const studentPhotoError= document.getElementById('student-photo-error');
     const certUploadError  = document.getElementById('cert-upload-error');
 
@@ -380,6 +491,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 const newSiblingBadge = document.getElementById('edit-sibling-badge');
                 if (newSiblingBadge) { newSiblingBadge.style.display = 'none'; newSiblingBadge.innerHTML = ''; }
 
+                // New admission — no B-Form/certificate on file yet either
+                if (certUploadStatus) certUploadStatus.style.display = 'none';
+
                 if (booksFeePanel) {
                     booksFeePanel.style.display = 'none';
                     if (takeBooksBtn) takeBooksBtn.innerHTML = '<i class="fas fa-book"></i> Take Books';
@@ -432,6 +546,18 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             voRenderClassCards();
             voShowStage('classes');
+        }
+
+        // School phone/address are set on the Settings page only — this page
+        // just fetches and displays them, every time a certificate modal opens.
+        if (modalId === 'slc-modal' || modalId === 'character-modal') {
+            const prefix = modalId === 'slc-modal' ? 'slc' : 'char';
+            const phone   = getSchoolContactPhone();
+            const address = getSchoolContactAddress();
+            const telEl   = document.getElementById(`${prefix}-school-tel`);
+            const addrEl  = document.getElementById(`${prefix}-school-address`);
+            if (telEl)  telEl.textContent  = phone   || 'Not set in Settings';
+            if (addrEl) addrEl.textContent = address || 'Not set in Settings';
         }
 
         modal.style.display = 'block';
@@ -749,6 +875,9 @@ if (certUploadInput) {
                 const compressedBase64 = await compressImage(file, 1600, 0.7);
                 certDataHidden.value = compressedBase64;
             }
+            // A new file was just attached — the "already on file" note now
+            // refers to a stale/replaced document, so hide it.
+            if (certUploadStatus) certUploadStatus.style.display = 'none';
             showToast("File Ready", "Document optimized and attached.", "success");
         }
     });
@@ -1337,6 +1466,11 @@ if (certUploadInput) {
     const schoolName = schoolEl ? schoolEl.textContent.trim() : 'ST. LAWRENCE INTERNATIONAL SCHOOL';
     const schoolLogoUrl = getSchoolLogoUrl();
     const crestInner = schoolLogoUrl ? `<img src="${esc(schoolLogoUrl)}" alt="School Logo">` : `<i class="fas fa-graduation-cap"></i>`;
+    // Phone/address are set on the Settings page only — this print view just
+    // fetches and displays them, never lets anyone edit them here.
+    const schoolPhone   = getSchoolContactPhone();
+    const schoolAddress = getSchoolContactAddress();
+    const schoolContactLine = [schoolAddress, schoolPhone].filter(Boolean).map(esc).join('  &bull;  ');
     const academicSession = getCurrentAcademicSession(); // Uses the helper in your JS
     const printedOn = new Date().toLocaleDateString('en-US', {
         day: '2-digit', month: 'short', year: 'numeric'
@@ -1530,6 +1664,7 @@ if (certUploadInput) {
                 <div>
                     <div class="school-name-title">${esc(schoolName)}</div>
                     <div class="school-sub">Official Admission Record</div>
+                    ${schoolContactLine ? `<div class="school-sub" style="text-transform:none;letter-spacing:0;margin-top:1px;">${schoolContactLine}</div>` : ''}
                 </div>
             </div>
             <div class="meta-badge">
@@ -1674,7 +1809,7 @@ if (certUploadInput) {
                 window.open('https://wa.me/?text=' + msg, '_blank');
             } catch (err) {
                 console.error('Share failed', err);
-                alert('Sharing failed. The admission form image could not be generated.');
+                showToast('Share Failed', 'The admission form image could not be generated.', 'danger');
             } finally {
                 btn.disabled = false;
                 btn.innerHTML = oldHtml;
@@ -1712,6 +1847,11 @@ if (certUploadInput) {
         const schoolName = schoolEl ? schoolEl.textContent.trim() : 'ST. LAWRENCE INTERNATIONAL SCHOOL';
         const schoolLogoUrl = getSchoolLogoUrl();
         const recCrestInner = schoolLogoUrl ? `<img src="${esc(schoolLogoUrl)}" alt="School Logo">` : `<i class="fas fa-id-card-clip"></i>`;
+        // Phone/address are set on the Settings page only — this print view just
+        // fetches and displays them, never lets anyone edit them here.
+        const schoolPhone   = getSchoolContactPhone();
+        const schoolAddress = getSchoolContactAddress();
+        const schoolContactLine = [schoolAddress, schoolPhone].filter(Boolean).map(esc).join('  &bull;  ');
         const printedOn = new Date().toLocaleDateString('en-US', {
             day: '2-digit', month: 'short', year: 'numeric'
         }) + '  ·  ' + new Date().toLocaleTimeString('en-US', {
@@ -1888,6 +2028,7 @@ if (certUploadInput) {
                 <div>
                     <div class="rec-school-name">${esc(schoolName)}</div>
                     <div class="rec-school-sub">Complete Student Record</div>
+                    ${schoolContactLine ? `<div class="rec-school-sub" style="text-transform:none;letter-spacing:0;margin-top:1px;">${schoolContactLine}</div>` : ''}
                 </div>
             </div>
             <div class="rec-meta-pill">
@@ -2009,7 +2150,7 @@ if (certUploadInput) {
                 window.open('https://wa.me/?text=' + msg, '_blank');
             } catch (err) {
                 console.error('Share failed', err);
-                alert('Sharing failed. The student record image could not be generated.');
+                showToast('Share Failed', 'The student record image could not be generated.', 'danger');
             } finally {
                 btn.disabled = false;
                 btn.innerHTML = oldHtml;
@@ -2091,6 +2232,11 @@ if (certUploadInput) {
         const schoolName = schoolEl ? schoolEl.textContent.trim() : 'ST. LAWRENCE INTERNATIONAL SCHOOL';
         const schoolLogoUrl = getSchoolLogoUrl();
         const slCrestInner = schoolLogoUrl ? `<img src="${esc(schoolLogoUrl)}" alt="School Logo">` : `<i class="fas fa-users"></i>`;
+        // Phone/address are set on the Settings page only — this print view just
+        // fetches and displays them, never lets anyone edit them here.
+        const schoolPhone   = getSchoolContactPhone();
+        const schoolAddress = getSchoolContactAddress();
+        const schoolContactLine = [schoolAddress, schoolPhone].filter(Boolean).map(esc).join('  &bull;  ');
         const printedOn = new Date().toLocaleDateString('en-US', {
             day: '2-digit', month: 'short', year: 'numeric'
         }) + '  ·  ' + new Date().toLocaleTimeString('en-US', {
@@ -2205,6 +2351,7 @@ if (certUploadInput) {
                 <div>
                     <div class="sl-school-name">${esc(schoolName)}</div>
                     <div class="sl-school-sub">Student List Report</div>
+                    ${schoolContactLine ? `<div class="sl-school-sub" style="text-transform:none;letter-spacing:0;margin-top:1px;">${schoolContactLine}</div>` : ''}
                 </div>
             </div>
             <div class="sl-meta-pill">
@@ -2906,16 +3053,9 @@ if (certUploadInput) {
                 <td><span class="class-chip">${classSectionCell}</span></td>
                 <td>${s.gender}</td>
                 <td style="text-align:center;">
-                    <div class="vo-action-btn-group">
-                        <button class="btn-icon vo-view" onclick="viewFullProfile('${s.regNo}')" title="View Profile">
-                            <i class="fas fa-eye"></i><span>View</span>
-                        </button>
-                        <button class="btn-icon print-admission" onclick="printAdmissionFormForStudent('${s.regNo}')" title="Print Admission Form">
-                            <i class="fas fa-file-signature"></i><span>Admission</span>
-                        </button>
-                        <button class="btn-icon print-record" onclick="printStudentRecordForStudent('${s.regNo}')" title="Print Student Record">
-                            <i class="fas fa-print"></i><span>Record</span>
-                        </button>
+                    <div class="action-btn-group">
+                        <button class="btn-icon view" onclick="viewFullProfile('${s.regNo}')" title="View Profile"><i class="fas fa-eye"></i></button>
+                        <button class="btn-icon print-record" onclick="printStudentRecordForStudent('${s.regNo}')" title="Print Student Record"><i class="fas fa-print"></i></button>
                     </div>
                 </td>
             </tr>`;
@@ -2984,7 +3124,7 @@ if (certUploadInput) {
         renderStudentTable();
     };
 
-    window.confirmPromotion = function() {
+    window.confirmPromotion = async function() {
         const checkboxes = document.querySelectorAll('.promote-checkbox');
         const selectedRegNos = Array.from(checkboxes)
             .filter(cb => cb.checked)
@@ -3016,7 +3156,11 @@ if (certUploadInput) {
             return;
         }
 
-        if (!confirm(`Promote ${selectedRegNos.length} selected student(s) to their next class?`)) return;
+        const promoteConfirmed = await ssConfirm(
+            `Promote ${selectedRegNos.length} selected student(s) to their next class?`,
+            { title: 'Promote Students', confirmLabel: 'Promote', danger: false }
+        );
+        if (!promoteConfirmed) return;
 
         const todayISO = new Date().toISOString().slice(0, 10);
         const thisYear = new Date().getFullYear();
@@ -3218,12 +3362,14 @@ if (certUploadInput) {
                     <td><span class="class-chip">${sec}</span></td>
                     <td>${dateVal}</td>
                     <td style="text-align:center;">
-                        <button class="btn-icon view" onclick="viewFullProfile('${s.regNo}')" title="View Profile">
-                            <i class="fas fa-eye"></i>
-                        </button>
-                        ${kind === 'dropped' ? `<button class="btn-icon reactivate" onclick="reactivateStudent('${s.regNo}')" title="Reactivate Student">
-                            <i class="fas fa-user-check"></i>
-                        </button>` : ''}
+                        <div class="action-btn-group">
+                            <button class="btn-icon view" onclick="viewFullProfile('${s.regNo}')" title="View Profile">
+                                <i class="fas fa-eye"></i>
+                            </button>
+                            ${kind === 'dropped' ? `<button class="btn-icon reactivate" onclick="reactivateStudent('${s.regNo}')" title="Reactivate Student">
+                                <i class="fas fa-user-check"></i>
+                            </button>` : ''}
+                        </div>
                     </td>
                 </tr>`;
         }).join('');
@@ -3244,7 +3390,11 @@ if (certUploadInput) {
         }
 
         const student = db[index];
-        if (!confirm(`Reactivate ${student.fullName || 'this student'} and move them back to the active roster?`)) return;
+        const reactivateConfirmed = await ssConfirm(
+            `Reactivate ${student.fullName || 'this student'} and move them back to the active roster?`,
+            { title: 'Reactivate Student', confirmLabel: 'Reactivate', danger: false }
+        );
+        if (!reactivateConfirmed) return;
 
         student.status = 'active';
         delete student.droppedDate;
@@ -3336,6 +3486,18 @@ if (certUploadInput) {
     displayRegBadge.innerText = student.regNo;
     rollNoInput.value = student.rollNo || '';
 
+    // CRITICAL FIX: certData (B-Form / certificate upload) was being skipped
+    // during populate (it's in SKIP_FIELDS, like photo) but — unlike photo —
+    // was never restored into its hidden input afterwards. That meant every
+    // "Save Changes" on an existing student silently wiped their previously
+    // uploaded B-Form/certificate from the database, because the empty
+    // hidden input got submitted and overwrote the stored value. Restore it
+    // here so it's preserved unless the user deliberately uploads a new file.
+    certDataHidden.value = student.certData || '';
+    if (certUploadStatus) {
+        certUploadStatus.style.display = student.certData ? 'flex' : 'none';
+    }
+
     // Highlighted "Sibling of …" badge shown right below the name/reg-no area
     const editSiblingBadge = document.getElementById('edit-sibling-badge');
     if (editSiblingBadge) {
@@ -3392,7 +3554,11 @@ if (certUploadInput) {
             showToast("Archive Limit Reached", `Your plan allows up to ${getArchiveLimit()} archived students. Upgrade your plan to remove more students.`, "danger");
             return;
         }
-        if (!confirm("Are you sure you want to remove this student from the Database?")) return;
+        const deleteConfirmed = await ssConfirm(
+            'Are you sure you want to remove this student from the Database?',
+            { title: 'Remove Student', confirmLabel: 'Remove' }
+        );
+        if (!deleteConfirmed) return;
 
         const db    = getDatabase();
         const index = db.findIndex(s => s.regNo === studentId || s.id === studentId);
@@ -3830,7 +3996,7 @@ if (certUploadInput) {
                     + text.replace(/[<>&]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;'}[c])) + '</pre>');
                 w.document.close();
             } else {
-                alert(text);
+                showToast('Pop-up Blocked', 'Please allow pop-ups to view the student profile, or try sharing again.', 'warning');
             }
         }
     };
@@ -4055,10 +4221,14 @@ if (certUploadInput) {
         toast.classList.add('show');
         setTimeout(() => toast.classList.remove('show'), 4000);
     }
+    // Expose globally so functions defined outside this closure (e.g. the
+    // Data Export & Import handlers) can also show themed toasts instead
+    // of falling back to a plain browser alert().
+    window.showToast = showToast;
 
     window.exportToCSV = function() {
         const db = getDatabase();
-        if (db.length === 0) { alert("No student data available to export."); return; }
+        if (db.length === 0) { showToast("No Data", "No student data available to export.", "warning"); return; }
 
         const headers = ["RegNo","FullName","Class","Guardian","Phone","NetPayable","SiblingGroupID"];
         let csv = headers.join(",") + "\n";
@@ -4242,7 +4412,7 @@ function slcManualGenerate() {
     }
 
     if (!studentName) {
-        alert('Please enter at least the student name (use Student~Guardian format if you want to add the guardian too).');
+        showToast('Missing Name', 'Please enter at least the student name (use Student~Guardian format if you want to add the guardian too).', 'warning');
         return;
     }
 
@@ -4298,6 +4468,10 @@ function slcFillFromStudent(s) {
     // School name from header if present
     const schoolEl = document.querySelector('.school-name');
     if (schoolEl) setText('slc-school-name', schoolEl.textContent);
+
+    // School phone/address come from Settings only — never editable here.
+    setText('slc-school-tel', getSchoolContactPhone() || 'Not set in Settings');
+    setText('slc-school-address', getSchoolContactAddress() || 'Not set in Settings');
 
     // Compose the beautiful bottom paragraph from real student details
     const recordEl = document.getElementById('slc-record-para');
@@ -4368,7 +4542,7 @@ async function shareSLC() {
         window.open(`https://wa.me/?text=${msg}`, '_blank');
     } catch (err) {
         console.error('Share failed', err);
-        alert('Sharing failed. The certificate image could not be generated.');
+        showToast('Share Failed', 'The certificate image could not be generated.', 'danger');
     } finally {
         if (shareBtn) { shareBtn.disabled = false; shareBtn.innerHTML = oldHtml; }
     }
@@ -4411,7 +4585,7 @@ body{font-family:'Cormorant Garamond',Georgia,serif;background:#eef2f7;padding:2
 .slc-l-header{display:flex;align-items:center;gap:18px;padding-bottom:14px;border-bottom:1px solid #e2e8f0}
 .slc-l-logo{width:54px;height:54px;border-radius:50%;background:linear-gradient(135deg,#2c5797,#3b6fb8);color:#fff;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;box-shadow:0 4px 14px rgba(59,111,184,.4)}
 .slc-l-school-block{flex:1;text-align:center}
-.slc-l-school-name{font-family:'Cormorant Garamond',serif;font-size:22px;font-weight:700;letter-spacing:.18em;color:#0f172a;text-transform:uppercase}
+.slc-l-school-name{font-family:'Cormorant Garamond',serif;font-size:27px;font-weight:700;letter-spacing:.08em;color:#0f172a;text-transform:uppercase}
 .slc-l-school-meta{margin-top:4px;font-family:'Inter',sans-serif;font-size:11px;color:#64748b;letter-spacing:.04em}
 .slc-l-dot{margin:0 8px;color:#cbd5e1}
 .slc-l-serial{text-align:right;flex-shrink:0;font-family:'Inter',sans-serif}
@@ -4553,7 +4727,7 @@ function charManualGenerate() {
     }
 
     if (!studentName) {
-        alert('Please enter at least the student name (use Student~Guardian format if you want to add the guardian too).');
+        showToast('Missing Name', 'Please enter at least the student name (use Student~Guardian format if you want to add the guardian too).', 'warning');
         return;
     }
 
@@ -4636,6 +4810,10 @@ function charFillFromStudent(s) {
     const schoolName = schoolEl ? schoolEl.textContent : 'ST. LAWRENCE INTERNATIONAL SCHOOL';
     setText('char-school-name', schoolName);
     setText('char-taught-at', schoolName);
+
+    // School phone/address come from Settings only — never editable here.
+    setText('char-school-tel', getSchoolContactPhone() || 'Not set in Settings');
+    setText('char-school-address', getSchoolContactAddress() || 'Not set in Settings');
 
     // Remember for conduct re-render & print
     window.__charCurrentName     = studentName;
@@ -4728,7 +4906,7 @@ async function shareCharCert() {
         window.open(`https://wa.me/?text=${msg}`, '_blank');
     } catch (err) {
         console.error('Share failed', err);
-        alert('Sharing failed. The certificate image could not be generated.');
+        showToast('Share Failed', 'The certificate image could not be generated.', 'danger');
     } finally {
         if (shareBtn) { shareBtn.disabled = false; shareBtn.innerHTML = oldHtml; }
     }
@@ -4749,7 +4927,7 @@ function printCharCert() {
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:'Cormorant Garamond',Georgia,serif;background:#eef2f7;padding:24px;display:flex;justify-content:center;align-items:center;min-height:100vh}
-.char-cert-outer{position:relative;background:#fff;width:760px;min-height:980px;overflow:hidden;box-shadow:0 12px 40px rgba(15,23,42,.18);border-radius:4px;color:#0f172a;margin:0 auto}
+.char-cert-outer{position:relative;background:#fff;width:745px;height:1075px;overflow:hidden;box-shadow:0 12px 40px rgba(15,23,42,.18);border-radius:4px;color:#0f172a;margin:0 auto}
 .char-geo{position:absolute;width:0;height:0;z-index:1}
 .char-geo-tl{top:0;left:0;border-top:170px solid #c8a753;border-right:170px solid transparent}
 .char-geo-bl{bottom:0;left:0;border-bottom:170px solid #1a2744;border-right:170px solid transparent}
@@ -4757,12 +4935,12 @@ body{font-family:'Cormorant Garamond',Georgia,serif;background:#eef2f7;padding:2
 .char-geo-br{bottom:0;right:0;border-bottom:130px solid #c8a753;border-left:130px solid transparent}
 .char-border-frame{position:absolute;inset:26px;border:2px solid #c8a753;z-index:2;pointer-events:none}
 .char-inner{position:relative;z-index:3;padding:64px 64px 50px;display:flex;flex-direction:column;align-items:center;text-align:center;height:100%}
-.char-l-header{display:flex;align-items:center;gap:14px;width:100%;margin-bottom:18px}
-.char-l-logo{width:46px;height:46px;border-radius:50%;background:linear-gradient(135deg,#1a2744,#3b6fb8);color:#fff;display:flex;align-items:center;justify-content:center;font-size:19px;flex-shrink:0;box-shadow:0 4px 14px rgba(26,39,68,.35)}
+.char-l-header{display:flex;align-items:center;gap:20px;width:calc(100% - 30px);margin:56px 0 20px 30px}
+.char-l-logo{width:78px;height:78px;border-radius:50%;background:linear-gradient(135deg,#1a2744,#3b6fb8);color:#fff;display:flex;align-items:center;justify-content:center;font-size:32px;flex-shrink:0;box-shadow:0 4px 14px rgba(26,39,68,.35)}
 .char-l-school-block{flex:1;text-align:center}
-.char-l-school-meta{margin-top:3px;font-family:'Inter',sans-serif;font-size:10.5px;color:#64748b;letter-spacing:.04em}
+.char-l-school-meta{margin-top:4px;font-family:'Inter',sans-serif;font-size:10.5px;color:#64748b;letter-spacing:.04em}
 .char-l-dot{margin:0 8px;color:#cbd5e1}
-.char-school-name{font-family:'Inter',sans-serif;font-size:11px;letter-spacing:.18em;color:#64748b;text-transform:uppercase;margin-bottom:0}
+.char-school-name{font-family:'Inter',sans-serif;font-size:27px;font-weight:700;letter-spacing:.08em;color:#1a2744;text-transform:uppercase;margin-bottom:0}
 .char-certify-line{font-family:'Cormorant Garamond',serif;font-size:15px;font-style:italic;color:#475569;margin-bottom:18px}
 .char-title{font-family:'Great Vibes',cursive;font-size:54px;color:#1a2744;line-height:1;margin-bottom:4px}
 .char-subtitle{font-family:'Inter',sans-serif;font-size:20px;font-weight:700;letter-spacing:.1em;color:#c8a753;text-transform:uppercase;margin-bottom:18px}
@@ -4783,7 +4961,7 @@ body{font-family:'Cormorant Garamond',Georgia,serif;background:#eef2f7;padding:2
 .char-sig-title{font-family:'Inter',sans-serif;font-size:12px;font-weight:700;color:#0f172a;text-transform:uppercase;letter-spacing:.06em}
 @media print{
   html,body{padding:0;margin:0;background:#fff;width:100%;height:100%}
-  @page{size:A4 portrait;margin:6mm}
+  @page{size:A4 portrait;margin:5mm}
   .char-cert-outer{box-shadow:none;border-radius:0;margin:0 auto;page-break-after:avoid;page-break-inside:avoid}
 }
 </style>
@@ -5000,7 +5178,7 @@ function _buildPhotoGalleryHTML(students) {
 </html>`;
 }
 
-function exportStudentsToExcel() {
+async function exportStudentsToExcel() {
     if (typeof XLSX === 'undefined') {
         showDataIOStatus('Excel library not loaded yet. Please wait a moment and try again.', 'error');
         return;
@@ -5013,12 +5191,12 @@ function exportStudentsToExcel() {
     }
 
     // ── Confirmation before exporting ──
-    const ok = window.confirm(
+    const ok = await ssConfirm(
         `Export ${students.length} student record(s) to Excel?\n\n` +
         `This will download:\n` +
         `  • EduSoft (Student Data).xlsx — full directory & discount breakdown\n` +
-        `  • EduSoft (Student Photos).html — photos & B-Form images (if any)\n\n` +
-        `Click OK to continue, or Cancel to abort.`
+        `  • EduSoft (Student Photos).html — photos & B-Form images (if any)`,
+        { title: 'Export to Excel', confirmLabel: 'Export', danger: false }
     );
     if (!ok) {
         showDataIOStatus('Export cancelled.', 'info');

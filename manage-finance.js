@@ -21,6 +21,79 @@
 // file automatically. If no school is registered yet (single-school/demo
 // mode, before Super Admin has added anyone), it falls back to a generic
 // placeholder so the app still works out of the box.
+/* ══════════════════════════════════════════════════════════════
+   IN-APP CONFIRM DIALOG — replaces native window.confirm() with a
+   themed dialog that matches the rest of the app. Self-contained:
+   injects its own markup + styles on first use, so no HTML edits
+   are required. Usage: const ok = await ssConfirm("message", opts)
+   ══════════════════════════════════════════════════════════════ */
+function ssConfirm(message, opts = {}) {
+    if (!document.getElementById('ss-confirm-styles')) {
+        const style = document.createElement('style');
+        style.id = 'ss-confirm-styles';
+        style.textContent = `
+.ss-confirm-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.55);backdrop-filter:blur(3px);display:flex;align-items:center;justify-content:center;z-index:10000;opacity:0;transition:opacity .2s ease;padding:20px;}
+.ss-confirm-overlay.show{opacity:1;}
+.ss-confirm-box{background:var(--bg-card,#1e293b);border:1px solid var(--border-subtle,rgba(148,163,184,.2));border-radius:var(--radius-lg,20px);box-shadow:0 24px 60px rgba(0,0,0,0.4);padding:26px 24px 22px;max-width:380px;width:100%;text-align:center;transform:translateY(14px) scale(.97);transition:transform .2s ease;font-family:inherit;}
+.ss-confirm-overlay.show .ss-confirm-box{transform:translateY(0) scale(1);}
+.ss-confirm-icon{width:52px;height:52px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:20px;margin:0 auto 14px;}
+.ss-confirm-icon.ss-danger{background:rgba(239,68,68,.12);color:#ef4444;}
+.ss-confirm-icon.ss-info{background:rgba(59,130,246,.12);color:#3b82f6;}
+.ss-confirm-title{font-size:16px;font-weight:800;color:var(--text-primary,#e8ecf4);margin-bottom:8px;}
+.ss-confirm-message{font-size:13px;color:var(--text-secondary,#8892a8);line-height:1.55;margin-bottom:20px;white-space:pre-line;}
+.ss-confirm-actions{display:flex;gap:10px;}
+.ss-confirm-btn{flex:1;padding:10px 14px;border-radius:var(--radius-md,12px);font-family:inherit;font-size:13px;font-weight:700;cursor:pointer;border:1px solid var(--border-subtle,rgba(148,163,184,.2));background:transparent;color:var(--text-secondary,#8892a8);transition:all .2s ease;}
+.ss-confirm-btn:hover{background:rgba(255,255,255,.06);}
+[data-theme="light"] .ss-confirm-btn:hover{background:rgba(0,0,0,.04);}
+.ss-confirm-ok{border-color:transparent;background:#17716A;color:#fff;}
+.ss-confirm-ok:hover{background:#145f59;}
+.ss-confirm-ok.ss-danger-btn{background:#ef4444;}
+.ss-confirm-ok.ss-danger-btn:hover{background:#dc2626;}
+@media (max-width:480px){.ss-confirm-box{padding:22px 18px 18px;}}
+`;
+        document.head.appendChild(style);
+    }
+
+    return new Promise(resolve => {
+        const danger = opts.danger !== false;
+        const overlay = document.createElement('div');
+        overlay.className = 'ss-confirm-overlay';
+        overlay.innerHTML = `
+            <div class="ss-confirm-box">
+                <div class="ss-confirm-icon ${danger ? 'ss-danger' : 'ss-info'}">
+                    <i class="fas ${danger ? 'fa-triangle-exclamation' : 'fa-circle-question'}"></i>
+                </div>
+                <h4 class="ss-confirm-title"></h4>
+                <p class="ss-confirm-message"></p>
+                <div class="ss-confirm-actions">
+                    <button type="button" class="ss-confirm-btn ss-confirm-cancel"></button>
+                    <button type="button" class="ss-confirm-btn ss-confirm-ok ${danger ? 'ss-danger-btn' : ''}"></button>
+                </div>
+            </div>`;
+        overlay.querySelector('.ss-confirm-title').textContent = opts.title || 'Please Confirm';
+        overlay.querySelector('.ss-confirm-message').textContent = message;
+        overlay.querySelector('.ss-confirm-cancel').textContent = opts.cancelLabel || 'Cancel';
+        overlay.querySelector('.ss-confirm-ok').textContent = opts.confirmLabel || 'Confirm';
+
+        document.body.appendChild(overlay);
+        requestAnimationFrame(() => overlay.classList.add('show'));
+
+        function close(result) {
+            overlay.classList.remove('show');
+            setTimeout(() => overlay.remove(), 200);
+            document.removeEventListener('keydown', escHandler);
+            resolve(result);
+        }
+        function escHandler(e) { if (e.key === 'Escape') close(false); }
+
+        overlay.querySelector('.ss-confirm-cancel').addEventListener('click', () => close(false));
+        overlay.querySelector('.ss-confirm-ok').addEventListener('click', () => close(true));
+        overlay.addEventListener('click', e => { if (e.target === overlay) close(false); });
+        document.addEventListener('keydown', escHandler);
+    });
+}
+window.ssConfirm = ssConfirm;
+
 function getSchoolIdentity() {
     if (window.SoftSchoolAdmin && typeof window.SoftSchoolAdmin.getCurrentSchool === 'function') {
         const school = window.SoftSchoolAdmin.getCurrentSchool();
@@ -276,7 +349,7 @@ function handleFeeSubmit(e) {
     db.finances.fees.pending = Math.max(0, db.finances.fees.pending - amount);
     saveGlobalData(db);
 
-    alert(`Successfully collected RS ${amount.toLocaleString()}`);
+    showFinanceToast(`Successfully collected RS ${amount.toLocaleString()}`, 'success');
     closeModal('fee-modal');
     e.target.reset();
 }
@@ -493,7 +566,7 @@ document.addEventListener('click', function(e) {
 async function handleAddStudentFine() {
     const amount = document.getElementById('student-fine-amount').value;
     const desc = document.getElementById('student-fine-desc').value.trim();
-    if (!sfSelectedId || !amount) return alert("Please select a class, section, student and enter a fine amount.");
+    if (!sfSelectedId || !amount) return showFinanceToast("Please select a class, section, student and enter a fine amount.", 'error');
 
     await apiRequest("/add-fine", "POST", {
         regNo: sfSelectedRegNo || sfSelectedId,
@@ -502,7 +575,7 @@ async function handleAddStudentFine() {
         reason: desc
     });
 
-    alert("Fine added to MySQL Database");
+    showFinanceToast("Fine added to MySQL Database", 'success');
     resetStudentFineForm();
 }
 
@@ -768,16 +841,16 @@ function selectStaffMember(id) {
 }
 
 function handleAddStaffFine() {
-    if (!selectedStaffId) { alert('Please select a staff member.'); return; }
+    if (!selectedStaffId) { showFinanceToast('Please select a staff member.', 'error'); return; }
     const amount = Number(document.getElementById('staff-fine-amount').value);
     const desc = document.getElementById('staff-fine-desc').value.trim();
-    if (!amount || amount < 1) { alert('Please enter a valid fine amount.'); return; }
-    if (!desc) { alert('Please enter a fine description/cause.'); return; }
+    if (!amount || amount < 1) { showFinanceToast('Please enter a valid fine amount.', 'error'); return; }
+    if (!desc) { showFinanceToast('Please enter a fine description/cause.', 'error'); return; }
 
     const db = getGlobalData();
     const members = db.staff[selectedStaffCategory];
     const idx = members.findIndex(s => s.id === selectedStaffId);
-    if (idx === -1) { alert('Staff member not found.'); return; }
+    if (idx === -1) { showFinanceToast('Staff member not found.', 'error'); return; }
 
     // NOTE: do NOT write to members[idx].fines — that field is owned by
     // attendance.js applyAbsenceFines() (absence fine only). Manual fines
@@ -795,7 +868,7 @@ function handleAddStaffFine() {
     });
     saveStaffFinesData(finesLog);
 
-    alert(`Fine of RS ${amount.toLocaleString()} added to ${members[idx].name}.`);
+    showFinanceToast(`Fine of RS ${amount.toLocaleString()} added to ${members[idx].name}.`, 'success');
     document.getElementById('staff-fine-amount').value = '';
     document.getElementById('staff-fine-desc').value = '';
     selectedStaffId = null;
@@ -958,8 +1031,8 @@ function saveExpensesData(arr) {
 function handleExpenseSubmitNew() {
     const amount = Number(document.getElementById('exp-amount').value);
     const desc = document.getElementById('exp-desc').value.trim();
-    if (!amount || amount < 1) { alert('Please enter a valid expense amount.'); return; }
-    if (!desc) { alert('Please enter an expense description.'); return; }
+    if (!amount || amount < 1) { showFinanceToast('Please enter a valid expense amount.', 'error'); return; }
+    if (!desc) { showFinanceToast('Please enter an expense description.', 'error'); return; }
 
     const list = getExpensesData();
     const now = new Date();
@@ -970,7 +1043,7 @@ function handleExpenseSubmitNew() {
     db.finances.expenses.other += amount;
     saveGlobalData(db);
 
-    alert(`Operational expense of RS ${amount.toLocaleString()} logged successfully.`);
+    showFinanceToast(`Operational expense of RS ${amount.toLocaleString()} logged successfully.`, 'success');
     document.getElementById('exp-amount').value = '';
     document.getElementById('exp-desc').value = '';
     showPage('page-expense-hub');
@@ -1446,7 +1519,7 @@ let ievFamilyReturnName = null;
 async function viewVoucher(studentId, fullName, isPaidBill = false) {
     // 1. Validation
     if (!studentId || studentId === "null") {
-        alert("Invalid Student ID.");
+        showFinanceToast("Invalid Student ID.", 'error');
         return;
     }
 
@@ -1455,7 +1528,7 @@ async function viewVoucher(studentId, fullName, isPaidBill = false) {
     let student = findStudentExact(students, studentId, fullName);
     
     if (!student) { 
-        alert('Student profile not found in local cache.'); 
+        showFinanceToast('Student profile not found in local cache.', 'error'); 
         return; 
     }
 
@@ -1617,7 +1690,7 @@ async function viewVoucher(studentId, fullName, isPaidBill = false) {
 
     } catch (err) {
         console.error("Voucher Rendering Error:", err);
-        alert("Failed to sync with the server. The voucher might show outdated information.");
+        showFinanceToast("Failed to sync with the server. The voucher might show outdated information.", 'error');
         // Don't leave the modal stuck on the loading spinner if something
         // above threw before the voucher HTML was rendered.
         const rt = document.getElementById('voucher-render-target');
@@ -1658,7 +1731,7 @@ function openVoucherEditModal() {
 // child, and remembers which student the Family Voucher was opened with
 // so Save can rebuild the combined view again afterwards.
 function editFamilyVoucherChild(childId, childName) {
-    if (!childId) { alert('Student not found.'); return; }
+    if (!childId) { showFinanceToast('Student not found.', 'error'); return; }
     ievFamilyReturnId = currentVoucherStudentId;
     ievFamilyReturnName = currentVoucherStudentName;
     openInlineVoucherEditor(childId, childName);
@@ -2562,7 +2635,7 @@ let afmCurrentPendingAmount = 0;
 function openAddFeesModal(studentId, fullName) {
     const students = JSON.parse(localStorage.getItem('edu_students') || '[]');
     const student = findStudentExact(students, studentId, fullName);
-    if (!student) { alert('Student not found.'); return; }
+    if (!student) { showFinanceToast('Student not found.', 'error'); return; }
     afmCurrentStudent = student;
 
     document.getElementById('add-fees-student-id').value = studentId;
@@ -2661,7 +2734,7 @@ async function saveSimpleStudentFeePayment() {
     const notes = notesInput ? notesInput.value.trim() : '';
 
     if (paid <= 0 && discount <= 0) {
-        alert('Please enter a payment amount.');
+        showFinanceToast('Please enter a payment amount.', 'error');
         return;
     }
 
@@ -2685,7 +2758,7 @@ async function saveSimpleStudentFeePayment() {
         ? findStudentExact(students, studentId, afmCurrentStudent.fullName)
         : findStudentExact(students, studentId);
 
-    if (!student) { alert('Student not found — payment was not saved.'); return; }
+    if (!student) { showFinanceToast('Student not found — payment was not saved.', 'error'); return; }
     if (!Array.isArray(student.feePayments)) student.feePayments = [];
 
     if (paid > 0) {
@@ -2865,7 +2938,7 @@ function atvUpdateFeeRowCount() {
 function openAddToVoucherModal(studentId, fullName, editMode) {
     const students = JSON.parse(localStorage.getItem('edu_students') || '[]');
     const student = findStudentExact(students, studentId, fullName);
-    if (!student) { alert('Student not found.'); return; }
+    if (!student) { showFinanceToast('Student not found.', 'error'); return; }
 
     document.getElementById('atv-student-id').value = student.id;
     document.getElementById('atv-student-id').dataset.fullName = student.fullName || '';
@@ -3103,9 +3176,9 @@ function saveFeesToVoucher() {
     const fullName = idEl.dataset.fullName || '';
     const bulkDisc = parseFloat(document.getElementById('atv-bulk-discount').value) || 0;
 
-    if (atvFeeRows.length === 0) { alert('Please add at least one fee item.'); return; }
+    if (atvFeeRows.length === 0) { showFinanceToast('Please add at least one fee item.', 'error'); return; }
     const gross = atvFeeRows.reduce((s, r) => s + (r.amount || 0), 0);
-    if (gross <= 0) { alert('Please enter valid fee amounts.'); return; }
+    if (gross <= 0) { showFinanceToast('Please enter valid fee amounts.', 'error'); return; }
 
     let students = JSON.parse(localStorage.getItem('edu_students') || '[]');
     let idx = -1;
@@ -3113,7 +3186,7 @@ function saveFeesToVoucher() {
         idx = students.findIndex(s => String(s.id) === String(studentId) && s.fullName === fullName);
     }
     if (idx === -1) idx = students.findIndex(s => String(s.id) === String(studentId));
-    if (idx === -1) { alert('Student not found.'); return; }
+    if (idx === -1) { showFinanceToast('Student not found.', 'error'); return; }
 
     // Build additional fees list to be stored on the student record
     // These will appear in the voucher via computeFeeBreakdown → additionalFees
@@ -3437,7 +3510,11 @@ async function payCurrentSalary() {
     const manualFine = parseFloat(document.getElementById('sbp-fine').value.replace(/[^0-9.]/g, '')) || 0;
     const monthKey = getCurrentMonthKey();
 
-    if (!confirm(`Confirm salary payment for ${document.getElementById('sbp-teacher-name').textContent}?`)) return;
+    const paySalaryConfirmed = await ssConfirm(
+        `Confirm salary payment for ${document.getElementById('sbp-teacher-name').textContent}?`,
+        { title: 'Confirm Salary Payment', confirmLabel: 'Pay', danger: false }
+    );
+    if (!paySalaryConfirmed) return;
 
     try {
         // 2. Call the Spring Boot Backend
@@ -3449,7 +3526,7 @@ async function payCurrentSalary() {
         });
 
         // 3. Success UI updates
-        alert("Salary processed and recorded in database!");
+        showFinanceToast("Salary processed and recorded in database!", 'success');
         
         // Refresh the table to show "Paid" status
         if (category === 'Teaching') {
@@ -3461,11 +3538,11 @@ async function payCurrentSalary() {
         closeSalaryBreakdown();
     } catch (err) {
         console.error(err);
-        alert("Error: " + err.message);
+        showFinanceToast("Error: " + err.message, 'error');
     }
 }
 
-function processSalaryPayment(staffId, category = 'Teaching') {
+async function processSalaryPayment(staffId, category = 'Teaching') {
     const db = getGlobalData();
     const list = db.staff[category] || [];
     const staff = list.find(s => s.id === staffId);
@@ -3483,7 +3560,11 @@ function processSalaryPayment(staffId, category = 'Teaching') {
     const netSalary   = Math.max(0, Number(staff.salary) - totalFines);
     const fineNote    = totalFines > 0 ? ` (after RS ${totalFines.toLocaleString()} fines)` : '';
 
-    if (confirm(`Confirm salary payment of RS ${netSalary.toLocaleString()} to ${staff.name}?${fineNote}`)) {
+    const salaryConfirmed = await ssConfirm(
+        `Confirm salary payment of RS ${netSalary.toLocaleString()} to ${staff.name}?${fineNote}`,
+        { title: 'Confirm Salary Payment', confirmLabel: 'Pay', danger: false }
+    );
+    if (salaryConfirmed) {
         if (!staff.salaryHistory) staff.salaryHistory = [];
 
         // Apply this month's security deduction (if any pending)
@@ -3510,7 +3591,7 @@ function processSalaryPayment(staffId, category = 'Teaching') {
         saveGlobalData(db);
         const note = secDeducted > 0 ? `\nSecurity deducted: RS ${secDeducted.toLocaleString()}` : '';
         const fineMsg = absenceFine > 0 ? `\nAbsence fine deducted: RS ${absenceFine.toLocaleString()}` : '';
-        alert(`Salary processed successfully for ${staff.name}${fineMsg}${note}`);
+        showFinanceToast(`Salary processed successfully for ${staff.name}${fineMsg}${note}`, 'success');
         if (category === 'Teaching') {
             renderTeachingSalaries(document.getElementById('teacher-salary-search').value);
         } else {
@@ -3575,7 +3656,7 @@ function toggleInlineBonus() {
     const staffId  = panel && panel.dataset.teacherId;
     const category = (panel && panel.dataset.category) || 'Teaching';
     if (staffId && isStaffPaidThisMonth(staffId, category)) {
-        alert('Salary for this month has already been paid. No further actions can be performed until next month.');
+        showFinanceToast('Salary for this month has already been paid. No further actions can be performed until next month.', 'error');
         return;
     }
     const wrap = document.getElementById('sbp-inline-bonus-wrap');
@@ -3595,13 +3676,13 @@ function addBonusFromSalaryPanel() {
 
     const amount = Number(document.getElementById('sbp-inline-bonus-amount').value);
     const desc = document.getElementById('sbp-inline-bonus-desc').value.trim();
-    if (!amount || amount < 1) { alert('Please enter a valid bonus amount.'); return; }
-    if (!desc) { alert('Please enter a bonus reason.'); return; }
+    if (!amount || amount < 1) { showFinanceToast('Please enter a valid bonus amount.', 'error'); return; }
+    if (!desc) { showFinanceToast('Please enter a bonus reason.', 'error'); return; }
 
     const db = getGlobalData();
     const members = db.staff[category] || [];
     const member = members.find(s => s.id === staffId);
-    if (!member) { alert('Staff member not found.'); return; }
+    if (!member) { showFinanceToast('Staff member not found.', 'error'); return; }
 
     const role = category === 'Teaching' ? (member.subjects || 'Teacher') : (member.job || 'Staff');
 
@@ -3627,7 +3708,7 @@ function toggleAdvancePay() {
     const staffId  = panel && panel.dataset.teacherId;
     const category = (panel && panel.dataset.category) || 'Teaching';
     if (staffId && isStaffPaidThisMonth(staffId, category)) {
-        alert('Salary for this month has already been paid. No further actions can be performed until next month.');
+        showFinanceToast('Salary for this month has already been paid. No further actions can be performed until next month.', 'error');
         return;
     }
     const wrap = document.getElementById('sbp-advance-input-wrap');
@@ -3649,7 +3730,7 @@ async function payAdvanceSalary() {
     const monthKey = getCurrentMonthKey();
 
     if (!amount || amount <= 0) {
-        alert('Please enter a valid advance amount.');
+        showFinanceToast('Please enter a valid advance amount.', 'error');
         return;
     }
 
@@ -3661,13 +3742,13 @@ async function payAdvanceSalary() {
             monthKey: monthKey
         });
 
-        alert(`Advance of RS ${amount.toLocaleString()} recorded in database.`);
+        showFinanceToast(`Advance of RS ${amount.toLocaleString()} recorded in database.`, 'success');
         
         // Clear input and refresh panel
         amtEl.value = '';
         showSalaryBreakdown(staffId, panel.dataset.category); 
     } catch (err) {
-        alert("Failed to record advance: " + err.message);
+        showFinanceToast("Failed to record advance: " + err.message, 'error');
     }
 }
 
@@ -3780,7 +3861,7 @@ let ievFineReason = '';
 function openInlineVoucherEditor(studentId, fullName) {
     const students = JSON.parse(localStorage.getItem('edu_students') || '[]');
     const student = findStudentExact(students, studentId, fullName);
-    if (!student) { alert('Student not found.'); return; }
+    if (!student) { showFinanceToast('Student not found.', 'error'); return; }
 
     ievCurrentStudentId = studentId;
     ievCurrentStudentName = fullName;
@@ -3965,12 +4046,12 @@ function ievSave() {
         }))
         .filter(r => r.description || r.amount > 0);
 
-    if (cleanRows.length === 0) { alert('Please add at least one fee row.'); return; }
+    if (cleanRows.length === 0) { showFinanceToast('Please add at least one fee row.', 'error'); return; }
 
     let students = JSON.parse(localStorage.getItem('edu_students') || '[]');
     let idx = students.findIndex(s => String(s.id) === String(studentId) && s.fullName === fullName);
     if (idx === -1) idx = students.findIndex(s => String(s.id) === String(studentId));
-    if (idx === -1) { alert('Student not found.'); return; }
+    if (idx === -1) { showFinanceToast('Student not found.', 'error'); return; }
 
     const noteEl = document.getElementById('iev-note-input');
 
@@ -4148,7 +4229,11 @@ function renderFineRows(data) {
 }
 
 async function processIndividualPay(fineId) {
-    if(!confirm("Proceed to settle this specific transaction?")) return;
+    const settleConfirmed = await ssConfirm(
+        "Proceed to settle this specific transaction?",
+        { title: 'Settle Transaction', confirmLabel: 'Settle', danger: false }
+    );
+    if (!settleConfirmed) return;
 
     try {
         const updated = await apiCall(`/pay-fine/${fineId}`, 'POST');
@@ -4169,7 +4254,7 @@ async function processIndividualPay(fineId) {
         applyHistoryFilters(); // Refresh the current Ledger UI
 
     } catch (err) {
-        alert("Transaction failed: " + err.message);
+        showFinanceToast("Transaction failed: " + err.message, 'error');
     }
 }
 
@@ -5204,7 +5289,7 @@ function _getClasses() {
 /* ── Toast ───────────────────────────────────────────────── */
 function _toast(msg, type) {
     const container = document.getElementById('finance-toast-container');
-    if (!container) { alert(msg); return; }
+    if (!container) { showFinanceToast(msg, 'error'); return; }
     const el = document.createElement('div');
     el.className = `finance-toast toast-${type || 'success'}`;
     el.innerHTML = `<i class="fas fa-${type === 'error' ? 'exclamation-circle' : type === 'info' ? 'info-circle' : 'check-circle'}"></i> ${msg}`;
@@ -5538,8 +5623,12 @@ function filterCfrDetailTable() {
     }
 }
 
-function deleteCustomFee(feeId) {
-    if (!confirm('Delete this custom fee record? This cannot be undone.')) return;
+async function deleteCustomFee(feeId) {
+    const deleteFeeConfirmed = await ssConfirm(
+        'Delete this custom fee record? This cannot be undone.',
+        { title: 'Delete Fee Record', confirmLabel: 'Delete' }
+    );
+    if (!deleteFeeConfirmed) return;
     saveCustomFees(getCustomFees().filter(f => f.id !== feeId));
     _activeCfrFeeId = null;
     renderCustomFeeRecords();
@@ -6042,8 +6131,12 @@ function markCustomFeePaidWs(feeId, studentId) {
 /**
  * Delete a custom fee record from the workspace panel (with confirmation).
  */
-function deleteCustomFeeFromWorkspace(feeId) {
-    if (!confirm('Delete this custom fee record? This cannot be undone.')) return;
+async function deleteCustomFeeFromWorkspace(feeId) {
+    const deleteFeeWsConfirmed = await ssConfirm(
+        'Delete this custom fee record? This cannot be undone.',
+        { title: 'Delete Fee Record', confirmLabel: 'Delete' }
+    );
+    if (!deleteFeeWsConfirmed) return;
     saveCustomFees(getCustomFees().filter(f => f.id !== feeId));
     _toast('Custom fee record deleted.', 'success');
     showCfCreateForm();
@@ -6139,17 +6232,17 @@ function resetSalaryBonusForm(panelId) {
 function handleSalaryPageBonus(category) {
     const panelId = category === 'Teaching' ? 'teaching' : 'non-teaching';
     const selectedId = _salaryBonusSelected[panelId];
-    if (!selectedId) { alert('Please select a staff member.'); return; }
+    if (!selectedId) { showFinanceToast('Please select a staff member.', 'error'); return; }
 
     const amount = Number((document.getElementById('bonus-amount-' + panelId) || {}).value);
     const desc   = ((document.getElementById('bonus-desc-' + panelId) || {}).value || '').trim();
-    if (!amount || amount < 1) { alert('Please enter a valid bonus amount.'); return; }
-    if (!desc) { alert('Please enter a bonus description.'); return; }
+    if (!amount || amount < 1) { showFinanceToast('Please enter a valid bonus amount.', 'error'); return; }
+    if (!desc) { showFinanceToast('Please enter a bonus description.', 'error'); return; }
 
     const db = getGlobalData();
     const members = (db.staff && db.staff[category]) ? db.staff[category] : [];
     const member  = members.find(s => String(s.id) === String(selectedId));
-    if (!member) { alert('Staff member not found.'); return; }
+    if (!member) { showFinanceToast('Staff member not found.', 'error'); return; }
 
     const role = category === 'Teaching'
         ? (member.subjects || 'Teacher')
@@ -6164,7 +6257,7 @@ function handleSalaryPageBonus(category) {
     });
     saveStaffBonusData(log);
 
-    alert('Bonus of RS ' + amount.toLocaleString() + ' added to ' + member.name + '.');
+    showFinanceToast('Bonus of RS ' + amount.toLocaleString() + ' added to ' + member.name + '.', 'success');
     resetSalaryBonusForm(panelId);
 }
 
@@ -6422,8 +6515,8 @@ function addExpenseQuickAmount(val) {
 function handleExpenseSubmitHub() {
     const amount = Number(document.getElementById('hub-exp-amount').value);
     const desc = document.getElementById('hub-exp-desc').value.trim();
-    if (!amount || amount < 1) { alert('Please enter a valid expense amount.'); return; }
-    if (!desc) { alert('Please enter an expense description.'); return; }
+    if (!amount || amount < 1) { showFinanceToast('Please enter a valid expense amount.', 'error'); return; }
+    if (!desc) { showFinanceToast('Please enter an expense description.', 'error'); return; }
 
     const list = getExpensesData();
     const now = new Date();

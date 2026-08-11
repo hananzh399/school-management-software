@@ -33,8 +33,15 @@
   "use strict";
 
   /* ── STORAGE KEYS ─────────────────────────────────────────── */
-  const SCHOOLS_KEY  = "softschool_schools";   // array of school records
+  const SCHOOLS_KEY  = "softschool_schools";   // legacy local-only registry (see NOTE below)
   const SESSION_KEY   = "softschool_session";   // currently logged-in school
+
+  /* Real backend for school accounts (registered via index.html, managed via
+     superadmin.html). SCHOOLS_KEY above predates the backend and is now only
+     kept as a harmless fallback — schools created through the super admin
+     portal live in the database, not in localStorage, so this file talks to
+     the same "/api/school" endpoints index.js uses instead of SCHOOLS_KEY. */
+  const SCHOOL_API_BASE_URL = "http://localhost:8080/api/school";
 
   /* ── PLAN DEFINITIONS ─────────────────────────────────────── */
   const PLANS = {
@@ -74,11 +81,52 @@
     try { return JSON.parse(localStorage.getItem(SESSION_KEY)) || null; }
     catch (e) { return null; }
   }
-  function setSession(schoolId) {
-    localStorage.setItem(SESSION_KEY, JSON.stringify({ schoolId: schoolId, at: Date.now() }));
+  /* Accepts either:
+       setSession(schoolIdString)   — legacy callers, kept for compatibility
+       setSession(fullSchoolObject) — the real backend school record
+                                       (what index.js passes after login)
+     Storing the full object means every protected page (main.html etc.)
+     already has the school's name/logo/status/locks the instant it loads,
+     with no extra network round trip. */
+  function setSession(schoolOrId) {
+    if (schoolOrId && typeof schoolOrId === "object") {
+      localStorage.setItem(SESSION_KEY, JSON.stringify({
+        schoolId: schoolOrId.schoolId,
+        school: schoolOrId,
+        at: Date.now()
+      }));
+    } else {
+      localStorage.setItem(SESSION_KEY, JSON.stringify({ schoolId: schoolOrId, at: Date.now() }));
+    }
   }
   function clearSession() {
     localStorage.removeItem(SESSION_KEY);
+  }
+
+  /* Re-checks the logged-in school's live status against the real backend
+     (status/expiry/locks/limits can change after login — e.g. the super
+     admin blocks the school or changes its plan). Non-blocking: pages use
+     the cached session data to render immediately, and this just corrects
+     it shortly after / logs the school out if it's no longer valid. */
+  function revalidateSession(onInvalid) {
+    const session = getSession();
+    const username = session && session.school && session.school.username;
+    if (!username) return;
+
+    fetch(SCHOOL_API_BASE_URL + "/status?username=" + encodeURIComponent(username))
+      .then(function (res) {
+        if (res.status === 404) throw new Error("not_found");
+        return res.json();
+      })
+      .then(function (school) {
+        if (school.status === "blocked") throw new Error("blocked");
+        // Keep the cached session fresh (locks/limits/plan may have changed).
+        setSession(school);
+      })
+      .catch(function () {
+        clearSession();
+        if (typeof onInvalid === "function") onInvalid();
+      });
   }
 
   function genSchoolId() {
@@ -132,7 +180,14 @@
   function isFeatureLocked(school, featureKey) {
     if (!school) return true;
     if (school.status === "blocked") return true;
-    return (school.locks || []).indexOf(featureKey) !== -1;
+    // Backend (School.locks) stores this as a comma-separated string
+    // ("biometric,finance"); older local records used an array. Normalize
+    // to an array of exact keys either way, so e.g. "fin" doesn't
+    // false-positive match inside "finance" via a raw string .indexOf().
+    const locks = Array.isArray(school.locks)
+      ? school.locks
+      : String(school.locks || "").split(",").map(s => s.trim()).filter(Boolean);
+    return locks.indexOf(featureKey) !== -1;
   }
 
   function authenticateSchool(username, password) {
@@ -148,6 +203,10 @@
   function getCurrentSchool() {
     const session = getSession();
     if (!session) return null;
+    // Real backend-issued session (from index.html login) embeds the full
+    // school record — use it directly instead of the legacy local registry,
+    // which nothing writes to anymore now that schools live in the database.
+    if (session.school) return session.school;
     return getSchoolById(session.schoolId);
   }
 
@@ -181,7 +240,7 @@
   window.SoftSchoolAdmin = {
     PLANS: PLANS,
     FEATURES: FEATURES,
-    getSchools, saveSchools, getSession, setSession, clearSession,
+    getSchools, saveSchools, getSession, setSession, clearSession, revalidateSession,
     addSchool, updateSchool, deleteSchool, getSchoolById,
     isFeatureLocked, authenticateSchool, getCurrentSchool, studentCount,
     getSchoolPrefix, nextStaffId
@@ -195,21 +254,26 @@
   const isPublicPage = path === "" || path === "index.html" || path === "superadmin.html";
 
   if (!isPublicPage) {
-    /* If Super Admin hasn't added any school yet, don't force a login —
-       let every page open directly like before, so the software works
-       normally out of the box. The guard activates automatically the
-       moment the first school is added in superadmin.html. */
-    if (getSchools().length === 0) {
-      return;
-    }
-
     const session = getSession();
-    if (!session) {
+
+    /* Not logged in at all -> send to the login page. */
+    if (!session || (!session.school && !session.schoolId)) {
       window.location.href = "index.html";
       return;
     }
-    const school = getSchoolById(session.schoolId);
+
+    /* Use the school record embedded in the session at login time (from the
+       real backend) rather than the legacy local SCHOOLS_KEY registry —
+       nothing writes to that registry anymore now that schools live in the
+       database, so looking a school up there always failed and incorrectly
+       treated every logged-in school as "not found" -> blocked. */
+    const school = getCurrentSchool();
     if (!school || school.status === "blocked") {
+      clearSession();
+      window.location.href = "index.html?blocked=1";
+      return;
+    }
+    if (school.expiryDate && new Date(school.expiryDate) < new Date()) {
       clearSession();
       window.location.href = "index.html?blocked=1";
       return;
@@ -219,6 +283,15 @@
       window.location.href = "main.html?locked=" + requiredFeature;
       return;
     }
+
+    /* Confirm the cached session is still accurate against the live backend
+       (in case the super admin blocked/changed the plan after this school
+       logged in). Runs after the page has already rendered with the cached
+       data, so it never blocks or delays the page — it only corrects things
+       shortly after if something changed. */
+    revalidateSession(function () {
+      window.location.href = "index.html?blocked=1";
+    });
 
     document.addEventListener("DOMContentLoaded", function () {
       /* Update school name/logo wherever it appears on the page */
@@ -290,20 +363,13 @@
         }
       }
 
-      /* Enforce student limit on the Manage Students page */
-      if (path === "manage-students.html") {
-        const addCard = document.getElementById("card-add-student");
-        const count = studentCount();
-        if (addCard && count >= (school.studentLimit || 0)) {
-          addCard.style.opacity = "0.5";
-          addCard.style.pointerEvents = "none";
-          addCard.title = "Student limit reached for your plan (" + school.studentLimit + ")";
-          addCard.addEventListener("click", function (e) {
-            e.preventDefault(); e.stopImmediatePropagation();
-            alert("You've reached your plan's student limit (" + school.studentLimit + " students). Please contact your administrator to upgrade your plan.");
-          }, true);
-        }
-      }
+      /* NOTE: the active-student limit on the Manage Students page ("New
+         Admission" card + warning banner) is now handled entirely by
+         manage-students.js (renderPlanLimitBanners() / canAdmitNewStudent()),
+         which also covers the archiveStudentLimit and correctly counts only
+         ACTIVE students (this file's old studentCount() counted everyone,
+         archived students included). Kept out of this shared file so it
+         doesn't double up with that page's own banner + click guard. */
 
       /* Show a toast if we were redirected here because a page was locked */
       const params = new URLSearchParams(window.location.search);
