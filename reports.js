@@ -11,7 +11,7 @@ let currentPeriod = 'month';
 let currentMonthValue = ''; // 'YYYY-MM', set in initMonthFilter()
 let currentTxnFilter = 'all';
 let allPeriodTxnRows = []; // full (unsliced) set of transactions for the active period+filter, used by CSV export
-let charts = { revExp: null, attendance: null, expenseBreak: null, feeStatus: null, classPerf: null };
+let charts = { revExp: null, attendance: null, expenseBreak: null, feeStatus: null, cashFlow: null };
 
 document.addEventListener('DOMContentLoaded', () => {
     initTheme();
@@ -290,36 +290,6 @@ function getAttendanceForDate(dateKey) {
     }
 
     return { presentStudents, totalStudents, presentStaff, totalStaff, hasData };
-}
-
-/* ============================================
-   CLASS-LEVEL ATTENDANCE READER
-   Attendance is stored per class per day as
-   eduflow_att_<date>_<className> — the class name
-   is the tail of the key itself.
-   ============================================ */
-function getClassAttendanceForRange(buckets) {
-    const dateKeys = new Set();
-    buckets.forEach(b => b.days.forEach(d => dateKeys.add(toDateKey(d))));
-
-    const map = {}; // className -> { present, total }
-    dateKeys.forEach(dateKey => {
-        const prefix = 'eduflow_att_' + dateKey + '_';
-        for (let key in localStorage) {
-            if (!key.startsWith(prefix)) continue;
-            const className = key.slice(prefix.length);
-            try {
-                const payload = JSON.parse(localStorage.getItem(key));
-                if (!payload || !payload.records) continue;
-                if (!map[className]) map[className] = { present: 0, total: 0 };
-                Object.values(payload.records).forEach(r => {
-                    map[className].total++;
-                    if (r.status === 'present') map[className].present++;
-                });
-            } catch (e) { /* skip malformed */ }
-        }
-    });
-    return map;
 }
 
 /* ============================================
@@ -614,8 +584,25 @@ function renderReports() {
     document.getElementById('chart-attendance-trend-empty').style.display =
         attendanceHasAnyData ? 'none' : 'block';
 
-    // ---------- Class Performance ----------
-    safeRenderChart('Class Performance', () => renderClassPerformance(buckets, students));
+    // ---------- Net Cash Flow Trend ----------
+    const netSeries = revenueSeries.map((r, i) => r - expenseSeries[i]);
+    safeRenderChart('Net Cash Flow Trend', () => renderCashFlowTrend(buckets.map(b => b.label), netSeries));
+    document.getElementById('chart-cash-flow-trend-empty').style.display =
+        (periodRevenue === 0 && periodExpense === 0) ? 'block' : 'none';
+
+    const cashflowBadge = document.getElementById('rp-cashflow-badge');
+    if (cashflowBadge) {
+        if (periodRevenue === 0 && periodExpense === 0) {
+            cashflowBadge.className = 'trend neutral';
+            cashflowBadge.innerHTML = '<i class="fas fa-circle" style="font-size:7px;"></i> No activity yet';
+        } else if (netFlow >= 0) {
+            cashflowBadge.className = 'trend up';
+            cashflowBadge.innerHTML = '<i class="fas fa-arrow-up"></i> Surplus';
+        } else {
+            cashflowBadge.className = 'trend down';
+            cashflowBadge.innerHTML = '<i class="fas fa-arrow-down"></i> Deficit';
+        }
+    }
 
     // ---------- Top Pending Fees ----------
     renderPendingFees(students);
@@ -817,57 +804,39 @@ function renderAttendanceChart(labels, studentPct, staffPct) {
 }
 
 /* ============================================
-   CHART: Class Performance (grouped bar)
-   Attendance % (period) vs Fee Collected % (all-time)
+   CHART: Net Cash Flow Trend (line, surplus/deficit aware)
+   Plots revenue-minus-expense per bucket so admins can see at a glance
+   which weeks/days ran a surplus vs a deficit, not just the period total.
    ============================================ */
-function renderClassPerformance(buckets, students) {
-    const attMap = getClassAttendanceForRange(buckets);
-
-    const feeMap = {}; // className -> { expected, collected }
-    students.forEach(s => {
-        const cls = s.studentClass || 'Unassigned';
-        if (!feeMap[cls]) feeMap[cls] = { expected: 0, collected: 0 };
-        feeMap[cls].expected += (Number(s.standardFee) || 0) + (Number(s.transportFee) || 0);
-        (s.feePayments || []).forEach(p => { feeMap[cls].collected += Number(p.amount) || 0; });
-    });
-
-    const classNames = Array.from(new Set([...Object.keys(attMap), ...Object.keys(feeMap)]))
-        .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
-
-    const badge = document.getElementById('rp-class-count-badge');
-    if (badge) badge.textContent = `${classNames.length} class${classNames.length === 1 ? '' : 'es'}`;
-
-    const emptyNote = document.getElementById('chart-class-performance-empty');
-    const ctx = document.getElementById('chart-class-performance');
+function renderCashFlowTrend(labels, netSeries) {
+    const ctx = document.getElementById('chart-cash-flow-trend');
     if (!ctx || typeof Chart === 'undefined') return;
 
-    if (classNames.length === 0) {
-        if (emptyNote) emptyNote.style.display = 'block';
-        if (charts.classPerf) { charts.classPerf.destroy(); charts.classPerf = null; }
-        return;
-    }
-    if (emptyNote) emptyNote.style.display = 'none';
-
-    const attendanceData = classNames.map(c => {
-        const a = attMap[c];
-        return a && a.total > 0 ? Math.round((a.present / a.total) * 100) : 0;
-    });
-    const feeData = classNames.map(c => {
-        const f = feeMap[c];
-        return f && f.expected > 0 ? Math.round((f.collected / f.expected) * 100) : 0;
-    });
-
     const theme = chartTheme();
+    const teal = CHART_PALETTE.teal;
+    const rose = CHART_PALETTE.rose;
 
-    if (charts.classPerf) charts.classPerf.destroy();
-    charts.classPerf = new Chart(ctx, {
-        type: 'bar',
+    if (charts.cashFlow) charts.cashFlow.destroy();
+    charts.cashFlow = new Chart(ctx, {
+        type: 'line',
         data: {
-            labels: classNames,
-            datasets: [
-                { label: 'Attendance % (period)', data: attendanceData, backgroundColor: barGradient(CHART_PALETTE.indigo), borderRadius: 6, borderSkipped: false, maxBarThickness: 24 },
-                { label: 'Fee Collected % (all-time)', data: feeData, backgroundColor: barGradient(CHART_PALETTE.teal), borderRadius: 6, borderSkipped: false, maxBarThickness: 24 }
-            ]
+            labels,
+            datasets: [{
+                label: 'Net Cash Flow',
+                data: netSeries,
+                borderWidth: 2.5,
+                fill: true,
+                tension: 0.35,
+                backgroundColor: lineFillGradient(teal),
+                pointRadius: 4,
+                pointHoverRadius: 6,
+                pointBorderWidth: 2,
+                pointBorderColor: theme.cardBg,
+                pointBackgroundColor: netSeries.map(v => v >= 0 ? teal : rose),
+                segment: {
+                    borderColor: (segCtx) => (segCtx.p0.parsed.y < 0 || segCtx.p1.parsed.y < 0) ? rose : teal
+                }
+            }]
         },
         options: {
             responsive: true,
@@ -875,14 +844,42 @@ function renderClassPerformance(buckets, students) {
             animation: { duration: 650, easing: 'easeOutQuart' },
             interaction: { mode: 'index', intersect: false },
             plugins: {
-                legend: { labels: { color: theme.text, font: { family: 'Inter', size: 11.5, weight: '600' }, usePointStyle: true, pointStyle: 'circle', padding: 16 } },
-                tooltip: { ...tooltipStyle(theme), callbacks: { label: (c) => ` ${c.dataset.label}: ${c.parsed.y}%` } }
+                legend: { display: false },
+                tooltip: {
+                    ...tooltipStyle(theme),
+                    callbacks: {
+                        label: (c) => ` ${c.parsed.y >= 0 ? 'Surplus' : 'Deficit'}: RS ${Math.abs(Math.round(c.parsed.y)).toLocaleString()}`
+                    }
+                }
             },
             scales: {
                 x: { grid: { display: false }, ticks: { color: theme.text, font: { size: 11 } } },
-                y: { min: 0, max: 100, grid: { color: theme.grid }, border: { display: false }, ticks: { color: theme.text, font: { size: 11 }, callback: v => v + '%' } }
+                y: {
+                    grid: { color: theme.grid }, border: { display: false },
+                    ticks: {
+                        color: theme.text, font: { size: 11 },
+                        callback: v => (v < 0 ? '−' : '') + 'RS ' + (Math.abs(v) >= 1000 ? Math.round(Math.abs(v) / 1000) + 'k' : Math.round(Math.abs(v)))
+                    }
+                }
             }
-        }
+        },
+        plugins: [{
+            id: 'zeroLine',
+            afterDraw(chart) {
+                const { ctx: c, chartArea, scales } = chart;
+                if (!chartArea) return;
+                const y0 = scales.y.getPixelForValue(0);
+                c.save();
+                c.strokeStyle = theme.grid;
+                c.setLineDash([4, 4]);
+                c.lineWidth = 1;
+                c.beginPath();
+                c.moveTo(chartArea.left, y0);
+                c.lineTo(chartArea.right, y0);
+                c.stroke();
+                c.restore();
+            }
+        }]
     });
 }
 
