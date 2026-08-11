@@ -134,7 +134,10 @@ async function handleLogin(e) {
   btn.disabled = true;
   btn.style.opacity = "0.8";
 
-  const result = await SoftSchoolAuth.authenticate(phone.value.trim(), pass.value);
+  const rememberBox = document.getElementById("rememberAdmin");
+  const remember = !!(rememberBox && rememberBox.checked);
+
+  const result = await SoftSchoolAuth.authenticate(phone.value.trim(), pass.value, remember);
 
   btn.textContent = origText;
   btn.disabled = false;
@@ -156,6 +159,14 @@ async function handleLogin(e) {
       phone.closest(".login-card").classList.remove("shake");
     }, { once: true });
     return;
+  }
+
+  if (remember && result.school && result.school.rememberToken) {
+    SoftSchoolAuth.saveRememberMe(result.school.username, result.school.rememberToken);
+  } else if (!remember) {
+    // Unchecked on this login → don't leave an old token from a previous
+    // "Remember Me" login still sitting in this browser.
+    SoftSchoolAuth.clearRememberMe();
   }
 
   SoftSchoolAuth.startSession(result);
@@ -362,6 +373,7 @@ const SoftSchoolAuth = (function () {
   // "https://api.yourdomain.com/api/school"
   const API_BASE_URL = "http://localhost:8080/api/school";
   const SESSION_KEY = "softschool_session";
+  const REMEMBER_KEY = "softschool_remember";
   const CODE_RE = /^(?=.*[a-z])(?=.*[0-9])[a-z0-9]{7}$/;
 
   function isValidCode(code) {
@@ -406,14 +418,28 @@ const SoftSchoolAuth = (function () {
     return apiRequest("/register", { schoolId, username, password, code });
   }
 
-  function authenticate(username, password) {
-    return apiRequest("/login", { username, password });
+  function authenticate(username, password, remember) {
+    return apiRequest("/login", { username, password, remember: !!remember });
+  }
+
+  /* schoolId + code = activation key from the super admin portal (same
+     proof of ownership as register). username must match the school's
+     EXISTING username; newPassword replaces loginPasswordHash. */
+  function resetPassword({ schoolId, code, username, newPassword }) {
+    return apiRequest("/reset-password", { schoolId, code, username, newPassword });
   }
 
   function startSession(result) {
+    /* rememberToken is a one-time credential, not part of the school's
+       profile — strip it before the school object gets stored as the
+       "logged in" session (which access-control.js may read back out
+       elsewhere in the app). It's persisted separately via saveRememberMe(). */
+    const school = result.school ? Object.assign({}, result.school) : null;
+    if (school) delete school.rememberToken;
+
     const payload = {
-      schoolId: result.school ? result.school.schoolId : null,
-      school: result.school || null,
+      schoolId: school ? school.schoolId : null,
+      school: school,
       at: Date.now(),
     };
     /* Prefer access-control.js's setSession so both files always agree on
@@ -421,8 +447,8 @@ const SoftSchoolAuth = (function () {
        id) so the page guard on main.html etc. doesn't need a network round
        trip just to know who's logged in. Falls back to writing localStorage
        directly if access-control.js isn't loaded for some reason. */
-    if (window.SoftSchoolAdmin && typeof window.SoftSchoolAdmin.setSession === "function" && result.school) {
-      window.SoftSchoolAdmin.setSession(result.school);
+    if (window.SoftSchoolAdmin && typeof window.SoftSchoolAdmin.setSession === "function" && school) {
+      window.SoftSchoolAdmin.setSession(school);
       return;
     }
     try {
@@ -441,9 +467,122 @@ const SoftSchoolAuth = (function () {
     }
   }
 
-  return { register, authenticate, startSession, currentSession, isValidCode };
+  /* ── "REMEMBER ME" TOKEN STORAGE ──
+     Only the school's username + a random, single-use-until-rotated token
+     live here — never the password. The token by itself is useless without
+     the backend's matching salted hash, and it's rotated (a new one issued)
+     every time it's used, so it can't just be replayed forever if it leaks. */
+  function saveRememberMe(username, token) {
+    if (!username || !token) return;
+    try {
+      localStorage.setItem(REMEMBER_KEY, JSON.stringify({ username, token }));
+    } catch (err) {
+      /* ignore — remember-me just won't persist */
+    }
+  }
+
+  function getRememberMe() {
+    try {
+      const raw = localStorage.getItem(REMEMBER_KEY);
+      return raw ? JSON.parse(raw) : null;
+    } catch (err) {
+      return null;
+    }
+  }
+
+  function clearRememberMe() {
+    try {
+      localStorage.removeItem(REMEMBER_KEY);
+    } catch (err) {
+      /* ignore */
+    }
+  }
+
+  /* Tells the backend to invalidate the stored token too (not just the
+     copy in this browser) — call this from wherever "Log out" lives. */
+  function forgetMe() {
+    const remembered = getRememberMe();
+    clearRememberMe();
+    if (remembered && remembered.username) {
+      apiRequest("/logout", { username: remembered.username }).catch(() => {});
+    }
+  }
+
+  /* Trades a saved remember-me token for a fresh session. Used on page
+     load to log the school straight in without showing the login form. */
+  async function tryAutoLogin() {
+    const remembered = getRememberMe();
+    if (!remembered || !remembered.username || !remembered.token) {
+      return { ok: false, reason: "no_token" };
+    }
+    const result = await apiRequest("/login-token", {
+      username: remembered.username,
+      token: remembered.token,
+    });
+    if (!result.ok) {
+      clearRememberMe();
+      return result;
+    }
+    if (result.school && result.school.rememberToken) {
+      saveRememberMe(result.school.username, result.school.rememberToken);
+    }
+    return result;
+  }
+
+  return {
+    register,
+    authenticate,
+    resetPassword,
+    startSession,
+    currentSession,
+    isValidCode,
+    saveRememberMe,
+    getRememberMe,
+    clearRememberMe,
+    forgetMe,
+    tryAutoLogin,
+  };
 })();
 window.SoftSchoolAuth = SoftSchoolAuth;
+
+/* ── REMEMBER ME: SILENT AUTO-LOGIN ──
+   If this browser already has a valid "Remember Me" token from a previous
+   visit, skip the login modal entirely — trade the token for a session and
+   go straight to the dashboard. A full-page overlay covers the marketing
+   page while this check happens so the school never sees it flash by. */
+(function () {
+  document.addEventListener("DOMContentLoaded", async () => {
+    const remembered = SoftSchoolAuth.getRememberMe();
+    if (!remembered) return;
+
+    const overlay = document.createElement("div");
+    overlay.id = "autoLoginOverlay";
+    overlay.setAttribute("role", "status");
+    overlay.setAttribute("aria-live", "polite");
+    overlay.style.cssText =
+      "position:fixed;inset:0;z-index:99999;display:flex;align-items:center;" +
+      "justify-content:center;gap:.6rem;background:var(--paper,#FAF8F3);" +
+      "color:var(--ink,#0B2B28);font-family:'Inter',sans-serif;font-size:1rem;font-weight:500;";
+    overlay.innerHTML =
+      '<i class="fas fa-circle-notch fa-spin" style="color:var(--teal-500,#1E8F86);"></i> Signing you in…';
+    document.body.appendChild(overlay);
+
+    let result;
+    try {
+      result = await SoftSchoolAuth.tryAutoLogin();
+    } catch (err) {
+      result = { ok: false };
+    }
+
+    if (result.ok) {
+      SoftSchoolAuth.startSession(result);
+      window.location.href = "main.html";
+      return; // leave the overlay up until the browser navigates away
+    }
+
+    overlay.remove();
+  });
+})();
 
 /* ── REGISTRATION MODAL ── */
 let _regTrap = null;
@@ -593,6 +732,141 @@ async function handleRegister(e) {
   showToast("Registration successful! You can now login.", "success");
   setTimeout(() => {
     closeRegister();
+    setTimeout(() => {
+      openLogin();
+      const loginUser = document.getElementById("phone");
+      if (loginUser) loginUser.value = usernameVal;
+    }, 200);
+  }, 900);
+}
+
+/* ── FORGOT PASSWORD MODAL ── */
+let _fpTrap = null;
+let _fpLastFocused = null;
+
+function openForgotPassword() {
+  const modal = document.getElementById("forgotPasswordModal");
+  if (!modal) return;
+  _fpLastFocused = document.activeElement;
+  modal.classList.add("open");
+  document.body.style.overflow = "hidden";
+  setTimeout(() => {
+    const first = document.getElementById("fpSchoolId");
+    if (first) first.focus();
+  }, 200);
+  if (_fpTrap) modal.removeEventListener("keydown", _fpTrap);
+  _fpTrap = createFocusTrap(modal);
+  modal.addEventListener("keydown", _fpTrap);
+}
+
+function closeForgotPassword() {
+  const modal = document.getElementById("forgotPasswordModal");
+  if (!modal) return;
+  modal.classList.remove("open");
+  document.body.style.overflow = "";
+  if (_fpTrap) {
+    modal.removeEventListener("keydown", _fpTrap);
+    _fpTrap = null;
+  }
+  if (_fpLastFocused) {
+    _fpLastFocused.focus();
+    _fpLastFocused = null;
+  }
+}
+
+function closeForgotPasswordOutside(e) {
+  if (e.target === document.getElementById("forgotPasswordModal")) closeForgotPassword();
+}
+
+function openForgotPasswordFromLogin() {
+  closeLogin();
+  setTimeout(openForgotPassword, 180);
+}
+
+function openLoginFromForgotPassword() {
+  closeForgotPassword();
+  setTimeout(openLogin, 180);
+}
+
+function shakeForgotPasswordCard(field) {
+  const card = document.getElementById("forgotPasswordCard");
+  if (field) field.classList.add("error");
+  if (!card) return;
+  card.classList.add("shake");
+  card.addEventListener("animationend", () => card.classList.remove("shake"), { once: true });
+  if (field) field.focus();
+}
+
+async function handleForgotPassword(e) {
+  e.preventDefault();
+
+  const schoolId = document.getElementById("fpSchoolId");
+  const code = document.getElementById("fpCode");
+  const username = document.getElementById("fpUsername");
+  const password = document.getElementById("fpPassword");
+  const password2 = document.getElementById("fpPassword2");
+  const btn = document.getElementById("forgotPasswordBtn");
+
+  [schoolId, code, username, password, password2].forEach((el) => el.classList.remove("error"));
+
+  const schoolIdVal = schoolId.value.trim();
+  const codeVal = code.value.trim().toLowerCase();
+  const usernameVal = username.value.trim();
+
+  if (!schoolIdVal) {
+    showToast("Please enter the School ID given to you.", "error");
+    return shakeForgotPasswordCard(schoolId);
+  }
+  if (!SoftSchoolAuth.isValidCode(codeVal)) {
+    showToast("Security code must be 7 characters using lowercase letters and numbers.", "error");
+    return shakeForgotPasswordCard(code);
+  }
+  if (!usernameVal) {
+    showToast("Please enter your username.", "error");
+    return shakeForgotPasswordCard(username);
+  }
+  if (password.value.length < 6) {
+    showToast("New password must be at least 6 characters.", "error");
+    return shakeForgotPasswordCard(password);
+  }
+  if (password.value !== password2.value) {
+    showToast("Passwords do not match.", "error");
+    return shakeForgotPasswordCard(password2);
+  }
+
+  const origText = btn.innerHTML;
+  btn.innerHTML = "Resetting…";
+  btn.disabled = true;
+  btn.style.opacity = "0.8";
+
+  const result = await SoftSchoolAuth.resetPassword({
+    schoolId: schoolIdVal,
+    code: codeVal,
+    username: usernameVal,
+    newPassword: password.value,
+  });
+
+  btn.innerHTML = origText;
+  btn.disabled = false;
+  btn.style.opacity = "";
+
+  if (!result.ok) {
+    if (result.reason === "network") {
+      showToast(result.message, "error");
+    } else if (result.message && /username/i.test(result.message)) {
+      showToast(result.message, "error");
+      shakeForgotPasswordCard(username);
+    } else {
+      showToast(result.message || "School ID or security code is not valid. Please check and try again.", "error");
+      shakeForgotPasswordCard(code);
+    }
+    return;
+  }
+
+  document.getElementById("forgotPasswordForm").reset();
+  showToast("Password reset successful! You can now login.", "success");
+  setTimeout(() => {
+    closeForgotPassword();
     setTimeout(() => {
       openLogin();
       const loginUser = document.getElementById("phone");

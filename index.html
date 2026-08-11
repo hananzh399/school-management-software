@@ -742,7 +742,7 @@
                 <i class="fas fa-eye" id="eyeIcon"></i>
               </button>
             </div>
-            <div class="forgot"><a href="#">Forgot password?</a></div>
+            <div class="forgot"><a href="javascript:void(0)" onclick="openForgotPasswordFromLogin()">Forgot password?</a></div>
           </div>
 
           <label class="remember-row">
@@ -823,7 +823,7 @@
       </div>
 
       <div class="login-welcome">Register your school</div>
-      <p class="register-intro">Enter the School ID and 7-digit security code provided by Soft School, then choose your login username and password.</p>
+      <p class="register-intro">Enter School ID and 7-digit code provided by Soft School <br/> to get it contact<a class="btn-signup-login">whatsapp</a> </p>
 
       <form id="registerForm" onsubmit="handleRegister(event)" novalidate>
         <div class="field-group field-group-underline">
@@ -865,7 +865,7 @@
             <i class="fas fa-shield-halved field-icon"></i>
             <input type="text" id="regCode" placeholder="7-digit Security Code*" required maxlength="7" spellcheck="false" autocapitalize="off" aria-label="Security code">
           </div>
-          <div class="register-hint">7 characters, lowercase letters and numbers only (e.g. a7k2p9x).</div>
+          <div class="register-hint"></div>
         </div>
 
         <button type="submit" class="btn-login btn-ripple" id="registerBtn"><i class="fas fa-user-plus"></i> Register</button>
@@ -873,6 +873,71 @@
 
       <div class="login-signup-row">
         Already registered? <a href="javascript:void(0)" onclick="openLoginFromRegister()" class="btn-signup-login">Login</a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── FORGOT PASSWORD MODAL ── -->
+<div class="modal-overlay" id="forgotPasswordModal" onclick="closeForgotPasswordOutside(event)">
+  <div class="modal-box login-modal-box">
+    <button class="modal-close" onclick="closeForgotPassword()" aria-label="Close"><i class="fas fa-times"></i></button>
+    <div class="login-card" id="forgotPasswordCard">
+      <div class="login-modal-brand">
+        <img src="logo-icon.png" alt="Soft School" style="height:32px;">
+        <span class="logo-wordmark">Soft<strong>School</strong></span>
+      </div>
+
+      <div class="login-welcome">Reset your password</div>
+      <p class="register-intro">Enter your School ID and 7-digit security code given by Soft School, <br/> then your username and a new password.</p>
+
+      <form id="forgotPasswordForm" onsubmit="handleForgotPassword(event)" novalidate>
+        <div class="field-group field-group-underline">
+          <div class="field-wrap field-wrap-underline">
+            <i class="fas fa-school field-icon"></i>
+            <input type="text" id="fpSchoolId" placeholder="School ID (provided by Soft School)*" required aria-label="School ID">
+          </div>
+        </div>
+
+        <div class="field-group field-group-underline">
+          <div class="field-wrap field-wrap-underline">
+            <i class="fas fa-shield-halved field-icon"></i>
+            <input type="text" id="fpCode" placeholder="7-digit Security Code*" required maxlength="7" spellcheck="false" autocapitalize="off" aria-label="Security code">
+          </div>
+        </div>
+
+        <div class="field-group field-group-underline">
+          <div class="field-wrap field-wrap-underline">
+            <i class="fas fa-user field-icon"></i>
+            <input type="text" id="fpUsername" placeholder="Your Username*" required autocomplete="username" aria-label="Username">
+          </div>
+        </div>
+
+        <div class="field-group field-group-underline">
+          <div class="field-wrap field-wrap-underline">
+            <i class="fas fa-lock field-icon"></i>
+            <input type="password" id="fpPassword" placeholder="New Password*" required autocomplete="new-password" aria-label="New password">
+            <button type="button" class="pw-toggle" onclick="toggleRegPw('fpPassword','eyeIconFp')" aria-label="Toggle password visibility">
+              <i class="fas fa-eye" id="eyeIconFp"></i>
+            </button>
+          </div>
+        </div>
+
+        <div class="field-group field-group-underline">
+          <div class="field-wrap field-wrap-underline">
+            <i class="fas fa-lock field-icon"></i>
+            <input type="password" id="fpPassword2" placeholder="Confirm New Password*" required autocomplete="new-password" aria-label="Confirm new password">
+            <button type="button" class="pw-toggle" onclick="toggleRegPw('fpPassword2','eyeIconFp2')" aria-label="Toggle password visibility">
+              <i class="fas fa-eye" id="eyeIconFp2"></i>
+            </button>
+          </div>
+        </div>
+
+        <button type="submit" class="btn-login btn-ripple" id="forgotPasswordBtn"><i class="fas fa-key"></i> Reset Password</button>
+      </form>
+
+      <div class="login-signup-row">
+        Remembered it? <a href="javascript:void(0)" onclick="openLoginFromForgotPassword()" class="btn-signup-login">Login</a>
       </div>
     </div>
   </div>
