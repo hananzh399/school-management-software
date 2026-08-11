@@ -260,6 +260,7 @@
                     <div id="fine-panel-student" class="fine-panel">
                         <div class="form-page-container">
                             <label class="section-mini-label">Select Student</label>
+
                             <div class="cascade-select-grid">
                                 <div class="form-group">
                                     <label>Class</label>
@@ -275,9 +276,12 @@
                                 </div>
                                 <div class="form-group">
                                     <label>Student</label>
-                                    <select id="sf-student-select" onchange="onFineStudentChange()" disabled>
-                                        <option value="">-- Select Student --</option>
-                                    </select>
+                                    <div class="student-select-combo">
+                                        <input type="text" id="sf-student-select" class="student-combo-input" placeholder="-- Select Student --" autocomplete="off" disabled
+                                               oninput="filterFineStudentOptions()" onfocus="openFineStudentOptions()">
+                                        <i class="fas fa-chevron-down student-combo-caret"></i>
+                                        <div id="sf-student-options" class="fine-results-list student-combo-dropdown d-none"></div>
+                                    </div>
                                 </div>
                             </div>
                             <div id="sf-selected-student-info" class="selected-target-info d-none"></div>
@@ -495,40 +499,51 @@
                 <div class="title-divider"></div>
             </section>
 
-            <!-- Inline add-expense form -->
-            <div class="expense-hub-form-wrap">
-                <div class="expense-hub-form-card">
-                    <div class="expense-hub-form-header">
-                        <div class="expense-hub-icon-wrap">
-                            <i class="fas fa-receipt"></i>
-                        </div>
-                        <div>
-                            <h3 class="expense-hub-form-title">Record New Expense</h3>
-                            <p class="expense-hub-form-sub">Fill in the details below to log an expense entry.</p>
-                        </div>
-                    </div>
-                    <div class="expense-hub-fields">
-                        <div class="form-group">
-                            <label>Expense Amount <span class="field-currency">(RS)</span></label>
-                            <div class="expense-amount-input-wrap">
-                                <span class="expense-rs-prefix">RS</span>
-                                <input type="number" id="hub-exp-amount" min="1" placeholder="0" class="expense-amount-input">
+            <!-- Expense hub: entry form now spans the full width of the page -->
+            <div class="expense-hub-layout expense-hub-layout-full">
+
+                <!-- Add-expense form, full width -->
+                <div class="expense-hub-form-wrap">
+                    <div class="expense-hub-form-card">
+                        <div class="expense-hub-form-header">
+                            <div class="expense-hub-icon-wrap">
+                                <i class="fas fa-receipt"></i>
+                            </div>
+                            <div>
+                                <h3 class="expense-hub-form-title">Record New Expense</h3>
+                                <p class="expense-hub-form-sub">Fill in the details below to log an expense entry.</p>
                             </div>
                         </div>
-                        <div class="form-group">
-                            <label>Description</label>
-                            <input type="text" id="hub-exp-desc" placeholder="e.g. Electricity bill, maintenance supplies, stationery…">
+                        <div class="expense-hub-fields">
+                            <div class="form-group">
+                                <label>Expense Amount <span class="field-currency">(RS)</span></label>
+                                <div class="expense-amount-input-wrap">
+                                    <span class="expense-rs-prefix">RS</span>
+                                    <input type="number" id="hub-exp-amount" min="1" placeholder="0" class="expense-amount-input">
+                                </div>
+                                <div class="expense-quick-chips">
+                                    <button type="button" class="expense-chip" onclick="addExpenseQuickAmount(500)">+500</button>
+                                    <button type="button" class="expense-chip" onclick="addExpenseQuickAmount(1000)">+1,000</button>
+                                    <button type="button" class="expense-chip" onclick="addExpenseQuickAmount(5000)">+5,000</button>
+                                    <button type="button" class="expense-chip expense-chip-clear" onclick="setExpenseQuickAmount(0)">Reset</button>
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label>Description</label>
+                                <input type="text" id="hub-exp-desc" placeholder="e.g. Electricity bill, maintenance supplies, stationery…">
+                            </div>
+                        </div>
+                        <div class="expense-hub-actions">
+                            <button type="button" class="btn btn-cancel" onclick="clearExpenseHubForm()">
+                                <i class="fas fa-times"></i> Clear
+                            </button>
+                            <button type="button" class="btn btn-primary expense-log-btn" onclick="handleExpenseSubmitHub()">
+                                <i class="fas fa-plus-circle"></i> Log Expense
+                            </button>
                         </div>
                     </div>
-                    <div class="expense-hub-actions">
-                        <button type="button" class="btn btn-cancel" onclick="clearExpenseHubForm()">
-                            <i class="fas fa-times"></i> Clear
-                        </button>
-                        <button type="button" class="btn btn-primary expense-log-btn" onclick="handleExpenseSubmitHub()">
-                            <i class="fas fa-plus-circle"></i> Log Expense
-                        </button>
-                    </div>
                 </div>
+
             </div>
         </div>
 
@@ -559,14 +574,41 @@
 
         <!-- ===================== PAGE: VIEW EXPENSES ===================== -->
         <div id="page-view-expenses" class="sub-page d-none">
-            <section class="page-title-section sub-title-section">
+            <section class="page-title-section sub-title-section stats-header-section">
                 <button class="back-btn" onclick="showPage('page-expense-hub')"><i class="fas fa-arrow-left"></i> Back</button>
-                <h2 class="page-title">Expenses</h2>
-                <p class="page-description">All recorded operational expenses.</p>
-                <div class="title-divider"></div>
+                <div class="fee-stats-row-compact" id="expense-summary-row">
+                    <div class="fee-stat-card fee-stat-pending">
+                        <div class="fee-stat-icon"><i class="fas fa-wallet"></i></div>
+                        <div class="fee-stat-info">
+                            <span class="fee-stat-label" id="expense-total-label">Total Expenses (Monthly)</span>
+                            <span class="fee-stat-value" id="expense-total-value">Rs. 0</span>
+                        </div>
+                    </div>
+                </div>
             </section>
 
             <div class="table-container centered-block">
+                <!-- Toolbar sits above the table: title on the left, daily/monthly switcher on the right -->
+                <div class="expense-records-toolbar">
+                    <div class="expense-records-toolbar-label" id="expense-records-toolbar-label">
+                        <i class="fas fa-list-ul"></i> Monthly Expenses <span id="expense-records-count"></span>
+                    </div>
+                    <div class="segemented-control expense-view-switcher" id="expense-view-switcher">
+                        <button type="button" class="seg-btn active" data-view="monthly" onclick="setExpenseView('monthly', this)">
+                            <i class="fas fa-calendar-alt"></i> Monthly
+                        </button>
+                        <button type="button" class="seg-btn" data-view="daily" onclick="setExpenseView('daily', this)">
+                            <i class="fas fa-calendar-day"></i> Daily
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Date picker row, shown only in daily mode -->
+                <div class="expense-daily-filter-row d-none" id="expense-daily-filter-row">
+                    <label for="expense-daily-date"><i class="fas fa-calendar-alt"></i> Date</label>
+                    <input type="date" id="expense-daily-date" onchange="renderExpensesTable()">
+                </div>
+
                 <table class="finance-table">
                     <thead>
                         <tr>

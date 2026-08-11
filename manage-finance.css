@@ -3747,6 +3747,60 @@
     border-color: var(--accent, #6366f1);
     box-shadow: 0 0 0 3px rgba(99,102,241,0.25);
 }
+
+/* Student combobox — the "Student" field in the cascade grid, searchable in place */
+.student-select-combo {
+    position: relative;
+}
+.student-combo-input {
+    width: 100%;
+    padding: 10px 34px 10px 14px;
+    border-radius: 10px;
+    border: 1px solid var(--border-color, var(--border-subtle, rgba(255,255,255,0.12)));
+    background: var(--input-bg, var(--bg-input, rgba(255,255,255,0.04)));
+    color: var(--text-primary, #fff);
+    font-size: 14px;
+    outline: none;
+    transition: border-color .2s ease, box-shadow .2s ease;
+}
+.student-combo-input:focus {
+    border-color: var(--accent, #6366f1);
+    box-shadow: 0 0 0 3px rgba(99,102,241,0.25);
+}
+.student-combo-input:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+}
+.student-combo-caret {
+    position: absolute;
+    right: 14px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--text-secondary, #9aa0aa);
+    font-size: 12px;
+    pointer-events: none;
+}
+.student-combo-dropdown {
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 0;
+    right: 0;
+    z-index: 20;
+    background: var(--bg-card, #14161c);
+    border: 1px solid var(--border-color, var(--border-subtle, rgba(255,255,255,0.12)));
+    border-radius: 10px;
+    box-shadow: 0 12px 28px -10px rgba(0,0,0,0.35);
+    padding: 8px;
+    max-height: 240px;
+    overflow-y: auto;
+    margin-top: 0;
+    scrollbar-width: thin;
+    scrollbar-color: var(--border-hover) transparent;
+}
+.student-combo-dropdown::-webkit-scrollbar { width: 6px; }
+.student-combo-dropdown::-webkit-scrollbar-thumb { background: var(--border-hover); border-radius: 3px; }
+.student-combo-dropdown .staff-member-item { margin-bottom: 6px; }
+.student-combo-dropdown .staff-member-item:last-child { margin-bottom: 0; }
 .search-hint {
     margin: 8px 2px 0;
     font-size: 12px;
@@ -6351,53 +6405,89 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 }
 
 /* ============================================================
-   EXPENSE HUB — inline form redesign
+   EXPENSE HUB — two-pane layout, themed to match the rest of the app
+   Left: entry form, pinned in view while the page scrolls.
+   Right: a live "Today's Expenses" table, also pinned in view.
    ============================================================ */
-.expense-hub-form-wrap {
-    display: flex;
-    justify-content: center;
-    padding: 0 16px;
+.expense-hub-layout {
+    display: grid;
+    grid-template-columns: minmax(320px, 400px) 1fr;
+    align-items: start;
+    gap: 24px;
+    padding: 0 16px 32px;
+    max-width: 1180px;
+    margin: 0 auto;
+}
+
+/* Full-screen variant: form is now the only thing on the page, so let it use the full width */
+.expense-hub-layout-full {
+    display: block;
+    max-width: none;
+    padding: 0 32px 32px;
+}
+
+.expense-hub-form-wrap,
+.expense-today-wrap {
+    position: sticky;
+    top: 24px;
+    z-index: 2;
+}
+
+.expense-hub-layout-full .expense-hub-form-wrap {
+    position: static;
+    width: 100%;
 }
 
 .expense-hub-form-card {
     background: var(--bg-card);
     border: 1px solid var(--border-subtle);
     border-radius: var(--radius-lg, 16px);
-    padding: 32px 36px 28px;
+    padding: 28px 28px 24px;
     width: 100%;
-    max-width: 640px;
     box-shadow: 0 4px 24px -8px rgba(0,0,0,0.08);
+}
+
+.expense-hub-layout-full .expense-hub-form-card {
+    max-width: none;
+    padding: 40px 48px;
+}
+
+.expense-hub-layout-full .expense-hub-fields {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+    align-items: start;
 }
 
 .expense-hub-form-header {
     display: flex;
     align-items: flex-start;
     gap: 16px;
-    margin-bottom: 28px;
+    margin-bottom: 26px;
 }
 
 .expense-hub-icon-wrap {
-    width: 48px;
-    height: 48px;
+    width: 46px;
+    height: 46px;
     border-radius: 12px;
-    background: linear-gradient(135deg, #f97316, #ea580c);
+    background: linear-gradient(135deg, #6366f1, #4f46e5);
     color: #fff;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 1.25rem;
+    font-size: 1.15rem;
     flex-shrink: 0;
-    box-shadow: 0 4px 12px -4px rgba(249,115,22,0.5);
+    box-shadow: 0 4px 12px -4px rgba(79,70,229,0.5);
 }
 
 .expense-hub-form-title {
-    font-size: 1.05rem;
+    font-size: 1.02rem;
     font-weight: 700;
     color: var(--text-primary);
     margin: 0 0 4px;
 }
 .expense-hub-form-sub {
-    font-size: 0.83rem;
+    font-size: 0.82rem;
     color: var(--text-secondary);
     margin: 0;
 }
@@ -6406,7 +6496,7 @@ input[type="date"]::-webkit-calendar-picker-indicator {
     display: flex;
     flex-direction: column;
     gap: 18px;
-    margin-bottom: 24px;
+    margin-bottom: 22px;
 }
 .expense-hub-fields .form-group {
     width: 100%;
@@ -6434,7 +6524,8 @@ input[type="date"]::-webkit-calendar-picker-indicator {
     transition: border-color 0.2s;
 }
 .expense-amount-input-wrap:focus-within {
-    border-color: var(--accent, #6366f1);
+    border-color: #6366f1;
+    box-shadow: 0 0 0 3px rgba(99,102,241,0.15);
 }
 .expense-rs-prefix {
     padding: 11px 14px;
@@ -6456,6 +6547,33 @@ input[type="date"]::-webkit-calendar-picker-indicator {
     outline: none;
 }
 
+.expense-quick-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 10px;
+}
+.expense-chip {
+    border: 1px solid var(--border-subtle);
+    background: var(--bg-secondary, rgba(99,102,241,0.06));
+    color: var(--text-secondary);
+    font-size: 0.78rem;
+    font-weight: 600;
+    padding: 6px 12px;
+    border-radius: 999px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+.expense-chip:hover {
+    border-color: #6366f1;
+    color: #6366f1;
+    background: rgba(99,102,241,0.1);
+    transform: translateY(-1px);
+}
+.expense-chip-clear {
+    margin-left: auto;
+}
+
 .expense-hub-actions {
     display: flex;
     gap: 12px;
@@ -6466,11 +6584,175 @@ input[type="date"]::-webkit-calendar-picker-indicator {
     min-width: 150px;
 }
 
+/* ---- Today's Expenses — pinned table, matches the rest of the app's tables ---- */
+.expense-today-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-lg, 16px);
+    padding: 22px 22px 8px;
+    box-shadow: 0 4px 24px -8px rgba(0,0,0,0.08);
+}
+
+.expense-today-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+    margin-bottom: 18px;
+}
+.expense-today-title-group h3 {
+    margin: 0 0 4px;
+    font-size: 1.02rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.expense-today-title-group h3 i { color: #6366f1; }
+.expense-today-title-group p {
+    margin: 0;
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+}
+
+.expense-today-total {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    background: linear-gradient(135deg, rgba(99,102,241,0.12), rgba(79,70,229,0.06));
+    border: 1px solid rgba(99,102,241,0.25);
+    border-radius: 12px;
+    padding: 10px 18px;
+    min-width: 150px;
+}
+.expense-today-total-label {
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #6366f1;
+}
+.expense-today-total-value {
+    font-size: 1.3rem;
+    font-weight: 800;
+    color: var(--text-primary);
+    font-family: 'Space Grotesk', sans-serif;
+}
+
+.expense-today-table-wrap {
+    max-height: 480px;
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: var(--border-hover) transparent;
+    border-radius: 10px;
+}
+.expense-today-table-wrap::-webkit-scrollbar { width: 6px; }
+.expense-today-table-wrap::-webkit-scrollbar-thumb { background: var(--border-hover); border-radius: 3px; }
+
+.expense-today-table thead tr th {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+}
+.expense-today-table td:last-child,
+.expense-today-table th:last-child {
+    text-align: right;
+}
+
+/* ---- View Records: toolbar above the table + daily date-filter row ---- */
+.expense-records-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    flex-wrap: wrap;
+    margin-bottom: 14px;
+}
+.expense-records-toolbar-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+.expense-records-toolbar-label i { color: #6366f1; }
+.expense-records-toolbar-label span {
+    font-size: 0.8rem;
+    font-weight: 500;
+    color: var(--text-secondary);
+}
+
+.expense-daily-filter-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 14px;
+    padding: 10px 14px;
+    border: 1px solid var(--border-subtle);
+    border-radius: 10px;
+    background: var(--bg-secondary, rgba(99,102,241,0.05));
+}
+.expense-daily-filter-row label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+}
+.expense-daily-filter-row label i { color: #6366f1; }
+.expense-daily-filter-row input[type="date"] {
+    padding: 8px 12px;
+    border-radius: 8px;
+    border: 1px solid var(--border-subtle);
+    background: var(--bg-card);
+    color: var(--text-primary);
+    font-size: 0.85rem;
+    font-family: inherit;
+}
+.expense-daily-filter-row input[type="date"]:focus {
+    outline: none;
+    border-color: #6366f1;
+    box-shadow: 0 0 0 3px rgba(99,102,241,0.15);
+}
+
+@media (max-width: 900px) {
+    .expense-hub-layout { grid-template-columns: 1fr; }
+    .expense-hub-form-wrap,
+    .expense-today-wrap { position: static; }
+}
+
+@media (max-width: 600px) {
+    .expense-hub-form-card { padding: 22px 18px 20px; }
+    .expense-hub-form-header { flex-direction: column; gap: 10px; }
+    .expense-hub-layout-full .expense-hub-fields { grid-template-columns: 1fr; }
+    .expense-hub-actions { flex-direction: column; }
+    .expense-log-btn { width: 100%; justify-content: center; }
+    .expense-today-header { flex-direction: column; align-items: stretch; }
+    .expense-today-total { align-items: flex-start; }
+    .expense-records-toolbar { flex-direction: column; align-items: stretch; }
+    .expense-records-toolbar .expense-view-switcher { justify-content: center; width: 100%; }
+    .salary-records-controls { flex-direction: column; align-items: flex-start; }
+    .salary-records-tabs { width: 100%; }
+    .salary-rec-tab { flex: 1; justify-content: center; }
+    .btn-salary-view-records { flex: 1; justify-content: center; }
+    .salary-bonus-action-btns { flex-wrap: wrap; }
+    .sr-controls-row { flex-direction: column; gap: 10px; }
+    .sr-search-wrap { min-width: 0; width: 100%; }
+    .bonus-records-toolbar { flex-direction: column; gap: 10px; }
+    .bonus-search-wrap { max-width: none !important; }
+}
+
 @media (max-width: 600px) {
     .expense-hub-form-card { padding: 22px 18px 20px; }
     .expense-hub-form-header { flex-direction: column; gap: 10px; }
     .expense-hub-actions { flex-direction: column; }
     .expense-log-btn { width: 100%; justify-content: center; }
+    .expense-today-header { flex-direction: column; align-items: stretch; }
+    .expense-today-total { align-items: flex-start; }
     .salary-records-controls { flex-direction: column; align-items: flex-start; }
     .salary-records-tabs { width: 100%; }
     .salary-rec-tab { flex: 1; justify-content: center; }

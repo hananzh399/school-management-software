@@ -326,11 +326,13 @@ function setFineTargetTab(tab) {
 function resetStudentFineForm() {
     sfSelectedRegNo = null;
     sfSelectedId = null;
+    fineStudentOptions = [];
     populateFineClassDropdown();
     const secSel = document.getElementById('sf-section-select');
-    const stuSel = document.getElementById('sf-student-select');
+    const stuInput = document.getElementById('sf-student-select');
     if (secSel) { secSel.innerHTML = '<option value="">-- Select Section --</option>'; secSel.disabled = true; }
-    if (stuSel) { stuSel.innerHTML = '<option value="">-- Select Student --</option>'; stuSel.disabled = true; }
+    if (stuInput) { stuInput.value = ''; stuInput.placeholder = '-- Select Student --'; stuInput.disabled = true; }
+    closeFineStudentOptions();
     const info = document.getElementById('sf-selected-student-info');
     if (info) { info.classList.add('d-none'); info.innerHTML = ''; }
     const amt = document.getElementById('student-fine-amount'); if (amt) amt.value = '';
@@ -343,9 +345,10 @@ function resetStaffFineForm() {
     selectStaffCategory('Teaching');
 }
 
-/* ---- Cascading Class -> Section -> Student dropdowns ---- */
+/* ---- Cascading Class -> Section -> Student (Student is a searchable combobox) ---- */
 let sfSelectedRegNo = null;
 let sfSelectedId = null;
+let fineStudentOptions = []; // current class/section-filtered candidate list for the Student combobox
 
 function populateFineClassDropdown() {
     const classSel = document.getElementById('sf-class-select');
@@ -361,20 +364,22 @@ function populateFineClassDropdown() {
 function onFineClassChange() {
     const cls = document.getElementById('sf-class-select').value;
     const secSel = document.getElementById('sf-section-select');
-    const stuSel = document.getElementById('sf-student-select');
+    const stuInput = document.getElementById('sf-student-select');
     sfSelectedRegNo = null; sfSelectedId = null;
+    fineStudentOptions = [];
+    closeFineStudentOptions();
     const info = document.getElementById('sf-selected-student-info');
     if (info) { info.classList.add('d-none'); info.innerHTML = ''; }
 
     if (!cls) {
         secSel.innerHTML = '<option value="">-- Select Section --</option>'; secSel.disabled = true;
-        stuSel.innerHTML = '<option value="">-- Select Student --</option>'; stuSel.disabled = true;
+        if (stuInput) { stuInput.value = ''; stuInput.placeholder = '-- Select Student --'; stuInput.disabled = true; }
         return;
     }
 
     const students = getRealStudents().filter(s => (s.studentClass || s.className) === cls);
     let sections = [...new Set(students.map(s => s.section).filter(Boolean))];
-    stuSel.innerHTML = '<option value="">-- Select Student --</option>'; stuSel.disabled = true;
+    if (stuInput) { stuInput.value = ''; stuInput.placeholder = '-- Select Student --'; stuInput.disabled = true; }
 
     if (sections.length === 0) {
         // No sections on record for this class — skip straight to students
@@ -398,47 +403,92 @@ function onFineSectionChange() {
 }
 
 function populateFineStudentDropdown(cls, sec) {
-    const stuSel = document.getElementById('sf-student-select');
-    if (!stuSel) return;
+    const stuInput = document.getElementById('sf-student-select');
+    if (!stuInput) return;
     let students = getRealStudents().filter(s => (s.studentClass || s.className) === cls);
     if (sec) students = students.filter(s => s.section === sec);
 
-    if (students.length === 0) {
-        stuSel.innerHTML = '<option value="">-- No Students Found --</option>';
-        stuSel.disabled = true;
-        return;
-    }
+    fineStudentOptions = students.map(s => ({
+        id: s.id || s.regNo || '',
+        regNo: s.regNo || s.id || '',
+        name: s.fullName || s.name || 'Unnamed'
+    }));
 
-    stuSel.innerHTML = '<option value="">-- Select Student --</option>' +
-        students.map(s => {
-            const id = s.id || s.regNo || '';
-            const regNo = s.regNo || s.id || '';
-            const name = s.fullName || s.name || 'Unnamed';
-            return `<option value="${escapeForAttr(id)}" data-regno="${escapeForAttr(regNo)}">${escapeHtml(name)} (${escapeHtml(id)})</option>`;
-        }).join('');
-    stuSel.disabled = false;
+    stuInput.value = '';
+    if (fineStudentOptions.length === 0) {
+        stuInput.placeholder = '-- No Students Found --';
+        stuInput.disabled = true;
+    } else {
+        stuInput.placeholder = '-- Select Student -- (type to search)';
+        stuInput.disabled = false;
+    }
+    closeFineStudentOptions();
 }
 
-function onFineStudentChange() {
-    const stuSel = document.getElementById('sf-student-select');
-    const opt = stuSel.options[stuSel.selectedIndex];
-    const info = document.getElementById('sf-selected-student-info');
-    if (!opt || !opt.value) {
-        sfSelectedId = null; sfSelectedRegNo = null;
-        if (info) { info.classList.add('d-none'); info.innerHTML = ''; }
-        return;
+/* ---- Student combobox: search-as-you-type within the class/section-filtered list ---- */
+function renderFineStudentOptions(matches) {
+    const box = document.getElementById('sf-student-options');
+    if (!box) return;
+    if (matches.length === 0) {
+        box.innerHTML = '<p class="search-empty">No matching students.</p>';
+    } else {
+        box.innerHTML = matches.map(s => `
+            <div class="staff-member-item" onclick="selectFineStudentOption('${escapeForAttr(s.id)}')">
+                <div class="staff-member-info">
+                    <span class="staff-member-name">${escapeHtml(s.name)}</span>
+                    <span class="staff-member-role"><b>ID:</b> ${escapeHtml(s.id)}</span>
+                </div>
+                <div class="staff-member-check"><i class="fas fa-check"></i></div>
+            </div>`).join('');
     }
-    sfSelectedId = opt.value;
-    sfSelectedRegNo = opt.getAttribute('data-regno') || opt.value;
+    box.classList.remove('d-none');
+}
+
+function openFineStudentOptions() {
+    const stuInput = document.getElementById('sf-student-select');
+    if (!stuInput || stuInput.disabled) return;
+    renderFineStudentOptions(fineStudentOptions);
+}
+
+function filterFineStudentOptions() {
+    const stuInput = document.getElementById('sf-student-select');
+    if (!stuInput) return;
+    const q = stuInput.value.trim().toLowerCase();
+    const matches = !q ? fineStudentOptions : fineStudentOptions.filter(s =>
+        s.name.toLowerCase().includes(q) || String(s.id).toLowerCase().includes(q));
+    renderFineStudentOptions(matches);
+}
+
+function closeFineStudentOptions() {
+    const box = document.getElementById('sf-student-options');
+    if (box) { box.classList.add('d-none'); box.innerHTML = ''; }
+}
+
+function selectFineStudentOption(id) {
+    const s = fineStudentOptions.find(x => String(x.id) === String(id));
+    const stuInput = document.getElementById('sf-student-select');
+    const info = document.getElementById('sf-selected-student-info');
+    if (!s) return;
+
+    sfSelectedId = s.id;
+    sfSelectedRegNo = s.regNo;
+    if (stuInput) stuInput.value = `${s.name} (${s.id})`;
+    closeFineStudentOptions();
 
     const students = getRealStudents();
-    const s = students.find(x => String(x.id || x.regNo) === String(sfSelectedId));
-    if (info && s) {
-        const father = s.guardianName || '-';
+    const full = students.find(x => String(x.id || x.regNo) === String(sfSelectedId));
+    if (info && full) {
+        const father = full.guardianName || '-';
         info.classList.remove('d-none');
-        info.innerHTML = `<i class="fas fa-user-check"></i> <b>${escapeHtml(s.fullName || s.name || '')}</b> &nbsp;&bull;&nbsp; ID: ${escapeHtml(sfSelectedId)} &nbsp;&bull;&nbsp; Father: ${escapeHtml(father)}`;
+        info.innerHTML = `<i class="fas fa-user-check"></i> <b>${escapeHtml(full.fullName || full.name || '')}</b> &nbsp;&bull;&nbsp; ID: ${escapeHtml(sfSelectedId)} &nbsp;&bull;&nbsp; Father: ${escapeHtml(father)}`;
     }
 }
+
+// Close the student dropdown when clicking anywhere outside of it
+document.addEventListener('click', function(e) {
+    const combo = document.querySelector('.student-select-combo');
+    if (combo && !combo.contains(e.target)) closeFineStudentOptions();
+});
 
 async function handleAddStudentFine() {
     const amount = document.getElementById('student-fine-amount').value;
@@ -685,6 +735,11 @@ function filterStaffFineList() {
 
 function renderStaffMembersList(category, query) {
     const container = document.getElementById('staff-members-list');
+    if (!query || !query.trim()) {
+        // Don't dump the full staff roster — wait for the user to search
+        container.innerHTML = '<p class="search-empty"><i class="fas fa-search"></i> Start typing to search staff members.</p>';
+        return;
+    }
     const db = getGlobalData();
     let members = db.staff[category] || [];
     members = members.filter(s => staffMatchesQuery(s, query));
@@ -923,11 +978,36 @@ function handleExpenseSubmitNew() {
 
 function renderExpensesTable() {
     const tbody = document.getElementById('expenses-tbody');
+    if (!tbody) return;
     const allList = getExpensesData();
-    const currentMonthKey = getCurrentMonthKey();
-    const list = allList.filter(e => !e.monthKey || e.monthKey === currentMonthKey);
+    const labelEl = document.getElementById('expense-records-toolbar-label');
+    const countEl = document.getElementById('expense-records-count');
+    const totalLabelEl = document.getElementById('expense-total-label');
+    const totalValueEl = document.getElementById('expense-total-value');
+
+    let list;
+    if (expenseDailyViewActive) {
+        const dateInput = document.getElementById('expense-daily-date');
+        const isoDate = (dateInput && dateInput.value) ? dateInput.value : todayIsoDate();
+        const targetDateStr = isoToEnUSDate(isoDate);
+        list = allList.filter(e => e.date === targetDateStr);
+        if (labelEl) labelEl.innerHTML = `<i class="fas fa-calendar-day"></i> Daily Expenses`;
+        if (totalLabelEl) totalLabelEl.textContent = 'Total Expenses (Daily)';
+    } else {
+        const currentMonthKey = getCurrentMonthKey();
+        list = allList.filter(e => !e.monthKey || e.monthKey === currentMonthKey);
+        if (labelEl) labelEl.innerHTML = `<i class="fas fa-list-ul"></i> Monthly Expenses`;
+        if (totalLabelEl) totalLabelEl.textContent = 'Total Expenses (Monthly)';
+    }
+
+    if (countEl) countEl.textContent = list.length ? `(${list.length})` : '';
+
+    const total = list.reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
+    if (totalValueEl) totalValueEl.textContent = `Rs. ${total.toLocaleString()}`;
+
     if (list.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="4" class="empty-row">No expenses recorded this month.</td></tr>';
+        const msg = expenseDailyViewActive ? 'No expenses recorded on this date.' : 'No expenses recorded this month.';
+        tbody.innerHTML = `<tr><td colspan="4" class="empty-row">${msg}</td></tr>`;
         return;
     }
     tbody.innerHTML = list.map(e => `
@@ -938,6 +1018,42 @@ function renderExpensesTable() {
             <td>RS ${Number(e.amount).toLocaleString()}</td>
         </tr>
     `).join('');
+}
+
+/* ---- View Records: switch between "Monthly" (this month) and "Daily" (pick a date) ---- */
+let expenseDailyViewActive = false;
+
+function todayIsoDate() {
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = String(now.getMonth() + 1).padStart(2, '0');
+    const d = String(now.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+}
+function isoToEnUSDate(iso) {
+    const [y, m, d] = iso.split('-').map(Number);
+    return `${m}/${d}/${y}`;
+}
+
+function setExpenseView(view, btnEl) {
+    expenseDailyViewActive = (view === 'daily');
+
+    const switcher = document.getElementById('expense-view-switcher');
+    if (switcher) {
+        switcher.querySelectorAll('.seg-btn').forEach(b => b.classList.remove('active'));
+    }
+    if (btnEl) btnEl.classList.add('active');
+
+    const filterRow = document.getElementById('expense-daily-filter-row');
+    const dateInput = document.getElementById('expense-daily-date');
+
+    if (expenseDailyViewActive) {
+        if (dateInput && !dateInput.value) dateInput.value = todayIsoDate();
+        if (filterRow) filterRow.classList.remove('d-none');
+    } else {
+        if (filterRow) filterRow.classList.add('d-none');
+    }
+    renderExpensesTable();
 }
 
 
@@ -1092,7 +1208,7 @@ function _classDisplayLabel(name) {
  * having been clicked.
  */
 function _computeRealtimePendingTotal(students) {
-    const monthKey = getCurrentMonthKey();
+    const monthKey = getCurrentFeeMonthKey();
     let total = 0;
     students.forEach(s => {
         if (!isStudentBillable(s)) return;
@@ -1125,7 +1241,7 @@ function updateFeeStatsHeader() {
     const penEl = document.getElementById('fee-stat-pending');
     if (!genEl || !colEl || !penEl) return;
 
-    const monthKey = getCurrentMonthKey();
+    const monthKey = getCurrentFeeMonthKey();
     const monthLabel = new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
 
     let totalGenerated = 0;
@@ -1176,7 +1292,7 @@ function updateClassFeeStats(className) {
     const penEl = document.getElementById('class-fee-stat-pending');
     if (!genEl || !colEl || !penEl) return;
 
-    const monthKey = getCurrentMonthKey();
+    const monthKey = getCurrentFeeMonthKey();
     const monthLabel = new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
 
     let totalGenerated = 0;
@@ -1343,7 +1459,7 @@ async function viewVoucher(studentId, fullName, isPaidBill = false) {
         return; 
     }
 
-    const monthKey = getCurrentMonthKey();
+    const monthKey = getCurrentFeeMonthKey();
 
     // 2c. LOADING STATE — show the modal immediately with a spinner instead of
     // leaving the user staring at the previous voucher (or a blank overlay)
@@ -1982,7 +2098,7 @@ function computeFeeBreakdown(s) {
     // actually belongs to, so it only ever applies for that one month —
     // regardless of when "Generate" is eventually clicked.
     let customRows = null;
-    const customEditIsCurrentMonth = !s.voucherCustomFeesMonth || s.voucherCustomFeesMonth === getCurrentMonthKey();
+    const customEditIsCurrentMonth = !s.voucherCustomFeesMonth || s.voucherCustomFeesMonth === getCurrentFeeMonthKey();
     if (s.voucherCustomFees === true && customEditIsCurrentMonth) {
         try {
             const parsed = JSON.parse(s.otherFeesData || '[]');
@@ -2272,7 +2388,7 @@ async function renderFees(className) {
 
     const students = JSON.parse(localStorage.getItem('edu_students') || '[]');
     const tbody = document.getElementById('fee-table-body');
-    const monthKey = getCurrentMonthKey(); 
+    const monthKey = getCurrentFeeMonthKey(); 
     
     if(!tbody) return;
     
@@ -2392,6 +2508,25 @@ function getCurrentMonthKey() {
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 }
 
+/**
+ * Fee-voucher billing cycle key. Unlike getCurrentMonthKey() (plain calendar
+ * month, used by fines/salaries/expenses), the fee voucher module resets on
+ * the 27th of every month instead of the 1st — so from the 27th onward,
+ * "current month" for voucher generation/stats/arrears already means NEXT
+ * calendar month, letting admins generate next month's vouchers early.
+ * Before the 27th, it's just the current calendar month as usual.
+ */
+function getCurrentFeeMonthKey() {
+    const now = new Date();
+    let year = now.getFullYear();
+    let month = now.getMonth(); // 0-indexed
+    if (now.getDate() >= 27) {
+        month += 1;
+        if (month > 11) { month = 0; year += 1; }
+    }
+    return `${year}-${String(month + 1).padStart(2, '0')}`;
+}
+
 // Fee type presets — label + suggested amount source key
 const FEE_TYPE_PRESETS = [
     { value: 'tuition',   label: '📚 Tuition Fee',      key: 'standardFee' },
@@ -2449,7 +2584,7 @@ function openAddFeesModal(studentId, fullName) {
 function renderAddFeesModal(student) {
     const f = computeFeeBreakdown(student);
     const payments = student.feePayments || [];
-    const currentMonthKey = getCurrentMonthKey();
+    const currentMonthKey = getCurrentFeeMonthKey();
     const thisMonthPaid = payments
         .filter(p => p.monthKey === currentMonthKey)
         .reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
@@ -2530,7 +2665,7 @@ async function saveSimpleStudentFeePayment() {
         return;
     }
 
-    const monthKey = getCurrentMonthKey();
+    const monthKey = getCurrentFeeMonthKey();
     const monthLabel = new Date().toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
 
     // BUGFIX — "Pay Bill doesn't work / stays View & Pay after paying":
@@ -2754,7 +2889,7 @@ function openAddToVoucherModal(studentId, fullName, editMode) {
     // reopening this modal in a new month would pre-fill last month's one-time
     // discount as if the admin were applying it again, defeating the "one
     // month only" fix.
-    const savedIsCurrentMonth = !student.voucherCustomFeesMonth || student.voucherCustomFeesMonth === getCurrentMonthKey();
+    const savedIsCurrentMonth = !student.voucherCustomFeesMonth || student.voucherCustomFeesMonth === getCurrentFeeMonthKey();
     const hasSaved = student.voucherCustomFees === true && savedIsCurrentMonth && Array.isArray(savedFees) && savedFees.length > 0;
 
     if (hasSaved) {
@@ -3005,7 +3140,7 @@ function saveFeesToVoucher() {
     // ever applies to THIS month's voucher (see computeFeeBreakdown) — a
     // discount typed in for August must not silently still be applied when
     // September's voucher is viewed/paid, even before "Generate" is clicked.
-    students[idx].voucherCustomFeesMonth = getCurrentMonthKey();
+    students[idx].voucherCustomFeesMonth = getCurrentFeeMonthKey();
     students[idx].voucherNote = noteEl ? noteEl.value.trim() : '';
 
     localStorage.setItem('edu_students', JSON.stringify(students));
@@ -3846,7 +3981,7 @@ function ievSave() {
     // Stamp the month this edit belongs to (see computeFeeBreakdown) so it
     // expires on its own once the calendar moves to a new month, instead of
     // silently still applying to next month's voucher before "Generate" runs.
-    students[idx].voucherCustomFeesMonth = getCurrentMonthKey();
+    students[idx].voucherCustomFeesMonth = getCurrentFeeMonthKey();
     // Reset any prior bulk discount — per-row discounts now drive the math.
     students[idx].voucherBulkDiscount = 0;
     // Persist editable arrears + voucher note
@@ -4203,12 +4338,12 @@ function voucherRecordKey(studentId, monthKey) {
  * month (defaults to the current month). Returns null if none exists yet —
  * this is the single source of truth the duplicate-generation guard relies on.
  */
-function getVoucherRecord(studentId, monthKey = getCurrentMonthKey()) {
+function getVoucherRecord(studentId, monthKey = getCurrentFeeMonthKey()) {
     const key = voucherRecordKey(studentId, monthKey);
     return getGeneratedVouchers().find(r => r.key === key) || null;
 }
 
-function isVoucherGenerated(studentId, monthKey = getCurrentMonthKey()) {
+function isVoucherGenerated(studentId, monthKey = getCurrentFeeMonthKey()) {
     return !!getVoucherRecord(studentId, monthKey);
 }
 
@@ -4257,7 +4392,7 @@ function computeOutstandingArrears(student) {
     // broken record), so bail out to 0 rather than risk a false match.
     if (!studentId) return 0;
 
-    const currentMonthKey = getCurrentMonthKey();
+    const currentMonthKey = getCurrentFeeMonthKey();
     const payments = student.feePayments || [];
 
     const priorRecords = getGeneratedVouchers()
@@ -4366,7 +4501,7 @@ function startFreshVoucherMonth(studentId, fullName, arrears) {
  * arrears still shows" / "7800 fee shows as 15k" symptoms.
  */
 function syncVoucherSnapshotForCurrentMonth(studentId, fullName) {
-    const monthKey = getCurrentMonthKey();
+    const monthKey = getCurrentFeeMonthKey();
     const key = voucherRecordKey(studentId, monthKey);
     const list = getGeneratedVouchers();
     const recIdx = list.findIndex(r => r.key === key);
@@ -4393,7 +4528,7 @@ function syncVoucherSnapshotForCurrentMonth(studentId, fullName) {
 }
 
 function recordVoucherGeneration(student, source = 'individual') {
-    const monthKey = getCurrentMonthKey();
+    const monthKey = getCurrentFeeMonthKey();
     const studentId = student.regNo || student.id;
     const key = voucherRecordKey(studentId, monthKey);
 
@@ -4466,7 +4601,7 @@ function getAllClassNames() {
  */
 function getPendingStudentsForClass(className) {
     const students = JSON.parse(localStorage.getItem('edu_students') || '[]');
-    const monthKey = getCurrentMonthKey();
+    const monthKey = getCurrentFeeMonthKey();
     return students
         .filter(s => s.studentClass === className)
         .filter(isStudentBillable)
@@ -4474,7 +4609,7 @@ function getPendingStudentsForClass(className) {
 }
 
 function getPendingStudentsSchoolWide() {
-    const monthKey = getCurrentMonthKey();
+    const monthKey = getCurrentFeeMonthKey();
     const students = JSON.parse(localStorage.getItem('edu_students') || '[]');
     return students
         .filter(isStudentBillable)
@@ -4492,7 +4627,7 @@ function getClassVoucherStatus(className) {
         .filter(s => s.studentClass === className)
         .filter(isStudentBillable);
     if (students.length === 0) return { state: 'none', total: 0, generated: 0 };
-    const monthKey = getCurrentMonthKey();
+    const monthKey = getCurrentFeeMonthKey();
     const generated = students.filter(s => isVoucherGenerated(s.regNo || s.id, monthKey)).length;
     let state = 'none';
     if (generated === students.length) state = 'done';
@@ -4619,7 +4754,7 @@ function showVoucherGenerationPreview(students, source, label) {
 }
 
 function countAlreadyGeneratedFor(source) {
-    const monthKey = getCurrentMonthKey();
+    const monthKey = getCurrentFeeMonthKey();
     const students = JSON.parse(localStorage.getItem('edu_students') || '[]').filter(isStudentBillable);
     const scoped = source === 'class' && currentFeeClassName
         ? students.filter(s => s.studentClass === currentFeeClassName)
@@ -6267,6 +6402,21 @@ function clearExpenseHubForm() {
     const descEl = document.getElementById('hub-exp-desc');
     if (amtEl) amtEl.value = '';
     if (descEl) descEl.value = '';
+}
+
+/* Quick-amount chips on the expense form */
+function setExpenseQuickAmount(val) {
+    const amtEl = document.getElementById('hub-exp-amount');
+    if (!amtEl) return;
+    amtEl.value = val > 0 ? val : '';
+    amtEl.focus();
+}
+function addExpenseQuickAmount(val) {
+    const amtEl = document.getElementById('hub-exp-amount');
+    if (!amtEl) return;
+    const current = Number(amtEl.value) || 0;
+    amtEl.value = current + val;
+    amtEl.focus();
 }
 
 function handleExpenseSubmitHub() {
