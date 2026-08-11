@@ -339,7 +339,23 @@
         <span id="subscription-expiry-text"></span>
     </div>
 
-    <script src="shared-data.js"></script>
+    <!-- STAFF LIMIT WARNING — fixed-position, doesn't affect page layout.
+         Shown by renderStaffLimitBanner() in manage-staff.js once the
+         school's live staff count reaches 90% of School.staffLimit, and
+         switches to "limit reached" once it hits 100%. -->
+    <div id="staff-limit-badge" class="staff-limit-badge d-none">
+        <i class="fas fa-users"></i>
+        <span>
+            <span id="staff-limit-badge-text"></span>
+            <span id="staff-limit-badge-sub" class="staff-limit-sub"></span>
+        </span>
+    </div>
+
+    <!-- TOAST NOTIFICATIONS — used for the "staff limit reached" alert
+         (shown when Add Staff is clicked past the cap) via showToast() in
+         manage-staff.js. -->
+    <div id="toast-container" class="toast-container"></div>
+
     <script src="manage-staff.js"></script>
 </body>
 </html>

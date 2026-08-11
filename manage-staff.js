@@ -95,6 +95,124 @@ function renderSubscriptionExpiryBadge() {
 }
 
 // ============================================================================
+// STAFF LIMIT ENFORCEMENT — School.staffLimit caps how many staff (Teaching
+// + Non-Teaching combined) a school can have. Fires a "beautiful" floating
+// badge once seats are down to their last 10%, and blocks the Add button
+// with a toast (instead of opening the form) once the cap is hit. Mirrors
+// the subscription-expiry badge above so both live comfortably on screen
+// together.
+// ============================================================================
+
+/** Show the near-limit badge once usage is at/above this percentage of the cap. */
+const STAFF_LIMIT_WARNING_PERCENT = 90;
+
+/**
+ * Current usage against the school's staff cap, or null when no limit is
+ * configured for this school (unlimited plan) or there's no school session.
+ */
+function getStaffLimitInfo() {
+    const school = getCurrentSchoolRecord();
+    const limit = school ? Number(school.staffLimit) : NaN;
+    if (!school || !limit || isNaN(limit) || limit <= 0) return null;
+
+    const used = (staffData['Teaching'] || []).length + (staffData['Non-Teaching'] || []).length;
+    const remaining = Math.max(0, limit - used);
+    const percentUsed = Math.min(100, (used / limit) * 100);
+
+    return {
+        limit,
+        used,
+        remaining,
+        percentUsed,
+        isNearLimit: percentUsed >= STAFF_LIMIT_WARNING_PERCENT && used < limit,
+        isFull: used >= limit
+    };
+}
+
+/**
+ * Floating badge (bottom-right, above the subscription badge if both are
+ * visible) that warns when staff seats are almost gone or completely used
+ * up. Call after anything that can change the roster size — hooked into
+ * loadStaffCounts() so every add/edit/delete/sync path picks it up for
+ * free.
+ */
+function renderStaffLimitBanner() {
+    const badge = document.getElementById('staff-limit-badge');
+    const text = document.getElementById('staff-limit-badge-text');
+    const sub = document.getElementById('staff-limit-badge-sub');
+    if (!badge || !text || !sub) return;
+
+    const info = getStaffLimitInfo();
+    if (!info || (!info.isNearLimit && !info.isFull)) {
+        badge.classList.add('d-none');
+        badge.classList.remove('warning', 'critical');
+        updateAddButtonLimitState(info);
+        return;
+    }
+
+    badge.classList.remove('d-none');
+    if (info.isFull) {
+        badge.classList.add('critical');
+        badge.classList.remove('warning');
+        text.textContent = 'Staff limit reached';
+        sub.textContent = `${info.used} / ${info.limit} seats used`;
+    } else {
+        badge.classList.add('warning');
+        badge.classList.remove('critical');
+        text.textContent = `Only ${info.remaining} staff seat${info.remaining === 1 ? '' : 's'} left`;
+        sub.textContent = `${info.used} / ${info.limit} seats used`;
+    }
+
+    // Stack above the subscription-expiry badge instead of overlapping it.
+    const expiryBadge = document.getElementById('subscription-expiry-badge');
+    const expiryVisible = expiryBadge && expiryBadge.style.display !== 'none';
+    badge.classList.toggle('has-expiry-sibling', !!expiryVisible);
+
+    updateAddButtonLimitState(info);
+}
+
+/** Mute the Add Staff button once the cap is hit — stays clickable so the toast can explain why. */
+function updateAddButtonLimitState(info) {
+    const addBtn = document.getElementById('add-staff-btn');
+    if (!addBtn) return;
+    addBtn.classList.toggle('limit-reached', !!(info && info.isFull));
+}
+
+/**
+ * Small glassmorphism toast, top-center, auto-dismissing. Used for the
+ * "staff limit reached" alert (openAddForm) but generic enough for any
+ * quick, non-blocking notice.
+ */
+function showToast(message, type = 'error', title) {
+    const container = document.getElementById('toast-container');
+    if (!container) { alert(message); return; }
+
+    const icons = { error: 'fa-circle-exclamation', warning: 'fa-triangle-exclamation', success: 'fa-circle-check' };
+    const titles = { error: 'Limit reached', warning: 'Heads up', success: 'Done' };
+
+    const toast = document.createElement('div');
+    toast.className = `toast toast-${type}`;
+    toast.innerHTML = `
+        <div class="toast-icon"><i class="fas ${icons[type] || icons.error}"></i></div>
+        <div class="toast-body">
+            <span class="toast-title">${title || titles[type] || 'Notice'}</span>
+            <span class="toast-message">${message}</span>
+        </div>
+        <button type="button" class="toast-close" aria-label="Dismiss"><i class="fas fa-xmark"></i></button>
+    `;
+
+    const dismiss = () => {
+        toast.classList.add('toast-out');
+        setTimeout(() => toast.remove(), 300);
+    };
+    toast.querySelector('.toast-close').addEventListener('click', dismiss);
+    const autoDismiss = setTimeout(dismiss, 5000);
+    toast.addEventListener('click', () => clearTimeout(autoDismiss));
+
+    container.appendChild(toast);
+}
+
+// ============================================================================
 // BACKEND SYNC — StaffController.java exposes CRUD under this base, scoped
 // by schoolId exactly like StudentController does for students (see
 // manage-students.js's identical apiRequest/toApiPayload/syncWithBackend).
@@ -256,6 +374,9 @@ document.addEventListener('DOMContentLoaded', () => {
     // ── PLAN ENFORCEMENT: initial pass ──────────────────────────────────
     applyFeatureLocks();
     renderSubscriptionExpiryBadge();
+    // Re-run after the expiry badge so the staff-limit badge knows whether
+    // to stack above it (avoids a one-tick mis-position on first load).
+    renderStaffLimitBanner();
 });
 
 /* ============================================
@@ -385,6 +506,11 @@ function loadStaffCounts(animate = true) {
         document.getElementById('summary-teaching').textContent = teachingCount;
         document.getElementById('summary-nonteaching').textContent = nonTeachingCount;
     }, animate ? 400 : 0);
+
+    // Staff limit badge + Add button state — every path that can change the
+    // roster size (add/edit/delete/sync) already calls loadStaffCounts(),
+    // so this stays correct everywhere for free.
+    renderStaffLimitBanner();
 }
 
 
@@ -477,6 +603,7 @@ function showDirectoryView(category) {
     setTimeout(() => dirView.classList.remove('fade-in'), 400);
 
     populateDirectory(category);
+    renderStaffLimitBanner();
 }
 
 /* ============================================
@@ -2240,6 +2367,19 @@ function renderFormFields(category) {
 
 /* ---- OVERRIDE: openAddForm ---- */
 function openAddForm() {
+    // Staff limit enforcement: once the school has hit School.staffLimit
+    // (Teaching + Non-Teaching combined), block the form entirely and just
+    // explain why — no silent no-op.
+    const limitInfo = getStaffLimitInfo();
+    if (limitInfo && limitInfo.isFull) {
+        showToast(
+            `This school has reached its staff limit (${limitInfo.used}/${limitInfo.limit}). Ask the Super Admin to raise the plan's staff limit to add more.`,
+            'error',
+            'Staff limit reached'
+        );
+        return;
+    }
+
     isEditMode = false;
     _pendingPhoto = '';
     _pendingAgreement = null;
@@ -2677,6 +2817,15 @@ let _certStaffId = null;
 let _certPosition = 'Teacher';
 
 /**
+ * In-memory only (NOT localStorage) holder for school address/phone, kept
+ * for the lifetime of this page load. Neither field is wired to a backend
+ * column yet and neither is currently rendered anywhere (see
+ * _getSchoolIdentity/_saveSchoolContact below) — once the school record's
+ * API gains address/phone fields, replace this cache with a real fetch.
+ */
+let _schoolContactCache = { address: '', phone: '' };
+
+/**
  * Pull the school's name & logo for THIS logged-in school. Prioritizes the
  * authoritative Super Admin record (window.SoftSchoolAdmin.getCurrentSchool(),
  * set up by access-control.js) — the same source manage-students.js already
@@ -2684,8 +2833,8 @@ let _certPosition = 'Teacher';
  * super admin actually configured, instead of stale/guessed localStorage
  * keys or the demo default. Older fallbacks are kept afterwards purely for
  * single-school / no-super-admin demo setups. Address & phone aren't shown
- * anywhere in the app yet, so we ask for them once and remember the answer
- * in localStorage for next time.
+ * anywhere in the app yet; they're held in _schoolContactCache for this
+ * session only (see note above) instead of localStorage.
  */
 function _getSchoolIdentity() {
     let logo = '';
@@ -2732,7 +2881,7 @@ function _getSchoolIdentity() {
     //    from it. Leave logo blank if not found above; callers already
     //    handle an empty logo gracefully.
 
-    const contact = JSON.parse(localStorage.getItem('eduflow-school-contact') || '{"address":"","phone":""}');
+    const contact = _schoolContactCache;
 
     return { 
         name: name || document.querySelector('.school-name')?.textContent?.trim() || 'ST. LAWRENCE INTERNATIONAL SCHOOL', 
@@ -2742,10 +2891,11 @@ function _getSchoolIdentity() {
     };
 }
 
+/** Kept for callers that want to set contact details for this session — no
+ *  longer persisted anywhere (was localStorage before). Lives only in
+ *  _schoolContactCache and resets on page reload. */
 function _saveSchoolContact(address, phone) {
-    try {
-        localStorage.setItem('eduflow-school-contact', JSON.stringify({ address, phone }));
-    } catch (e) { /* ignore */ }
+    _schoolContactCache = { address: address || '', phone: phone || '' };
 }
 
 /** Gender-aware pronoun set. */
