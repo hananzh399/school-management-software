@@ -2,29 +2,12 @@
  * EDUFLOW PRO - DASHBOARD LOGIC
  */
 
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
     initTheme();
     initSidebar();
     initNavSearch();
     initDate();
-    calculateAndLoadDashboardData();
-    // Add this inside DOMContentLoaded in index.js
-window.addEventListener('storage', (e) => {
-    if (!e.key) return;
-    const watchedKeys = ['edu_students', 'eduflow-db', 'eduflow-student-fines',
-         'eduflow-staff-fines', 'eduflow-staff-bonus', 'eduflow-other-expenses',
-         'edu_staff', 'eduflow-staff-advances', 'edu_latefee_config',
-         'eduflow-custom-fees'];
-    // Attendance keys are per-class/per-day (eduflow_att_<date>_<class>) and
-    // per-day for staff (eduflow_staff_att_<date>), so match by prefix
-    // instead of an exact key — otherwise a saved attendance sheet in
-    // another tab would never refresh this dashboard.
-    const isAttendanceKey = e.key.startsWith('eduflow_att_') || e.key.startsWith('eduflow_staff_att_');
-    if (watchedKeys.includes(e.key) || isAttendanceKey) {
-        calculateAndLoadDashboardData();
-    }
-});
-
+    await loadDashboardFromBackend();
 });
 
 /* ============================================
@@ -103,8 +86,9 @@ function initDate() {
    DASHBOARD DATA & LOGIC SIMULATION
    ============================================ */
 
-function calculateAndLoadDashboardData() {
-    const data = calculateFinancials();
+
+async function loadDashboardFromBackend() {
+    const data = await calculateFinancials();
     
     // 1. CALCULATE TOTALS FIRST
     // Net Expenses = Salaries + Bonuses + Other Expenses
@@ -123,7 +107,7 @@ function calculateAndLoadDashboardData() {
     const netProfit = totalRev - netExp;
 
     // 2. HEADCOUNT (feeds the quick-stats strip, no dedicated card anymore)
-    const totalStaff = (data.db.staff['Teaching']?.length || 0) + (data.db.staff['Non-Teaching']?.length || 0);
+    const totalStaff = data.totalStaff || 0;
 
     // 3. UPDATE THE UI (Revenue)
     animateCounter('expected-fees', data.fees.expected);
@@ -133,11 +117,10 @@ function calculateAndLoadDashboardData() {
     animateCounter('student-other-fines', data.fines.studentOther + data.fines.staffTotal); 
     animateCounter('teacher-absence-fines', data.fines.teacherAbsence);
 
-    // 3b. ADMISSION FEES — only appears once at least one student has an
-    // admission fee on record; otherwise it just sits at 0 like any other metric.
+    // 3b. ADMISSION FEES
     animateCounter('admission-fees', data.admissionFees);
 
-    // 3b-2. CUSTOM FEE COLLECTED — sum of every "Generate Custom Fee" charge
+    // 3b-2. CUSTOM FEE COLLECTED
     // (Fees & Finance page) that has actually been marked Paid per student.
     animateCounter('custom-fees-collected', data.customFeesCollected);
 
@@ -171,58 +154,15 @@ function calculateAndLoadDashboardData() {
     }
 
     // 7. UPDATE QUICK STATS STRIP + TODAY'S ATTENDANCE
-    loadAttendanceData(data.realStudentCount, totalStaff);
+    loadAttendanceData(data.realStudentCount || 0, totalStaff, data.todayAttendance);
 }
 
-/* ============================================
-   TODAY'S ATTENDANCE
-   ============================================
-   Reads the real data written by attendance.html/attendance.js:
-     - Student attendance is saved per class per day under
-       'eduflow_att_<YYYY-MM-DD>_<className>', shape:
-       { date, class, records: { <regNo>: { status: "present"|"absent"|"leave" } } }
-     - Staff attendance is saved once per day under
-       'eduflow_staff_att_<YYYY-MM-DD>', shape:
-       { date, records: { <staffId>: { status: "present"|"absent"|"leave" } } }
-   This scans every class key for today and the single staff key for
-   today, so the dashboard reflects whatever's actually been marked.
    ============================================ */
-function getTodayAttendance() {
-    const todayKey = new Date().toISOString().split('T')[0];
-    let presentStudents = 0;
-    let presentStaff = 0;
-    let hasData = false;
 
-    // Student attendance — one key per class, all prefixed with today's date
-    const studentPrefix = `eduflow_att_${todayKey}_`;
-    for (let i = 0; i < localStorage.length; i++) {
-        const key = localStorage.key(i);
-        if (!key || !key.startsWith(studentPrefix)) continue;
-        try {
-            const payload = JSON.parse(localStorage.getItem(key) || 'null');
-            const records = (payload && payload.records) || {};
-            Object.values(records).forEach(rec => {
-                hasData = true;
-                if (rec && rec.status === 'present') presentStudents++;
-            });
-        } catch (e) { /* ignore malformed data */ }
-    }
-
-    // Staff attendance — single key for today
-    try {
-        const staffPayload = JSON.parse(localStorage.getItem(`eduflow_staff_att_${todayKey}`) || 'null');
-        const staffRecords = (staffPayload && staffPayload.records) || {};
-        Object.values(staffRecords).forEach(rec => {
-            hasData = true;
-            if (rec && rec.status === 'present') presentStaff++;
-        });
-    } catch (e) { /* ignore malformed data */ }
-
-    return { presentStudents, presentStaff, hasData };
-}
-
-function loadAttendanceData(totalStudents, totalStaff) {
-    const { presentStudents, presentStaff, hasData } = getTodayAttendance();
+function loadAttendanceData(totalStudents, totalStaff, attendanceData) {
+    const presentStudents = attendanceData ? attendanceData.presentStudents : 0;
+    const presentStaff = attendanceData ? attendanceData.presentStaff : 0;
+    const hasData = attendanceData ? attendanceData.hasData : false;
 
     // Quick stats strip
     animateCounter('strip-total-students', totalStudents);
@@ -301,244 +241,45 @@ function animateCounter(elementId, target) {
         // Format with commas for readability
         el.textContent = current.toLocaleString();
     }, stepTime);
+}/* ============================================
+   FINANCIAL CALCULATIONS
+   ============================================ */
+
+function _getSchoolId() {
+    if (window.SoftSchoolAdmin && typeof window.SoftSchoolAdmin.getCurrentSchool === 'function') {
+        const school = window.SoftSchoolAdmin.getCurrentSchool();
+        if (school && school.schoolId) return school.schoolId;
+    }
+    return '';
 }
 
-/* ============================================
-   STUDENT STATUS HELPER
-   ============================================
-   A student with no status field, or status "active", counts as an
-   active/current student. "dropped" and "graduated" students are kept
-   in the records (for history/certificates) but should not count
-   towards headcounts or ongoing fee expectations. Mirrors the same
-   isStudentBillable() convention used in manage-finance.js. */
-function isActiveStudent(s) {
-    return !s.status || s.status === 'active';
-}
-
-/* ============================================
-   CUSTOM FEE COLLECTED
-   ============================================
-   Reads 'eduflow-custom-fees' (written by the "Generate Custom Fee" /
-   "Custom Fee Records" pages in manage-finance.js). Each record bills a
-   fixed amount per targeted student and tracks payment per student via
-   markCustomFeePaid() (record.records[i].paid). Collected = paid count
-   × fee amount, summed across every custom fee ever generated. */
-function getCustomFeesCollectedTotal() {
-    let customFees = [];
-    try { customFees = JSON.parse(localStorage.getItem('eduflow-custom-fees') || '[]'); } catch (e) { customFees = []; }
-    return customFees.reduce((sum, fee) => {
-        const amount = Number(fee.amount) || 0;
-        const paidCount = (fee.records || []).filter(r => r.paid).length;
-        return sum + (paidCount * amount);
-    }, 0);
-}
-
-function calculateFinancials() {
-    // 1. Get the global database
-    const db = getGlobalData();
-    
-    // 2. Get Real Student Data (for fee calculations)
-    const students = JSON.parse(localStorage.getItem('edu_students') || '[]');
-    const activeStudents = students.filter(isActiveStudent);
-    
-    // 3. GET STAFF BONUS TOTAL
-    const bonusRecords = JSON.parse(localStorage.getItem('eduflow-staff-bonus') || '[]');
-    const totalStaffBonuses = bonusRecords.reduce((sum, record) => sum + (Number(record.amount) || 0), 0);
-
-    // 4. GET STAFF FINES TOTAL
-    const fineRecords = JSON.parse(localStorage.getItem('eduflow-staff-fines') || '[]');
-    const totalStaffFines = fineRecords.reduce((sum, record) => sum + (Number(record.amount) || 0), 0);
-
-    // 5. GET OTHER EXPENSES TOTAL — read directly from eduflow-other-expenses for real-time accuracy
-    const expenseRecords = JSON.parse(localStorage.getItem('eduflow-other-expenses') || '[]');
-    const totalOtherExpenses = expenseRecords.reduce((sum, record) => sum + (Number(record.amount) || 0), 0);
-
-    // 6. GET TEACHER ABSENCE FINES — sum t.fines from all Teaching + Non-Teaching staff
-    const allStaff = [...(db.staff.Teaching || []), ...(db.staff['Non-Teaching'] || [])];
-    const totalTeacherAbsenceFines = allStaff.reduce((sum, t) => sum + (Number(t.fines) || 0), 0);
-
-    // 7. GET STUDENT FINES — read from eduflow-student-fines for real-time accuracy
-    const studentFineRecords = JSON.parse(localStorage.getItem('eduflow-student-fines') || '[]');
-    const totalStudentFines = studentFineRecords.reduce((sum, record) => sum + (Number(record.amount) || 0), 0);
-
-    // 7b. GET CUSTOM FEE COLLECTED TOTAL — "Generate Custom Fee" records from
-    // the Fees & Finance page (school-wide/class/individual one-off fees like
-    // exam fee, field trip fee, etc). Each record bills a fixed `amount` per
-    // targeted student and marks each student `paid: true/false` individually
-    // when collected — so the amount actually collected is (paid count × fee
-    // amount), summed across every custom fee ever generated.
-    const customFeesCollected = getCustomFeesCollectedTotal();
-
-    // 8. Calculate Student Fees
-    //    - "Expected" is an ongoing monthly obligation, so it only makes sense
-    //      for currently-active students — a dropped/graduated student doesn't
-    //      owe next month's tuition.
-    //    - "Collected" and "Admission Fees" are money already received in the
-    //      past, so they stay historical (all students) even if the student
-    //      has since left — that revenue was genuinely earned.
-    let expected = 0;
-    let collected = 0;
-    let admissionFees = 0;
-    students.forEach(s => {
-        if (isActiveStudent(s)) {
-            expected += (Number(s.standardFee) || 0);
+async function calculateFinancials() {
+    try {
+        const schoolId = _getSchoolId();
+        const url = `http://localhost:8080/api/dashboard?schoolId=${encodeURIComponent(schoolId)}`;
+        const res = await fetch(url, { headers: { "Content-Type": "application/json" }});
+        if (res.ok) {
+            return await res.json();
+        } else {
+            console.error('Failed to fetch dashboard data:', await res.text());
         }
-        (s.feePayments || []).forEach(p => {
-            collected += (Number(p.amount) || 0);
-        });
-        // Admission Fee is a one-time charge captured on the student's record
-        // at the time of admission — only counts once anything is actually entered.
-        admissionFees += (Number(s.admissionFee) || 0);
-    });
-
-    // 9. Return the data object
+    } catch (e) {
+        console.error('Network error fetching dashboard data:', e);
+    }
+    
     return {
-        db: db,
-        realStudentCount: activeStudents.length,
-        fees: {
-            expected: expected,
-            collected: collected,
-            pending: Math.max(0, expected - collected)
-        },
-        admissionFees: admissionFees,
-        customFeesCollected: customFeesCollected,
-        fines: {
-            studentLate: computeStudentLateFinesTotal() + (db.students?.fines?.lateFees || 0),
-            studentOther: totalStudentFines,
-            staffTotal: totalStaffFines,
-            teacherAbsence: totalTeacherAbsenceFines
-        },
-        salaries: {
-            total: allStaff.reduce((s, t) => s + (Number(t.salary) || 0), 0)
-        },
-        staffBonusTotal: totalStaffBonuses,
-        otherExpensesTotal: totalOtherExpenses,
+        realStudentCount: 0,
+        totalStaff: 0,
+        fees: { expected: 0, collected: 0, pending: 0 },
+        admissionFees: 0,
+        customFeesCollected: 0,
+        fines: { studentLate: 0, studentOther: 0, staffTotal: 0, teacherAbsence: 0 },
+        salaries: { total: 0 },
+        staffBonusTotal: 0,
+        otherExpensesTotal: 0,
         netExpenses: 0,
         netProfit: 0,
-        lastMonthProfit: computeLastMonthProfit(db, students)
+        lastMonthProfit: 0,
+        todayAttendance: { presentStudents: 0, presentStaff: 0, hasData: false }
     };
-}
-
-/* ============================================
-   LAST MONTH PROFIT (real calculation)
-   ============================================
-   Every money record in this app (fee payments, student fines, staff
-   fines, staff bonuses, other expenses, salary payments) is tagged with
-   a "monthKey" in the form "YYYY-MM" — see getCurrentMonthKey() in
-   manage-finance.js. This walks the same records but for last month's
-   key, so the dashboard's "vs last month" comparison reflects real
-   history instead of a guess.
-   Note: staff absence fines and student late fines are running/point-
-   in-time figures rather than logged per month in this data model, so
-   they aren't included here (same limitation applies going forward —
-   there's no historical ledger to look them up from). */
-function getLastMonthKey() {
-    const now = new Date();
-    const d = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-}
-
-function computeLastMonthProfit(db, students) {
-    const lastMonthKey = getLastMonthKey();
-
-    // Revenue actually recorded against last month
-    let feesCollected = 0;
-    students.forEach(s => {
-        (s.feePayments || []).forEach(p => {
-            if (p.monthKey === lastMonthKey) feesCollected += (Number(p.amount) || 0);
-        });
-    });
-
-    // Admission fees for students admitted last month (admissionDate is an
-    // ISO "YYYY-MM-DD" string from the admission form's date input)
-    let admissionFees = 0;
-    students.forEach(s => {
-        if (s.admissionDate && String(s.admissionDate).slice(0, 7) === lastMonthKey) {
-            admissionFees += (Number(s.admissionFee) || 0);
-        }
-    });
-
-    const studentFineRecords = JSON.parse(localStorage.getItem('eduflow-student-fines') || '[]');
-    const studentFines = studentFineRecords
-        .filter(r => r.monthKey === lastMonthKey)
-        .reduce((sum, r) => sum + (Number(r.amount) || 0), 0);
-
-    const staffFineRecords = JSON.parse(localStorage.getItem('eduflow-staff-fines') || '[]');
-    const staffFines = staffFineRecords
-        .filter(r => r.monthKey === lastMonthKey)
-        .reduce((sum, r) => sum + (Number(r.amount) || 0), 0);
-
-    const lastMonthRevenue = feesCollected + admissionFees + studentFines + staffFines;
-
-    // Expenses actually recorded against last month
-    const allStaff = [...(db.staff?.Teaching || []), ...(db.staff?.['Non-Teaching'] || [])];
-    const salariesPaid = allStaff.reduce((sum, st) => {
-        const entry = (st.salaryHistory || []).find(h => h.monthKey === lastMonthKey);
-        return sum + (entry ? (Number(entry.amount) || 0) : 0);
-    }, 0);
-
-    const bonusRecords = JSON.parse(localStorage.getItem('eduflow-staff-bonus') || '[]');
-    const bonuses = bonusRecords
-        .filter(r => r.monthKey === lastMonthKey)
-        .reduce((sum, r) => sum + (Number(r.amount) || 0), 0);
-
-    const expenseRecords = JSON.parse(localStorage.getItem('eduflow-other-expenses') || '[]');
-    const otherExpenses = expenseRecords
-        .filter(r => r.monthKey === lastMonthKey)
-        .reduce((sum, r) => sum + (Number(r.amount) || 0), 0);
-
-    const lastMonthExpenses = salariesPaid + bonuses + otherExpenses;
-
-    return lastMonthRevenue - lastMonthExpenses;
-}
-
-/* ============================================
-   STUDENT LATE-FEE COMPUTATION
-   ============================================
-   Reads late-fee config from 'edu_latefee_config' (saved by settings.js)
-   and sums lateFeeSurcharge for every student whose CURRENT-month voucher
-   is unpaid and past the (deadlineDay + grace) cut-off.
-   This mirrors the logic in manage-finance.js (getVoucherSettings /
-   computeFeeBreakdown) so the dashboard reflects real outstanding
-   late-fee charges. */
-function computeStudentLateFinesTotal() {
-    let cfg = {};
-    try { cfg = JSON.parse(localStorage.getItem('edu_latefee_config') || '{}'); } catch(e) {}
-    const enabled = cfg.enabled !== false;
-    if (!enabled) return 0;
-
-    const deadlineDay = parseInt(cfg.deadlineDay, 10) || 10;
-    const grace       = parseInt(cfg.grace, 10) || 0;
-    const lateType    = cfg.type || 'fixed';
-    const lateVal     = parseFloat(cfg.amount) || 200;
-    const cutoffDay   = deadlineDay + grace;
-
-    const today = new Date();
-    if (today.getDate() <= cutoffDay) return 0; // not yet late this month
-
-    const monthKey = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}`;
-    const students = JSON.parse(localStorage.getItem('edu_students') || '[]').filter(isActiveStudent);
-
-
-    let total = 0;
-    students.forEach(s => {
-        const tuition   = Number(s.standardFee)   || 0;
-        const transport = Number(s.transportFee)  || 0;
-        const baseMonthly = Math.max(0, tuition + transport
-            - (Number(s.tuitionDiscount)   || 0)
-            - (Number(s.transportDiscount) || 0)
-            - (Number(s.siblingDiscount)   || 0));
-        if (baseMonthly <= 0) return;
-
-        const paidThisMonth = (s.feePayments || [])
-            .filter(p => p.monthKey === monthKey)
-            .reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
-        if (paidThisMonth >= baseMonthly) return; // already paid
-
-        const surcharge = lateType === 'percent'
-            ? Math.round(baseMonthly * (lateVal / 100))
-            : lateVal;
-        total += surcharge;
-    });
-    return total;
 }

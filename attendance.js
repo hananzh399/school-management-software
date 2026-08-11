@@ -107,40 +107,16 @@ function refreshLiveData() {
     CLASSES  = loadRealClasses();
 }
 
-// Build history from saved localStorage attendance keys (real data)
+// Build history from saved attendance keys (real data)
 function buildRealStudentHistory(students) {
     const hist = {};
     students.forEach(s => { hist[s.regNo] = []; });
-    for (let key in localStorage) {
-        if (!key.startsWith('eduflow_att_')) continue;
-        try {
-            const payload = JSON.parse(localStorage.getItem(key));
-            if (!payload || !payload.records) continue;
-            Object.entries(payload.records).forEach(([regNo, entry]) => {
-                if (hist[regNo] !== undefined) {
-                    hist[regNo].push({ date: payload.date, status: entry.status, reason: entry.reason || null });
-                }
-            });
-        } catch(e) { /* skip */ }
-    }
     return hist;
 }
 
 function buildRealStaffHistory(staff) {
     const hist = {};
     staff.forEach(s => { hist[s.id] = []; });
-    for (let key in localStorage) {
-        if (!key.startsWith('eduflow_staff_att_')) continue;
-        try {
-            const payload = JSON.parse(localStorage.getItem(key));
-            if (!payload || !payload.records) continue;
-            Object.entries(payload.records).forEach(([id, entry]) => {
-                if (hist[id] !== undefined) {
-                    hist[id].push({ date: payload.date, status: entry.status, reason: entry.reason || null });
-                }
-            });
-        } catch(e) { /* skip */ }
-    }
     return hist;
 }
 
@@ -181,8 +157,11 @@ state.staffMonthlyWeekStart  = null;
 // ---------- DATE HELPERS ----------
 function todayKey() { return new Date().toISOString().slice(0, 10); }
  
+const todayAttendanceCache = {}; // class name -> records
+let todayStaffAttendanceCache = null; // staffId -> records
+let lastDay = null;
+
 function checkDayReset() {
-    const lastDay = localStorage.getItem("eduflow_last_day");
     const today = todayKey();
     if (lastDay !== today) {
         // New day — clear all saved marks
@@ -190,7 +169,9 @@ function checkDayReset() {
         state.savedStaffKeys.clear();
         state.studentEditMode.clear();
         state.staffEditMode.clear();
-        localStorage.setItem("eduflow_last_day", today);
+        for (let key in todayAttendanceCache) delete todayAttendanceCache[key];
+        todayStaffAttendanceCache = null;
+        lastDay = today;
     }
 }
  
@@ -208,7 +189,9 @@ function scheduleMidnightRefresh() {
         state.staffEditMode.clear();
         state.attendance = {};
         state.staffAttendance = {};
-        localStorage.setItem("eduflow_last_day", todayKey());
+        lastDay = todayKey();
+        for (let key in todayAttendanceCache) delete todayAttendanceCache[key];
+        todayStaffAttendanceCache = null;
         // Re-init current visible stage
         if (!document.querySelector("#stage-table.hidden")) { renderTable(); }
         if (!document.querySelector("#stage-staff.hidden")) { initStaffAttendance(); renderStaff(); }
@@ -216,6 +199,7 @@ function scheduleMidnightRefresh() {
         scheduleMidnightRefresh();
     }, msUntilMidnight);
 }
+
  
 // ---------- DOM HELPERS ----------
 const $ = (sel) => document.querySelector(sel);
@@ -270,35 +254,24 @@ function initDate() {
     $("#header-date").textContent = d.toLocaleDateString(undefined, { weekday:'long', year:'numeric', month:'long', day:'numeric' });
 }
 
-// ---------- LIVE ATTENDANCE STATS (Students/Staff Present/Absent) ----------
 function computeAttendanceStats() {
-    const today = todayKey();
     let studentsPresent = 0, studentsAbsent = 0, staffPresent = 0, staffAbsent = 0;
 
-    // Student attendance is saved per class per day: eduflow_att_<date>_<className>
-    const studentPrefix = `eduflow_att_${today}_`;
-    for (let i = 0; i < localStorage.length; i++) {
-        const key = localStorage.key(i);
-        if (!key || !key.startsWith(studentPrefix)) continue;
-        try {
-            const payload = JSON.parse(localStorage.getItem(key));
-            const records = (payload && payload.records) || {};
-            Object.values(records).forEach(rec => {
-                if (rec.status === "present") studentsPresent++;
-                else if (rec.status === "absent") studentsAbsent++;
-            });
-        } catch (e) { /* ignore malformed entries */ }
-    }
+    // Student stats from in-memory cache
+    Object.values(todayAttendanceCache).forEach(records => {
+        Object.values(records).forEach(rec => {
+            if (rec.status === "present") studentsPresent++;
+            else if (rec.status === "absent") studentsAbsent++;
+        });
+    });
 
-    // Staff attendance is saved once per day: eduflow_staff_att_<date>
-    try {
-        const staffPayload = JSON.parse(localStorage.getItem(`eduflow_staff_att_${today}`) || "null");
-        const staffRecords = (staffPayload && staffPayload.records) || {};
-        Object.values(staffRecords).forEach(rec => {
+    // Staff stats from in-memory cache
+    if (todayStaffAttendanceCache) {
+        Object.values(todayStaffAttendanceCache).forEach(rec => {
             if (rec.status === "present") staffPresent++;
             else if (rec.status === "absent") staffAbsent++;
         });
-    } catch (e) { /* ignore malformed entries */ }
+    }
 
     return { studentsPresent, studentsAbsent, staffPresent, staffAbsent };
 }
@@ -315,9 +288,7 @@ function renderAttendanceStats() {
 
 function initAttendanceStats() {
     renderAttendanceStats();
-    // Real-time refresh: pick up changes from other tabs immediately, and
-    // poll periodically to catch same-tab updates without needing a page reload.
-    window.addEventListener("storage", renderAttendanceStats);
+    // Poll periodically to catch in-memory cache updates without needing a page reload.
     setInterval(renderAttendanceStats, 5000);
 }
 
@@ -412,7 +383,7 @@ function renderClasses() {
     }
     CLASSES.forEach(cls => {
         const count = STUDENTS.filter(s => s.class === cls.name).length;
-        const alreadySaved = !!localStorage.getItem(`eduflow_att_${todayKey()}_${cls.name}`);
+        const alreadySaved = !!todayAttendanceCache[cls.name];
         const card = document.createElement("div");
         card.className = "class-card" + (alreadySaved ? " class-card--saved" : "");
         card.innerHTML = `
@@ -431,26 +402,16 @@ function openClass(cls) {
     state.search = "";
     state.studentEditMode.clear();
 
-    // Check if attendance has already been saved today for this class
-    const todayStorageKey = `eduflow_att_${todayKey()}_${cls.name}`;
-    const existing = localStorage.getItem(todayStorageKey);
+    // Check if attendance has already been saved today for this class in our cache
+    const existing = todayAttendanceCache[cls.name];
 
     if (existing) {
-        try {
-            const payload = JSON.parse(existing);
-            // Pre-load the saved records so rows show the correct status
-            state.attendance = payload.records || {};
-            // Mark every student in the class as already saved (locked "Done" state)
-            state.savedStudentKeys = new Set(
-                STUDENTS.filter(s => s.class === cls.name).map(s => s.regNo)
-            );
-        } catch(e) {
-            // Corrupted data — fall back to fresh sheet
-            state.attendance = {};
-            state.savedStudentKeys.clear();
-            STUDENTS.filter(s => s.class === cls.name)
-                .forEach(s => { state.attendance[s.regNo] = { status: "present", reason: "" }; });
-        }
+        // Pre-load the saved records so rows show the correct status
+        state.attendance = { ...existing };
+        // Mark every student in the class as already saved (locked "Done" state)
+        state.savedStudentKeys = new Set(
+            STUDENTS.filter(s => s.class === cls.name).map(s => s.regNo)
+        );
     } else {
         // No record yet for today — start fresh
         state.attendance = {};
@@ -676,26 +637,14 @@ function initSave() {
                 state.studentEditMode.delete(s.regNo);
             });
 
-        const storageKey = `eduflow_att_${todayKey()}_${cls.name}`;
-        let existingRecords = {};
-        try {
-            const prev = localStorage.getItem(storageKey);
-            if (prev) existingRecords = JSON.parse(prev).records || {};
-        } catch(e) { }
-
-        const payload = {
-            date: todayKey(),
-            class: cls.name,
-            records: { ...existingRecords, ...state.attendance },
-        };
-        localStorage.setItem(storageKey, JSON.stringify(payload));
-        renderAttendanceStats();
+        // Update in-memory cache
+        todayAttendanceCache[cls.name] = { ...state.attendance };
         
         // --- ADDED THIS LINE FOR DATABASE ---
         syncCurrentSheetWithDatabase(); 
 
         renderTable();
-        toast("Attendance saved to Browser & Database");
+        toast("Attendance saved to Database");
     });
 
     // 2. STAFF SAVE BUTTON
@@ -707,54 +656,35 @@ function initSave() {
                 state.staffEditMode.delete(s.id);
             });
 
-        const storageKey = `eduflow_staff_att_${todayKey()}`;
-        let existingRecords = {};
-        try {
-            const prev = localStorage.getItem(storageKey);
-            if (prev) existingRecords = JSON.parse(prev).records || {};
-        } catch(e) { }
-
-        const payload = {
-            date: todayKey(),
-            records: { ...existingRecords, ...state.staffAttendance },
-        };
-        localStorage.setItem(storageKey, JSON.stringify(payload));
-        renderAttendanceStats();
+        // Update in-memory cache
+        todayStaffAttendanceCache = { ...state.staffAttendance };
         
         // --- ADDED THIS LINE FOR DATABASE ---
         syncCurrentSheetWithDatabase(); 
 
         applyAbsenceFines(); 
         renderStaff();
-        toast("Staff saved to Browser & Database");
+        toast("Staff saved to Database");
     });
 }
 
 async function loadAttendanceFromDatabase() {
     try {
-        // 1. Ask Java for the full history of the person we are looking at
-        // If state.studentRecord is open, use its regNo
         const id = state.mode === 'student' ? state.studentRecord.regNo : state.staffRecord.id;
         
         const response = await fetch(`http://localhost:8080/api/attendance/history/${id}`);
         const data = await response.json();
 
-        // 2. Clear the old history list on the screen
-        const list = state.mode === 'student' ? document.getElementById("history-list") : document.getElementById("staff-history-list");
-        if(!list) return;
-        list.innerHTML = "";
+        // Sort by date descending (newest first)
+        data.sort((a, b) => b.date.localeCompare(a.date));
 
-        // 3. Fill the list with data from MySQL
-        data.forEach(r => {
-            const row = document.createElement("div");
-            row.className = "history-row";
-            row.innerHTML = `
-                <span class="history-date">${r.date}</span>
-                <span class="history-reason">${r.reason || "—"}</span>
-                <span class="history-status ${r.status}">${r.status.toUpperCase()}</span>
-            `;
-            list.appendChild(row);
-        });
+        if (state.mode === 'student') {
+            state.studentFullHistory = data;
+            renderStudentRecord();
+        } else {
+            state.staffFullHistory = data;
+            renderStaffRecord();
+        }
 
     } catch (error) {
         console.error("Failed to load attendance from Database:", error);
@@ -776,28 +706,22 @@ function initStaff() {
     $("#staff-search").addEventListener("input", () => renderStaff());
 }
 function initStaffAttendance() {
-    const todayStorageKey = `eduflow_staff_att_${todayKey()}`;
-    const existing = localStorage.getItem(todayStorageKey);
     state.savedStaffKeys = new Set();
 
-    if (existing) {
-        try {
-            const payload = JSON.parse(existing);
-            const savedRecords = payload.records || {};
-            STAFF.forEach(s => {
-                if (savedRecords[s.id]) {
-                    state.staffAttendance[s.id] = savedRecords[s.id];
-                    // Only lock if it's a confirmed manual save OR has a biometric checkIn
-                    if (savedRecords[s.id].isFromDB && !savedRecords[s.id].checkIn) {
-                         state.staffAttendance[s.id].isFromDB = false;
-                    } else {
-                         state.savedStaffKeys.add(s.id);
-                    }
+    if (todayStaffAttendanceCache) {
+        STAFF.forEach(s => {
+            if (todayStaffAttendanceCache[s.id]) {
+                state.staffAttendance[s.id] = todayStaffAttendanceCache[s.id];
+                // Only lock if it's a confirmed manual save OR has a biometric checkIn
+                if (todayStaffAttendanceCache[s.id].isFromDB && !todayStaffAttendanceCache[s.id].checkIn) {
+                     state.staffAttendance[s.id].isFromDB = false;
                 } else {
-                    state.staffAttendance[s.id] = { status: "absent", reason: "" };
+                     state.savedStaffKeys.add(s.id);
                 }
-            });
-        } catch(e) { console.error(e); }
+            } else {
+                state.staffAttendance[s.id] = { status: "absent", reason: "" };
+            }
+        });
     } else {
         // Default everything to Absent / White Row
         STAFF.forEach(s => {
@@ -1131,84 +1055,9 @@ function kpiCard(iconClass, fa, label, value) {
 
 
 // ---------- AUTO FINE APPLICATION ----------
-/**
- * Reads all saved staff attendance records for the current month,
- * counts absent days per staff member, computes fines using their
- * penalty settings from Settings (or global pay variables),
- * and writes the total fine back into the shared DB so finance pages
- * and settings cards show the correct deductions automatically.
- */
 function applyAbsenceFines() {
-    try {
-        const db = JSON.parse(localStorage.getItem('eduflow-db') || '{}');
-        if (!db.staff) return;
-
-        const vars = JSON.parse(localStorage.getItem('edu_pay_variables') || '{}');
-        const globalPenaltyType  = vars.penaltyType  || 'percent';
-        const globalPenaltyValue = parseFloat(vars.penaltyValue) || 3;
-
-        const now = new Date();
-        const month = now.getMonth();
-        const year  = now.getFullYear();
-
-        // Gather all this-month attendance records
-        const monthRecords = {}; // staffId -> [status, ...]
-        for (let key in localStorage) {
-            if (!key.startsWith('eduflow_staff_att_')) continue;
-            const dateStr = key.replace('eduflow_staff_att_', '');
-            const d = new Date(dateStr);
-            if (isNaN(d.getTime()) || d.getMonth() !== month || d.getFullYear() !== year) continue;
-            try {
-                const payload = JSON.parse(localStorage.getItem(key));
-                if (!payload || !payload.records) continue;
-                Object.entries(payload.records).forEach(([id, entry]) => {
-                    if (!monthRecords[id]) monthRecords[id] = [];
-                    monthRecords[id].push(entry.status);
-                });
-            } catch(e) { /* skip */ }
-        }
-
-        // Helper: count absents (absent + leave both count as non-present for fine)
-        function countAbsents(records) {
-            return records.filter(s => s === 'absent').length; // only 'absent' triggers fine; 'leave' usually doesn't
-        }
-
-        // Apply fine to Teaching staff
-        db.staff['Teaching'] = (db.staff['Teaching'] || []).map(s => {
-            const records = monthRecords[s.id] || [];
-            const absentDays = countAbsents(records);
-            const salary = parseFloat(s.salary) || 0;
-            const pType  = s.penaltyType  || globalPenaltyType;
-            const pValue = parseFloat(s.penaltyValue != null ? s.penaltyValue : globalPenaltyValue);
-            let fine = 0;
-            if (absentDays > 0) {
-                fine = pType === 'percent'
-                    ? Math.round((salary * pValue / 100) * absentDays)
-                    : Math.round(pValue * absentDays);
-            }
-            return { ...s, fines: fine, absentDaysThisMonth: absentDays };
-        });
-
-        // Apply fine to Non-Teaching staff
-        db.staff['Non-Teaching'] = (db.staff['Non-Teaching'] || []).map(s => {
-            const records = monthRecords[s.id] || [];
-            const absentDays = countAbsents(records);
-            const salary = parseFloat(s.salary) || 0;
-            const pType  = s.penaltyType  || globalPenaltyType;
-            const pValue = parseFloat(s.penaltyValue != null ? s.penaltyValue : globalPenaltyValue);
-            let fine = 0;
-            if (absentDays > 0) {
-                fine = pType === 'percent'
-                    ? Math.round((salary * pValue / 100) * absentDays)
-                    : Math.round(pValue * absentDays);
-            }
-            return { ...s, fines: fine, absentDaysThisMonth: absentDays };
-        });
-
-        localStorage.setItem('eduflow-db', JSON.stringify(db));
-    } catch(e) {
-        console.warn('applyAbsenceFines error:', e);
-    }
+    // Absence fines calculation is managed on the backend server
+    console.log("Absence fines application handled by backend.");
 }
 // ---------- MONTHLY VIEW (Student View Attendance) ----------
 const _WD = ["Su","M","Tu","W","Th","F","Sa"];
@@ -1410,43 +1259,22 @@ function renderMonthly() {
     }
     emptyEl.classList.add("hidden");
 
-    // Pre-load records for each day/month column
-    const prefix = `eduflow_att_`;
-    const suffix = `_${cls.name}`;
-
-    // For week/month: load per dateKey; for year: load per month
+    // Pre-load records for each day/month column from in-memory cache
     const dayRecords = {};
     if (period !== "year") {
+        const today = todayKey();
         days.forEach(col => {
-            const raw = localStorage.getItem(`${prefix}${col.dateKey}${suffix}`);
-            dayRecords[col.dateKey] = raw ? (JSON.parse(raw).records || {}) : null;
+            // Only today's data is available in-memory from the current session cache
+            if (col.dateKey === today && todayAttendanceCache[cls.name]) {
+                dayRecords[col.dateKey] = todayAttendanceCache[cls.name];
+            } else {
+                dayRecords[col.dateKey] = null;
+            }
         });
     }
 
-    // For year: aggregate per month
+    // For year: aggregate per month — data comes from backend, not available in session cache
     const yearMonthData = {}; // monthIndex -> { regNo -> { p,a,l } }
-    if (period === "year") {
-        const year = state.monthlyDate.getFullYear();
-        for (let i = 0; i < localStorage.length; i++) {
-            const key = localStorage.key(i);
-            if (!key || !key.startsWith(prefix) || !key.endsWith(suffix)) continue;
-            const dateStr = key.slice(prefix.length, key.length - suffix.length);
-            const d = new Date(dateStr);
-            if (isNaN(d.getTime()) || d.getFullYear() !== year) continue;
-            const m = d.getMonth();
-            if (!yearMonthData[m]) yearMonthData[m] = {};
-            try {
-                const recs = (JSON.parse(localStorage.getItem(key)).records) || {};
-                Object.entries(recs).forEach(([regNo, entry]) => {
-                    if (!yearMonthData[m][regNo]) yearMonthData[m][regNo] = {p:0,a:0,l:0};
-                    const st = entry && entry.status;
-                    if (st==="present") yearMonthData[m][regNo].p++;
-                    else if (st==="absent")  yearMonthData[m][regNo].a++;
-                    else if (st==="leave")   yearMonthData[m][regNo].l++;
-                });
-            } catch(e) {}
-        }
-    }
 
     // Build header
     const colSpan = days.length;
@@ -1537,24 +1365,14 @@ state.recordRange   = "all";
 
 /* Scan every eduflow_att_<date>_<class> key and collect this student's entries */
 function buildStudentFullHistory(regNo) {
-    const records = [];
-    for (let key in localStorage) {
-        if (!key.startsWith('eduflow_att_')) continue;
-        try {
-            const payload = JSON.parse(localStorage.getItem(key));
-            if (!payload || !payload.records) continue;
-            const entry = payload.records[regNo];
-            if (entry) records.push({ date: payload.date, status: entry.status, reason: entry.reason || "" });
-        } catch(e) { /* skip corrupted */ }
-    }
-    records.sort((a, b) => b.date.localeCompare(a.date)); // newest first
-    return records;
+    return state.studentFullHistory || [];
 }
 
 function openStudentRecord(student) {
     state.studentRecord = student;
     state.recordSearch = "";
     state.recordRange = "all";
+    state.studentFullHistory = []; // Reset history
     $("#record-title").textContent = `${student.name} — Attendance Record`;
     $("#record-search").value = "";
     $$("#record-filters .filter-btn").forEach(b => b.classList.remove("active"));
@@ -1576,6 +1394,7 @@ function openStudentRecord(student) {
     hideAllStages();
     show("#stage-student-record");
     renderStudentRecord();
+    loadAttendanceFromDatabase(); // Fetch and render from MySQL backend
 }
 
 function _recordWithinRange(dateStr, range) {
@@ -2200,42 +2019,39 @@ function _performanceParagraph(ratingCls, pct, scopeName) {
         const sectionsLine = Object.keys(sectionMap).sort()
             .map(sec => `${sec} (${sectionMap[sec]})`).join(", ") || "—";
 
-        const prefix = `eduflow_att_`;
-        const suffix = `_${cls.name}`;
         let present = 0, absent = 0, leave = 0;
         const reasonCounts = {};
         const studentIds = new Set(allStudents.map(s => s.regNo));
 
-        for (let i = 0; i < localStorage.length; i++) {
-            const key = localStorage.key(i);
-            if (!key || !key.startsWith(prefix) || !key.endsWith(suffix)) continue;
-            const dateStr = key.slice(prefix.length, key.length - suffix.length);
-            const d = new Date(dateStr);
-            if (isNaN(d.getTime())) continue;
+        // Use in-memory cache — only today's session data is available
+        const today = todayKey();
+        const cachedRecords = todayAttendanceCache[cls.name];
+        if (cachedRecords) {
+            // Check if today falls within the requested scope
+            let inScope = false;
+            const todayDate = new Date(today);
             if (scope === "week") {
                 const ws = weekStart;
                 const we = new Date(ws); we.setDate(ws.getDate() + 6);
-                if (d < ws || d > we) continue;
+                inScope = todayDate >= ws && todayDate <= we;
             } else {
-                if (d.getFullYear() !== year) continue;
-                if (month !== null && d.getMonth() !== month) continue;
-            }
-
-            let payload;
-            try { payload = JSON.parse(localStorage.getItem(key)); }
-            catch (e) { continue; }
-            const records = (payload && payload.records) || {};
-            Object.entries(records).forEach(([sid, entry]) => {
-                if (!studentIds.has(sid)) return;
-                const st = entry && entry.status;
-                if (st === "present")      present++;
-                else if (st === "absent")  absent++;
-                else if (st === "leave") {
-                    leave++;
-                    const reason = (entry.reason || "Unspecified").trim() || "Unspecified";
-                    reasonCounts[reason] = (reasonCounts[reason] || 0) + 1;
+                if (year !== null && todayDate.getFullYear() === year) {
+                    inScope = (month === null || todayDate.getMonth() === month);
                 }
-            });
+            }
+            if (inScope) {
+                Object.entries(cachedRecords).forEach(([sid, entry]) => {
+                    if (!studentIds.has(sid)) return;
+                    const st = entry && entry.status;
+                    if (st === "present")      present++;
+                    else if (st === "absent")  absent++;
+                    else if (st === "leave") {
+                        leave++;
+                        const reason = (entry.reason || "Unspecified").trim() || "Unspecified";
+                        reasonCounts[reason] = (reasonCounts[reason] || 0) + 1;
+                    }
+                });
+            }
         }
 
         const totalMarks = present + absent + leave;
@@ -2443,39 +2259,21 @@ function renderStaffMonthly() {
     }
     emptyEl.classList.add("hidden");
 
-    // Pre-load records
+    // Pre-load records from in-memory cache
     const dayRecords = {};
     if (period !== "year") {
+        const today = todayKey();
         days.forEach(col => {
-            const raw = localStorage.getItem(`eduflow_staff_att_${col.dateKey}`);
-            dayRecords[col.dateKey] = raw ? (JSON.parse(raw).records || {}) : null;
+            if (col.dateKey === today && todayStaffAttendanceCache) {
+                dayRecords[col.dateKey] = todayStaffAttendanceCache;
+            } else {
+                dayRecords[col.dateKey] = null;
+            }
         });
     }
 
-    // Year: aggregate per month
+    // Year: aggregate per month — data comes from backend, not available in session cache
     const yearMonthData = {};
-    if (period === "year") {
-        const year = state.staffMonthlyDate.getFullYear();
-        for (let i = 0; i < localStorage.length; i++) {
-            const key = localStorage.key(i);
-            if (!key || !key.startsWith('eduflow_staff_att_')) continue;
-            const dateStr = key.replace('eduflow_staff_att_', '');
-            const d = new Date(dateStr);
-            if (isNaN(d.getTime()) || d.getFullYear() !== year) continue;
-            const m = d.getMonth();
-            if (!yearMonthData[m]) yearMonthData[m] = {};
-            try {
-                const recs = (JSON.parse(localStorage.getItem(key)).records) || {};
-                Object.entries(recs).forEach(([id, entry]) => {
-                    if (!yearMonthData[m][id]) yearMonthData[m][id] = {p:0,a:0,l:0};
-                    const st = entry && entry.status;
-                    if (st==="present") yearMonthData[m][id].p++;
-                    else if (st==="absent") yearMonthData[m][id].a++;
-                    else if (st==="leave")  yearMonthData[m][id].l++;
-                });
-            } catch(e) {}
-        }
-    }
 
     let headHtml = `<thead><tr>
         <th class="col-id" rowspan="2">Staff ID</th>
@@ -2652,24 +2450,14 @@ document.addEventListener("DOMContentLoaded", () => {
 
 /* ---------- INDIVIDUAL STAFF RECORD ---------- */
 function buildStaffFullHistory(staffId) {
-    const records = [];
-    for (let key in localStorage) {
-        if (!key.startsWith('eduflow_staff_att_')) continue;
-        try {
-            const payload = JSON.parse(localStorage.getItem(key));
-            if (!payload || !payload.records) continue;
-            const entry = payload.records[staffId];
-            if (entry) records.push({ date: payload.date, status: entry.status, reason: entry.reason || "" });
-        } catch(e) {}
-    }
-    records.sort((a, b) => b.date.localeCompare(a.date));
-    return records;
+    return state.staffFullHistory || [];
 }
 
 function openStaffRecord(member) {
     state.staffRecord = member;
     state.staffRecordSearch = "";
     state.staffRecordRange = "30";
+    state.staffFullHistory = []; // Reset history
     document.getElementById("staff-record-title").textContent = `${member.name} — Attendance Record`;
     const srch = document.getElementById("staff-record-search");
     if (srch) srch.value = "";
@@ -2691,6 +2479,7 @@ function openStaffRecord(member) {
     hideAllStages();
     show("#stage-staff-record");
     renderStaffRecord();
+    loadAttendanceFromDatabase(); // Fetch and render from MySQL backend
 }
 
 function renderStaffRecord() {
@@ -2819,33 +2608,34 @@ document.addEventListener("DOMContentLoaded", () => {
         let present=0, absent=0, leave=0;
         const reasonCounts = {};
         const staffIds = new Set(STAFF.map(s => s.id));
-        for (let i = 0; i < localStorage.length; i++) {
-            const key = localStorage.key(i);
-            if (!key || !key.startsWith("eduflow_staff_att_")) continue;
-            const dateStr = key.replace("eduflow_staff_att_", "");
-            const d = new Date(dateStr);
-            if (isNaN(d.getTime())) continue;
+
+        // Use in-memory cache — only today's session data is available
+        const today = todayKey();
+        if (todayStaffAttendanceCache) {
+            let inScope = false;
+            const todayDate = new Date(today);
             if (scope === "week") {
                 const ws = weekStart;
                 const we = new Date(ws); we.setDate(ws.getDate() + 6);
-                if (d < ws || d > we) continue;
+                inScope = todayDate >= ws && todayDate <= we;
             } else {
-                if (d.getFullYear() !== year) continue;
-                if (month !== null && d.getMonth() !== month) continue;
-            }
-            let payload; try { payload = JSON.parse(localStorage.getItem(key)); } catch(e) { continue; }
-            const records = (payload && payload.records) || {};
-            Object.entries(records).forEach(([sid, entry]) => {
-                if (!staffIds.has(sid)) return;
-                const st = entry && entry.status;
-                if (st === "present") present++;
-                else if (st === "absent") absent++;
-                else if (st === "leave") {
-                    leave++;
-                    const reason = (entry.reason || "Unspecified").trim() || "Unspecified";
-                    reasonCounts[reason] = (reasonCounts[reason] || 0) + 1;
+                if (year !== null && todayDate.getFullYear() === year) {
+                    inScope = (month === null || todayDate.getMonth() === month);
                 }
-            });
+            }
+            if (inScope) {
+                Object.entries(todayStaffAttendanceCache).forEach(([sid, entry]) => {
+                    if (!staffIds.has(sid)) return;
+                    const st = entry && entry.status;
+                    if (st === "present") present++;
+                    else if (st === "absent") absent++;
+                    else if (st === "leave") {
+                        leave++;
+                        const reason = (entry.reason || "Unspecified").trim() || "Unspecified";
+                        reasonCounts[reason] = (reasonCounts[reason] || 0) + 1;
+                    }
+                });
+            }
         }
         const totalMarks = present + absent + leave;
         const pct = totalMarks ? Math.round((present/totalMarks)*1000)/10 : 0;
@@ -3350,7 +3140,7 @@ setInterval(pollBiometricUpdates, 3000);
 
 /* ============================================================
    BIOMETRIC LINK MODAL
-   Stores att2000.mdb path in localStorage: eduflow_biometric_path
+   Holds att2000.mdb path in-memory for the current session.
    Also pushes the (normalized) path to the Java backend so the
    server-side process knows where to find/open the device's
    Access database.
@@ -3395,15 +3185,17 @@ function normalizeBiometricPath(raw) {
         const BACKEND_URL = 'http://localhost:8080/api/biometric/link';
 
         // Configurable demo video URL (also settable from settings page)
-        const DEMO_URL = localStorage.getItem('eduflow_biometric_demo_url')
-            || 'https://www.youtube.com/watch?v=YQm7g7lWQ4E';
+        const DEMO_URL = 'https://www.youtube.com/watch?v=YQm7g7lWQ4E';
+
+        // In-memory biometric state (no localStorage)
+        let _biometricPath = '';
+        let _biometricLastFolder = '';
 
         function refreshStatus() {
-            const saved = localStorage.getItem('eduflow_biometric_path');
-            if (saved) {
+            if (_biometricPath) {
                 statusEl.style.color = '';
                 statusEl.innerHTML = '<i class="fas fa-check-circle"></i> Linked';
-                pathInp.value = saved;
+                pathInp.value = _biometricPath;
             } else {
                 statusEl.textContent = '';
             }
@@ -3484,7 +3276,7 @@ function normalizeBiometricPath(raw) {
                 const existing = normalizeBiometricPath(pathInp.value);
                 const existingSlash = existing.lastIndexOf('\\');
                 const existingFolder = existingSlash > -1 ? existing.slice(0, existingSlash + 1) : '';
-                const lastFolder = localStorage.getItem('eduflow_biometric_last_folder') || '';
+                const lastFolder = _biometricLastFolder || '';
                 const folder = existingFolder || lastFolder;
 
                 pathInp.value = normalizeBiometricPath(folder + file.name);
@@ -3519,16 +3311,15 @@ function normalizeBiometricPath(raw) {
             statusEl.style.color = '';
             statusEl.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Connecting to device...';
 
-            // Always keep a local copy so the app still works offline.
-            localStorage.setItem('eduflow_biometric_path', normalized);
-            localStorage.setItem('eduflow_biometric_linked_at', new Date().toISOString());
+            // Keep in-memory copy for current session
+            _biometricPath = normalized;
 
             // Remember the folder so the next time "Browse" is used (which
             // can only see the file name, not the folder) we can prefill it
             // automatically instead of leaving it blank.
             const slashIdx = normalized.lastIndexOf('\\');
             if (slashIdx > -1) {
-                localStorage.setItem('eduflow_biometric_last_folder', normalized.slice(0, slashIdx + 1));
+                _biometricLastFolder = normalized.slice(0, slashIdx + 1);
             }
 
             // Push the normalized path to the backend so it can open the
@@ -3562,24 +3353,17 @@ function normalizeBiometricPath(raw) {
 
 /* ============================================================
    AUTO-SAVE SCHEDULER
-   Linked directly to the Attendance Timing set in Settings.
-   Reads the SAME localStorage key that settings.js writes to
-   (edu_attendance_timing, via saveAttendanceTiming()):
-     { first:  { hour, minute, meridiem, enabled },
-       second: { hour, minute, meridiem, enabled } }
-   Whatever time the user sets on the Settings page is exactly
-   the time this scheduler acts on — there is only one source
-   of truth for the timing.
-
+   Timing is held in-memory (_timingState) and can be updated
+   via the window.EduFlowAutoSave.set() helper (called by Settings).
    At each enabled slot's time, if the staff/student attendance
    stage is currently open, this clicks the real Save button
-   (#staff-save-btn / #save-btn), which is the same code path a
-   manual save uses — so it writes to localStorage AND syncs to
-   the real database via syncCurrentSheetWithDatabase().
+   (#staff-save-btn / #save-btn), which syncs to the real database
+   via syncCurrentSheetWithDatabase().
    ============================================================ */
 (function initAutoSaveScheduler() {
-    const TIMING_KEY = 'edu_attendance_timing'; // same key settings.js uses
-    const FIRED_KEY   = 'eduflow_autosave_fired'; // JSON { date, first, second }
+    // In-memory timing and fired state (no localStorage)
+    let _timingState = null;
+    let _firedState = null;
 
     const DEFAULT_TIMING = {
         first:  { hour: 10, minute: 0, meridiem: 'AM', enabled: true },
@@ -3588,7 +3372,7 @@ function normalizeBiometricPath(raw) {
 
     function getTiming() {
         try {
-            const saved = JSON.parse(localStorage.getItem(TIMING_KEY) || '{}');
+            const saved = _timingState || {};
             return {
                 first:  Object.assign({}, DEFAULT_TIMING.first,  saved.first  || {}),
                 second: Object.assign({}, DEFAULT_TIMING.second, saved.second || {}),
@@ -3611,13 +3395,10 @@ function normalizeBiometricPath(raw) {
         return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
     }
     function loadFired() {
-        try {
-            const raw = JSON.parse(localStorage.getItem(FIRED_KEY) || '{}');
-            if (raw.date !== todayStr()) return { date: todayStr(), first: false, second: false };
-            return raw;
-        } catch(e) { return { date: todayStr(), first: false, second: false }; }
+        if (_firedState && _firedState.date === todayStr()) return _firedState;
+        return { date: todayStr(), first: false, second: false };
     }
-    function saveFired(f) { localStorage.setItem(FIRED_KEY, JSON.stringify(f)); }
+    function saveFired(f) { _firedState = f; }
 
     function updateLabels() {
         const t = getTiming();
@@ -3699,9 +3480,6 @@ function normalizeBiometricPath(raw) {
         // React immediately when Settings saves a new time — same tab
         // (custom event) or another open tab (native storage event).
         window.addEventListener('eduflow-attendance-timing-changed', () => { updateLabels(); tick(); });
-        window.addEventListener('storage', (e) => {
-            if (e.key === TIMING_KEY) { updateLabels(); tick(); }
-        });
         // Check every 30 seconds
         setInterval(tick, 30 * 1000);
         // First tick after 5s so page is ready
@@ -3724,7 +3502,7 @@ function normalizeBiometricPath(raw) {
                 first:  firstHHMM  ? parseHHMM(firstHHMM)  : current.first,
                 second: secondHHMM ? parseHHMM(secondHHMM) : current.second,
             };
-            localStorage.setItem(TIMING_KEY, JSON.stringify(timing));
+            _timingState = timing;
             updateLabels();
         },
     };

@@ -147,45 +147,13 @@ function _classesLocalToApi(localClasses) {
 }
 
 /**
- * Mirrors a SchoolSettings row from the backend into the existing
- * localStorage keys so the rest of the page (and other pages that read
- * these same keys, e.g. teacher pay defaults) keep working unchanged —
- * the backend is the source of truth, localStorage is just the cache.
+ * Caches a SchoolSettings row from the backend into the in-memory
+ * _serverSettings object. The backend is the sole source of truth;
+ * no localStorage writes are made.
  */
 function _mirrorServerSettingsToLocalStorage(s) {
-  if (!s) return;
-
-  localStorage.setItem(SCHOOL_INFO_KEY, JSON.stringify({
-    name:      s.schoolName      || '',
-    address:   s.schoolAddress   || '',
-    phone:     s.schoolPhone     || '',
-    phoneAlt:  s.schoolPhoneAlt  || '',
-    email:     s.schoolEmail     || '',
-    website:   s.schoolWebsite   || '',
-    principal: s.schoolPrincipal || '',
-    regNo:     s.schoolRegNo     || '',
-  }));
-
-  localStorage.setItem(LATEFEE_KEY, JSON.stringify({
-    enabled:     s.lateFeeEnabled !== false,
-    deadlineDay: s.lateFeeDeadlineDay,
-    type:        s.lateFeeType,
-    amount:      s.lateFeeAmount,
-    grace:       s.lateFeeGrace,
-  }));
-
-  localStorage.setItem(VARIABLES_KEY, JSON.stringify({
-    penaltyType:  s.payPenaltyType,
-    penaltyValue: s.payPenaltyValue,
-    bonus:        s.payBonus,
-  }));
-
-  localStorage.setItem(CLASSES_KEY, JSON.stringify(_classesApiToLocal(s.classes)));
-
-  localStorage.setItem('edu_attendance_timing', JSON.stringify({
-    first:  { hour: s.autosave1Hour, minute: s.autosave1Minute, meridiem: s.autosave1Meridiem, enabled: s.autosave1Enabled },
-    second: { hour: s.autosave2Hour, minute: s.autosave2Minute, meridiem: s.autosave2Meridiem, enabled: s.autosave2Enabled },
-  }));
+  // Data is already stored in _serverSettings by loadSettingsFromServer().
+  // This function is kept for compatibility but no longer writes to localStorage.
 }
 
 /** Fetches the settings row from the backend and caches it locally. */
@@ -240,31 +208,12 @@ function initDarkMode() {
 // ═══════════════════════════════════════════════
 
 /**
- * Reads saved staff attendance records from localStorage (written by attendance.js)
- * and counts absent days for a given staff member in the current month.
- * Key format: eduflow_staff_att_YYYY-MM-DD
+ * Returns absent days for a staff member this month.
+ * Attendance data is managed by the backend — this returns 0
+ * as the backend handles absence fine calculations server-side.
  */
 function getAbsentDaysThisMonth(staffId) {
-  const now = new Date();
-  const month = now.getMonth();
-  const year  = now.getFullYear();
-  let count = 0;
-
-  for (let key in localStorage) {
-    if (!key.startsWith('eduflow_staff_att_')) continue;
-    const dateStr = key.replace('eduflow_staff_att_', '');
-    const d = new Date(dateStr);
-    if (isNaN(d.getTime())) continue;
-    if (d.getMonth() !== month || d.getFullYear() !== year) continue;
-
-    try {
-      const payload = JSON.parse(localStorage.getItem(key));
-      if (payload && payload.records && payload.records[staffId]) {
-        if (payload.records[staffId].status === 'absent') count++;
-      }
-    } catch (e) { /* skip */ }
-  }
-  return count;
+  return 0; // Absence data is fetched from the backend, not localStorage
 }
 
 /**
@@ -429,10 +378,10 @@ document.addEventListener('DOMContentLoaded', () => {
 //  CLASSES
 // ═══════════════════════════════════════════════
 function loadClasses() {
-  const saved = JSON.parse(localStorage.getItem(CLASSES_KEY)) || DEFAULT_CLASSES;
+  const classes = _serverSettings ? _classesApiToLocal(_serverSettings.classes) : DEFAULT_CLASSES;
   const grid  = document.getElementById('class-grid');
   grid.innerHTML = '';
-  saved.forEach(c => appendClassCard(c.name, c.fee, c.fund, false, c.sections || []));
+  classes.forEach(c => appendClassCard(c.name, c.fee, c.fund, false, c.sections || []));
 }
 
 function appendClassCard(name, fee, fund, isNew = false, sections = []) {
@@ -532,15 +481,15 @@ function addClassCard() {
 //  SCHOOL INFO / CONTACT DETAILS
 // ═══════════════════════════════════════════════
 function loadSchoolInfo() {
-  const saved = JSON.parse(localStorage.getItem(SCHOOL_INFO_KEY)) || DEFAULT_SCHOOL_INFO;
-  document.getElementById('school-name').value      = saved.name      || '';
-  document.getElementById('school-address').value   = saved.address   || '';
-  document.getElementById('school-phone').value      = saved.phone     || '';
-  document.getElementById('school-phone-alt').value  = saved.phoneAlt  || '';
-  document.getElementById('school-email').value      = saved.email     || '';
-  document.getElementById('school-website').value    = saved.website   || '';
-  document.getElementById('school-principal').value  = saved.principal || '';
-  document.getElementById('school-reg-no').value     = saved.regNo     || '';
+  const s = _serverSettings || {};
+  document.getElementById('school-name').value      = s.schoolName      || '';
+  document.getElementById('school-address').value   = s.schoolAddress   || '';
+  document.getElementById('school-phone').value      = s.schoolPhone     || '';
+  document.getElementById('school-phone-alt').value  = s.schoolPhoneAlt  || '';
+  document.getElementById('school-email').value      = s.schoolEmail     || '';
+  document.getElementById('school-website').value    = s.schoolWebsite   || '';
+  document.getElementById('school-principal').value  = s.schoolPrincipal || '';
+  document.getElementById('school-reg-no').value     = s.schoolRegNo     || '';
 }
 
 function collectSchoolInfo() {
@@ -557,22 +506,29 @@ function collectSchoolInfo() {
 }
 
 function saveSchoolInfo() {
-  localStorage.setItem(SCHOOL_INFO_KEY, JSON.stringify(collectSchoolInfo()));
+  // School info is saved to the backend via saveAll() — no localStorage write needed.
 }
 
 // ═══════════════════════════════════════════════
 //  LATE FEE
 // ═══════════════════════════════════════════════
 function loadLateFee() {
-  const saved = JSON.parse(localStorage.getItem(LATEFEE_KEY)) || DEFAULT_LATEFEE;
+  const s = _serverSettings || {};
+  const saved = {
+    enabled:     s.lateFeeEnabled !== false,
+    deadlineDay: s.lateFeeDeadlineDay ?? DEFAULT_LATEFEE.deadlineDay,
+    type:        s.lateFeeType        ?? DEFAULT_LATEFEE.type,
+    amount:      s.lateFeeAmount      ?? DEFAULT_LATEFEE.amount,
+    grace:       s.lateFeeGrace       ?? DEFAULT_LATEFEE.grace,
+  };
 
-  document.getElementById('latefee-enabled').checked    = saved.enabled !== false;
+  document.getElementById('latefee-enabled').checked    = saved.enabled;
   document.getElementById('latefee-deadline-day').value = saved.deadlineDay;
   document.getElementById('latefee-type').value         = saved.type;
   document.getElementById('latefee-amount').value       = saved.amount;
   document.getElementById('latefee-grace').value        = saved.grace;
 
-  applyLateFeeToggle(saved.enabled !== false);
+  applyLateFeeToggle(saved.enabled);
   syncLateFeePrefix();
   updateLateFeePreview();
 }
@@ -655,15 +611,8 @@ function loadTeachers() {
     return;
   }
 
-  const saved = JSON.parse(localStorage.getItem(TEACHERS_KEY)) || DEFAULT_TEACHERS;
-  saved.forEach(t => appendTeacherCard(t, false));
+  DEFAULT_TEACHERS.forEach(t => appendTeacherCard(t, false));
 }
-
-window.addEventListener('storage', (e) => {
-  if (e.key && e.key.toLowerCase().includes('staff')) {
-    if (document.getElementById('teacher-grid')) loadTeachers();
-  }
-});
 
 function appendTeacherCard(t = {}, isNew = true) {
   const grid = document.getElementById('teacher-grid');
@@ -783,7 +732,14 @@ function addTeacherCard() {
 //  VARIABLES
 // ═══════════════════════════════════════════════
 function getVariables() {
-  return JSON.parse(localStorage.getItem(VARIABLES_KEY)) || DEFAULT_VARIABLES;
+  if (_serverSettings) {
+    return {
+      penaltyType:  _serverSettings.payPenaltyType  ?? DEFAULT_VARIABLES.penaltyType,
+      penaltyValue: _serverSettings.payPenaltyValue ?? DEFAULT_VARIABLES.penaltyValue,
+      bonus:        _serverSettings.payBonus         ?? DEFAULT_VARIABLES.bonus,
+    };
+  }
+  return DEFAULT_VARIABLES;
 }
 
 function loadVariables() {
@@ -854,7 +810,7 @@ function persistVariablesLive() {
     penaltyValue: parseFloat(document.getElementById('var-penalty-value').value) || 0,
     bonus:        parseFloat(document.getElementById('var-bonus').value) || 0,
   };
-  localStorage.setItem(VARIABLES_KEY, JSON.stringify(vars));
+  // Variables are persisted to the backend via saveAll() — no localStorage write needed.
 }
 
 function wirePayVariableLiveSync() {
@@ -1159,8 +1115,7 @@ function loadNonTeaching() {
     return;
   }
 
-  const saved = JSON.parse(localStorage.getItem(NONTEACHING_KEY)) || DEFAULT_NONTEACHING;
-  saved.forEach(t => appendNonTeachingCard(t, false));
+  DEFAULT_NONTEACHING.forEach(t => appendNonTeachingCard(t, false));
 }
 
 function appendNonTeachingCard(t = {}, isNew = true) {
@@ -1330,7 +1285,7 @@ function saveNonTeaching() {
       });
     }
   });
-  localStorage.setItem(NONTEACHING_KEY, JSON.stringify(list));
+  // Non-teaching list is saved to backend via saveAll() — no localStorage write needed.
   if (sharedList) setSharedNonTeaching(updatedShared);
 }
 
@@ -1366,13 +1321,21 @@ const DEFAULT_ATT_TIMING = {
 };
 
 function loadAttendanceTiming() {
-  try {
-    const saved = JSON.parse(localStorage.getItem(ATT_TIMING_KEY) || '{}');
-    return {
-      first:  Object.assign({}, DEFAULT_ATT_TIMING.first,  saved.first  || {}),
-      second: Object.assign({}, DEFAULT_ATT_TIMING.second, saved.second || {}),
-    };
-  } catch { return DEFAULT_ATT_TIMING; }
+  const s = _serverSettings || {};
+  return {
+    first:  Object.assign({}, DEFAULT_ATT_TIMING.first,  {
+      hour:     s.autosave1Hour     ?? DEFAULT_ATT_TIMING.first.hour,
+      minute:   s.autosave1Minute   ?? DEFAULT_ATT_TIMING.first.minute,
+      meridiem: s.autosave1Meridiem ?? DEFAULT_ATT_TIMING.first.meridiem,
+      enabled:  s.autosave1Enabled  ?? DEFAULT_ATT_TIMING.first.enabled,
+    }),
+    second: Object.assign({}, DEFAULT_ATT_TIMING.second, {
+      hour:     s.autosave2Hour     ?? DEFAULT_ATT_TIMING.second.hour,
+      minute:   s.autosave2Minute   ?? DEFAULT_ATT_TIMING.second.minute,
+      meridiem: s.autosave2Meridiem ?? DEFAULT_ATT_TIMING.second.meridiem,
+      enabled:  s.autosave2Enabled  ?? DEFAULT_ATT_TIMING.second.enabled,
+    }),
+  };
 }
 
 function renderAttendanceTiming() {
@@ -1428,17 +1391,11 @@ async function saveAttendanceTiming() {
   try {
     const saved = await apiSaveTiming(payload);
     _serverSettings = saved;
-    localStorage.setItem(ATT_TIMING_KEY, JSON.stringify(timing));
 
     if (status) {
       status.textContent = '✓ Saved. Auto-save times updated.';
       setTimeout(() => (status.textContent = ''), 2500);
     }
-    // The Attendance page (attendance.js) is what actually clicks the real
-    // Save buttons at the configured time. Tell it right away — via a
-    // same-tab custom event, and via the native 'storage' event for any
-    // other open tab — so the new time takes effect immediately instead of
-    // waiting for its next periodic check.
     window.dispatchEvent(new CustomEvent('eduflow-attendance-timing-changed', { detail: timing }));
     if (typeof showToast === 'function') showToast('Attendance timings saved.', 'success');
   } catch (e) {
@@ -1481,24 +1438,15 @@ function scheduleAttendanceAutoSaves() {
 }
 
 async function runStaffAttendanceAutoSave(label, slot) {
-  const db = JSON.parse(localStorage.getItem('eduflow-db') || '{}');
   const today = new Date().toISOString().slice(0, 10);
-
   const snapshot = {
     date: today,
-    slot: label,                    // 'first' | 'second'
+    slot: label,
     time: `${slot.hour}:${String(slot.minute).padStart(2, '0')} ${slot.meridiem}`,
     savedAt: new Date().toISOString(),
-    staff: (db.attendance && db.attendance.staff && db.attendance.staff[today]) || [],
   };
 
-  // 1) Persist locally
-  db.attendance = db.attendance || {};
-  db.attendance.autoSaves = db.attendance.autoSaves || [];
-  db.attendance.autoSaves.push(snapshot);
-  localStorage.setItem('eduflow-db', JSON.stringify(db));
-
-  // 2) Push to real database if endpoint configured
+  // Push to real database if endpoint configured
   if (ATTENDANCE_DB_ENDPOINT) {
     try {
       await fetch(ATTENDANCE_DB_ENDPOINT, {

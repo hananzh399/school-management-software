@@ -34,7 +34,7 @@ function showReportsToast(message, type = 'info') {
     }, 3000);
 }
 
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
     initTheme();
     initSidebar();
     initNavSearch();
@@ -42,16 +42,10 @@ document.addEventListener('DOMContentLoaded', () => {
     initPeriodSwitch();
     initMonthFilter();
     initTxnControls();
+    
+    await loadReportsDataFromBackend();
+    
     renderReports();
-
-    // Live-refresh if data changes in another tab, same pattern as main.js
-    window.addEventListener('storage', (e) => {
-        const watched = ['edu_students', 'eduflow-db', 'eduflow-student-fines',
-            'eduflow-staff-fines', 'eduflow-staff-bonus', 'eduflow-other-expenses'];
-        if (watched.includes(e.key) || (e.key && e.key.startsWith('eduflow_'))) {
-            renderReports();
-        }
-    });
 });
 
 /* ============================================
@@ -232,48 +226,66 @@ function csvEscape(str) {
 /* ============================================
    DATA READERS (raw, dated events)
    ============================================ */
-function safeParse(key, fallback) {
-    try { return JSON.parse(localStorage.getItem(key) || JSON.stringify(fallback)); }
-    catch (e) { return fallback; }
+let _reportsDataCache = {
+    feePayments: [],
+    otherExpenses: [],
+    staffBonus: [],
+    studentFines: [],
+    staffFines: [],
+    attendance: {}
+};
+
+function _getSchoolId() {
+    if (window.SoftSchoolAdmin && typeof window.SoftSchoolAdmin.getCurrentSchool === 'function') {
+        const school = window.SoftSchoolAdmin.getCurrentSchool();
+        if (school && school.schoolId) return school.schoolId;
+    }
+    return '';
+}
+
+async function loadReportsDataFromBackend() {
+    try {
+        const schoolId = _getSchoolId();
+        const url = `http://localhost:8080/api/reports?schoolId=${encodeURIComponent(schoolId)}`;
+        const res = await fetch(url, { headers: { "Content-Type": "application/json" } });
+        if (res.ok) {
+            const data = await res.json();
+            if (data) {
+                _reportsDataCache = Object.assign(_reportsDataCache, data);
+            }
+        }
+    } catch (e) {
+        console.error("Failed to load reports data from backend", e);
+    }
 }
 
 function getAllFeePayments() {
-    const students = safeParse('edu_students', []);
-    const out = [];
-    students.forEach(s => {
-        (s.feePayments || []).forEach(p => {
-            const d = new Date(p.date);
-            if (!isNaN(d)) out.push({ date: d, amount: Number(p.amount) || 0, label: `Fee payment — ${s.fullName || 'Student'}` });
-        });
-    });
-    return out;
+    return (_reportsDataCache.feePayments || []).map(p => ({
+        date: new Date(p.date), amount: Number(p.amount) || 0, label: p.label || 'Fee payment'
+    })).filter(p => !isNaN(p.date));
 }
 
 function getAllOtherExpenses() {
-    return safeParse('eduflow-other-expenses', []).map(e => ({
-        date: new Date(e.date), amount: Number(e.amount) || 0,
-        label: e.description || 'Operational expense'
+    return (_reportsDataCache.otherExpenses || []).map(e => ({
+        date: new Date(e.date), amount: Number(e.amount) || 0, label: e.label || 'Operational expense'
     })).filter(e => !isNaN(e.date));
 }
 
 function getAllStaffBonus() {
-    return safeParse('eduflow-staff-bonus', []).map(b => ({
-        date: new Date(b.date), amount: Number(b.amount) || 0,
-        label: `Bonus — ${b.name || 'Staff'}`
+    return (_reportsDataCache.staffBonus || []).map(b => ({
+        date: new Date(b.date), amount: Number(b.amount) || 0, label: b.label || 'Bonus'
     })).filter(b => !isNaN(b.date));
 }
 
 function getAllStudentFines() {
-    return safeParse('eduflow-student-fines', []).map(f => ({
-        date: new Date(f.date), amount: Number(f.amount) || 0,
-        label: `Student fine — ${f.name || 'Student'}`
+    return (_reportsDataCache.studentFines || []).map(f => ({
+        date: new Date(f.date), amount: Number(f.amount) || 0, label: f.label || 'Student fine'
     })).filter(f => !isNaN(f.date));
 }
 
 function getAllStaffFines() {
-    return safeParse('eduflow-staff-fines', []).map(f => ({
-        date: new Date(f.date), amount: Number(f.amount) || 0,
-        label: `Staff fine — ${f.name || 'Staff'}`
+    return (_reportsDataCache.staffFines || []).map(f => ({
+        date: new Date(f.date), amount: Number(f.amount) || 0, label: f.label || 'Staff fine'
     })).filter(f => !isNaN(f.date));
 }
 
@@ -281,36 +293,10 @@ function getAllStaffFines() {
    ATTENDANCE READER (per calendar date)
    ============================================ */
 function getAttendanceForDate(dateKey) {
-    let presentStudents = 0, totalStudents = 0, presentStaff = 0, totalStaff = 0, hasData = false;
-
-    for (let key in localStorage) {
-        if (!key.startsWith('eduflow_att_' + dateKey)) continue;
-        try {
-            const payload = JSON.parse(localStorage.getItem(key));
-            if (!payload || !payload.records) continue;
-            hasData = true;
-            Object.values(payload.records).forEach(r => {
-                totalStudents++;
-                if (r.status === 'present') presentStudents++;
-            });
-        } catch (e) { /* skip malformed */ }
+    if (_reportsDataCache.attendance && _reportsDataCache.attendance[dateKey]) {
+        return _reportsDataCache.attendance[dateKey];
     }
-
-    const staffRaw = localStorage.getItem('eduflow_staff_att_' + dateKey);
-    if (staffRaw) {
-        try {
-            const payload = JSON.parse(staffRaw);
-            if (payload && payload.records) {
-                hasData = true;
-                Object.values(payload.records).forEach(r => {
-                    totalStaff++;
-                    if (r.status === 'present') presentStaff++;
-                });
-            }
-        } catch (e) { /* skip malformed */ }
-    }
-
-    return { presentStudents, totalStudents, presentStaff, totalStaff, hasData };
+    return { presentStudents: 0, totalStudents: 0, presentStaff: 0, totalStaff: 0, hasData: false };
 }
 
 /* ============================================
