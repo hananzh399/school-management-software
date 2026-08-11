@@ -2245,12 +2245,8 @@ body {
 .brand-logo {
     width: 38px;
     height: 38px;
-    object-fit: cover;
-    border-radius: 50%;
+    object-fit: contain;
     flex-shrink: 0;
-    background: #fff;
-    border: 2px solid rgba(23, 113, 106, 0.35);
-    box-shadow: 0 2px 8px rgba(23, 113, 106, 0.25);
 }
 
 .brand-name {

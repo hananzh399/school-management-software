@@ -140,32 +140,10 @@
             </div>
         </section>
 
-        <!-- STAGE 2: Add vs View -->
-        <section id="stage-submode" class="stage hidden">
-            <div class="stage-header">
-                <button class="back-btn" data-back="mode"><i class="fas fa-arrow-left"></i> Back</button>
-                <h2 class="stage-title" id="submode-title">Choose Action</h2>
-            </div>
-            <div class="choice-grid">
-                <button class="choice-card icon-indigo" data-action="add">
-                    <div class="card-glow"></div>
-                    <div class="choice-icon"><i class="fas fa-plus-circle"></i></div>
-                    <h3>Add Attendance</h3>
-                    <p>Mark today's attendance using the entry form.</p>
-                </button>
-                <button class="choice-card icon-emerald" data-action="view">
-                    <div class="card-glow"></div>
-                    <div class="choice-icon"><i class="fas fa-chart-line"></i></div>
-                    <h3>View Attendance</h3>
-                    <p>Search records and review analytics.</p>
-                </button>
-            </div>
-        </section>
-
-        <!-- STAGE 3: Pick a class (student/add) -->
+        <!-- STAGE 3: Pick a class (student) -->
         <section id="stage-classes" class="stage hidden">
             <div class="stage-header">
-                <button class="back-btn" data-back="submode"><i class="fas fa-arrow-left"></i> Back</button>
+                <button class="back-btn" data-back="mode"><i class="fas fa-arrow-left"></i> Back</button>
                 <h2 class="stage-title">Select Class</h2>
             </div>
             <div id="classes-grid" class="classes-grid"></div>
@@ -176,6 +154,7 @@
             <div class="stage-header">
                 <button class="back-btn" data-back="classes"><i class="fas fa-arrow-left"></i> Back</button>
                 <h2 class="stage-title" id="table-title">Attendance</h2>
+                <button id="table-view-attendance-btn" class="view-attendance-btn"><i class="fas fa-chart-line"></i> View Attendance</button>
             </div>
 
             <div class="toolbar">
@@ -231,8 +210,9 @@
         <!-- STAGE 5: Staff attendance table (Add) -->
         <section id="stage-staff" class="stage hidden">
             <div class="stage-header">
-                <button class="back-btn" data-back="submode"><i class="fas fa-arrow-left"></i> Back</button>
+                <button class="back-btn" data-back="mode"><i class="fas fa-arrow-left"></i> Back</button>
                 <h2 class="stage-title">Staff Attendance</h2>
+                <button id="staff-view-attendance-btn" class="view-attendance-btn"><i class="fas fa-chart-line"></i> View Attendance</button>
             </div>
             <div class="toolbar">
                 <div class="search-wrap">
@@ -330,7 +310,7 @@
         <!-- STAGE 7: Monthly class attendance grid (View) -->
         <section id="stage-monthly" class="stage hidden">
             <div class="stage-header">
-                <button class="back-btn" data-back="view-classes"><i class="fas fa-arrow-left"></i> Back</button>
+                <button class="back-btn" data-back="table"><i class="fas fa-arrow-left"></i> Back</button>
                 <h2 class="stage-title" id="monthly-title">Monthly Attendance</h2>
             </div>
 
@@ -425,7 +405,7 @@
         <!-- STAGE 9: Monthly STAFF attendance grid (View) -->
         <section id="stage-staff-monthly" class="stage hidden">
             <div class="stage-header">
-                <button class="back-btn" data-back="submode"><i class="fas fa-arrow-left"></i> Back</button>
+                <button class="back-btn" data-back="staff"><i class="fas fa-arrow-left"></i> Back</button>
                 <h2 class="stage-title" id="staff-monthly-title">Staff Attendance</h2>
             </div>
 

@@ -244,15 +244,10 @@ document.addEventListener('DOMContentLoaded', () => {
     initDate();
     loadStaffCounts();
 
-    // Update the header brand logo (and any other .brand-logo instances)
-    // from the logged-in school's saved logo, instead of leaving the
-    // static placeholder image in the markup.
-    const headerSchool = _getSchoolIdentity();
-    document.querySelectorAll('.brand-logo').forEach(img => {
-        if (headerSchool.logo && !headerSchool.logo.includes('logo-icon.png')) {
-            img.src = headerSchool.logo;
-        }
-    });
+    // NOTE: the sidebar brand logo (.brand-logo) is the fixed SoftSchool
+    // product logo and must never be swapped for the school's own logo —
+    // the school's logo/name belongs in the header (.school-branding),
+    // which access-control.js already populates from the Super Admin record.
 
     // Pull the live roster from MySQL as soon as the page loads, so the
     // counters/directory reflect the database instead of a stale local cache.
@@ -2731,14 +2726,11 @@ function _getSchoolIdentity() {
 
     } catch (e) { console.warn("Search interrupted:", e); }
 
-    // 4. Last Resort: Grab it from the actual Header Image on the screen
-    if (!logo) {
-        const headerLogo = document.querySelector('.brand-logo');
-        if (headerLogo && headerLogo.src && !headerLogo.src.includes('placeholder')) {
-            // Check if the source is a valid data string or path
-            logo = headerLogo.src;
-        }
-    }
+    // 4. Last Resort: previously fell back to the sidebar's .brand-logo,
+    //    but that element is always the fixed SoftSchool product logo now,
+    //    never the school's own logo — so there is nothing useful to read
+    //    from it. Leave logo blank if not found above; callers already
+    //    handle an empty logo gracefully.
 
     const contact = JSON.parse(localStorage.getItem('eduflow-school-contact') || '{"address":"","phone":""}');
 

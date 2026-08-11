@@ -1,5 +1,6 @@
 /* EduFlow Pro — Attendance module
-   Flow: mode (Staff/Studen) -> submode (Add/View) -> form or analytics
+   Flow: mode (Staff/Student) -> form (Add Attendance), with a "View Attendance"
+   button that jumps directly into analytics (top-right for staff, per class card for students)
 */
  
 // ---------- REAL DATA FROM DATABASE ----------
@@ -235,7 +236,7 @@ function show(id) {
 }
 function hide(id) { $(id).classList.add("hidden"); }
 function hideAllStages() {
-    ["#stage-mode","#stage-submode","#stage-classes","#stage-table","#stage-staff","#stage-view","#stage-monthly","#stage-student-record","#stage-staff-monthly","#stage-staff-record"].forEach(hide);
+    ["#stage-mode","#stage-classes","#stage-table","#stage-staff","#stage-view","#stage-monthly","#stage-student-record","#stage-staff-monthly","#stage-staff-record"].forEach(hide);
 }
 
  
@@ -248,8 +249,9 @@ document.addEventListener("DOMContentLoaded", () => {
     initDate();
     initAttendanceStats();
     initModeCards();
-    initSubmodeCards();
     initBackButtons();
+    initStaffViewAttendanceButton();
+    initTableViewAttendanceButton();
     initSearch();
     initSectionDropdown();
     initBulk();
@@ -341,33 +343,37 @@ function initModeCards() {
     $$("#stage-mode .choice-card").forEach(card => {
         card.addEventListener("click", () => {
             state.mode = card.getAttribute("data-mode");
-            $("#submode-title").textContent = state.mode === "staff" ? "Staff Attendance" : "Student Attendance";
+            state.action = "add";
+            refreshLiveData(); // always pull fresh DB data
             hideAllStages();
-            show("#stage-submode");
+            if (state.mode === "student") {
+                renderClasses();
+                show("#stage-classes");
+            } else {
+                initStaffAttendance();
+                renderStaff();
+                show("#stage-staff");
+            }
         });
     });
 }
- 
-function initSubmodeCards() {
-    $$("#stage-submode .choice-card").forEach(card => {
-        card.addEventListener("click", () => {
-            state.action = card.getAttribute("data-action");
-            refreshLiveData(); // always pull fresh DB data
-            hideAllStages();
-            if (state.action === "add") {
-                if (state.mode === "student") { renderClasses(); show("#stage-classes"); }
-                else { initStaffAttendance(); renderStaff(); show("#stage-staff"); }
-            } else {
-                if (state.mode === "student") {
-                    // View student attendance: first pick a class, then show monthly grid
-                    renderClasses();
-                    show("#stage-classes");
-                } else {
-                    // Staff view: open the monthly staff attendance grid (mirrors student monthly view)
-                    openStaffMonthly();
-                }
-            }
-        });
+
+function initStaffViewAttendanceButton() {
+    const btn = $("#staff-view-attendance-btn");
+    if (!btn) return;
+    btn.addEventListener("click", () => {
+        refreshLiveData();
+        openStaffMonthly();
+    });
+}
+
+function initTableViewAttendanceButton() {
+    const btn = $("#table-view-attendance-btn");
+    if (!btn) return;
+    btn.addEventListener("click", () => {
+        if (!state.selectedClass) return;
+        refreshLiveData();
+        openClassMonthly(state.selectedClass);
     });
 }
 
@@ -378,10 +384,14 @@ function initBackButtons() {
             const target = btn.getAttribute("data-back");
             hideAllStages();
             if (target === "mode") show("#stage-mode");
-            else if (target === "submode") show("#stage-submode");
             else if (target === "classes") show("#stage-classes");
             else if (target === "view-classes") { renderClasses(); show("#stage-classes"); }
+            else if (target === "table") {
+                if (state.selectedClass) openClass(state.selectedClass);
+                else { renderClasses(); show("#stage-classes"); }
+            }
             else if (target === "monthly") { show("#stage-monthly"); }
+            else if (target === "staff") { initStaffAttendance(); renderStaff(); show("#stage-staff"); }
             else if (target === "staff-monthly") { show("#stage-staff-monthly"); }
         });
     });
@@ -410,10 +420,7 @@ function renderClasses() {
             <div class="class-meta">Sections: ${cls.sections.join(", ")}</div>
             <div class="class-count"><i class="fas fa-users"></i> ${count} students</div>
         `;
-        card.addEventListener("click", () => {
-            if (state.action === "view") openClassMonthly(cls);
-            else openClass(cls);
-        });
+        card.addEventListener("click", () => openClass(cls));
         grid.appendChild(card);
     });
 }
@@ -979,7 +986,7 @@ function initView() {
                     table{width:100%;border-collapse:collapse;font-size:13px;}
                     th,td{border:1px solid #e2e8f0;padding:8px 10px;text-align:left;}
                     th{background:#f1f5f9;}
-                    .kpi-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:18px;}
+                    .kpi-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:12px;margin-bottom:18px;}
                     .kpi-card{border:1px solid #e2e8f0;border-radius:10px;padding:12px;}
                     .kpi-label{font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:.5px;}
                     .kpi-value{font-size:20px;font-weight:700;margin-top:4px;}
@@ -990,10 +997,12 @@ function initView() {
                     .badge-absent{background:#fee2e2;color:#b91c1c;}
                     .badge-leave{background:#fef3c7;color:#a16207;}
                     .id-badge{font-family:monospace;background:#f1f5f9;padding:2px 6px;border-radius:4px;font-size:11px;}
-                    @media print { button{display:none;} }
+                    * { -webkit-print-color-adjust:exact; print-color-adjust:exact; color-adjust:exact; }
+                    @page{ size:A4; margin:14mm; }
+                    @media print { button{display:none;} body{padding:0;} }
                 </style></head><body>
                 <h1>${title}</h1>
-                <div class="sub">St. Lawrence International School &middot; ${dateStr}</div>
+                <div class="sub">${_reportEscapeHtml(_reportSchoolInfo().name)} &middot; ${dateStr}</div>
                 ${kpis}${table}
                 <script>window.onload=()=>{setTimeout(()=>window.print(),250);};<\/script>
                 </body></html>`);
@@ -1678,6 +1687,49 @@ function _reportEscapeHtml(str) {
     })[ch]);
 }
 
+/* Current school (name + logo) as set by the Super Admin for this login.
+   Falls back gracefully when the multi-school layer / a session isn't present
+   (e.g. local single-school use), so reports never show a blank brand. */
+function _reportSchoolInfo() {
+    try {
+        if (window.SoftSchoolAdmin && typeof window.SoftSchoolAdmin.getCurrentSchool === "function") {
+            const school = window.SoftSchoolAdmin.getCurrentSchool();
+            if (school && school.name) {
+                return { name: school.name, logo: school.logo || "" };
+            }
+        }
+    } catch (e) { /* ignore and fall through to default */ }
+    const domName = document.querySelector(".school-name, .slc-l-school-name, .char-school-name");
+    return { name: (domName && domName.textContent.trim()) || "ST. LAWRENCE INTERNATIONAL SCHOOL", logo: "" };
+}
+
+/* Builds the report card header (logo/name + subtitle) used across every
+   report type, so the school actually set in Super Admin always appears
+   instead of a hardcoded name/brand. */
+function _reportBrandHeadHtml(subtitle) {
+    const esc = _reportEscapeHtml;
+    const info = _reportSchoolInfo();
+    const iconHtml = info.logo
+        ? `<img src="${esc(info.logo)}" alt="School Logo" style="width:100%;height:100%;object-fit:cover;border-radius:10px;display:block;">`
+        : `<i class="fas fa-graduation-cap"></i>`;
+    return `
+                <div class="report-card__brand">
+                    <div class="report-card__brand-icon">${iconHtml}</div>
+                    <div>
+                        <div class="report-card__brand-name">${esc(info.name)}</div>
+                        <div class="report-card__brand-sub">${esc(subtitle)}</div>
+                    </div>
+                </div>`;
+}
+
+/* Footer line — "Generated <date> · <School Name>" using the same source
+   of truth as the header, instead of a hardcoded brand/school string. */
+function _reportFooterHtml(dateStr) {
+    const esc = _reportEscapeHtml;
+    const info = _reportSchoolInfo();
+    return `Generated ${esc(dateStr)} · ${esc(info.name)}`;
+}
+
 /* Open the report card in a new window for reliable, full-page printing.
    Solves the "only top of report prints" bug caused by the modal's
    fixed positioning + max-height + overflow:hidden clipping. */
@@ -1693,58 +1745,72 @@ function _printReportNode(node, title) {
             *{box-sizing:border-box;margin:0;padding:0;}
             html,body{background:#fff;color:#0f172a;font-family:'Inter',Arial,sans-serif;}
             body{padding:28px;}
-            #print-wrap{max-width:820px;margin:0 auto;background:linear-gradient(180deg,#ffffff 0%,#f8fafc 100%);
+            #print-wrap{max-width:820px;margin:0 auto;background:#ffffff;
                 border:1px solid #e2e8f0;border-radius:14px;padding:28px 30px;
                 box-shadow:0 4px 12px rgba(2,6,23,0.06);}
-            .report-card__head{display:flex;justify-content:space-between;align-items:flex-start;
-                padding-bottom:14px;margin-bottom:18px;border-bottom:2px solid #6366f1;}
+            .report-card__head{display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:16px;
+                padding-bottom:20px;margin-bottom:20px;border-bottom:1px solid #eef0f4;}
             .report-card__brand{display:flex;align-items:center;gap:12px;}
-            .report-card__brand-icon{width:42px;height:42px;border-radius:10px;
-                background:linear-gradient(135deg,#6366f1,#4f46e5);color:#fff;
-                display:grid;place-items:center;font-size:1.1rem;}
-            .report-card__brand-name{font-weight:800;font-size:1.15rem;}
-            .report-card__brand-sub{font-size:0.75rem;color:#64748b;letter-spacing:0.04em;}
-            .report-card__period{text-align:right;}
-            .report-card__period-label{font-size:0.7rem;color:#64748b;text-transform:uppercase;letter-spacing:0.06em;}
-            .report-card__period-value{font-weight:700;font-size:1rem;}
-            .report-meta{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:18px;}
-            .report-meta__item{background:#f1f5f9;border:1px solid #e2e8f0;border-radius:10px;padding:10px 12px;}
+            .report-card__brand-icon{width:40px;height:40px;border-radius:10px;
+                background:rgba(99,102,241,0.1);color:#6366f1;overflow:hidden;flex-shrink:0;
+                display:grid;place-items:center;font-size:1rem;}
+            .report-card__brand-name{font-weight:700;font-size:1.02rem;letter-spacing:-0.01em;}
+            .report-card__brand-sub{font-size:0.75rem;color:#64748b;letter-spacing:0.02em;margin-top:1px;}
+            .report-card__period{text-align:right;background:#f8fafc;border:1px solid #eef0f4;border-radius:10px;padding:8px 14px;}
+            .report-card__period-label{font-size:0.64rem;color:#6366f1;font-weight:700;text-transform:uppercase;letter-spacing:0.07em;}
+            .report-card__period-value{font-weight:700;font-size:0.92rem;margin-top:2px;}
+            .report-meta{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:24px;}
+            .report-meta__item{background:#f8fafc;border:1px solid #eef0f4;border-radius:10px;padding:12px 14px;}
             .report-meta__item--full{grid-column:1/-1;}
-            .report-meta__label{font-size:0.7rem;color:#64748b;text-transform:uppercase;letter-spacing:0.05em;}
-            .report-meta__value{font-weight:700;font-size:1rem;margin-top:2px;}
-            h4{margin:0 0 10px;font-size:1rem;color:#1e293b;}
-            .report-stats{display:grid;gap:10px;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));margin-bottom:18px;}
-            .report-stat{padding:14px;border-radius:12px;color:#fff;display:flex;flex-direction:column;gap:4px;
-                background:linear-gradient(135deg,#64748b,#475569);}
-            .report-stat--present{background:linear-gradient(135deg,#10b981,#059669);}
-            .report-stat--absent{background:linear-gradient(135deg,#ef4444,#dc2626);}
-            .report-stat--leave{background:linear-gradient(135deg,#f59e0b,#d97706);}
-            .report-stat--pct{background:linear-gradient(135deg,#6366f1,#4f46e5);}
-            .report-stat__label{font-size:0.72rem;opacity:0.9;text-transform:uppercase;letter-spacing:0.05em;}
-            .report-stat__value{font-size:1.5rem;font-weight:800;}
-            .report-section{margin-top:14px;}
+            .report-meta__label{font-size:0.66rem;color:#64748b;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;}
+            .report-meta__value{font-weight:700;font-size:0.98rem;margin-top:3px;}
+            h4{margin:0 0 12px;font-size:0.86rem;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.05em;}
+            .report-stats{display:grid;gap:10px;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));margin-bottom:24px;}
+            .report-stat{position:relative;display:block;min-height:62px;
+                padding:11px 14px 11px 58px;border-radius:12px;background:var(--rs-bg,#f8fafc);border:1px solid var(--rs-border,#eef0f4);}
+            .report-stat::before{position:absolute;left:14px;top:50%;transform:translateY(-50%);width:38px;height:38px;border-radius:9px;display:flex;align-items:center;justify-content:center;
+                font-family:"Font Awesome 6 Free";font-weight:900;font-size:14px;background:var(--rs-icon-bg,rgba(100,116,139,0.12));color:var(--rs-accent,#64748b);content:"\f0ce";}
+            .report-stat--present{--rs-accent:#10b981;--rs-icon-bg:rgba(16,185,129,0.12);--rs-bg:rgba(16,185,129,0.05);--rs-border:rgba(16,185,129,0.18);}
+            .report-stat--present::before{content:"\f00c";}
+            .report-stat--absent{--rs-accent:#f43f5e;--rs-icon-bg:rgba(244,63,94,0.12);--rs-bg:rgba(244,63,94,0.05);--rs-border:rgba(244,63,94,0.18);}
+            .report-stat--absent::before{content:"\f00d";}
+            .report-stat--leave{--rs-accent:#f59e0b;--rs-icon-bg:rgba(245,158,11,0.12);--rs-bg:rgba(245,158,11,0.05);--rs-border:rgba(245,158,11,0.18);}
+            .report-stat--leave::before{content:"\f017";}
+            .report-stat--pct{--rs-accent:#6366f1;--rs-icon-bg:rgba(99,102,241,0.12);--rs-bg:rgba(99,102,241,0.05);--rs-border:rgba(99,102,241,0.18);}
+            .report-stat--pct::before{content:"\f295";}
+            .report-stat__label{display:block;font-size:0.66rem;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:#64748b;line-height:1.3;}
+            .report-stat__value{display:block;margin-top:3px;font-size:1.28rem;font-weight:800;color:#0f172a;line-height:1.2;}
+            .report-section{margin-top:20px;}
             .report-reasons-list{list-style:none;display:grid;gap:6px;}
             .report-reasons-list li{display:flex;justify-content:space-between;align-items:center;
-                padding:8px 12px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;font-size:0.88rem;}
-            .report-reasons-list .rank{display:inline-grid;place-items:center;width:22px;height:22px;border-radius:50%;
-                background:#6366f1;color:#fff;font-size:0.72rem;font-weight:700;margin-right:10px;}
-            .report-reasons-list .count{background:#e0e7ff;color:#4338ca;font-weight:700;padding:2px 10px;border-radius:999px;font-size:0.78rem;}
-            .report-empty-reasons{padding:10px 12px;background:#f8fafc;border:1px dashed #cbd5e1;border-radius:8px;color:#64748b;font-size:0.85rem;text-align:center;}
-            .report-rating{margin-top:16px;padding:12px 16px;border-radius:10px;text-align:center;font-size:0.95rem;
-                border:1px solid #e2e8f0;background:#f8fafc;}
+                padding:10px 12px;background:#f8fafc;border:1px solid #eef0f4;border-radius:10px;font-size:0.86rem;}
+            .report-reasons-list .rank{display:inline-grid;place-items:center;width:20px;height:20px;border-radius:50%;
+                background:rgba(99,102,241,0.12);color:#4f46e5;font-size:0.68rem;font-weight:700;margin-right:10px;}
+            .report-reasons-list .count{background:#eef2ff;color:#4338ca;font-weight:700;padding:3px 10px;border-radius:999px;font-size:0.76rem;}
+            .report-empty-reasons{padding:14px 12px;background:#f8fafc;border:1px dashed #cbd5e1;border-radius:10px;color:#64748b;font-size:0.85rem;text-align:center;}
+            .report-rating{margin-top:4px;padding:14px 16px;border-radius:12px;text-align:center;font-size:0.95rem;
+                border:1px solid #eef0f4;background:#f8fafc;}
             .report-rating strong{font-size:1.05rem;}
-            .report-rating--excellent{background:#dcfce7;border-color:#86efac;color:#14532d;}
-            .report-rating--good{background:#e0f2fe;border-color:#7dd3fc;color:#0c4a6e;}
-            .report-rating--average,.report-rating--moderate{background:#fef3c7;border-color:#fcd34d;color:#78350f;}
-            .report-rating--poor,.report-rating--bad{background:#fee2e2;border-color:#fca5a5;color:#7f1d1d;}
-            .report-paragraph{margin-top:14px;padding:14px 16px;border-radius:10px;border-left:4px solid #6366f1;
-                background:#f8fafc;color:#1e293b;font-size:0.9rem;line-height:1.55;}
-            .report-signature{display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-top:32px;padding-top:18px;border-top:1px dashed #cbd5e1;}
+            .report-rating--excellent{background:rgba(16,185,129,0.08);border-color:rgba(16,185,129,0.3);color:#065f46;}
+            .report-rating--good{background:rgba(59,130,246,0.08);border-color:rgba(59,130,246,0.3);color:#1e40af;}
+            .report-rating--average,.report-rating--moderate{background:rgba(245,158,11,0.1);border-color:rgba(245,158,11,0.32);color:#92400e;}
+            .report-rating--poor,.report-rating--bad{background:rgba(244,63,94,0.08);border-color:rgba(244,63,94,0.3);color:#9f1239;}
+            .report-paragraph{margin-top:16px;padding:16px 18px;border-radius:12px;border-left:3px solid #6366f1;
+                background:#f8fafc;color:#334155;font-size:0.88rem;line-height:1.6;}
+            .report-signature{display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-top:34px;padding-top:20px;border-top:1px dashed #cbd5e1;}
             .report-signature__block{font-size:0.8rem;color:#475569;}
-            .report-signature__line{height:1px;background:#0f172a;margin:36px 0 6px;}
-            .report-footer{margin-top:22px;padding-top:12px;border-top:1px solid #e2e8f0;font-size:0.72rem;color:#64748b;text-align:center;}
-            @page{margin:14mm;}
-            @media print{button{display:none;}}
+            .report-signature__line{height:1px;background:#cbd5e1;margin:38px 0 8px;}
+            .report-footer{margin-top:20px;padding-top:14px;border-top:1px solid #eef0f4;font-size:0.7rem;color:#94a3b8;text-align:center;}
+            * { -webkit-print-color-adjust:exact; print-color-adjust:exact; color-adjust:exact; }
+            @page{ size:A4; margin:14mm; }
+            @media print{
+                button{display:none;}
+                html,body{width:100%;height:auto;}
+                body{padding:0;}
+                #print-wrap{max-width:none;width:100%;margin:0;border:none;border-radius:0;
+                    padding:0;box-shadow:none;}
+                .report-card__head,.report-meta,.report-stats,.report-signature{break-inside:avoid;page-break-inside:avoid;}
+            }
         </style></head><body>
         <div id="print-wrap">${html}</div>
         <script>window.onload=function(){setTimeout(function(){window.print();},300);};<\/script>
@@ -1949,14 +2015,7 @@ function _performanceParagraph(ratingCls, pct, scopeName) {
         const paragraph = _performanceParagraph(d.rating.cls, d.attendancePct, d.periodLabel);
 
         return `
-            <div class="report-card__head">
-                <div class="report-card__brand">
-                    <div class="report-card__brand-icon"><i class="fas fa-graduation-cap"></i></div>
-                    <div>
-                        <div class="report-card__brand-name">EduFlow Pro</div>
-                        <div class="report-card__brand-sub">ST. LAWRENCE INTERNATIONAL SCHOOL · Student Attendance Report</div>
-                    </div>
-                </div>
+            <div class="report-card__head">${_reportBrandHeadHtml("Student Attendance Report")}
                 <div class="report-card__period">
                     <div class="report-card__period-label">Period</div>
                     <div class="report-card__period-value">${esc(d.periodLabel)}</div>
@@ -2037,7 +2096,7 @@ function _performanceParagraph(ratingCls, pct, scopeName) {
             </div>
 
             <div class="report-footer">
-                Generated ${esc(dateStr)} · EduFlow Pro · ST. LAWRENCE INTERNATIONAL SCHOOL
+                ${_reportFooterHtml(dateStr)}
             </div>
         `;
     }
@@ -2217,14 +2276,7 @@ function _performanceParagraph(ratingCls, pct, scopeName) {
         const paragraph = _performanceParagraph(d.rating.cls, d.attendancePct, d.periodLabel);
 
         return `
-            <div class="report-card__head">
-                <div class="report-card__brand">
-                    <div class="report-card__brand-icon"><i class="fas fa-graduation-cap"></i></div>
-                    <div>
-                        <div class="report-card__brand-name">EduFlow Pro</div>
-                        <div class="report-card__brand-sub">ST. LAWRENCE INTERNATIONAL SCHOOL · Class Attendance Report</div>
-                    </div>
-                </div>
+            <div class="report-card__head">${_reportBrandHeadHtml("Class Attendance Report")}
                 <div class="report-card__period">
                     <div class="report-card__period-label">${d.scope === "week" ? "Week" : d.scope === "month" ? "Month" : "Year"}</div>
                     <div class="report-card__period-value">${esc(d.periodLabel)}</div>
@@ -2297,7 +2349,7 @@ function _performanceParagraph(ratingCls, pct, scopeName) {
             </div>
 
             <div class="report-footer">
-                Generated ${esc(dateStr)} · EduFlow Pro · ST. LAWRENCE INTERNATIONAL SCHOOL
+                ${_reportFooterHtml(dateStr)}
             </div>
         `;
     }
@@ -2561,10 +2613,12 @@ document.addEventListener("DOMContentLoaded", () => {
                     .mark-L{color:#a16207;font-weight:700;} .mark-empty{color:#94a3b8;}
                     .id-badge{font-family:monospace;background:#f1f5f9;padding:1px 4px;border-radius:3px;font-size:10px;}
                     .day-weekend{background:#f8fafc;}
-                    @media print { button{display:none;} @page{size:landscape;margin:10mm;} }
+                    * { -webkit-print-color-adjust:exact; print-color-adjust:exact; color-adjust:exact; }
+                    @page{ size:A4 landscape; margin:10mm; }
+                    @media print { button{display:none;} }
                 </style></head><body>
                 <h1>${title}</h1>
-                <div class="sub">St. Lawrence International School &middot; ${dateStr}</div>
+                <div class="sub">${_reportEscapeHtml(_reportSchoolInfo().name)} &middot; ${dateStr}</div>
                 ${tableHtml}
                 <script>window.onload=()=>setTimeout(()=>window.print(),300);<\/script>
                 </body></html>`);
@@ -2815,14 +2869,7 @@ document.addEventListener("DOMContentLoaded", () => {
             : `<div class="report-empty-reasons">No leave reasons recorded in this period.</div>`;
         const paragraph = _performanceParagraph(d.rating.cls, d.attendancePct, d.periodLabel);
         return `
-            <div class="report-card__head">
-                <div class="report-card__brand">
-                    <div class="report-card__brand-icon"><i class="fas fa-graduation-cap"></i></div>
-                    <div>
-                        <div class="report-card__brand-name">EduFlow Pro</div>
-                        <div class="report-card__brand-sub">ST. LAWRENCE INTERNATIONAL SCHOOL · Staff Attendance Report</div>
-                    </div>
-                </div>
+            <div class="report-card__head">${_reportBrandHeadHtml("Staff Attendance Report")}
                 <div class="report-card__period">
                     <div class="report-card__period-label">${d.scope === "week" ? "Week" : d.scope === "month" ? "Month" : "Year"}</div>
                     <div class="report-card__period-value">${esc(d.periodLabel)}</div>
@@ -2847,7 +2894,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 <div class="report-signature__block"><div class="report-signature__line"></div>HR / Administrator</div>
                 <div class="report-signature__block"><div class="report-signature__line"></div>Principal</div>
             </div>
-            <div class="report-footer">Generated ${esc(dateStr)} · EduFlow Pro · ST. LAWRENCE INTERNATIONAL SCHOOL</div>
+            <div class="report-footer">${_reportFooterHtml(dateStr)}</div>
         `;
     }
 })();
@@ -2939,14 +2986,7 @@ document.addEventListener("DOMContentLoaded", () => {
             : `<div class="report-empty-reasons">No leave reasons recorded in this period.</div>`;
         const paragraph = _performanceParagraph(d.rating.cls, d.attendancePct, d.periodLabel);
         return `
-            <div class="report-card__head">
-                <div class="report-card__brand">
-                    <div class="report-card__brand-icon"><i class="fas fa-graduation-cap"></i></div>
-                    <div>
-                        <div class="report-card__brand-name">EduFlow Pro</div>
-                        <div class="report-card__brand-sub">ST. LAWRENCE INTERNATIONAL SCHOOL · Staff Attendance Report</div>
-                    </div>
-                </div>
+            <div class="report-card__head">${_reportBrandHeadHtml("Staff Attendance Report")}
                 <div class="report-card__period">
                     <div class="report-card__period-label">Period</div>
                     <div class="report-card__period-value">${esc(d.periodLabel)}</div>
@@ -2973,7 +3013,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 <div class="report-signature__block"><div class="report-signature__line"></div>HR / Administrator</div>
                 <div class="report-signature__block"><div class="report-signature__line"></div>Principal</div>
             </div>
-            <div class="report-footer">Generated ${esc(dateStr)} · EduFlow Pro · ST. LAWRENCE INTERNATIONAL SCHOOL</div>
+            <div class="report-footer">${_reportFooterHtml(dateStr)}</div>
         `;
     }
 })();
