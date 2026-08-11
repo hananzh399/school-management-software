@@ -49,15 +49,47 @@ document.addEventListener('DOMContentLoaded', () => {
 
 const API_BASE = "http://localhost:8080/api/finance";
 
+// ---------------------------------------------------------------------------
+// SCHOOL SCOPING — every finance record (student fee ledgers, fines, salary
+// payments, salary advances) now belongs to a schoolId on the backend (see
+// FinanceController), the same way manage-staff.js scopes every staff
+// record. getCurrentSchoolId() mirrors that file's helper exactly, reading
+// the real logged-in school from access-control.js.
+// ---------------------------------------------------------------------------
+function getCurrentSchoolId() {
+    if (window.SoftSchoolAdmin && typeof window.SoftSchoolAdmin.getCurrentSchool === 'function') {
+        const school = window.SoftSchoolAdmin.getCurrentSchool();
+        return (school && school.schoolId) ? school.schoolId : '';
+    }
+    return '';
+}
+
+// Both apiCall() and apiRequest() stamp every request with the current
+// school's ID here, in ONE place, so every finance endpoint call
+// automatically stays scoped to the logged-in school without every call
+// site having to remember to add it:
+//   - GET/DELETE (no body): appended as a `schoolId` query param
+//   - POST/PUT/etc (has/gets a body): merged into the JSON body
+function _withSchoolScope(endpoint, method, body) {
+    const schoolId = getCurrentSchoolId();
+    if (method === 'GET' || method === 'DELETE') {
+        const sep = endpoint.includes('?') ? '&' : '?';
+        return { url: `${API_BASE}${endpoint}${sep}schoolId=${encodeURIComponent(schoolId)}`, payload: null };
+    }
+    const payload = Object.assign({}, body || {}, { schoolId });
+    return { url: `${API_BASE}${endpoint}`, payload };
+}
+
 async function apiCall(endpoint, method = "GET", body = null) {
+    const { url, payload } = _withSchoolScope(endpoint, method, body);
     const config = {
         method,
         headers: { "Content-Type": "application/json" }
     };
-    if (body) config.body = JSON.stringify(body);
+    if (payload) config.body = JSON.stringify(payload);
 
-    const res = await fetch(`${API_BASE}${endpoint}`, config);
-    
+    const res = await fetch(url, config);
+
     if (!res.ok) {
         const err = await res.text();
         throw new Error(err || "Server Error");
@@ -69,14 +101,15 @@ async function apiCall(endpoint, method = "GET", body = null) {
 }
 
 async function apiRequest(endpoint, method = "GET", body = null) {
+    const { url, payload } = _withSchoolScope(endpoint, method, body);
     const config = {
         method,
         headers: { "Content-Type": "application/json" }
     };
-    if (body) config.body = JSON.stringify(body);
+    if (payload) config.body = JSON.stringify(payload);
 
     try {
-        const res = await fetch(`${API_BASE}${endpoint}`, config);
+        const res = await fetch(url, config);
         
         if (!res.ok) {
             const errorText = await res.text();
