@@ -48,7 +48,44 @@ document.addEventListener('DOMContentLoaded', async () => {
     await loadReportsDataFromBackend();
     
     renderReports();
+
+    initLiveRefresh();
 });
+
+/* ============================================
+   LIVE REFRESH
+   Keeps every figure on this page (stat cards, charts, transactions,
+   quick links) accurate without a manual reload: re-pulls the backend
+   on an interval, and immediately whenever the tab/window regains focus
+   (e.g. coming back from Fees & Finance after recording a payment). A
+   simple in-flight guard stops overlapping refreshes from stacking up if
+   the network is slow.
+   ============================================ */
+const REPORTS_REFRESH_INTERVAL_MS = 30000; // 30s
+let _reportsRefreshInFlight = false;
+
+async function refreshReportsData() {
+    if (_reportsRefreshInFlight) return;
+    _reportsRefreshInFlight = true;
+    try {
+        await loadReportsDataFromBackend();
+        renderReports();
+    } catch (err) {
+        console.error('[Reports] Live refresh failed:', err);
+    } finally {
+        _reportsRefreshInFlight = false;
+    }
+}
+
+function initLiveRefresh() {
+    setInterval(refreshReportsData, REPORTS_REFRESH_INTERVAL_MS);
+
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') refreshReportsData();
+    });
+
+    window.addEventListener('focus', refreshReportsData);
+}
 
 /* ============================================
    THEME TOGGLE
@@ -469,6 +506,27 @@ function getAllStaffFines() {
     })).filter(f => !isNaN(f.date));
 }
 
+/**
+ * Actual, applied salary payments — one event per salary record that was
+ * really paid (i.e. exists in /api/finance/salary/records), dated to when
+ * it was paid. This replaces the old "monthly payroll ÷ 30 × days in
+ * bucket" estimate: that proration counted a full month of salary as an
+ * expense in every period even when nothing had actually been paid yet,
+ * and double-counted once real payments started coming in. Using the
+ * dated records means the period charts only ever show expense that was
+ * genuinely applied, exactly like bonuses and operational expenses already do.
+ */
+function getAllSalaryEvents() {
+    return (_reportsDataCache.salaryRecords || []).map(row => ({
+        date: _reportsDate(
+            row.date || row.paymentDate || row.payDate || row.paidAt || row.generatedAt || row.createdAt,
+            row.monthKey || row.month || _reportsMonthKey()
+        ),
+        amount: _reportsNumber(row.netPaid || row.baseSalary || row.amount),
+        label: row.staffName ? `Salary paid · ${row.staffName}` : 'Staff salary'
+    })).filter(e => !isNaN(e.date));
+}
+
 /* ============================================
    ATTENDANCE READER (per calendar date)
    ============================================ */
@@ -509,16 +567,30 @@ function getBuckets(period, monthValue) {
         }
         const monthStart = new Date(year, month, 1);
         const monthEnd = new Date(year, month + 1, 0, 23, 59, 59, 999);
-        let weekIdx = 1;
-        for (let d = new Date(monthStart); d <= monthEnd; d.setDate(d.getDate() + 7)) {
-            const bStart = new Date(d);
-            let bEnd = new Date(d); bEnd.setDate(bEnd.getDate() + 6);
+
+        // Always exactly 4 week buckets, whatever the month length. A plain
+        // "every 7 days" walk produces a stray 5th bucket for any month
+        // longer than 28 days (i.e. every month except a non-leap February),
+        // since 29-31 days doesn't divide evenly into 7-day chunks. Instead,
+        // the first 3 buckets are a clean 7 days each, and the 4th bucket
+        // absorbs whatever remains of the month (7-10 days) so the whole
+        // month is still fully covered by exactly 4 weeks.
+        const WEEKS_PER_MONTH = 4;
+        for (let weekIdx = 1; weekIdx <= WEEKS_PER_MONTH; weekIdx++) {
+            const bStart = new Date(monthStart);
+            bStart.setDate(bStart.getDate() + (weekIdx - 1) * 7);
+            let bEnd;
+            if (weekIdx < WEEKS_PER_MONTH) {
+                bEnd = new Date(bStart);
+                bEnd.setDate(bEnd.getDate() + 6);
+            } else {
+                bEnd = new Date(monthEnd); // last bucket takes the remainder of the month
+            }
             if (bEnd > monthEnd) bEnd = new Date(monthEnd);
             const bEndOfDay = new Date(bEnd); bEndOfDay.setHours(23, 59, 59, 999);
             const days = [];
             for (let day = new Date(bStart); day <= bEnd; day.setDate(day.getDate() + 1)) days.push(new Date(day));
             buckets.push({ label: `Week ${weekIdx}`, start: bStart, end: bEndOfDay, days });
-            weekIdx++;
         }
     }
     return buckets;
@@ -642,6 +714,7 @@ function renderReports() {
     const staffBonus = getAllStaffBonus();
     const studentFines = getAllStudentFines();
     const staffFines = getAllStaffFines();
+    const salaryEvents = getAllSalaryEvents();
 
     // ---------- Staff payroll (loaded from the Staff API) ----------
     const staff = Array.isArray(_reportsDataCache.staff) ? _reportsDataCache.staff : [];
@@ -659,9 +732,13 @@ function renderReports() {
     const totalSalaries = salaryRows.length
         ? salaryRows.reduce((total, row) => total + _reportsNumber(row.netPaid || row.baseSalary || row.amount), 0)
         : staff.reduce((total, member) => total + _reportsNumber(member.salary), 0);
-    const dailySalaryRate = totalSalaries / 30; // monthly payroll prorated to a daily rate
 
-    // ---------- Per-bucket revenue / expense series (salary-aware) ----------
+    // ---------- Per-bucket revenue / expense series ----------
+    // Expenses only count what was actually applied/paid in each bucket's
+    // date range (salary records, bonuses, operational expenses) — no
+    // estimating or prorating. totalSalaries above (whole payroll figure)
+    // is still used for the Expense Breakdown donut and Payroll Snapshot,
+    // which are explicitly labeled as whole-of-record, not period totals.
     const revenueSeries = buckets.map(b =>
         sumInRange(feePayments, b.start, b.end) +
         sumInRange(studentFines, b.start, b.end) +
@@ -670,7 +747,7 @@ function renderReports() {
     const expenseSeries = buckets.map(b =>
         sumInRange(otherExpenses, b.start, b.end) +
         sumInRange(staffBonus, b.start, b.end) +
-        dailySalaryRate * b.days.length
+        sumInRange(salaryEvents, b.start, b.end)
     );
 
     const periodRevenue = revenueSeries.reduce((a, b) => a + b, 0);
@@ -682,11 +759,10 @@ function renderReports() {
         sumInRange(feePayments, prevRange.start, prevRange.end) +
         sumInRange(studentFines, prevRange.start, prevRange.end) +
         sumInRange(staffFines, prevRange.start, prevRange.end);
-    const prevDays = countDaysInRange(prevRange.start, prevRange.end);
     const prevExpense =
         sumInRange(otherExpenses, prevRange.start, prevRange.end) +
         sumInRange(staffBonus, prevRange.start, prevRange.end) +
-        dailySalaryRate * prevDays;
+        sumInRange(salaryEvents, prevRange.start, prevRange.end);
     const prevNetFlow = prevRevenue - prevExpense;
 
     setText('rp-total-revenue', 'RS ' + Math.round(periodRevenue).toLocaleString());
@@ -761,21 +837,17 @@ function renderReports() {
     const totalOtherAll = otherExpenses.reduce((s, e) => s + e.amount, 0);
 
     // ---------- Fee collection status (active students from the Student API) ----------
+    // Labeled "All-Time" in the UI, so it needs to sum each student's full
+    // payment history — not just one month's status snapshot. It now uses
+    // the exact same per-student calculation as "Top Pending Fees" below,
+    // so the two cards can never disagree with each other.
     const students = Array.isArray(_reportsDataCache.students)
         ? _reportsDataCache.students
         : [];
-    const currentStatusMonth = currentMonthValue || _reportsMonthKey();
-    const currentStatus = _reportsDataCache.feeStatus.filter(row =>
-        row.monthKey === currentStatusMonth
-    );
-    const statusByStudent = new Map(currentStatus
-        .filter(row => row && row.regNo)
-        .map(row => [String(row.regNo), row]));
     let expected = 0, collected = 0;
     students.forEach(s => {
         expected += (Number(s.standardFee) || 0) + (Number(s.transportFee) || 0);
-        const status = statusByStudent.get(String(s.regNo || s.id || ''));
-        collected += _reportsNumber(status && status.paidAmount);
+        collected += (s.feePayments || []).reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
     });
     const pending = Math.max(0, expected - collected);
 
@@ -826,7 +898,7 @@ function renderReports() {
     renderQuickLinks(students);
 
     // ---------- Transactions table ----------
-    renderTransactions(feePayments, otherExpenses, staffBonus, studentFines, staffFines, periodStart, periodEnd);
+    renderTransactions(feePayments, otherExpenses, staffBonus, studentFines, staffFines, salaryEvents, periodStart, periodEnd);
 }
 
 /* ============================================
@@ -1266,7 +1338,7 @@ function renderQuickLinks(students) {
 /* ============================================
    RECENT TRANSACTIONS TABLE
    ============================================ */
-function renderTransactions(feePayments, otherExpenses, staffBonus, studentFines, staffFines, periodStart, periodEnd) {
+function renderTransactions(feePayments, otherExpenses, staffBonus, studentFines, staffFines, salaryEvents, periodStart, periodEnd) {
     const rows = [];
 
     feePayments.forEach(e => rows.push({ date: e.date, type: 'fee', typeLabel: 'Fee Payment', desc: e.label, amount: e.amount, direction: 'in' }));
@@ -1274,6 +1346,7 @@ function renderTransactions(feePayments, otherExpenses, staffBonus, studentFines
     staffFines.forEach(e => rows.push({ date: e.date, type: 'fine-in', typeLabel: 'Fine Collected', desc: e.label, amount: e.amount, direction: 'in' }));
     otherExpenses.forEach(e => rows.push({ date: e.date, type: 'expense', typeLabel: 'Expense', desc: e.label, amount: e.amount, direction: 'out' }));
     staffBonus.forEach(e => rows.push({ date: e.date, type: 'bonus', typeLabel: 'Bonus Paid', desc: e.label, amount: e.amount, direction: 'out' }));
+    salaryEvents.forEach(e => rows.push({ date: e.date, type: 'salary', typeLabel: 'Salary Paid', desc: e.label, amount: e.amount, direction: 'out' }));
 
     let inPeriod = rows.filter(r => r.date >= periodStart && r.date <= periodEnd);
     if (currentTxnFilter !== 'all') {

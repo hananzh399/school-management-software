@@ -194,7 +194,7 @@
                         <canvas id="chart-revenue-expense"></canvas>
                     </div>
                     <p class="chart-empty-note" id="chart-revenue-expense-empty" style="display:none;">No financial activity recorded for this period yet.</p>
-                    <p class="chart-foot-note">Expenses include prorated staff salaries, bonuses &amp; recorded operational costs for the selected period.</p>
+                    <p class="chart-foot-note">Expenses include salary, bonus &amp; operational costs actually recorded/paid within the selected period — nothing is estimated or prorated.</p>
                 </div>
             </div>
 
@@ -311,6 +311,7 @@
                         <option value="fine-in">Fines Collected</option>
                         <option value="expense">Expenses</option>
                         <option value="bonus">Bonuses</option>
+                        <option value="salary">Salary Payments</option>
                     </select>
                     <button id="txn-export-btn" class="txn-export-btn" type="button" title="Export visible transactions as CSV">
                         <i class="fas fa-file-arrow-down"></i> Export CSV
