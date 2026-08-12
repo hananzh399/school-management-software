@@ -17,15 +17,15 @@ function initTheme() {
     const toggleBtn = document.getElementById('theme-toggle');
     const root = document.documentElement;
     
-    const savedTheme = localStorage.getItem('eduflow-theme') || 'dark';
-    root.setAttribute('data-theme', savedTheme);
+    // Dashboard data is never persisted in browser storage. Theme is kept
+    // in memory for this page only.
+    root.setAttribute('data-theme', 'dark');
 
-    toggleBtn.addEventListener('click', () => {
+    if (toggleBtn) toggleBtn.addEventListener('click', () => {
         const currentTheme = root.getAttribute('data-theme');
         const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
         
         root.setAttribute('data-theme', newTheme);
-        localStorage.setItem('eduflow-theme', newTheme);
     });
 }
 
@@ -157,7 +157,6 @@ async function loadDashboardFromBackend() {
     loadAttendanceData(data.realStudentCount || 0, totalStaff, data.todayAttendance);
 }
 
-   
 
 function loadAttendanceData(totalStudents, totalStaff, attendanceData) {
     const presentStudents = attendanceData ? attendanceData.presentStudents : 0;
@@ -243,6 +242,10 @@ function animateCounter(elementId, target) {
     }, stepTime);
 }/* ============================================
    FINANCIAL CALCULATIONS
+   ---------------------------------------------------------------------------
+   This page is read-only. It reads the same backend records used by Student
+   Management and Finance instead of depending on a separate dashboard
+   endpoint or browser storage.
    ============================================ */
 
 function _getSchoolId() {
@@ -253,33 +256,268 @@ function _getSchoolId() {
     return '';
 }
 
-async function calculateFinancials() {
-    try {
-        const schoolId = _getSchoolId();
-        const url = `http://localhost:8080/api/dashboard?schoolId=${encodeURIComponent(schoolId)}`;
-        const res = await fetch(url, { headers: { "Content-Type": "application/json" }});
-        if (res.ok) {
-            return await res.json();
-        } else {
-            console.error('Failed to fetch dashboard data:', await res.text());
-        }
-    } catch (e) {
-        console.error('Network error fetching dashboard data:', e);
+const DASHBOARD_BACKEND_ORIGIN = 'http://localhost:8080';
+
+function _dashboardMonthKey(date = new Date()) {
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+}
+
+function _dashboardFeeMonthKey(date = new Date()) {
+    const d = new Date(date);
+    if (d.getDate() >= 27) d.setMonth(d.getMonth() + 1);
+    return _dashboardMonthKey(d);
+}
+
+function _dashboardPreviousMonthKey(monthKey) {
+    const [year, month] = String(monthKey).split('-').map(Number);
+    return _dashboardMonthKey(new Date(year, (month || 1) - 2, 1));
+}
+
+function _dashboardNumber(value) {
+    const number = Number(value);
+    return Number.isFinite(number) ? number : 0;
+}
+
+function _dashboardIsActiveStudent(student) {
+    const status = String((student && student.status) || '').trim().toLowerCase();
+    return !status || status === 'active';
+}
+
+function _dashboardArray(data, keys = []) {
+    if (Array.isArray(data)) return data;
+    if (!data || typeof data !== 'object') return [];
+    for (const key of keys) {
+        if (Array.isArray(data[key])) return data[key];
     }
-    
+    return [];
+}
+
+function _dashboardStaffArray(data) {
+    if (Array.isArray(data)) return data;
+    if (!data || typeof data !== 'object') return [];
+    const result = [];
+    ['staff', 'employees', 'members', 'items', 'content', 'data',
+        'Teaching', 'Non-Teaching', 'teaching', 'nonTeaching'].forEach(key => {
+        if (Array.isArray(data[key])) result.push(...data[key]);
+    });
+    return result;
+}
+
+async function _dashboardGet(path, fallback) {
+    const schoolId = _getSchoolId();
+    const separator = path.includes('?') ? '&' : '?';
+    try {
+        const response = await fetch(
+            `${DASHBOARD_BACKEND_ORIGIN}${path}${separator}schoolId=${encodeURIComponent(schoolId)}`,
+            { headers: { 'Content-Type': 'application/json' } }
+        );
+        if (!response.ok) return fallback;
+        const text = await response.text();
+        return text ? JSON.parse(text) : fallback;
+    } catch (error) {
+        console.warn(`[Dashboard] Could not read ${path}:`, error);
+        return fallback;
+    }
+}
+
+function _dashboardDate(value, fallbackMonthKey) {
+    const parsed = value
+        ? new Date(value)
+        : new Date(`${fallbackMonthKey}-01T00:00:00`);
+    return Number.isNaN(parsed.getTime())
+        ? new Date(`${fallbackMonthKey}-01T00:00:00`)
+        : parsed;
+}
+
+function _dashboardPaidFine(fine) {
+    const status = String(fine && (fine.paymentStatus ?? fine.status) || '').toLowerCase();
+    return status === 'paid' || status === 'settled';
+}
+
+async function _dashboardFineRecords(students, monthKey) {
+    const records = [];
+    await Promise.all(students.map(async student => {
+        const id = student.regNo || student.id;
+        if (!id) return;
+        const data = await _dashboardGet(
+            `/api/finance/fine-details/${encodeURIComponent(id)}/${encodeURIComponent(monthKey)}`,
+            []
+        );
+        if (Array.isArray(data)) {
+            data.forEach(fine => records.push({
+                ...fine,
+                date: _dashboardDate(fine.payDate || fine.paymentDate || fine.createdAt, monthKey)
+            }));
+        }
+    }));
+    return records;
+}
+
+function _dashboardCustomFeesCollected(customFees, monthKey) {
+    return _dashboardArray(customFees).reduce((total, fee) => {
+        if (fee.monthKey && fee.monthKey !== monthKey) return total;
+        const records = Array.isArray(fee.records) ? fee.records : [];
+        return total + records.filter(record => record.paid).length * _dashboardNumber(fee.amount);
+    }, 0);
+}
+
+function _dashboardStaffAmount(items, monthKey) {
+    return _dashboardArray(items).reduce((total, item) => {
+        if (item.monthKey && item.monthKey !== monthKey) return total;
+        return total + _dashboardNumber(item.amount || item.netPaid || item.value);
+    }, 0);
+}
+
+function _dashboardSalaryAmount(salaryRecords, staff, monthKey) {
+    const paidRows = _dashboardArray(salaryRecords)
+        .filter(row => !row.monthKey || row.monthKey === monthKey);
+    if (paidRows.length) {
+        return paidRows.reduce((total, row) =>
+            total + _dashboardNumber(row.netPaid || row.baseSalary || row.amount), 0);
+    }
+    // If payroll has not been posted yet, show the roster's monthly salary
+    // obligation rather than an unexplained zero.
+    return staff.reduce((total, member) => total + _dashboardNumber(member.salary), 0);
+}
+
+async function _dashboardAttendance() {
+    const now = new Date();
+    const dateKey = `${_dashboardMonthKey(now)}-${String(now.getDate()).padStart(2, '0')}`;
+    const data = await _dashboardGet(`/api/attendance?date=${encodeURIComponent(dateKey)}`, null);
+    if (!data) return { presentStudents: 0, presentStaff: 0, hasData: false };
+
+    const record = Array.isArray(data) ? data[0] : (data.record || data.data || data);
+    if (!record || typeof record !== 'object') {
+        return { presentStudents: 0, presentStaff: 0, hasData: false };
+    }
+    const presentStudents = _dashboardNumber(record.presentStudents ?? record.studentsPresent);
+    const presentStaff = _dashboardNumber(
+        record.presentStaff ?? record.staffPresent ?? record.presentTeachers
+    );
+    const hasData = record.hasData !== undefined
+        ? Boolean(record.hasData)
+        : presentStudents > 0 || presentStaff > 0 ||
+          record.totalStudents != null || record.totalStaff != null;
+    return { presentStudents, presentStaff, hasData };
+}
+
+async function _dashboardSnapshot(
+    monthKey, students, staff, statusRows, customFees, staffBonus, staffFines, expenses, salaryRecords
+) {
+    const activeStudents = students.filter(_dashboardIsActiveStudent);
+    const statusByStudent = new Map(_dashboardArray(statusRows)
+        .filter(row => row && row.regNo)
+        .map(row => [String(row.regNo), row]));
+    // BUGFIX — "Expected Fees" didn't match Manage Finance's fine-inclusive
+    // totals and never moved when a fine was added. This used to be a
+    // static `standardFee + transportFee` per student, completely ignoring
+    // the live backend fee record (arrears rolled over from last month,
+    // and any fine applied this month). Manage Finance's "Total with Fine"
+    // is built from each student's live `netPayable` (base fee + arrears +
+    // fine — see FinanceController#calculateNetPayable), so we now mirror
+    // that here: use the student's current-month Finance master row when
+    // one exists (i.e. a fee record has actually been generated for them),
+    // and only fall back to the plain base fee for students who haven't
+    // been billed yet this month.
+    const expected = activeStudents.reduce((total, student) => {
+        const row = statusByStudent.get(String(student.regNo || student.id || ''));
+        if (row && row.netPayable != null) {
+            return total + _dashboardNumber(row.netPayable);
+        }
+        return total + _dashboardNumber(student.standardFee) + _dashboardNumber(student.transportFee);
+    }, 0);
+    const collected = activeStudents.reduce((total, student) => {
+        const row = statusByStudent.get(String(student.regNo || student.id || ''));
+        return total + _dashboardNumber(row && row.paidAmount);
+    }, 0);
+
+    const fineRecords = await _dashboardFineRecords(activeStudents, monthKey);
+    const paidFines = fineRecords.filter(_dashboardPaidFine);
+    const studentLate = paidFines
+        .filter(fine => /late|overdue|delay/i.test(String(fine.reason || '')))
+        .reduce((total, fine) => total + _dashboardNumber(fine.amount), 0);
+    const studentOther = paidFines
+        .filter(fine => !/late|overdue|delay/i.test(String(fine.reason || '')))
+        .reduce((total, fine) => total + _dashboardNumber(fine.amount), 0);
+
+    const staffFineRows = _dashboardArray(staffFines);
+    const staffTotal = staffFineRows
+        .filter(item => !/absence/i.test(String(item.reason || item.label || '')))
+        .reduce((total, item) => total + _dashboardNumber(item.amount), 0);
+    const teacherAbsence = staffFineRows
+        .filter(item => /absence/i.test(String(item.reason || item.label || '')))
+        .reduce((total, item) => total + _dashboardNumber(item.amount), 0);
+    const admissionFees = activeStudents.reduce(
+        (total, student) => total + _dashboardNumber(student.admissionFee), 0
+    );
+
     return {
-        realStudentCount: 0,
-        totalStaff: 0,
-        fees: { expected: 0, collected: 0, pending: 0 },
-        admissionFees: 0,
-        customFeesCollected: 0,
-        fines: { studentLate: 0, studentOther: 0, staffTotal: 0, teacherAbsence: 0 },
-        salaries: { total: 0 },
-        staffBonusTotal: 0,
-        otherExpensesTotal: 0,
-        netExpenses: 0,
-        netProfit: 0,
-        lastMonthProfit: 0,
-        todayAttendance: { presentStudents: 0, presentStaff: 0, hasData: false }
+        realStudentCount: activeStudents.length,
+        fees: { expected, collected, pending: Math.max(0, expected - collected) },
+        fines: { studentLate, studentOther, staffTotal, teacherAbsence },
+        admissionFees,
+        customFeesCollected: _dashboardCustomFeesCollected(customFees, monthKey),
+        salaries: { total: _dashboardSalaryAmount(salaryRecords, staff, monthKey) },
+        staffBonusTotal: _dashboardStaffAmount(staffBonus, monthKey),
+        otherExpensesTotal: _dashboardStaffAmount(expenses, monthKey)
+    };
+}
+
+async function calculateFinancials() {
+    const currentMonth = _dashboardFeeMonthKey();
+    const previousMonth = _dashboardPreviousMonthKey(currentMonth);
+    const [
+        studentsData,
+        staffData,
+        currentStatus,
+        previousStatus,
+        customFees,
+        staffBonus,
+        staffFines,
+        expenses,
+        salaryRecords,
+        attendance
+    ] = await Promise.all([
+        _dashboardGet('/api/students', []),
+        _dashboardGet('/api/staff', []),
+        _dashboardGet(`/api/finance/status-all/${encodeURIComponent(currentMonth)}`, []),
+        _dashboardGet(`/api/finance/status-all/${encodeURIComponent(previousMonth)}`, []),
+        _dashboardGet('/api/finance/custom-fees', []),
+        _dashboardGet('/api/finance/staff-bonus', []),
+        _dashboardGet('/api/finance/staff-fines', []),
+        _dashboardGet('/api/finance/expenses', []),
+        _dashboardGet('/api/finance/salary/records', []),
+        _dashboardAttendance()
+    ]);
+
+    const students = _dashboardArray(studentsData);
+    const staff = _dashboardStaffArray(staffData);
+    const current = await _dashboardSnapshot(
+        currentMonth, students, staff, currentStatus, customFees,
+        staffBonus, staffFines, expenses, salaryRecords
+    );
+    const previous = await _dashboardSnapshot(
+        previousMonth, students, staff, previousStatus, customFees,
+        staffBonus, staffFines, expenses, salaryRecords
+    );
+
+    const revenue = snapshot => snapshot.fees.collected
+        + snapshot.fines.studentLate
+        + snapshot.fines.studentOther
+        + snapshot.fines.staffTotal
+        + snapshot.fines.teacherAbsence
+        + snapshot.admissionFees
+        + snapshot.customFeesCollected;
+    const expensesTotal = snapshot => snapshot.salaries.total
+        + snapshot.staffBonusTotal
+        + snapshot.otherExpensesTotal;
+
+    return {
+        ...current,
+        totalStaff: staff.length,
+        netExpenses: expensesTotal(current),
+        netProfit: revenue(current) - expensesTotal(current),
+        lastMonthProfit: revenue(previous) - expensesTotal(previous),
+        todayAttendance: attendance
     };
 }

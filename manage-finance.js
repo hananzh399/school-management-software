@@ -201,13 +201,493 @@ async function apiRequest(endpoint, method = "GET", body = null) {
 
 let currentDetailedFines = []; // Global cache for current student's fines
 
-document.addEventListener('DOMContentLoaded', () => {
+// FinanceController serializes the Java entity field as `paymentStatus`.
+// Older frontend code read `status`, which is not present in that response,
+// so every settled fine was rendered as Pending after the list was refreshed.
+// Accept both names while the records are in the browser so all fine views
+// use the same source of truth.
+function getFinePaymentStatus(fine) {
+    return String((fine && (fine.paymentStatus ?? fine.status)) || '').trim();
+}
+
+function isFinePaid(fine) {
+    const status = getFinePaymentStatus(fine).toLowerCase();
+    return status === 'paid' || status === 'settled';
+}
+
+function isMonthlyFeePaid(finance) {
+    if (!finance) return false;
+    const remaining = Number(finance.remainingBalance);
+    return String(finance.paymentStatus || '').toLowerCase() === 'paid'
+        || (Number.isFinite(remaining) && remaining <= 0.01);
+}
+
+/* ============================================================================
+   REALTIME BACKEND DATA LAYER
+   ----------------------------------------------------------------------------
+   Every record this page works with (students, class configs, late-fee
+   settings, custom fees, staff bonuses/fines, expenses, salary advances,
+   generated vouchers) now lives on the backend, not in localStorage.
+   localStorage is only used for the dark/light theme toggle (initTheme()).
+
+   Pattern for every entity below:
+     - an in-memory cache (`_xCache`) that the rest of the file reads from
+       synchronously, exactly like it used to read from localStorage
+     - a `refreshXCache()` that pulls the latest from the backend
+     - refreshAllFinanceCaches() runs on load AND on the live-sync interval
+       (see LIVE SYNC below), so pages update on their own — no manual
+       browser refresh needed
+     - saves write to the cache immediately (so the UI feels instant) and
+       fire the request to the backend in the background
+
+   ⚠️ ENDPOINT PATHS: /custom-fees, /staff-bonus, /staff-fines, /expenses,
+   /staff-advances and /vouchers below follow the same convention as this
+   file's existing /add-fine, /all-fines, /salary/pay routes on
+   FinanceController — update ENDPOINTS if your backend differs.
+
+   ⚠️ OWNERSHIP NOTE: class configs and the late-fee settings are edited on
+   the Admin Settings page (settings.js), and the student roster is edited
+   on the Student Management page, and staff records are edited on the
+   Staff Management page — this file only reads them. STUDENTS_API_BASE,
+   SETTINGS_API_BASE, and STAFF_API_BASE below are my best guess at those
+   services' routes; point them at whatever those pages actually persist
+   to, or these will read back empty until that's confirmed.
+
+   localStorage is NEVER used as a source or cache for any of this data —
+   including the staff roster, which used to be read via shared-data.js's
+   localStorage-backed getGlobalData()/db.staff. That read (and the two
+   dead write paths that used to piggyback on it — a legacy fee-collection
+   handler and a superseded salary-payment function, neither of which was
+   ever called from the UI) have been removed below in favor of
+   _staffCache, fetched from the backend exactly like every other entity
+   on this page.
+   ============================================================================ */
+const STUDENTS_API_BASE = "http://localhost:8080/api/students";  // ⚠️ ASSUMED
+const SETTINGS_API_BASE = "http://localhost:8080/api/settings";  // ⚠️ ASSUMED
+const STAFF_API_BASE    = "http://localhost:8080/api/staff";     // ⚠️ ASSUMED — see manage-students.js
+
+const ENDPOINTS = {
+    customFees:    '/custom-fees',
+    staffBonus:    '/staff-bonus',
+    staffFines:    '/staff-fines',
+    expenses:      '/expenses',
+    staffAdvances: '/staff-advances',
+    salaryRecords: '/salary/records',
+    vouchers:      '/vouchers',
+};
+
+async function _backendGet(base, path) {
+    const schoolId = getCurrentSchoolId();
+    const sep = path.includes('?') ? '&' : '?';
+    try {
+        const res = await fetch(`${base}${path}${sep}schoolId=${encodeURIComponent(schoolId)}`);
+        if (!res.ok) return null;
+        const text = await res.text();
+        return text ? JSON.parse(text) : null;
+    } catch (e) {
+        console.warn(`Realtime sync: GET ${base}${path} failed —`, e.message);
+        return null;
+    }
+}
+
+async function _backendSave(base, path, method, body) {
+    const schoolId = getCurrentSchoolId();
+    try {
+        const res = await fetch(`${base}${path}`, {
+            method,
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(Object.assign({}, body, { schoolId }))
+        });
+        if (!res.ok) return null;
+        const text = await res.text();
+        return text ? JSON.parse(text) : null;
+    } catch (e) {
+        console.warn(`Realtime sync: ${method} ${base}${path} failed —`, e.message);
+        return null;
+    }
+}
+
+let _studentsCache = [];
+let _classConfigsCache = [];
+let _latefeeConfigCache = {};
+let _customFeesCache = [];
+let _staffBonusCache = [];
+let _staffFinesCache = [];
+let _expensesCache = [];
+let _staffAdvancesCache = [];
+// Authoritative salary payments from Finance.TYPE_SALARY. Staff records do
+// not own salaryHistory, so paid/pending status must come from this cache.
+let _salaryRecordsCache = [];
+let _generatedVouchersCache = [];
+// BUGFIX — "refresh the page and Collected resets to 0 / Pending goes up
+// by the same amount": updateFeeStatsHeader(), updateClassFeeStats(), and
+// _computeRealtimePendingTotal() used to compute "Collected" by summing
+// student.feePayments — an array that only ever gets written to LOCALLY
+// (by saveSimpleStudentFeePayment) and is never actually persisted as a
+// column on the backend Student record (payments live in the separate
+// Finance table instead, one cumulative `paidAmount` per student+month,
+// written by POST /pay). refreshStudentsCache() re-fetches students fresh
+// from the backend on every page load, and since the backend's Student API
+// has no feePayments field to return, every student's feePayments came
+// back undefined — silently zeroing out "Collected" and, because Pending
+// is computed as feeTotal − paidThisMonth, dumping the exact same amount
+// into "Pending" instead. This cache holds the real, persisted per-student
+// paidAmount/remainingBalance for the current month straight from the
+// Finance ledger (GET /status-all/{monthKey}), so a refresh can never lose
+// it — see getPaidThisMonthAuthoritative() below for how it's used.
+let _studentFeeStatusCache = {}; // regNo -> { paidAmount, remainingBalance, paymentStatus }
+let _studentFeeStatusMonthKey = null;
+// In-memory mirror of the staff roster, keyed the same way the old
+// localStorage-backed db.staff object was: { Teaching: [...], 'Non-Teaching': [...] }.
+// Populated by refreshStaffCache(); read via getStaffCache(category) below.
+// Never persisted to localStorage.
+let _staffCache = { Teaching: [], 'Non-Teaching': [] };
+
+async function refreshStudentsCache() {
+    const data = await _backendGet(STUDENTS_API_BASE, '');
+    if (Array.isArray(data)) _studentsCache = data;
+}
+async function refreshClassConfigsCache() {
+    // Real backend route (SchoolSettingsController): GET /api/settings/{schoolId}
+    // — schoolId is a PATH param there, not a query param like the rest of
+    // this file's _backendGet() helper appends it as, and the response is
+    // the whole SchoolSettings object, not a bare array at /class-configs.
+    // Its classes come back as {className, fee, fund, sections} (see
+    // SchoolSettings.ClassFee) — mapped to {name, fee, fund, sections} here
+    // since the rest of this file (renderClassCardGrid, getAllClassNames)
+    // reads cls.name.
+    const settings = await _fetchSchoolSettings();
+    if (!settings) return;
+    const classes = Array.isArray(settings.classes) ? settings.classes : [];
+    _classConfigsCache = classes.map(c => ({
+        name: c.className,
+        fee: c.fee,
+        fund: c.fund,
+        sections: c.sections,
+    }));
+}
+async function refreshLatefeeConfigCache() {
+    // Same endpoint as refreshClassConfigsCache() above — GET /api/settings/{schoolId}
+    // returns lateFeeEnabled/lateFeeDeadlineDay/lateFeeType/lateFeeAmount/lateFeeGrace,
+    // mapped here to the enabled/deadlineDay/type/amount/grace shape getVoucherSettings() reads.
+    const settings = await _fetchSchoolSettings();
+    if (!settings) return;
+    _latefeeConfigCache = {
+        enabled: settings.lateFeeEnabled,
+        deadlineDay: settings.lateFeeDeadlineDay,
+        type: settings.lateFeeType,
+        amount: settings.lateFeeAmount,
+        grace: settings.lateFeeGrace,
+    };
+}
+async function _fetchSchoolSettings() {
+    const schoolId = getCurrentSchoolId();
+    try {
+        const res = await fetch(`${SETTINGS_API_BASE}/${encodeURIComponent(schoolId)}`);
+        if (!res.ok) return null;
+        return await res.json();
+    } catch (e) {
+        console.warn('Realtime sync: GET school settings failed —', e.message);
+        return null;
+    }
+}
+async function refreshCustomFeesCache() {
+    const data = await _backendGet(API_BASE, ENDPOINTS.customFees);
+    if (Array.isArray(data)) _customFeesCache = data;
+}
+async function refreshStaffBonusCache() {
+    const data = await _backendGet(API_BASE, ENDPOINTS.staffBonus);
+    if (Array.isArray(data)) _staffBonusCache = data;
+}
+async function refreshStaffFinesCache() {
+    const data = await _backendGet(API_BASE, ENDPOINTS.staffFines);
+    if (Array.isArray(data)) _staffFinesCache = data;
+}
+async function refreshExpensesCache() {
+    const data = await _backendGet(API_BASE, ENDPOINTS.expenses);
+    if (Array.isArray(data)) _expensesCache = data;
+}
+async function refreshStaffAdvancesCache() {
+    const data = await _backendGet(API_BASE, ENDPOINTS.staffAdvances);
+    if (Array.isArray(data)) _staffAdvancesCache = data;
+}
+async function refreshSalaryRecordsCache() {
+    const data = await _backendGet(API_BASE, ENDPOINTS.salaryRecords);
+    if (Array.isArray(data)) _salaryRecordsCache = data;
+}
+// BUGFIX — "generate a voucher, switch class, voucher shows Not Generated
+// again": saveGeneratedVouchers() writes the new voucher into
+// _generatedVouchersCache immediately (correct) and fires a background PUT
+// /vouchers to persist it (fire-and-forget, not awaited). Meanwhile the
+// live-sync timer polls GET /vouchers every 10s and used to overwrite
+// _generatedVouchersCache with whatever it got back NO MATTER WHAT. If that
+// GET happened to land before the PUT had finished committing — or, on the
+// backend, in the gap between its delete-old-rows step and its re-insert
+// step, since PUT /vouchers isn't atomic — it could come back with the
+// voucher missing (or even an empty list), and that stale/partial response
+// would silently replace the good local cache. Nothing re-rendered the fee
+// table at that instant (live sync only re-renders a fixed set of other
+// pages), so the corruption was invisible until the next renderFees() call
+// — exactly what switching classes triggers — which is why the voucher
+// appeared to "de-generate" only once you navigated away and back.
+// Fix: track whether a voucher save is currently in flight and skip
+// applying a poll's result while one is — the next poll (10s later, well
+// after the save has landed) will pick up the correct, fully-committed list.
+let _generatedVouchersSaveInFlight = 0;
+
+async function refreshGeneratedVouchersCache() {
+    if (_generatedVouchersSaveInFlight > 0) return; // don't clobber cache mid-save
+    const data = await _backendGet(API_BASE, ENDPOINTS.vouchers);
+    if (Array.isArray(data)) _generatedVouchersCache = data;
+}
+
+async function refreshStudentFeeStatusCache() {
+    const monthKey = getCurrentFeeMonthKey();
+    const data = await _backendGet(API_BASE, `/status-all/${encodeURIComponent(monthKey)}`);
+    if (!Array.isArray(data)) return;
+    const map = {};
+    data.forEach(rec => {
+        if (rec && rec.regNo) map[rec.regNo] = rec;
+    });
+    _studentFeeStatusCache = map;
+    _studentFeeStatusMonthKey = monthKey;
+}
+
+/**
+ * Authoritative "how much has this student paid this month" — prefers the
+ * persisted backend Finance ledger (survives refresh) and only falls back
+ * to the local feePayments array when no backend record exists yet for
+ * this student+month (e.g. a payment just made this instant, before the
+ * next cache refresh has run).
+ */
+function getPaidThisMonthAuthoritative(student, monthKey) {
+    const studentId = student.regNo || student.id;
+    if (_studentFeeStatusMonthKey === monthKey) {
+        const rec = _studentFeeStatusCache[studentId];
+        if (rec) return Number(rec.paidAmount) || 0;
+    }
+    const payments = Array.isArray(student.feePayments) ? student.feePayments : [];
+    return payments
+        .filter(p => p.monthKey === monthKey)
+        .reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
+}
+function staffText(value) {
+    if (Array.isArray(value)) return value.filter(Boolean).map(String).join(', ');
+    return value == null ? '' : String(value);
+}
+
+function monthKeyFromDateValue(value) {
+    if (value == null || value === '') return '';
+    if (typeof value === 'object') {
+        value = value.monthKey || value.date || value.value || '';
+    }
+    const text = String(value).trim();
+    const direct = text.match(/^(\d{4})[-/](\d{1,2})(?:[-/]\d{1,2})?/);
+    if (direct) return `${direct[1]}-${String(Number(direct[2])).padStart(2, '0')}`;
+
+    const parsed = new Date(text);
+    if (Number.isNaN(parsed.getTime())) return '';
+    return `${parsed.getFullYear()}-${String(parsed.getMonth() + 1).padStart(2, '0')}`;
+}
+
+function getStaffJoiningMonthValue(source) {
+    return source.joiningMonthKey ||
+        source.employmentMonthKey ||
+        source.joiningDate ||
+        source.joining_date ||
+        source.dateOfJoining ||
+        source.date_of_joining ||
+        source.joinDate ||
+        source.join_date ||
+        source.employmentStartDate ||
+        source.employment_start_date ||
+        source.hireDate ||
+        source.hire_date ||
+        source.createdAt ||
+        source.created_at ||
+        '';
+}
+
+/**
+ * The Staff API has existed with a few field names over the lifetime of the
+ * app (staffId/id, fullName/name, staffCategory/category, etc.). Keep that
+ * variation at the API boundary so the finance page always works with one
+ * predictable shape.
+ */
+function normalizeStaffCategory(staff, categoryHint) {
+    if (categoryHint) {
+        return /non[\s-]*teach|nonteach/i.test(staffText(categoryHint))
+            ? 'Non-Teaching'
+            : 'Teaching';
+    }
+
+    if (staff && (staff.isTeaching === true || staff.teaching === true)) return 'Teaching';
+    if (staff && (staff.isTeaching === false || staff.teaching === false)) return 'Non-Teaching';
+
+    const raw = staff && (
+        staff.category ||
+        staff.staffCategory ||
+        staff.staffType ||
+        staff.employeeType ||
+        staff.type ||
+        staff.role ||
+        staff.designation
+    );
+    const value = staffText(raw).toLowerCase().replace(/[_-]/g, ' ');
+
+    if (/non\s*teaching|support staff|admin staff|office staff|worker|clerk|driver|security|peon|librarian|accountant/.test(value)) {
+        return 'Non-Teaching';
+    }
+    return 'Teaching';
+}
+
+function normalizeStaffMember(staff, categoryHint) {
+    const source = (staff && typeof staff === 'object') ? staff : {};
+    const firstName = source.firstName || source.first_name || '';
+    const lastName = source.lastName || source.last_name || '';
+    // The backend salary endpoint looks up Staff by `staffId`, not by the
+    // database primary-key `id`. Prefer the business/staff identifier when
+    // both values are present; otherwise the salary request can reach the
+    // server successfully but always return "Staff not found".
+    const staffId = source.staffId ?? source.staff_id ?? source.employeeId
+        ?? source.employee_id ?? source.staffCode ?? source.staff_code ?? source.code;
+    const id = staffId ?? source.id;
+    const name = source.name ?? source.fullName ?? source.full_name ?? source.staffName
+        ?? [firstName, lastName].filter(Boolean).join(' ');
+    const category = normalizeStaffCategory(source, categoryHint);
+
+    return {
+        ...source,
+        id: staffText(id),
+        staffId: staffText(id),
+        name: staffText(name) || 'Unnamed staff member',
+        category,
+        joiningMonthKey: monthKeyFromDateValue(getStaffJoiningMonthValue(source)),
+        subjects: staffText(source.subjects ?? source.subject ?? source.teachingSubject),
+        classes: staffText(source.classes ?? source.className ?? source.assignedClasses),
+        job: staffText(source.job ?? source.jobRole ?? source.designation ?? source.position ?? source.role),
+    };
+}
+
+function extractStaffList(data) {
+    if (Array.isArray(data)) return data.map(s => normalizeStaffMember(s));
+    if (!data || typeof data !== 'object') return [];
+
+    const listKeys = ['staff', 'employees', 'members', 'content', 'items', 'data'];
+    for (const key of listKeys) {
+        if (Array.isArray(data[key])) return data[key].map(s => normalizeStaffMember(s));
+    }
+
+    // Also accept grouped responses with case/spacing differences such as
+    // { teaching: [...], nonTeaching: [...] }.
+    const result = [];
+    Object.entries(data).forEach(([key, value]) => {
+        if (!Array.isArray(value)) return;
+        const isCategoryKey = /teach|faculty|non[\s_-]*teach|support|admin/i.test(key);
+        value.forEach(s => result.push(normalizeStaffMember(s, isCategoryKey ? key : undefined)));
+    });
+    return result;
+}
+
+/**
+ * Pull the school's staff roster (Teaching + Non-Teaching) from the
+ * backend. Accepts flat, nested, or grouped responses and normalizes all
+ * supported staff field names into the shape used by this page.
+ */
+async function refreshStaffCache() {
+    const data = await _backendGet(STAFF_API_BASE, '');
+    if (!data) return;
+
+    const staff = extractStaffList(data);
+    const grouped = { Teaching: [], 'Non-Teaching': [] };
+    staff.forEach(s => grouped[s.category].push(s));
+    _staffCache = grouped;
+}
+/** Read staff for a category straight from the in-memory backend mirror. */
+function getStaffCache(category) {
+    return (_staffCache && Array.isArray(_staffCache[category])) ? _staffCache[category] : [];
+}
+/**
+ * Persist a per-staff deduction override (security / feeDeducted) to the
+ * backend and update the in-memory cache immediately so the salary panel
+ * reflects it without waiting for the next poll. Used by the console-only
+ * EduFlowFinance.setStaffSecurity()/setStaffFeeDeducted() API below.
+ */
+async function _saveStaffDeductionToBackend(staffId, field, value) {
+    return _backendSave(STAFF_API_BASE, `/${encodeURIComponent(staffId)}/deductions`, 'PUT', { [field]: value });
+}
+
+async function refreshAllFinanceCaches() {
+    await Promise.all([
+        refreshStudentsCache(),
+        refreshClassConfigsCache(),
+        refreshLatefeeConfigCache(),
+        refreshCustomFeesCache(),
+        refreshStaffBonusCache(),
+        refreshStaffFinesCache(),
+        refreshExpensesCache(),
+        refreshStaffAdvancesCache(),
+        refreshSalaryRecordsCache(),
+        refreshGeneratedVouchersCache(),
+        refreshStudentFeeStatusCache(),
+        refreshStaffCache(),
+    ]);
+}
+
+/* ============================================================================
+   LIVE SYNC — polls the backend and re-renders whatever's on screen, so
+   records added/edited from another device, another tab, or by another
+   admin appear automatically. Only wired up for read-only list/summary
+   views (never a mid-fill form), so nobody's in-progress entry gets reset.
+   Pauses while the browser tab is hidden and catches up the moment it's
+   shown again.
+   ============================================================================ */
+const LIVE_SYNC_INTERVAL_MS = 10000;
+let _liveSyncTimer = null;
+
+function refreshCurrentFinanceView() {
+    const SAFE_LIVE_PAGES = {
+        'page-main':              renderClassCardGrid,
+        'page-fine-records':      initFineRecordsHub,
+        'page-view-staff-bonus':  initBonusRecordsHub,
+        'page-view-expenses':     renderExpensesTable,
+        'page-salary-teaching':   renderTeachingSalaries,
+        'page-salary-non-teaching': renderNonTeachingSalaries,
+        'page-salary-records':    renderSalaryRecordsTable,
+    };
+    Object.keys(SAFE_LIVE_PAGES).forEach(id => {
+        const el = document.getElementById(id);
+        if (el && !el.classList.contains('d-none')) SAFE_LIVE_PAGES[id]();
+    });
+}
+
+async function liveSyncTick() {
+    await refreshAllFinanceCaches();
+    refreshCurrentFinanceView();
+}
+
+function startLiveSync() {
+    stopLiveSync();
+    _liveSyncTimer = setInterval(liveSyncTick, LIVE_SYNC_INTERVAL_MS);
+}
+function stopLiveSync() {
+    if (_liveSyncTimer) clearInterval(_liveSyncTimer);
+    _liveSyncTimer = null;
+}
+document.addEventListener('visibilitychange', () => {
+    if (document.hidden) { stopLiveSync(); }
+    else { liveSyncTick(); startLiveSync(); }
+});
+
+document.addEventListener('DOMContentLoaded', async () => {
     initTheme();
     initSidebar();
     initDate();
     initAtvVoucherModal();
+    await refreshAllFinanceCaches();   // load real data from the backend first
     renderClassCardGrid();
     initLedgerScrollEffect();
+    startLiveSync();
 });
 
 /* ============================================
@@ -230,11 +710,19 @@ function initLedgerScrollEffect() {
 
 /* ============================================
    THEME TOGGLE
+   ------------------------------------------------------------------------
+   'eduflow-theme' ('light' | 'dark') is the ONLY thing this app ever
+   stores in localStorage. Every other record on this page — students,
+   class configs, staff, fees, fines, bonuses, expenses, advances,
+   vouchers — lives in the backend database and is held in memory (the
+   _xCache variables in the REALTIME BACKEND DATA LAYER above) between
+   requests. See that block's header comment for the full rationale.
    ============================================ */
 function initTheme() {
     const toggleBtn = document.getElementById('theme-toggle');
     const root = document.documentElement;
-    const savedTheme = localStorage.getItem('eduflow-theme') || 'dark';
+    const stored = localStorage.getItem('eduflow-theme');
+    const savedTheme = (stored === 'light' || stored === 'dark') ? stored : 'dark';
     root.setAttribute('data-theme', savedTheme);
 
     toggleBtn.addEventListener('click', () => {
@@ -338,38 +826,57 @@ function showPage(pageId) {
 }
 
 /* ============================================
-   COLLECT FEE (kept, not modified)
+   COLLECT FEE
+   ------------------------------------------------------------------------
+   NOTE: this legacy handler (handleFeeSubmit) was never wired to any form
+   in the UI and wrote only to the dead, never-read db.finances.fees
+   object in localStorage — removed. Real fee collection on this page goes
+   through the backend-driven Student Fees flow elsewhere in this file.
    ============================================ */
-function handleFeeSubmit(e) {
-    e.preventDefault();
-    const amount = Number(document.getElementById('fee-amount').value);
-
-    const db = getGlobalData();
-    db.finances.fees.collected += amount;
-    db.finances.fees.pending = Math.max(0, db.finances.fees.pending - amount);
-    saveGlobalData(db);
-
-    showFinanceToast(`Successfully collected RS ${amount.toLocaleString()}`, 'success');
-    closeModal('fee-modal');
-    e.target.reset();
-}
-
-/* ============================================
-   STUDENT FINES
-   ============================================ */
-function getStudentFinesData() {
-    const raw = localStorage.getItem('eduflow-student-fines');
-    return raw ? JSON.parse(raw) : [];
-}
-function saveStudentFinesData(arr) {
-    localStorage.setItem('eduflow-student-fines', JSON.stringify(arr));
-}
 
 /* ============================================
    STUDENT FINES  (real DB + search)
    ============================================ */
+/**
+ * Finance must operate on the live roster only.  Student Management keeps
+ * archived rows in the same API response so its Archive Center can display
+ * them, but archived students must never appear in finance selectors, fee
+ * tables, totals, voucher generation, or custom-fee searches.
+ *
+ * Keep the full response in _studentsCache for sync/persistence purposes and
+ * expose only billable students to the rest of this finance page.
+ */
 function getRealStudents() {
-    return JSON.parse(localStorage.getItem('edu_students') || '[]');
+    return _studentsCache.filter(isStudentBillable);
+}
+// Students are owned by the Student Management page, but this file does
+// edit them in a few places (marking fees paid, applying discounts, etc.),
+// so any such edit updates the cache immediately and pushes it to the
+// backend in the background. ⚠️ Uses STUDENTS_API_BASE — see the ownership
+// note in the REALTIME BACKEND DATA LAYER section above.
+function saveStudentsCache(students) {
+    // Most finance edits start from getRealStudents(), which intentionally
+    // excludes archived rows. Merge those edits back into the complete cache
+    // instead of replacing the cache with only active students.
+    const keyOf = s => String(s && (s.regNo || s.id) || '');
+    const updates = new Map((Array.isArray(students) ? students : [])
+        .map(s => [keyOf(s), s])
+        .filter(([key]) => key));
+
+    _studentsCache = _studentsCache.map(existing =>
+        updates.get(keyOf(existing)) || existing
+    );
+
+    const cachedKeys = new Set(_studentsCache.map(keyOf));
+    (Array.isArray(students) ? students : []).forEach(student => {
+        const key = keyOf(student);
+        if (key && !cachedKeys.has(key)) {
+            _studentsCache.push(student);
+            cachedKeys.add(key);
+        }
+    });
+
+    _backendSave(STUDENTS_API_BASE, '', 'PUT', { items: _studentsCache });
 }
 
 /* ============================================
@@ -568,12 +1075,26 @@ async function handleAddStudentFine() {
     const desc = document.getElementById('student-fine-desc').value.trim();
     if (!sfSelectedId || !amount) return showFinanceToast("Please select a class, section, student and enter a fine amount.", 'error');
 
-    await apiRequest("/add-fine", "POST", {
+    // NOTE: apiRequest() (unlike apiCall()) never throws on a failed
+    // request — it logs the error and resolves to null so callers can
+    // "handle it gracefully". That meant this function used to show
+    // "Fine added to MySQL Database" even when the POST 404'd or the
+    // server errored, because the result was never checked. Now a failed
+    // save shows a real error instead of a false-positive success toast.
+    const result = await apiRequest("/add-fine", "POST", {
         regNo: sfSelectedRegNo || sfSelectedId,
-        monthKey: getCurrentMonthKey(),
+        // Fine records follow the fee voucher billing cycle.  The backend
+        // moves this to the following month when the current fee is already
+        // Paid, so adding a fine can never reopen a paid voucher.
+        monthKey: getCurrentFeeMonthKey(),
         amount: amount,
         reason: desc
     });
+
+    if (result === null) {
+        showFinanceToast("Couldn't save the fine — check the server connection (see console for details).", 'error');
+        return;
+    }
 
     showFinanceToast("Fine added to MySQL Database", 'success');
     resetStudentFineForm();
@@ -581,32 +1102,138 @@ async function handleAddStudentFine() {
 
 let allStudentFinesCache = [];
 let studentFinesMonthKey = null;
+let selectedFineRecordsMonthKey = null;
+
+/**
+ * Month options for the Fine Records month switcher — current month plus
+ * the previous 5, most recent first.
+ */
+function getFineRecordsMonthOptions() {
+    const opts = [];
+    const now = new Date();
+    for (let i = 0; i < 6; i++) {
+        const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+        const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+        const label = d.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+        opts.push({ key, label });
+    }
+    return opts;
+}
+
+function populateFrMonthFilter() {
+    const sel = document.getElementById('fr-student-month-filter');
+    if (!sel) return;
+    const opts = getFineRecordsMonthOptions();
+    const keep = opts.some(o => o.key === selectedFineRecordsMonthKey) ? selectedFineRecordsMonthKey : opts[0].key;
+    sel.innerHTML = opts.map(o => `<option value="${o.key}">${o.label}</option>`).join('');
+    sel.value = keep;
+    selectedFineRecordsMonthKey = keep;
+}
+
+function onFrMonthFilterChange() {
+    const sel = document.getElementById('fr-student-month-filter');
+    selectedFineRecordsMonthKey = sel ? sel.value : null;
+    renderStudentFinesTable();
+}
+
+// Parses the "dd MMM yyyy" format stamped by Finance.stampPayNow() (e.g. "12 Aug 2026").
+function _parseFineRecordDate(str) {
+    if (!str) return null;
+    const parts = String(str).trim().split(' ');
+    if (parts.length !== 3) return null;
+    const months = { Jan: 0, Feb: 1, Mar: 2, Apr: 3, May: 4, Jun: 5, Jul: 6, Aug: 7, Sep: 8, Oct: 9, Nov: 10, Dec: 11 };
+    const day = parseInt(parts[0], 10);
+    const month = months[parts[1]];
+    const year = parseInt(parts[2], 10);
+    if (isNaN(day) || month === undefined || isNaN(year)) return null;
+    return new Date(year, month, day);
+}
+
+/**
+ * FEATURE — "fine record disappears once paid": /all-fines/{monthKey} only
+ * ever reflects each student's CURRENT outstanding fine total (that's what
+ * Finance.fineAmount is defined to mean — the running total of UNPAID
+ * fines), so a settled fine was never something that endpoint could show at
+ * all. To display both Paid and Pending with an actual status, this pulls
+ * every individual fine record (which does carry a status field) straight
+ * from /fine-details/{regNo}/{monthKey} — the same per-student source the
+ * fine ledger (showFineDetails) already trusts — for every student, and
+ * rolls each student's records for the month into one summary row.
+ *
+ * A student's overall status is Pending if ANY of their fines that month is
+ * still unpaid, and Paid only once every one of them is settled.
+ */
+async function fetchAllFineRecordsForMonth(monthKey) {
+    const students = getRealStudents().filter(isStudentBillable);
+    const settled = await Promise.all(students.map(async s => {
+        const regNo = s.regNo || s.id;
+        let records;
+        try { records = await apiCall(`/fine-details/${regNo}/${monthKey}`); }
+        catch (e) { return null; }
+        if (!Array.isArray(records) || records.length === 0) return null;
+
+        const fineAmount = records.reduce((sum, r) => sum + (Number(r.amount) || 0), 0);
+        // Keep duplicates here (not deduped) — getSmartFineReason() below
+        // relies on repeat reasons to flag a "(Frequent)" fine.
+        const reasons = records.map(r => r.reason).filter(Boolean);
+        const isPaid = records.every(isFinePaid);
+        const paidDates = records
+            .filter(isFinePaid)
+            .map(r => _parseFineRecordDate(r.payDate))
+            .filter(d => d instanceof Date && !isNaN(d));
+        const latestPaidDate = paidDates.length ? new Date(Math.max(...paidDates.map(d => d.getTime()))) : null;
+
+        return {
+            regNo,
+            studentName: s.fullName || s.name,
+            studentClass: s.studentClass,
+            section: s.section,
+            guardianName: s.guardianName,
+            fineAmount,
+            fineReason: reasons.join(', '),
+            status: isPaid ? 'Paid' : 'Pending',
+            latestPaidDate
+        };
+    }));
+    return settled.filter(Boolean);
+}
 
 async function renderStudentFinesTable() {
     const tbody = document.getElementById('student-fines-tbody');
-    const monthKey = getCurrentMonthKey();
+    const monthKey = selectedFineRecordsMonthKey || getCurrentMonthKey();
     studentFinesMonthKey = monthKey;
 
     if(!tbody) return;
-    tbody.innerHTML = "<tr><td colspan='6' class='empty-row'><i class='fas fa-spinner fa-spin'></i> Fetching aggregated records...</td></tr>";
+    tbody.innerHTML = "<tr><td colspan='7' class='empty-row'><i class='fas fa-spinner fa-spin'></i> Fetching aggregated records...</td></tr>";
 
     // Reset the search box whenever this page is (re)loaded fresh
     const searchInput = document.getElementById('student-fines-view-search');
     if (searchInput) searchInput.value = '';
 
     try {
-        const fines = await apiCall(`/all-fines/${monthKey}`);
-        allStudentFinesCache = fines || [];
+        const records = await fetchAllFineRecordsForMonth(monthKey);
+
+        // FEATURE — a Paid fine stays visible for 3 months after being
+        // paid (so it can still be found/reviewed), then quietly drops
+        // off the list. Pending fines are never time-limited — they show
+        // "on regular" until actually settled, however old.
+        const cutoff = new Date();
+        cutoff.setMonth(cutoff.getMonth() - 3);
+        allStudentFinesCache = records.filter(r => {
+            if (!isFinePaid(r)) return true;
+            if (!r.latestPaidDate) return true; // no date on record — fail open, don't hide
+            return r.latestPaidDate >= cutoff;
+        });
 
         if (allStudentFinesCache.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="6" class="empty-row">No students found with fines this month.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="7" class="empty-row">No fines recorded for this month.</td></tr>';
             return;
         }
 
         filterStudentFinesTable();
     } catch (err) {
         console.error(err);
-        tbody.innerHTML = '<tr><td colspan="6" class="empty-row" style="color:red;">Error connecting to MySQL.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="7" class="empty-row" style="color:red;">Error connecting to MySQL.</td></tr>';
     }
 }
 
@@ -615,7 +1242,7 @@ function renderStudentFinesRows(fines) {
     if (!tbody) return;
 
     if (!fines || fines.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="6" class="empty-row">No students match your search.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="7" class="empty-row">No students match your search.</td></tr>';
         return;
     }
 
@@ -624,6 +1251,7 @@ function renderStudentFinesRows(fines) {
     tbody.innerHTML = fines.map(f => {
         // Use our smart reason processor
         const smartReason = getSmartFineReason(f.fineReason);
+        const isPaid = isFinePaid(f);
 
         return `
              <tr class="salary-row-clickable" onclick="showFineDetails('${f.regNo}', '${monthKey}')">
@@ -633,8 +1261,13 @@ function renderStudentFinesRows(fines) {
                 <td><span class="class-chip" style="background: rgba(139, 92, 246, 0.1); color: #8b5cf6;">${f.section || 'N/A'}</span></td>
                 <td>${f.guardianName || '-'}</td>
                 <td>
-                    <div style="color:#dc2626; font-weight:800; font-size:1.05rem;">RS ${f.fineAmount.toLocaleString()}</div>
+                    <div style="color:${isPaid ? 'var(--text-primary)' : '#dc2626'}; font-weight:800; font-size:1.05rem;">RS ${f.fineAmount.toLocaleString()}</div>
                     <div style="color:var(--text-secondary); line-height: 1.2;">${smartReason}</div>
+                </td>
+                <td>
+                    <span class="fee-status-badge ${isPaid ? 'fee-paid' : 'fee-overdue'}">
+                        <i class="fas ${isPaid ? 'fa-check-circle' : 'fa-clock'}"></i> ${isPaid ? 'Paid' : 'Pending'}
+                    </span>
                 </td>
             </tr>
         `;
@@ -711,6 +1344,7 @@ function initFineRecordsHub() {
         if (studentPanel) studentPanel.classList.remove('d-none');
         if (staffPanel)   staffPanel.classList.add('d-none');
         populateFrClassFilter();
+        populateFrMonthFilter();
         renderStudentFinesTable();
     } else {
         if (studentPanel) studentPanel.classList.add('d-none');
@@ -768,11 +1402,11 @@ let selectedStaffCategory = 'Teaching';
 let selectedStaffId = null;
 
 function getStaffFinesData() {
-    const raw = localStorage.getItem('eduflow-staff-fines');
-    return raw ? JSON.parse(raw) : [];
+    return _staffFinesCache;
 }
 function saveStaffFinesData(arr) {
-    localStorage.setItem('eduflow-staff-fines', JSON.stringify(arr));
+    _staffFinesCache = arr;
+    _backendSave(API_BASE, ENDPOINTS.staffFines, 'PUT', { items: arr });
 }
 
 function selectStaffCategory(category) {
@@ -788,11 +1422,11 @@ function selectStaffCategory(category) {
 function staffMatchesQuery(s, q) {
     q = (q || '').trim().toLowerCase();
     if (!q) return true;
-    return (s.name || '').toLowerCase().includes(q) ||
-           (s.id || '').toLowerCase().includes(q) ||
-           (s.subjects || '').toLowerCase().includes(q) ||
-           (s.classes || '').toLowerCase().includes(q) ||
-           (s.job || '').toLowerCase().includes(q);
+    return staffText(s && s.name).toLowerCase().includes(q) ||
+           staffText(s && s.id).toLowerCase().includes(q) ||
+           staffText(s && s.subjects).toLowerCase().includes(q) ||
+           staffText(s && s.classes).toLowerCase().includes(q) ||
+           staffText(s && s.job).toLowerCase().includes(q);
 }
 
 function staffSubLine(s, category) {
@@ -813,9 +1447,8 @@ function renderStaffMembersList(category, query) {
         container.innerHTML = '<p class="search-empty"><i class="fas fa-search"></i> Start typing to search staff members.</p>';
         return;
     }
-    const db = getGlobalData();
-    let members = db.staff[category] || [];
-    members = members.filter(s => staffMatchesQuery(s, query));
+    const members0 = getStaffCache(category);
+    let members = members0.filter(s => staffMatchesQuery(s, query));
     if (members.length === 0) {
         container.innerHTML = '<p class="search-empty">No staff found in this category.</p>';
         return;
@@ -847,9 +1480,8 @@ function handleAddStaffFine() {
     if (!amount || amount < 1) { showFinanceToast('Please enter a valid fine amount.', 'error'); return; }
     if (!desc) { showFinanceToast('Please enter a fine description/cause.', 'error'); return; }
 
-    const db = getGlobalData();
-    const members = db.staff[selectedStaffCategory];
-    const idx = members.findIndex(s => s.id === selectedStaffId);
+    const members = getStaffCache(selectedStaffCategory);
+    const idx = members.findIndex(s => String(s.id) === String(selectedStaffId));
     if (idx === -1) { showFinanceToast('Staff member not found.', 'error'); return; }
 
     // NOTE: do NOT write to members[idx].fines — that field is owned by
@@ -878,6 +1510,20 @@ function handleAddStaffFine() {
 
 let staffFinesCategoryFilter = 'All';
 
+function getStaffFineCategory(fine) {
+    const explicitCategory = fine && (fine.category || fine.staffCategory || fine.staffType);
+    if (explicitCategory) return normalizeStaffCategory(fine, explicitCategory);
+
+    // Older records may not contain category. Resolve them from the current
+    // staff roster so they still appear in the correct Teaching/Non-Teaching
+    // records area.
+    const staffId = String((fine && (fine.staffId ?? fine.id)) ?? '');
+    for (const category of ['Teaching', 'Non-Teaching']) {
+        if (getStaffCache(category).some(s => String(s.id) === staffId)) return category;
+    }
+    return '';
+}
+
 function setStaffFinesCategoryFilter(category) {
     staffFinesCategoryFilter = category;
     document.querySelectorAll('#fr-panel-staff .records-category-toggle .category-btn').forEach(b => b.classList.remove('active'));
@@ -899,13 +1545,13 @@ function renderStaffFinesTable() {
 
     let fines = allFines.filter(f => !f.monthKey || f.monthKey === currentMonthKey);
     if (staffFinesCategoryFilter && staffFinesCategoryFilter !== 'All') {
-        fines = fines.filter(f => f.category === staffFinesCategoryFilter);
+        fines = fines.filter(f => getStaffFineCategory(f) === staffFinesCategoryFilter);
     }
     if (q) {
         fines = fines.filter(f =>
-            (f.name || '').toLowerCase().includes(q) ||
-            String(f.id || '').toLowerCase().includes(q) ||
-            (f.role || '').toLowerCase().includes(q)
+            staffText(f.name).toLowerCase().includes(q) ||
+            staffText(f.staffId ?? f.id).toLowerCase().includes(q) ||
+            staffText(f.role).toLowerCase().includes(q)
         );
     }
 
@@ -927,11 +1573,17 @@ function renderStaffFinesTable() {
    STAFF BONUS
    ============================================ */
 function getStaffBonusData() {
-    const raw = localStorage.getItem('eduflow-staff-bonus');
-    return raw ? JSON.parse(raw) : [];
+    return _staffBonusCache;
 }
 function saveStaffBonusData(arr) {
-    localStorage.setItem('eduflow-staff-bonus', JSON.stringify(arr));
+    _staffBonusCache = arr;
+    _backendSave(API_BASE, ENDPOINTS.staffBonus, 'PUT', { items: arr })
+        .then(() => refreshSalaryRecordsCache())
+        .then(() => {
+            renderTeachingSalaries();
+            renderNonTeachingSalaries();
+            renderSalaryRecordsTable();
+        });
 }
 
 /* Bonus Records: Teaching and Non-Teaching are two fully separate tabs,
@@ -971,8 +1623,7 @@ function renderStaffBonusTable(category) {
     const tbody = document.getElementById(category === 'Teaching' ? 'staff-bonus-tbody-teaching' : 'staff-bonus-tbody-non-teaching');
     if (!tbody) return;
 
-    const db = getGlobalData();
-    const allStaff = (db.staff && db.staff[category]) ? db.staff[category] : [];
+    const allStaff = getStaffCache(category);
     const allLog = getStaffBonusData();
     const currentMonthKey = getCurrentMonthKey();
     const searchId = category === 'Teaching' ? 'staff-bonus-view-search-teaching' : 'staff-bonus-view-search-non-teaching';
@@ -1021,11 +1672,11 @@ function renderStaffBonusTable(category) {
    OTHER EXPENSES
    ============================================ */
 function getExpensesData() {
-    const raw = localStorage.getItem('eduflow-other-expenses');
-    return raw ? JSON.parse(raw) : [];
+    return _expensesCache;
 }
 function saveExpensesData(arr) {
-    localStorage.setItem('eduflow-other-expenses', JSON.stringify(arr));
+    _expensesCache = arr;
+    _backendSave(API_BASE, ENDPOINTS.expenses, 'PUT', { items: arr });
 }
 
 function handleExpenseSubmitNew() {
@@ -1038,10 +1689,6 @@ function handleExpenseSubmitNew() {
     const now = new Date();
     list.push({ description: desc, amount: amount, date: now.toLocaleDateString('en-US'), time: now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }), monthKey: getCurrentMonthKey() });
     saveExpensesData(list);
-
-    const db = getGlobalData();
-    db.finances.expenses.other += amount;
-    saveGlobalData(db);
 
     showFinanceToast(`Operational expense of RS ${amount.toLocaleString()} logged successfully.`, 'success');
     document.getElementById('exp-amount').value = '';
@@ -1164,11 +1811,7 @@ const ANNUAL_FUND_AMOUNT = 2000; // Rs. — must match value in manage-students.
  * Falls back to safe defaults when nothing has been saved yet.
  */
 function getVoucherSettings() {
-    let cfg = {};
-    try {
-        const raw = localStorage.getItem('edu_latefee_config');
-        if (raw) cfg = JSON.parse(raw);
-    } catch (e) { /* ignore */ }
+    const cfg = _latefeeConfigCache || {};
 
     const deadlineDay  = parseInt(cfg.deadlineDay, 10)  || 10;
     const grace        = parseInt(cfg.grace,        10)  || 0;
@@ -1262,6 +1905,20 @@ function _classDisplayLabel(name) {
 }
 
 /**
+ * A student only counts toward "Pending" once a voucher has actually been
+ * generated for them — either this month, or in some earlier month whose
+ * balance is still unpaid. A student nobody has ever billed (no voucher
+ * record in the backend at all) has nothing formally "pending"; showing
+ * them in Pending/Defaulters before any voucher exists would flag students
+ * as owing money for a bill that was never actually issued to them.
+ * `getGeneratedVouchers()` is the backend-synced list (see
+ * refreshGeneratedVouchersCache / ENDPOINTS.vouchers) — never localStorage.
+ */
+function _hasAnyGeneratedVoucher(studentId) {
+    return getGeneratedVouchers().some(r => String(r.studentId) === String(studentId));
+}
+
+/**
  * BUGFIX — "Pending always shows 0": Pending used to be computed as
  * `totalGenerated - totalCollected`, where totalGenerated only counted
  * vouchers that had ALREADY been generated for the current month. Until an
@@ -1279,18 +1936,24 @@ function _classDisplayLabel(name) {
  * this month. Summing that across every billable student gives a true
  * real-time "Pending" figure that never depends on the Generate button
  * having been clicked.
+ *
+ * FEATURE — "Pending must only be of vouchers that are generated": on top
+ * of the above, a student is only included here if a voucher has actually
+ * been generated for them (this month, or an earlier month still carrying
+ * an unpaid balance — see _hasAnyGeneratedVoucher). Otherwise a student
+ * with no voucher at all would still show up as "pending" money nobody has
+ * ever actually billed them for.
  */
 function _computeRealtimePendingTotal(students) {
     const monthKey = getCurrentFeeMonthKey();
     let total = 0;
     students.forEach(s => {
         if (!isStudentBillable(s)) return;
+        const studentId = s.regNo || s.id;
+        if (!_hasAnyGeneratedVoucher(studentId)) return;
         let feeTotal = 0;
         try { feeTotal = computeFeeBreakdown(s).voucherTotal; } catch (e) { feeTotal = Number(s.standardFee) || 0; }
-        const payments = Array.isArray(s.feePayments) ? s.feePayments : [];
-        const paidThisMonth = payments
-            .filter(p => p.monthKey === monthKey)
-            .reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
+        const paidThisMonth = getPaidThisMonthAuthoritative(s, monthKey);
         total += Math.max(0, feeTotal - paidThisMonth);
     });
     return total;
@@ -1312,45 +1975,74 @@ function updateFeeStatsHeader() {
     const genEl = document.getElementById('fee-stat-generated');
     const colEl = document.getElementById('fee-stat-collected');
     const penEl = document.getElementById('fee-stat-pending');
+    const totFineEl = document.getElementById('fee-stat-totalfine');
     if (!genEl || !colEl || !penEl) return;
 
     const monthKey = getCurrentFeeMonthKey();
     const monthLabel = new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
 
+    // FEATURE — "Generated" must show fee-only, never the fine: previously
+    // this summed each voucher's snapshotted `voucherTotal`, which already
+    // has that student's fine baked in (see recordVoucherGeneration), so a
+    // student with a Rs.200 fine inflated this box by Rs.200 even though
+    // it's meant to represent pure invoiced FEE. Each snapshot also stores
+    // `fineAmount` separately (same source), so subtract it back out here —
+    // the fine still shows up fully in Pending and Total with Fine below,
+    // just not double-counted into Generated too.
+    // BUGFIX — "delete a student, their fee lingers in Generated forever":
+    // Collected/Pending (below) both derive from getRealStudents(), which
+    // already drops archived/deleted students — but Generated summed
+    // getGeneratedVouchers() directly with no such check, so a voucher
+    // generated before a student was deleted stayed counted here
+    // indefinitely. Filter to vouchers whose student is still on the
+    // active/billable roster, same as everything else on this page.
     let totalGenerated = 0;
     try {
+        const billableIds = new Set(getRealStudents().map(s => String(s.regNo || s.id || '')));
         totalGenerated = getGeneratedVouchers()
-            .filter(r => r.monthKey === monthKey)
-            .reduce((sum, r) => sum + (Number(r.snapshot && r.snapshot.voucherTotal) || 0), 0);
+            .filter(r => r.monthKey === monthKey && billableIds.has(String(r.studentId)))
+            .reduce((sum, r) => {
+                const snap = r.snapshot || {};
+                const voucherTotal = Number(snap.voucherTotal) || 0;
+                const fineAmount = Number(snap.fineAmount) || 0;
+                return sum + Math.max(0, voucherTotal - fineAmount);
+            }, 0);
     } catch (e) { totalGenerated = 0; }
 
     let totalCollected = 0;
     try {
-        const students = JSON.parse(localStorage.getItem('edu_students') || '[]');
-        totalCollected = students.reduce((sum, s) => {
-            const payments = Array.isArray(s.feePayments) ? s.feePayments : [];
-            return sum + payments
-                .filter(p => p.monthKey === monthKey)
-                .reduce((pSum, p) => pSum + (Number(p.amount) || 0), 0);
-        }, 0);
+        const students = getRealStudents();
+        totalCollected = students.reduce((sum, s) => sum + getPaidThisMonthAuthoritative(s, monthKey), 0);
     } catch (e) { totalCollected = 0; }
 
     let totalPending = 0;
     try {
-        const allStudents = JSON.parse(localStorage.getItem('edu_students') || '[]');
+        const allStudents = getRealStudents();
         totalPending = _computeRealtimePendingTotal(allStudents);
     } catch (e) { totalPending = 0; }
+
+    // "Total with Fine" — the full amount payable this month across every
+    // billable, voucher-generated student, fines included. totalCollected
+    // and totalPending are both derived from computeFeeBreakdown().voucherTotal
+    // (see _computeRealtimePendingTotal above), and voucherTotal already
+    // folds in the student's live fine amount — so simply adding what's
+    // already been collected to what's still pending gives the true
+    // fine-inclusive total payable, with no separate fine math needed here.
+    const totalWithFine = totalCollected + totalPending;
 
     genEl.textContent = `Rs. ${totalGenerated.toLocaleString()}`;
     colEl.textContent = `Rs. ${totalCollected.toLocaleString()}`;
     penEl.textContent = `Rs. ${totalPending.toLocaleString()}`;
+    if (totFineEl) totFineEl.textContent = `Rs. ${totalWithFine.toLocaleString()}`;
 
     const genLabel = document.getElementById('fee-stat-generated-label');
     const colLabel = document.getElementById('fee-stat-collected-label');
     const penLabel = document.getElementById('fee-stat-pending-label');
+    const totFineLabel = document.getElementById('fee-stat-totalfine-label');
     if (genLabel) genLabel.textContent = `Generated · ${monthLabel}`;
     if (colLabel) colLabel.textContent = `Collected · ${monthLabel}`;
     if (penLabel) penLabel.textContent = `Pending · ${monthLabel}`;
+    if (totFineLabel) totFineLabel.textContent = `Total with Fine · ${monthLabel}`;
 }
 
 /**
@@ -1363,47 +2055,64 @@ function updateClassFeeStats(className) {
     const genEl = document.getElementById('class-fee-stat-generated');
     const colEl = document.getElementById('class-fee-stat-collected');
     const penEl = document.getElementById('class-fee-stat-pending');
+    const totFineEl = document.getElementById('class-fee-stat-totalfine');
     if (!genEl || !colEl || !penEl) return;
 
     const monthKey = getCurrentFeeMonthKey();
     const monthLabel = new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
 
+    // See updateFeeStatsHeader() above — Generated stays fee-only, the
+    // fine is subtracted back out of each snapshot's voucherTotal, and (as
+    // with the school-wide total) vouchers belonging to a student who has
+    // since been deleted/archived are excluded so a removed student's fee
+    // drops out of Generated here too, same as it already does for
+    // Collected/Pending below.
     let totalGenerated = 0;
     try {
+        const billableIds = new Set(getRealStudents()
+            .filter(s => s.studentClass === className)
+            .map(s => String(s.regNo || s.id || '')));
         totalGenerated = getGeneratedVouchers()
-            .filter(r => r.monthKey === monthKey && r.studentClass === className)
-            .reduce((sum, r) => sum + (Number(r.snapshot && r.snapshot.voucherTotal) || 0), 0);
+            .filter(r => r.monthKey === monthKey && r.studentClass === className
+                && billableIds.has(String(r.studentId)))
+            .reduce((sum, r) => {
+                const snap = r.snapshot || {};
+                const voucherTotal = Number(snap.voucherTotal) || 0;
+                const fineAmount = Number(snap.fineAmount) || 0;
+                return sum + Math.max(0, voucherTotal - fineAmount);
+            }, 0);
     } catch (e) { totalGenerated = 0; }
 
     let totalCollected = 0;
     try {
-        const students = JSON.parse(localStorage.getItem('edu_students') || '[]')
+        const students = getRealStudents()
             .filter(s => s.studentClass === className);
-        totalCollected = students.reduce((sum, s) => {
-            const payments = Array.isArray(s.feePayments) ? s.feePayments : [];
-            return sum + payments
-                .filter(p => p.monthKey === monthKey)
-                .reduce((pSum, p) => pSum + (Number(p.amount) || 0), 0);
-        }, 0);
+        totalCollected = students.reduce((sum, s) => sum + getPaidThisMonthAuthoritative(s, monthKey), 0);
     } catch (e) { totalCollected = 0; }
 
     let totalPending = 0;
     try {
-        const classStudents = JSON.parse(localStorage.getItem('edu_students') || '[]')
+        const classStudents = getRealStudents()
             .filter(s => s.studentClass === className);
         totalPending = _computeRealtimePendingTotal(classStudents);
     } catch (e) { totalPending = 0; }
 
+    // See updateFeeStatsHeader() above — same reasoning, scoped to this class.
+    const totalWithFine = totalCollected + totalPending;
+
     genEl.textContent = `Rs. ${totalGenerated.toLocaleString()}`;
     colEl.textContent = `Rs. ${totalCollected.toLocaleString()}`;
     penEl.textContent = `Rs. ${totalPending.toLocaleString()}`;
+    if (totFineEl) totFineEl.textContent = `Rs. ${totalWithFine.toLocaleString()}`;
 
     const genLabel = document.getElementById('class-fee-stat-generated-label');
     const colLabel = document.getElementById('class-fee-stat-collected-label');
     const penLabel = document.getElementById('class-fee-stat-pending-label');
+    const totFineLabel = document.getElementById('class-fee-stat-totalfine-label');
     if (genLabel) genLabel.textContent = `Generated · ${monthLabel}`;
     if (colLabel) colLabel.textContent = `Collected · ${monthLabel}`;
     if (penLabel) penLabel.textContent = `Pending · ${monthLabel}`;
+    if (totFineLabel) totFineLabel.textContent = `Total with Fine · ${monthLabel}`;
 }
 
 /**
@@ -1413,20 +2122,43 @@ function updateClassFeeStats(className) {
  * Called once on DOMContentLoaded AND again when showPage('page-student-fees')
  * is triggered, so the grid always stays in sync with settings changes.
  */
+/**
+ * Renders the class-card-grid from _classConfigsCache — the in-memory
+ * mirror of GET {SETTINGS_API_BASE}/{schoolId} (see refreshClassConfigsCache()).
+ * Called once on DOMContentLoaded AND again when showPage('page-student-fees')
+ * is triggered, so the grid always stays in sync with Settings changes.
+ *
+ * If this renders blank, it means _classConfigsCache is empty — check the
+ * Network tab for a failed/404 GET to {SETTINGS_API_BASE}/{schoolId}
+ * (that route needs to exist and return this school's settings, including
+ * a classes array), or confirm classes have actually been saved on the
+ * Settings page for this school. The two failure modes are shown as
+ * distinct messages below so it's obvious which one you're hitting instead
+ * of just a blank grid.
+ */
 function renderClassCardGrid() {
     updateFeeStatsHeader();
 
     const grid = document.getElementById('class-card-grid');
     if (!grid) return;
 
-    let classes = [];
-    try {
-        const raw = localStorage.getItem('edu_class_configs');
-        if (raw) classes = JSON.parse(raw);
-    } catch (e) { classes = []; }
+    let classes = Array.isArray(_classConfigsCache) ? _classConfigsCache : [];
 
-    if (!Array.isArray(classes)) {
-        classes = [];
+    if (classes.length === 0) {
+        const schoolId = getCurrentSchoolId();
+        grid.innerHTML = !schoolId
+            ? `<p class="search-empty" style="grid-column:1/-1;">
+                 <i class="fas fa-triangle-exclamation"></i>
+                 No school session found — log in again to load classes.
+               </p>`
+            : `<p class="search-empty" style="grid-column:1/-1;">
+                 <i class="fas fa-triangle-exclamation"></i>
+                 Couldn't load classes from the server. Open the browser console —
+                 if you see "GET ${SETTINGS_API_BASE}/${schoolId}" failing, that
+                 backend route needs to exist and return this school's settings;
+                 otherwise, add classes on the Settings page first.
+               </p>`;
+        return;
     }
 
     grid.innerHTML = classes.map((cls, i) => {
@@ -1524,7 +2256,7 @@ async function viewVoucher(studentId, fullName, isPaidBill = false) {
     }
 
     // 2. Get the base student profile from local storage
-    const students = JSON.parse(localStorage.getItem('edu_students') || '[]');
+    const students = getRealStudents();
     let student = findStudentExact(students, studentId, fullName);
     
     if (!student) { 
@@ -1576,18 +2308,7 @@ async function viewVoucher(studentId, fullName, isPaidBill = false) {
             // same reasoning as the single-student fetch below, just done
             // per-child. One sibling's fetch failing shouldn't block the
             // rest of the family voucher from rendering.
-            await Promise.all(familyGroup.map(async (s) => {
-                try {
-                    const sId = s.id || s.regNo;
-                    const finance = await apiRequest(`/status/${sId}/${monthKey}`);
-                    if (finance) {
-                        s.backendFine = finance.fineAmount || 0;
-                        s.backendFineReason = finance.fineReason || "";
-                    }
-                } catch (e) {
-                    // fall back to whatever is already known locally for this child
-                }
-            }));
+            await Promise.all(familyGroup.map(s => syncStudentFineFromBackend(s, monthKey)));
 
             // Set global variables for the Share/Print functionality
             currentVoucherStudentId = studentId;
@@ -1629,21 +2350,16 @@ async function viewVoucher(studentId, fullName, isPaidBill = false) {
             return;
         }
 
-        // 3. API CALL: Fetch FRESH status from the MySQL database.
-        // If a fine was just settled/paid in the ledger, the backend logic 
-        // has already subtracted it from 'fineAmount'.
+        // 3. API CALL: Fetch FRESH status from the MySQL database and sync it
+        // onto the student object (backendFine/backendFineReason), which is
+        // what computeFeeBreakdown() inside buildVoucherHTML() reads. If a
+        // fine was just settled/paid in the ledger, the backend logic has
+        // already subtracted it from 'fineAmount'.
         // NOTE: this is best-effort. If the backend isn't reachable (e.g. running
         // fully client-side), we fall back to whatever is already known locally
         // (computeFeeBreakdown already pulls arrears/fines/discounts from the
         // student record itself) instead of blocking the voucher from opening.
-        const finance = await apiRequest(`/status/${studentId}/${monthKey}`);
-
-        // 4. Sync backend data to the student object used for rendering (when available).
-        // This 'backendFine' is picked up by computeFeeBreakdown() inside buildVoucherHTML().
-        if (finance) {
-            student.backendFine = finance.fineAmount || 0;
-            student.backendFineReason = finance.fineReason || "";
-        }
+        await syncStudentFineFromBackend(student, monthKey);
 
         // Set global variables for the Edit/Share functionality
         currentVoucherStudentId = studentId;
@@ -1653,7 +2369,7 @@ async function viewVoucher(studentId, fullName, isPaidBill = false) {
         // student fresh from localStorage (see note above the declaration).
         const fBreakdown = computeFeeBreakdown(student);
         currentVoucherFineAmount = fBreakdown.fineAmount || 0;
-        currentVoucherFineReason = student.backendFineReason || '';
+        currentVoucherFineReason = fBreakdown.fineReason || student.backendFineReason || '';
 
         // 5. Build the HTML content
         let html = buildVoucherHTML(student);
@@ -1776,7 +2492,7 @@ function shareVoucherOnline() {
             if (copies[0]) copies[0].style.display = '';
             editBtns.forEach(b => b.style.display = '');
 
-            const students = JSON.parse(localStorage.getItem('edu_students') || '[]');
+            const students = getRealStudents();
             const student  = findStudentExact(students, currentVoucherStudentId, currentVoucherStudentName);
             const safeName = (student?.fullName || 'student').replace(/\s+/g,'-');
             const fileName = `voucher-${safeName}.png`;
@@ -2113,18 +2829,75 @@ function printVoucherFromModal() {
  * Shared fee calculation — used by both the student table and the voucher,
  * so totals and discounts always match.
  */
+function getCurrentStudentBackendFine(student) {
+    const studentId = student.regNo || student.id;
+    const currentMonthKey = getCurrentFeeMonthKey();
+    const cached = _studentFeeStatusMonthKey === currentMonthKey
+        ? _studentFeeStatusCache[studentId]
+        : null;
+
+    // The status-all cache is populated during page startup and is also
+    // refreshed after payments. Prefer it whenever it has a fineAmount field:
+    // it is the persisted amount of unpaid fines for this billing month.
+    if (cached && Object.prototype.hasOwnProperty.call(cached, 'fineAmount')) {
+        return {
+            amount: isMonthlyFeePaid(cached) ? 0 : (Number(cached.fineAmount) || 0),
+            reason: isMonthlyFeePaid(cached) ? '' : (cached.fineReason || '')
+        };
+    }
+
+    // A fine fetched for another month must never leak into this month's
+    // voucher. Older in-memory records without a month marker remain
+    // backwards-compatible and are treated as current.
+    if (student.backendFineMonthKey && student.backendFineMonthKey !== currentMonthKey) {
+        return { amount: 0, reason: '' };
+    }
+
+    return {
+        amount: Number(student.backendFine) || 0,
+        reason: student.backendFineReason || ''
+    };
+}
+
 function computeFeeBreakdown(s) {
     const today = new Date();
     const monthLabel = today.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
     const regNo = s.regNo || s.id;
 
+    /*
+     * A generated voucher is an accounting snapshot. If Settings changes a
+     * class fee after this month's voucher has been generated, the existing
+     * voucher must continue to show the amount that was actually issued.
+     * When no voucher exists for the current billing month, use the student's
+     * current standardFee; this is what makes the new Settings amount start
+     * on the next voucher.
+     *
+     * Older voucher records may not contain a tuitionFee snapshot, so they
+     * safely fall back to the current student value.
+     */
+    const generatedVoucher = typeof getVoucherRecord === 'function'
+        ? getVoucherRecord(regNo, getCurrentFeeMonthKey())
+        : null;
+    const snapshotTuitionFee = generatedVoucher
+        && generatedVoucher.snapshot
+        && generatedVoucher.snapshot.tuitionFee != null
+        ? Number(generatedVoucher.snapshot.tuitionFee)
+        : null;
+
     // Core Charges
-    const tuitionFee   = Number(s.standardFee)   || 0;
+    const tuitionFee   = snapshotTuitionFee != null
+        ? snapshotTuitionFee
+        : (Number(s.standardFee) || 0);
     const transportFee = Number(s.transportFee)  || 0;
     const otherFee     = Number(s.otherFee)      || 0;
     
-    // Fines from MySQL handshake
-    const fineFromBackend = s.backendFine || 0; 
+    // Unpaid fines for this billing month.  This comes from the persisted
+    // Finance ledger/status cache, not from a stale student object. A fine
+    // settled in Fine Records is therefore removed from the voucher total and
+    // from the red unpaid-fine line immediately.
+    const backendFine = getCurrentStudentBackendFine(s);
+    const fineFromBackend = backendFine.amount;
+    const fineReasonFromBackend = backendFine.reason;
 
     // Specific Discounts from Student Profile
     const tDisc   = Number(s.tuitionDiscount)   || 0;
@@ -2221,6 +2994,7 @@ function computeFeeBreakdown(s) {
         regNo, monthLabel, 
         tuitionFee, transportFee, otherFee, arrears,
         fineAmount: fineFromBackend,
+        fineReason: fineReasonFromBackend,
         activeDiscounts, // Pass the array of individual discounts
         totalDiscounts,
         bulkDiscount,
@@ -2266,7 +3040,7 @@ function buildVoucherHTML(s) {
             ${f.otherFee > 0 ? `<tr><td>Other Charges</td><td>-</td><td>Rs. ${f.otherFee.toLocaleString()}</td></tr>` : ''}
         `;
     }
-    rowsHTML += `${f.fineAmount > 0 ? `<tr style="color:#dc2626;"><td><strong>Fine / Penalty</strong></td><td>${s.backendFineReason || 'Disciplinary'}</td><td>Rs. ${f.fineAmount.toLocaleString()}</td></tr>` : ''}`;
+    rowsHTML += `${f.fineAmount > 0 ? `<tr style="color:#dc2626;"><td><strong>Fine / Penalty</strong></td><td>${f.fineReason || 'Disciplinary'}</td><td>Rs. ${f.fineAmount.toLocaleString()}</td></tr>` : ''}`;
 
     // 2. Build Specific Discounts Section
     if (f.activeDiscounts.length > 0) {
@@ -2420,6 +3194,46 @@ buildVoucherHTML = function(s) {
     return html;
 };
 
+// BUGFIX — "fine added to a student only shows on View Voucher, not on Pay
+// Bill": computeFeeBreakdown() reads the fine from `student.backendFine` /
+// `student.backendFineReason`, but those fields used to be stamped onto the
+// in-memory student object in exactly ONE place — inside viewVoucher(). Pay
+// Bill (openAddFeesModal → renderAddFeesModal) never fetched the backend
+// fine at all; it just read whatever `backendFine` already happened to be
+// sitting on the student object (0/undefined unless View Voucher had been
+// opened first in the same session). So the same student could show a fine
+// on one screen and not the other depending purely on click order.
+//
+// Fix: centralize the backend→local sync into one helper and call it from
+// every screen that renders a fee breakdown for a student (the fee table
+// row, View Voucher, and now Pay Bill), so `backendFine` always reflects
+// what's actually in the MySQL ledger — never local/browser storage.
+async function syncStudentFineFromBackend(student, monthKey) {
+    if (!student) return null;
+    const studentIdentifier = student.regNo || student.id;
+    let finance = null;
+    try {
+        finance = await apiRequest(`/status/${studentIdentifier}/${monthKey}`);
+    } catch (e) { /* backend unreachable — leave last-known value in place */ }
+
+    if (finance) {
+        const monthlyFeePaid = isMonthlyFeePaid(finance);
+        student.backendFine = monthlyFeePaid ? 0 : (finance.fineAmount || 0);
+        student.backendFineReason = monthlyFeePaid ? "" : (finance.fineReason || "");
+        student.backendFineMonthKey = monthKey;
+        // Also refresh the authoritative paid-amount cache for this student
+        // right now (rather than waiting up to 10s for the next status-all
+        // poll — see refreshStudentFeeStatusCache), so getPaidThisMonthAuthoritative()
+        // — used by Pay Bill's remaining-balance calc — reflects this fetch
+        // immediately.
+        if (monthKey === getCurrentFeeMonthKey()) {
+            _studentFeeStatusCache[studentIdentifier] = finance;
+            _studentFeeStatusMonthKey = monthKey;
+        }
+    }
+    return finance;
+}
+
 /**
  * Best-effort finance status for a single student.
  * Tries the backend first (so a live server, when present, always wins);
@@ -2429,18 +3243,36 @@ buildVoucherHTML = function(s) {
  * the underlying calculation logic changes.
  */
 async function getFeeRowFinance(student, monthKey) {
-    const studentIdentifier = student.regNo || student.id;
-    let finance = null;
-    try {
-        finance = await apiRequest(`/status/${studentIdentifier}/${monthKey}`);
-    } catch (e) { /* handled below via fallback */ }
+    const finance = await syncStudentFineFromBackend(student, monthKey);
 
-    if (finance) return finance;
+    // BUGFIX — "Pending Fees row reverts to the OLD fee right after
+    // Generate Voucher": Generate Voucher (recordVoucherGeneration) is a
+    // local/localStorage-only action — it snapshots the CURRENT class fee
+    // onto the voucher record, but never pushes that snapshot to the
+    // backend. So the backend's own /status total keeps being computed
+    // from whatever fee IT still has on file, which can lag behind the fee
+    // that was just locked into the voucher/print preview. The old code
+    // below used to trust `finance` (the raw backend total) unconditionally
+    // the moment a voucher existed, so the row showed the backend's stale
+    // number even though the printed voucher was correctly showing the new
+    // one.
+    // Fix: once generated, the owed TOTAL must always come from the local
+    // snapshot (via computeFeeBreakdown(), same source the voucher preview
+    // and Pay Bill already trust) — never from the backend's total. The
+    // backend is still trusted for how much has actually been PAID
+    // (paidAmount) and for the fine, since those are real ledger data only
+    // it tracks — see the shared computation below, which is now used both
+    // before AND after generation instead of being skipped post-generation.
 
-    // ---- Local fallback ----
+    // ---- Local / live computation (now always used for the TOTAL) ----
+    // Keep the backend's own paidAmount when it's available (advance
+    // payments recorded server-side), otherwise fall back to local payment
+    // history.
     const f = computeFeeBreakdown(student);
     const payments = (student.feePayments || []).filter(p => p.monthKey === monthKey);
-    const paidAmount = payments.reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
+    const paidAmount = (finance && typeof finance.paidAmount === 'number')
+        ? finance.paidAmount
+        : payments.reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
     const remainingBalance = Math.max(0, f.voucherTotal - paidAmount);
     const paymentStatus = remainingBalance <= 0 ? 'Paid' : (paidAmount > 0 ? 'Partial' : 'Pending');
 
@@ -2451,15 +3283,19 @@ async function getFeeRowFinance(student, monthKey) {
         remainingBalance,
         paidAmount,
         paymentStatus,
-        fineAmount: (f.fineAmount || 0) + (f.monthlyFineTotal || 0),
-        fineReason: f.fineDetails || student.backendFineReason || ''
+        fineAmount: remainingBalance <= 0.01
+            ? 0
+            : (f.fineAmount || 0) + (f.monthlyFineTotal || 0),
+        fineReason: remainingBalance <= 0.01
+            ? ''
+            : (f.fineDetails || student.backendFineReason || '')
     };
 }
 
 async function renderFees(className) {
     updateClassFeeStats(className);
 
-    const students = JSON.parse(localStorage.getItem('edu_students') || '[]');
+    const students = getRealStudents();
     const tbody = document.getElementById('fee-table-body');
     const monthKey = getCurrentFeeMonthKey(); 
     
@@ -2489,7 +3325,7 @@ async function renderFees(className) {
             const finance = await getFeeRowFinance(s, monthKey);
 
             const isPaid = finance.paymentStatus === "Paid";
-            const hasUnpaidFine = finance.fineAmount > 0;
+            const hasUnpaidFine = finance.fineAmount > 0 && !isMonthlyFeePaid(finance);
 
             const statusClass = isPaid ? 'fee-paid' : (finance.paidAmount > 0 ? 'fee-pending' : 'fee-overdue');
 
@@ -2620,20 +3456,35 @@ let afmNextRowId = 1;
 let afmCurrentStudent = null;
 
 function findStudentExact(students, studentId, fullName) {
-    // Prefer an exact (id + name) match to disambiguate siblings that
-    // accidentally share an id. Fall back to id only.
+    // Callers pass either the student's regNo OR numeric id as `studentId`
+    // (most call sites prefer `student.regNo || student.id`, see e.g.
+    // getFeeRowFinance() / the Generate Voucher button in renderFees()),
+    // so a match has to check both — matching id only caused "Student not
+    // found" for every student whose regNo differs from their numeric id,
+    // even though they're right there in the cache.
+    const matchesId = s => String(s.id) === String(studentId) || String(s.regNo) === String(studentId);
+
+    // Prefer an exact (id/regNo + name) match to disambiguate siblings that
+    // accidentally share an id. Fall back to id/regNo only.
     if (fullName) {
-        const exact = students.find(s =>
-            String(s.id) === String(studentId) && s.fullName === fullName);
+        const exact = students.find(s => matchesId(s) && s.fullName === fullName);
         if (exact) return exact;
     }
-    return students.find(s => String(s.id) === String(studentId));
+    return students.find(matchesId);
 }
 
 let afmCurrentPendingAmount = 0;
 
-function openAddFeesModal(studentId, fullName) {
-    const students = JSON.parse(localStorage.getItem('edu_students') || '[]');
+// BUGFIX — "Pay Bill doesn't show fines that View Voucher shows": this used
+// to be synchronous and never touched the backend at all — it rendered the
+// modal straight from whatever `student.backendFine` already happened to be
+// in the local cache (only ever set by viewVoucher()). Now it re-syncs the
+// fine from the MySQL ledger (same /status endpoint View Voucher and the fee
+// table use) before showing the numbers, so Pay Bill and View Voucher always
+// agree — regardless of which one was opened first, and never relying on
+// localStorage/browser cache as the source of truth.
+async function openAddFeesModal(studentId, fullName) {
+    const students = getRealStudents();
     const student = findStudentExact(students, studentId, fullName);
     if (!student) { showFinanceToast('Student not found.', 'error'); return; }
     afmCurrentStudent = student;
@@ -2650,17 +3501,48 @@ function openAddFeesModal(studentId, fullName) {
     const notesInput = document.getElementById('af-fee-notes');
     if(notesInput) notesInput.value = '';
 
+    // Show the modal immediately with whatever is already known locally
+    // (instant feedback, no blank/loading flash) ...
     renderAddFeesModal(student);
     document.getElementById('add-fees-modal').style.display = 'flex';
+
+    // ...then re-sync the fine straight from the backend and re-render if it
+    // changed anything, so a fine added moments ago (in this session or by
+    // another admin) is never missed just because Pay Bill was opened first.
+    const monthKey = getCurrentFeeMonthKey();
+    try {
+        await syncStudentFineFromBackend(student, monthKey);
+    } catch (e) {
+        // Backend unreachable — keep showing the locally-known figures.
+    }
+    // Guard against the modal having been closed / switched to a different
+    // student while the fetch above was in flight.
+    if (afmCurrentStudent === student && document.getElementById('add-fees-modal').style.display !== 'none') {
+        renderAddFeesModal(student);
+    }
 }
 
+// BUGFIX — "Pay Bill remaining balance doesn't reflect payments already
+// made": this used to sum ONLY the local, in-memory `student.feePayments`
+// array to work out "paid so far this month". That array is a client-side
+// convenience list that is NOT persisted on the backend Student record —
+// the real, authoritative paid amount lives in the Finance ledger (written
+// by POST /pay) and is exposed via GET /status[-all]. So the moment
+// `student.feePayments` didn't already have the payment in it (a fresh
+// page load, a different browser tab/session, or simply this student
+// object having been re-fetched from the backend since the payment was
+// made), Pay Bill fell back to treating "paid so far" as 0 — showing the
+// full 8K voucher total as still owed even though 1K had genuinely already
+// been paid and recorded in the database.
+// Fix: read "paid so far" the same authoritative way the stats header and
+// fee table already do — getPaidThisMonthAuthoritative(), which prefers the
+// backend-synced Finance ledger and only falls back to the local array when
+// no backend record exists yet (e.g. the instant right after a payment,
+// before the next sync tick).
 function renderAddFeesModal(student) {
     const f = computeFeeBreakdown(student);
-    const payments = student.feePayments || [];
     const currentMonthKey = getCurrentFeeMonthKey();
-    const thisMonthPaid = payments
-        .filter(p => p.monthKey === currentMonthKey)
-        .reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
+    const thisMonthPaid = getPaidThisMonthAuthoritative(student, currentMonthKey);
 
     // Left panel: show ONE copy of the voucher (Student Copy) only.
     let voucherHTML = buildVoucherHTML(student);
@@ -2725,6 +3607,57 @@ function recalcSimpleAFTotal() {
     set('afm-t-remaining', `Rs. ${remaining.toLocaleString()}`, remaining > 0 ? '#c2410c' : '#16a34a');
 }
 
+/**
+ * FEATURE — "fine auto-clears once the fee + fine is fully paid": once a
+ * student's total payable for the month (voucherTotal, which already
+ * folds in their live fine — see computeFeeBreakdown) has been fully
+ * covered by what they've paid, any fine still sitting against them is
+ * stale — it's already been paid for as part of the bill — so it should
+ * disappear on its own rather than requiring a separate manual "Pay Now"
+ * on the Fines page.
+ *
+ * This settles every outstanding individual FINE record for the student+
+ * month on the backend via the same /pay-fine endpoint the manual button
+ * already uses (so the ledger, Fines Hub, and fine-details history all
+ * agree the fine is gone — not just this one screen), then zeroes the
+ * local/cached fine fields immediately so the UI reflects it without
+ * waiting for the next backend poll.
+ *
+ * Best-effort: if the backend is unreachable, the individual FINE rows
+ * won't be marked Paid server-side yet, but the local clear still keeps
+ * the fee table/voucher from showing a fine the student no longer
+ * effectively owes; the next successful sync will reconcile it.
+ */
+async function autoSettleFinesIfFullyPaid(student, monthKey) {
+    if (!student) return;
+    const studentId = student.regNo || student.id;
+
+    let f;
+    try { f = computeFeeBreakdown(student); } catch (e) { return; }
+    if (!f || !(f.fineAmount > 0)) return; // no fine currently on file — nothing to do
+
+    const paidSoFar = getPaidThisMonthAuthoritative(student, monthKey);
+    const isFullyPaid = (f.voucherTotal - paidSoFar) <= 0.01;
+    if (!isFullyPaid) return;
+
+    try {
+        const fines = await apiCall(`/fine-details/${studentId}/${monthKey}`);
+        if (Array.isArray(fines)) {
+        const unpaid = fines.filter(fx => !isFinePaid(fx));
+            for (const fx of unpaid) {
+                try { await apiCall(`/pay-fine/${fx.id}`, 'POST'); } catch (e) { /* best-effort, continue with the rest */ }
+            }
+        }
+    } catch (e) { /* backend unreachable — local clear below still updates the UI */ }
+
+    student.backendFine = 0;
+    student.backendFineReason = '';
+    if (_studentFeeStatusCache[studentId]) {
+        _studentFeeStatusCache[studentId].fineAmount = 0;
+        _studentFeeStatusCache[studentId].fineReason = '';
+    }
+}
+
 async function saveSimpleStudentFeePayment() {
     const studentId = document.getElementById('add-fees-student-id').value;
     const paid = parseFloat(document.getElementById('afm-pay-amount').value) || 0;
@@ -2747,13 +3680,30 @@ async function saveSimpleStudentFeePayment() {
     // (see its try/catch), so with no backend running the call was a silent
     // no-op — nothing was ever written to student.feePayments, which is the
     // array every balance/status calculation (getFeeRowFinance, the fee
-    // table, the voucher) actually reads. The row kept recomputing the same
-    // "Pending"/"Partial" status forever. We still ping the backend as a
+    // table, the voucher) actually reads. We still ping the backend as a
     // best-effort sync, but the payment is now ALSO saved locally so the
     // UI and dashboard always reflect it immediately regardless of backend.
-    apiRequest("/pay", "POST", { regNo: studentId, monthKey, amount: paid }).catch(() => {});
+    //
+    // BUGFIX #2 — "Still shows Pending right after paying":
+    // getFeeRowFinance() always prefers a successful backend /status
+    // response over the local fallback (it only falls back when the
+    // backend is unreachable). This /pay call used to be fired WITHOUT
+    // awaiting it, and renderFees() ran immediately afterwards, issuing a
+    // GET /status/... for the same student. That GET could reach the
+    // server and return BEFORE the POST /pay above finished committing the
+    // new paidAmount to MySQL — so the row re-rendered with the stale
+    // pre-payment "Pending" status even though the payment had actually
+    // been saved (locally right away, and on the backend a moment later).
+    // Awaiting the POST here guarantees the backend write is committed
+    // before we re-render, so the very next /status GET reflects it.
+    try {
+        await apiRequest("/pay", "POST", { regNo: studentId, monthKey, amount: paid, discount });
+    } catch (e) {
+        // Backend unreachable/failed — local save below still keeps the
+        // UI correct via getFeeRowFinance()'s local fallback.
+    }
 
-    const students = JSON.parse(localStorage.getItem('edu_students') || '[]');
+    const students = getRealStudents();
     const student = afmCurrentStudent
         ? findStudentExact(students, studentId, afmCurrentStudent.fullName)
         : findStudentExact(students, studentId);
@@ -2788,7 +3738,16 @@ async function saveSimpleStudentFeePayment() {
         });
     }
 
-    localStorage.setItem('edu_students', JSON.stringify(students));
+    saveStudentsCache(students);
+    // Refresh the authoritative backend status cache now (rather than
+    // waiting up to 10s for the next live-sync poll) so the Collected/
+    // Pending totals rendered just below reflect this payment immediately.
+    await refreshStudentFeeStatusCache();
+
+    // FEATURE — auto-clear any fine once this payment fully settles the
+    // bill (fee + fine). See autoSettleFinesIfFullyPaid() above.
+    await autoSettleFinesIfFullyPaid(student, monthKey);
+    refreshFineRecordsListIfVisible();
 
     showFeeSuccessToast(`Payment of Rs. ${paid} recorded successfully`);
     closeAddFeesModal();
@@ -2936,7 +3895,7 @@ function atvUpdateFeeRowCount() {
 }
 
 function openAddToVoucherModal(studentId, fullName, editMode) {
-    const students = JSON.parse(localStorage.getItem('edu_students') || '[]');
+    const students = getRealStudents();
     const student = findStudentExact(students, studentId, fullName);
     if (!student) { showFinanceToast('Student not found.', 'error'); return; }
 
@@ -3180,7 +4139,7 @@ function saveFeesToVoucher() {
     const gross = atvFeeRows.reduce((s, r) => s + (r.amount || 0), 0);
     if (gross <= 0) { showFinanceToast('Please enter valid fee amounts.', 'error'); return; }
 
-    let students = JSON.parse(localStorage.getItem('edu_students') || '[]');
+    let students = getRealStudents();
     let idx = -1;
     if (fullName) {
         idx = students.findIndex(s => String(s.id) === String(studentId) && s.fullName === fullName);
@@ -3216,7 +4175,7 @@ function saveFeesToVoucher() {
     students[idx].voucherCustomFeesMonth = getCurrentFeeMonthKey();
     students[idx].voucherNote = noteEl ? noteEl.value.trim() : '';
 
-    localStorage.setItem('edu_students', JSON.stringify(students));
+    saveStudentsCache(students);
 
     // BUGFIX — keep this month's already-generated voucher record in sync
     // with the edit just made. Without this, next month's arrears rollover
@@ -3251,15 +4210,58 @@ function saveFeesToVoucher() {
    ADVANCE SALARY STORAGE HELPERS
    ============================================ */
 function getAdvanceRecords() {
-    return JSON.parse(localStorage.getItem('eduflow-staff-advances') || '[]');
+    return _staffAdvancesCache;
 }
 function saveAdvanceRecords(list) {
-    localStorage.setItem('eduflow-staff-advances', JSON.stringify(list));
+    _staffAdvancesCache = list;
+    _backendSave(API_BASE, ENDPOINTS.staffAdvances, 'PUT', { items: list });
 }
 function getTotalAdvance(staffId) {
     return getAdvanceRecords()
-        .filter(r => r.staffId === staffId)
+        .filter(r => String(r.staffId) === String(staffId))
         .reduce((s, r) => s + (Number(r.amount) || 0), 0);
+}
+
+function getSalaryRecordForStaffMonth(staffId, monthKey) {
+    return _salaryRecordsCache.find(record =>
+        String(record && record.staffId) === String(staffId) &&
+        monthKeyFromDateValue(record && (record.monthKey ?? record.month)) === String(monthKey)
+    ) || null;
+}
+
+function getStaffSalaryStartMonthKey(staff) {
+    const explicitMonth = monthKeyFromDateValue(staff && staff.joiningMonthKey);
+    if (explicitMonth) return explicitMonth;
+
+    const staffRecords = _salaryRecordsCache
+        .filter(record => String(record && record.staffId) === String(staff && staff.id))
+        .map(record => monthKeyFromDateValue(record && (record.monthKey ?? record.month)))
+        .filter(Boolean)
+        .sort();
+    return staffRecords[0] || '';
+}
+
+function isStaffActiveForSalaryMonth(staff, monthKey) {
+    const startMonthKey = getStaffSalaryStartMonthKey(staff);
+    return !startMonthKey || String(monthKey) >= startMonthKey;
+}
+
+function upsertSalaryRecordCache(record) {
+    if (!record) return;
+    const existingIndex = _salaryRecordsCache.findIndex(item =>
+        (record.id != null && String(item.id) === String(record.id)) ||
+        (String(item.staffId) === String(record.staffId) &&
+         String(item.monthKey) === String(record.monthKey))
+    );
+    if (existingIndex === -1) {
+        _salaryRecordsCache.push(record);
+    } else {
+        _salaryRecordsCache[existingIndex] = record;
+    }
+}
+
+function isSalaryPaid(staffId, monthKey) {
+    return !!getSalaryRecordForStaffMonth(staffId, monthKey);
 }
 
 /* ============================================
@@ -3275,18 +4277,10 @@ function renderTeachingSalaries(filterText = '') {
     const tbody = document.getElementById('teaching-salary-tbody');
     if (!tbody) return;
 
-    // BUGFIX — "Teaching Salary page always shows 'Error connecting to
-    // backend server'": this used to fetch staff from a hardcoded
-    // http://localhost:8080/api/staff backend that doesn't exist in this
-    // app (everything else — including the Non-Teaching salary page right
-    // below — reads/writes staff via getGlobalData()/db.staff, which is
-    // backed by localStorage, see shared-data.js). Since that backend was
-    // never reachable, this page could never actually show the teaching
-    // staff that were added through the app, and "advance" was hardcoded
-    // to 0 instead of being read from the real advance records. Now this
-    // mirrors renderNonTeachingSalaries() exactly.
-    const db = getGlobalData();
-    const teachers = db.staff['Teaching'] || [];
+    // Staff for the salary pages is read from the in-memory backend mirror
+    // (_staffCache — see refreshStaffCache()), exactly like every other
+    // entity on this page. No localStorage / getGlobalData() involved.
+    const teachers = getStaffCache('Teaching');
     const currentMonthKey = getCurrentMonthKey();
 
     const filtered = teachers.filter(t =>
@@ -3300,7 +4294,7 @@ function renderTeachingSalaries(filterText = '') {
     }
 
     tbody.innerHTML = filtered.map(t => {
-        const isPaid = (t.salaryHistory || []).some(h => h.monthKey === currentMonthKey);
+        const isPaid = isSalaryPaid(t.id, currentMonthKey);
         const advance = getTotalAdvance(t.id);
         const absenceFine = Number(t.fines) || 0;
         const absentDays  = Number(t.absentDaysThisMonth) || 0;
@@ -3347,8 +4341,7 @@ function initNonTeachingSalaryPage() {
 function renderNonTeachingSalaries(filterText = '') {
     const tbody = document.getElementById('non-teaching-salary-tbody');
     if (!tbody) return;
-    const db = getGlobalData();
-    const workers = db.staff['Non-Teaching'] || [];
+    const workers = getStaffCache('Non-Teaching');
     const currentMonthKey = getCurrentMonthKey();
 
     const filtered = workers.filter(w =>
@@ -3362,7 +4355,7 @@ function renderNonTeachingSalaries(filterText = '') {
     }
 
     tbody.innerHTML = filtered.map(w => {
-        const isPaid = (w.salaryHistory || []).some(h => h.monthKey === currentMonthKey);
+        const isPaid = isSalaryPaid(w.id, currentMonthKey);
         const advance = getTotalAdvance(w.id);
         const absenceFine = Number(w.fines) || 0;
         const absentDays  = Number(w.absentDaysThisMonth) || 0;
@@ -3400,20 +4393,19 @@ function filterNonTeachingSalaries() {
    SALARY BREAKDOWN PANEL (shared)
    ============================================ */
 function showSalaryBreakdown(staffId, category = 'Teaching') {
-    const db = getGlobalData();
-    let list = db.staff[category] || [];
-    let staff = list.find(s => s.id === staffId);
+    let list = getStaffCache(category);
+    let staff = list.find(s => String(s.id) === String(staffId));
     if (!staff) {
         // Fallback: scan all staff categories (key for non-teaching may differ)
-        for (const key of Object.keys(db.staff || {})) {
-            const found = (db.staff[key] || []).find(s => s.id === staffId);
+        for (const key of Object.keys(_staffCache || {})) {
+            const found = getStaffCache(key).find(s => String(s.id) === String(staffId));
             if (found) { staff = found; category = key; break; }
         }
     }
     if (!staff) return;
 
-    const bonusRecords = JSON.parse(localStorage.getItem('eduflow-staff-bonus') || '[]');
-    const fineRecords  = JSON.parse(localStorage.getItem('eduflow-staff-fines') || '[]');
+    const bonusRecords = getStaffBonusData();
+    const fineRecords  = getStaffFinesData();
     const matchStaff = r => String(r.staffId) === String(staffId) || String(r.id) === String(staffId);
     const currentMonthKey = getCurrentMonthKey();
     const matchMonth = r => !r.monthKey || r.monthKey === currentMonthKey;
@@ -3474,7 +4466,14 @@ function showSalaryBreakdown(staffId, category = 'Teaching') {
     document.body.style.overflow = 'hidden';
 
     // Show or hide the green "Paid" overlay
-    const isPaidThisMonth = (staff.salaryHistory || []).some(h => h.monthKey === getCurrentMonthKey());
+    const isPaidThisMonth = isSalaryPaid(staff.id, getCurrentMonthKey());
+    const paySalaryButton = document.getElementById('sbp-pay-salary-btn');
+    if (paySalaryButton) {
+        paySalaryButton.disabled = isPaidThisMonth;
+        paySalaryButton.title = isPaidThisMonth
+            ? 'Salary for this month is already paid'
+            : 'Pay salary';
+    }
     let paidOverlay = panel.querySelector('.sbp-paid-overlay');
     if (!paidOverlay) {
         paidOverlay = document.createElement('div');
@@ -3524,6 +4523,10 @@ async function payCurrentSalary() {
             bonus: bonus,
             fine: manualFine
         });
+        // The payment response is the authoritative database record. Update
+        // the in-memory cache immediately so both salary tables change from
+        // Pending to Paid without waiting for the next polling interval.
+        upsertSalaryRecordCache(response);
 
         // 3. Success UI updates
         showFinanceToast("Salary processed and recorded in database!", 'success');
@@ -3534,6 +4537,7 @@ async function payCurrentSalary() {
         } else {
             renderNonTeachingSalaries();
         }
+        renderSalaryRecordsTable();
         
         closeSalaryBreakdown();
     } catch (err) {
@@ -3542,64 +4546,11 @@ async function payCurrentSalary() {
     }
 }
 
-async function processSalaryPayment(staffId, category = 'Teaching') {
-    const db = getGlobalData();
-    const list = db.staff[category] || [];
-    const staff = list.find(s => s.id === staffId);
-    if (!staff) return;
-
-    const absenceFine = Number(staff.fines) || 0;
-    // Subtract manual fines logged for this month as well
-    const _fineRecs = JSON.parse(localStorage.getItem('eduflow-staff-fines') || '[]');
-    const _mk = getCurrentMonthKey();
-    const manualFine = _fineRecs
-        .filter(r => (String(r.staffId) === String(staffId) || String(r.id) === String(staffId))
-                  && (!r.monthKey || r.monthKey === _mk))
-        .reduce((sum, r) => sum + (Number(r.amount) || 0), 0);
-    const totalFines  = absenceFine + manualFine;
-    const netSalary   = Math.max(0, Number(staff.salary) - totalFines);
-    const fineNote    = totalFines > 0 ? ` (after RS ${totalFines.toLocaleString()} fines)` : '';
-
-    const salaryConfirmed = await ssConfirm(
-        `Confirm salary payment of RS ${netSalary.toLocaleString()} to ${staff.name}?${fineNote}`,
-        { title: 'Confirm Salary Payment', confirmLabel: 'Pay', danger: false }
-    );
-    if (salaryConfirmed) {
-        if (!staff.salaryHistory) staff.salaryHistory = [];
-
-        // Apply this month's security deduction (if any pending)
-        const secInfo = computeMonthlySecurity(staff);
-        const secDeducted = secInfo.monthlyDue;
-        if (secDeducted > 0) {
-            staff.securityCollected = (Number(staff.securityCollected) || 0) + secDeducted;
-        }
-
-        // Reset absence fine after payment (marks it as settled)
-        staff.finesPaidThisMonth = absenceFine;
-        staff.fines = 0;
-        staff.absentDaysThisMonth = 0;
-
-        staff.salaryHistory.push({
-            date: new Date().toISOString(),
-            monthKey: getCurrentMonthKey(),
-            amount: staff.salary,
-            absenceFineDeducted: absenceFine,
-            securityDeducted: secDeducted,
-            status: 'Paid'
-        });
-
-        saveGlobalData(db);
-        const note = secDeducted > 0 ? `\nSecurity deducted: RS ${secDeducted.toLocaleString()}` : '';
-        const fineMsg = absenceFine > 0 ? `\nAbsence fine deducted: RS ${absenceFine.toLocaleString()}` : '';
-        showFinanceToast(`Salary processed successfully for ${staff.name}${fineMsg}${note}`, 'success');
-        if (category === 'Teaching') {
-            renderTeachingSalaries(document.getElementById('teacher-salary-search').value);
-        } else {
-            const sEl = document.getElementById('worker-salary-search');
-            renderNonTeachingSalaries(sEl ? sEl.value : '');
-        }
-    }
-}
+// NOTE: a legacy `processSalaryPayment()` used to live here, mutating the
+// staff record directly via getGlobalData()/saveGlobalData() (localStorage).
+// It was never called from the UI — payCurrentSalary() above is the real,
+// wired-up handler and already posts to the backend (/salary/pay) — so
+// it's been removed rather than ported.
 
 /* ============================================
    SECURITY DEPOSIT — MONTHLY DEDUCTION HELPER
@@ -3623,7 +4574,7 @@ function computeMonthlySecurity(staff) {
 
     // If already paid this month, don't show pending deduction again.
     const monthKey = getCurrentMonthKey();
-    const paidThisMonth = (staff.salaryHistory || []).some(h => h.monthKey === monthKey);
+    const paidThisMonth = isSalaryPaid(staff.id, monthKey);
     if (paidThisMonth) {
         return { total, monthly, collected, remaining, monthlyDue: 0 };
     }
@@ -3639,11 +4590,9 @@ function computeMonthlySecurity(staff) {
    ADVANCE SALARY — UI + PAYMENT
    ============================================ */
 function isStaffPaidThisMonth(staffId, category) {
-    const db = getGlobalData();
-    const list = db.staff[category] || [];
-    const staff = list.find(s => s.id === staffId);
-    if (!staff) return false;
-    return (staff.salaryHistory || []).some(h => h.monthKey === getCurrentMonthKey());
+    const list = getStaffCache(category);
+    const staff = list.find(s => String(s.id) === String(staffId));
+    return !!staff && isSalaryPaid(staff.id, getCurrentMonthKey());
 }
 
 /* ============================================
@@ -3655,10 +4604,6 @@ function toggleInlineBonus() {
     const panel = document.getElementById('salary-breakdown-panel');
     const staffId  = panel && panel.dataset.teacherId;
     const category = (panel && panel.dataset.category) || 'Teaching';
-    if (staffId && isStaffPaidThisMonth(staffId, category)) {
-        showFinanceToast('Salary for this month has already been paid. No further actions can be performed until next month.', 'error');
-        return;
-    }
     const wrap = document.getElementById('sbp-inline-bonus-wrap');
     if (!wrap) return;
     wrap.classList.toggle('d-none');
@@ -3679,8 +4624,7 @@ function addBonusFromSalaryPanel() {
     if (!amount || amount < 1) { showFinanceToast('Please enter a valid bonus amount.', 'error'); return; }
     if (!desc) { showFinanceToast('Please enter a bonus reason.', 'error'); return; }
 
-    const db = getGlobalData();
-    const members = db.staff[category] || [];
+    const members = getStaffCache(category);
     const member = members.find(s => s.id === staffId);
     if (!member) { showFinanceToast('Staff member not found.', 'error'); return; }
 
@@ -3707,10 +4651,6 @@ function toggleAdvancePay() {
     const panel = document.getElementById('salary-breakdown-panel');
     const staffId  = panel && panel.dataset.teacherId;
     const category = (panel && panel.dataset.category) || 'Teaching';
-    if (staffId && isStaffPaidThisMonth(staffId, category)) {
-        showFinanceToast('Salary for this month has already been paid. No further actions can be performed until next month.', 'error');
-        return;
-    }
     const wrap = document.getElementById('sbp-advance-input-wrap');
     if (!wrap) return;
     wrap.classList.toggle('d-none');
@@ -3782,17 +4722,22 @@ async function payAdvanceSalary() {
    Bonus and Fine totals come live from the records added on the
    "Add Staff Bonus" / "Add Staff Fine" pages, so every new entry
    updates the salary panel automatically.
+
+   PERSISTENCE: these write to the backend (PUT /api/staff/{id}/deductions
+   — see _saveStaffDeductionToBackend()), not localStorage. The in-memory
+   _staffCache is updated immediately so the UI feels instant; the actual
+   save happens in the background, matching every other save on this page.
    ============================================================ */
 function setStaffDeduction(staffId, field, value) {
     if (field !== 'security' && field !== 'feeDeducted') return false;
-    const db = getGlobalData();
-    if (!db || !db.staff) return false;
-    for (const cat of Object.keys(db.staff)) {
-        const list = db.staff[cat] || [];
+    if (!_staffCache) return false;
+    const clean = Math.max(0, Number(value) || 0);
+    for (const cat of Object.keys(_staffCache)) {
+        const list = _staffCache[cat] || [];
         const i = list.findIndex(s => String(s.id) === String(staffId));
         if (i !== -1) {
-            list[i][field] = Math.max(0, Number(value) || 0);
-            saveGlobalData(db);
+            list[i][field] = clean;
+            _saveStaffDeductionToBackend(staffId, field, clean);
             return true;
         }
     }
@@ -3802,10 +4747,9 @@ function setStaffSecurity(staffId, value)    { return setStaffDeduction(staffId,
 function setStaffFeeDeducted(staffId, value) { return setStaffDeduction(staffId, 'feeDeducted', value); }
 
 function getStaffDeductions(staffId) {
-    const db = getGlobalData();
-    if (!db || !db.staff) return null;
-    for (const cat of Object.keys(db.staff)) {
-        const s = (db.staff[cat] || []).find(x => String(x.id) === String(staffId));
+    if (!_staffCache) return null;
+    for (const cat of Object.keys(_staffCache)) {
+        const s = (_staffCache[cat] || []).find(x => String(x.id) === String(staffId));
         if (s) {
             return {
                 security:    Number(s.security)    || 0,
@@ -3818,15 +4762,13 @@ function getStaffDeductions(staffId) {
 
 function setAllStaffDeductionDefaults(opts) {
     opts = opts || {};
-    const db = getGlobalData();
-    if (!db || !db.staff) return;
-    for (const cat of Object.keys(db.staff)) {
-        (db.staff[cat] || []).forEach(s => {
-            if (opts.security    !== undefined) s.security    = Math.max(0, Number(opts.security)    || 0);
-            if (opts.feeDeducted !== undefined) s.feeDeducted = Math.max(0, Number(opts.feeDeducted) || 0);
+    if (!_staffCache) return;
+    for (const cat of Object.keys(_staffCache)) {
+        (_staffCache[cat] || []).forEach(s => {
+            if (opts.security    !== undefined) { s.security    = Math.max(0, Number(opts.security)    || 0); _saveStaffDeductionToBackend(s.id, 'security',    s.security); }
+            if (opts.feeDeducted !== undefined) { s.feeDeducted = Math.max(0, Number(opts.feeDeducted) || 0); _saveStaffDeductionToBackend(s.id, 'feeDeducted', s.feeDeducted); }
         });
     }
-    saveGlobalData(db);
 }
 
 window.atvAddFeeRow = atvAddFeeRow;
@@ -3859,7 +4801,7 @@ let ievFineAmount = 0;
 let ievFineReason = '';
 
 function openInlineVoucherEditor(studentId, fullName) {
-    const students = JSON.parse(localStorage.getItem('edu_students') || '[]');
+    const students = getRealStudents();
     const student = findStudentExact(students, studentId, fullName);
     if (!student) { showFinanceToast('Student not found.', 'error'); return; }
 
@@ -4048,7 +4990,7 @@ function ievSave() {
 
     if (cleanRows.length === 0) { showFinanceToast('Please add at least one fee row.', 'error'); return; }
 
-    let students = JSON.parse(localStorage.getItem('edu_students') || '[]');
+    let students = getRealStudents();
     let idx = students.findIndex(s => String(s.id) === String(studentId) && s.fullName === fullName);
     if (idx === -1) idx = students.findIndex(s => String(s.id) === String(studentId));
     if (idx === -1) { showFinanceToast('Student not found.', 'error'); return; }
@@ -4069,7 +5011,7 @@ function ievSave() {
     students[idx].arrears     = Math.max(0, Number(ievArrears) || 0);
     students[idx].voucherNote = noteEl ? noteEl.value.trim() : (students[idx].voucherNote || '');
 
-    localStorage.setItem('edu_students', JSON.stringify(students));
+    saveStudentsCache(students);
 
     // BUGFIX — same fix as saveFeesToVoucher(): sync this month's generated
     // record so a discount/edit applied here doesn't leave a phantom
@@ -4151,9 +5093,38 @@ async function showFineDetails(regNo, monthKey) {
         const summary = await apiCall(`/status/${regNo}/${monthKey}`);
         currentDetailedFines = await apiCall(`/fine-details/${regNo}/${monthKey}`);
 
+        // FEATURE — "fine still shows Pending/Pay Now after the fee is
+        // 100% paid": the fine amount is already folded into the monthly
+        // bill (see computeFeeBreakdown), so once the bill's remaining
+        // balance is 0, every fine underneath it has effectively been
+        // paid off too — even if the individual FINE record(s) on the
+        // backend haven't been separately flagged Paid yet. Detect that
+        // here and treat them as settled: best-effort sync the backend so
+        // it agrees (same /pay-fine endpoint the manual button uses), and
+        // — regardless of whether that sync succeeds — show them as Paid
+        // right now so the admin never sees a stale "Pending" for money
+        // that's already been collected.
+        const billFullyPaid = !!summary && (
+            summary.paymentStatus === 'Paid' ||
+            (Number(summary.remainingBalance) || 0) <= 0.01
+        );
+        if (billFullyPaid && Array.isArray(currentDetailedFines)) {
+            const stillUnpaid = currentDetailedFines.filter(f => !isFinePaid(f));
+            if (stillUnpaid.length > 0) {
+                for (const f of stillUnpaid) {
+                    try { await apiCall(`/pay-fine/${f.id}`, 'POST'); } catch (e) { /* best-effort, keep going */ }
+                }
+                currentDetailedFines = currentDetailedFines.map(f => isFinePaid(f) ? f : Object.assign({}, f, {
+                    status: 'Paid',
+                    payDate: f.payDate || 'Cleared',
+                    payTime: f.payTime || 'with fee payment'
+                }));
+            }
+        }
+
         // 1. Calculate Quick Stats
-        const totalPending = currentDetailedFines.filter(f => f.status !== "Paid").reduce((s, f) => s + f.amount, 0);
-        const totalPaid = currentDetailedFines.filter(f => f.status === "Paid").reduce((s, f) => s + f.amount, 0);
+        const totalPending = currentDetailedFines.filter(f => !isFinePaid(f)).reduce((s, f) => s + f.amount, 0);
+        const totalPaid = currentDetailedFines.filter(isFinePaid).reduce((s, f) => s + f.amount, 0);
 
         // 2. Render Banner
         document.getElementById('full-fine-banner').innerHTML = `
@@ -4198,7 +5169,7 @@ function renderFineRows(data) {
     
     // Use .map and .join to ensure the entire array is converted to HTML
     tbody.innerHTML = data.map(d => {
-        const isPaid = d.status === "Paid";
+        const isPaid = isFinePaid(d);
         return `
         <tr>
             <td><span class="tx-id">#FT-${d.id}</span></td>
@@ -4242,13 +5213,41 @@ async function processIndividualPay(fineId) {
         const idx = currentDetailedFines.findIndex(f => f.id === fineId);
         if (idx !== -1) currentDetailedFines[idx] = updated;
 
-        // 2. REFRESH MAIN FEE TABLE
+        // 2. Remove the settled fine from the live student calculation too.
+        // The backend subtracts it from Finance.fineAmount, but an already
+        // loaded student object can otherwise keep the old red "Unpaid Fine"
+        // line until a full page reload.
+        const settledStudent = updated && findStudentExact(
+            getRealStudents(),
+            updated.regNo,
+            updated.studentName
+        );
+        if (settledStudent) {
+            const unpaidFines = currentDetailedFines.filter(f => !isFinePaid(f));
+            settledStudent.backendFine = unpaidFines.reduce(
+                (sum, fine) => sum + (Number(fine.amount) || 0), 0
+            );
+            settledStudent.backendFineReason = unpaidFines
+                .map(fine => fine.reason)
+                .filter(Boolean)
+                .join(', ');
+            settledStudent.backendFineMonthKey = updated.monthKey;
+        }
+
+        // 3. REFRESH MAIN FEE TABLE
         // This is the key: it re-fetches the backend status for the student
         const classTitleEl = document.getElementById('selected-class-title');
         if (classTitleEl && classTitleEl.innerText.includes(':')) {
             const className = classTitleEl.innerText.split(': ')[1];
-            renderFees(className); 
+            await renderFees(className);
         }
+
+        // 4. Refresh the Fine Records list table sitting behind this
+        // overlay too — otherwise it keeps showing the stale "Pending"
+        // status it had when the overlay was opened, since that table
+        // is only (re)fetched on its own page-load/month-change, not
+        // whenever a fine gets settled from inside the ledger.
+        refreshFineRecordsListIfVisible();
 
         showFeeSuccessToast("Fine Settled Successfully");
         applyHistoryFilters(); // Refresh the current Ledger UI
@@ -4258,9 +5257,27 @@ async function processIndividualPay(fineId) {
     }
 }
 
+/**
+ * Re-fetches the student Fine Records list table if that page happens to
+ * be the one currently open behind whatever settled a fine (the ledger
+ * overlay, or a fee payment that auto-settles a fine — see
+ * autoSettleFinesIfFullyPaid). Safe to call even when the page isn't
+ * visible; it just re-renders an off-screen table in that case.
+ */
+function refreshFineRecordsListIfVisible() {
+    const page = document.getElementById('page-fine-records');
+    if (!page || page.classList.contains('d-none')) return;
+    if (_fineRecordsContext !== 'student') return;
+    renderStudentFinesTable();
+}
+
 function closeFullFineRecord() {
     document.getElementById('fine-full-record-page').classList.add('d-none');
     document.body.style.overflow = 'auto';
+    // Safety net: even if a fine was auto-settled just from opening this
+    // ledger (see showFineDetails' billFullyPaid check) without going
+    // through processIndividualPay, make sure the list behind it is current.
+    refreshFineRecordsListIfVisible();
 }
 
 function filterFines(timeframe, btn) {
@@ -4399,19 +5416,19 @@ window.ievSave = ievSave;
    existing, already-trusted calculation logic, plus the UI to drive it.
    ============================================================================ */
 
-const GENERATED_VOUCHERS_KEY = 'edu_generated_vouchers';
-
 // ---------------------------------------------------------------------------
-// Data layer
+// Data layer (backed by _generatedVouchersCache — see REALTIME BACKEND DATA
+// LAYER near the top of this file)
 // ---------------------------------------------------------------------------
 function getGeneratedVouchers() {
-    try {
-        return JSON.parse(localStorage.getItem(GENERATED_VOUCHERS_KEY) || '[]');
-    } catch (e) { return []; }
+    return _generatedVouchersCache;
 }
 
 function saveGeneratedVouchers(list) {
-    localStorage.setItem(GENERATED_VOUCHERS_KEY, JSON.stringify(list));
+    _generatedVouchersCache = list;
+    _generatedVouchersSaveInFlight++;
+    _backendSave(API_BASE, ENDPOINTS.vouchers, 'PUT', { items: list })
+        .finally(() => { _generatedVouchersSaveInFlight--; });
 }
 
 function voucherRecordKey(studentId, monthKey) {
@@ -4438,12 +5455,14 @@ function isVoucherGenerated(studentId, monthKey = getCurrentFeeMonthKey()) {
  * during generation — this is the "suspended status" edge case from the spec.
  */
 function isStudentBillable(s) {
-    return !s.status || s.status === 'active';
+    const status = String((s && s.status) || '').trim().toLowerCase();
+    return !status || status === 'active';
 }
 
 function studentStatusLabel(s) {
-    if (!s.status || s.status === 'active') return 'Active';
-    return s.status.charAt(0).toUpperCase() + s.status.slice(1);
+    const status = String((s && s.status) || '').trim().toLowerCase();
+    if (!status || status === 'active') return 'Active';
+    return status.charAt(0).toUpperCase() + status.slice(1);
 }
 
 /**
@@ -4562,7 +5581,7 @@ function computeOutstandingArrears(student) {
  * for the new month specifically, and it will only apply to that month.
  */
 function startFreshVoucherMonth(studentId, fullName, arrears) {
-    const students = JSON.parse(localStorage.getItem('edu_students') || '[]');
+    const students = getRealStudents();
     const matches = s => String(s.regNo || s.id) === String(studentId);
     let idx = students.findIndex(s => matches(s) && s.fullName === fullName);
     if (idx === -1) idx = students.findIndex(matches);
@@ -4572,7 +5591,7 @@ function startFreshVoucherMonth(studentId, fullName, arrears) {
     students[idx].otherFeesData = '[]';
     students[idx].voucherBulkDiscount = 0;
     students[idx].voucherCustomFeesMonth = null;
-    localStorage.setItem('edu_students', JSON.stringify(students));
+    saveStudentsCache(students);
 }
 
 /**
@@ -4592,7 +5611,7 @@ function syncVoucherSnapshotForCurrentMonth(studentId, fullName) {
     const recIdx = list.findIndex(r => r.key === key);
     if (recIdx === -1) return; // no voucher generated yet this month — nothing to sync
 
-    const students = JSON.parse(localStorage.getItem('edu_students') || '[]');
+    const students = getRealStudents();
     const student = findStudentExact(students, studentId, fullName);
     if (!student) return;
 
@@ -4666,14 +5685,7 @@ function recordVoucherGeneration(student, source = 'individual') {
 }
 
 function getAllClassNames() {
-    let classes = [];
-    try {
-        const raw = localStorage.getItem('edu_class_configs');
-        if (raw) classes = JSON.parse(raw);
-    } catch (e) { classes = []; }
-    if (!Array.isArray(classes)) {
-        classes = [];
-    }
+    const classes = Array.isArray(_classConfigsCache) ? _classConfigsCache : [];
     return classes.map(c => (c.name || '').trim()).filter(Boolean);
 }
 
@@ -4685,7 +5697,7 @@ function getAllClassNames() {
  * special has to be done for the "late admission" case.
  */
 function getPendingStudentsForClass(className) {
-    const students = JSON.parse(localStorage.getItem('edu_students') || '[]');
+    const students = getRealStudents();
     const monthKey = getCurrentFeeMonthKey();
     return students
         .filter(s => s.studentClass === className)
@@ -4695,7 +5707,7 @@ function getPendingStudentsForClass(className) {
 
 function getPendingStudentsSchoolWide() {
     const monthKey = getCurrentFeeMonthKey();
-    const students = JSON.parse(localStorage.getItem('edu_students') || '[]');
+    const students = getRealStudents();
     return students
         .filter(isStudentBillable)
         .filter(s => !isVoucherGenerated(s.regNo || s.id, monthKey));
@@ -4708,7 +5720,7 @@ function getPendingStudentsSchoolWide() {
  * 'none'    -> no billable students have one yet (also used when class is empty)
  */
 function getClassVoucherStatus(className) {
-    const students = JSON.parse(localStorage.getItem('edu_students') || '[]')
+    const students = getRealStudents()
         .filter(s => s.studentClass === className)
         .filter(isStudentBillable);
     if (students.length === 0) return { state: 'none', total: 0, generated: 0 };
@@ -4840,7 +5852,7 @@ function showVoucherGenerationPreview(students, source, label) {
 
 function countAlreadyGeneratedFor(source) {
     const monthKey = getCurrentFeeMonthKey();
-    const students = JSON.parse(localStorage.getItem('edu_students') || '[]').filter(isStudentBillable);
+    const students = getRealStudents().filter(isStudentBillable);
     const scoped = source === 'class' && currentFeeClassName
         ? students.filter(s => s.studentClass === currentFeeClassName)
         : students;
@@ -4883,7 +5895,7 @@ function handleGenerateClassClick() {
 
 /** Per-student "Generate Voucher" button in the student list. */
 function handleGenerateSingleVoucher(studentId, fullName) {
-    const students = JSON.parse(localStorage.getItem('edu_students') || '[]');
+    const students = getRealStudents();
     const student = findStudentExact(students, studentId, fullName);
     if (!student) { showFinanceToast('Student not found.', 'error'); return; }
 
@@ -4943,7 +5955,7 @@ function showPrintClassPicker() {
         // Only count billable (active) students — dropped-out/graduated/
         // suspended students never get a voucher printed, so they shouldn't
         // be counted here either.
-        const count = JSON.parse(localStorage.getItem('edu_students') || '[]')
+        const count = getRealStudents()
             .filter(s => s.studentClass === name)
             .filter(isStudentBillable).length;
         return `<button type="button" class="pv-list-item" onclick="printClassVouchers('${escapeForAttr(name)}')">
@@ -4970,7 +5982,7 @@ function filterPrintStudentResults() {
     // Only search active/billable students — dropped-out, graduated, or
     // suspended students should never surface here, since selecting one
     // would print/generate a voucher for a student who shouldn't get one.
-    const students = JSON.parse(localStorage.getItem('edu_students') || '[]').filter(isStudentBillable);
+    const students = getRealStudents().filter(isStudentBillable);
     const matches = students.filter(s => {
         const name = (s.fullName || '').toLowerCase();
         const id = (s.regNo || s.id || '').toLowerCase();
@@ -5090,7 +6102,7 @@ function buildFamilyVoucherHTML(studentsGroup) {
         }
 
         if (f.fineAmount > 0) {
-            rowsHTML += `<tr style="color:#dc2626;"><td><strong>Fine / Penalty</strong></td><td>${escapeHtml(s.backendFineReason || 'Disciplinary')}</td><td>Rs. ${f.fineAmount.toLocaleString()}</td></tr>`;
+            rowsHTML += `<tr style="color:#dc2626;"><td><strong>Fine / Penalty</strong></td><td>${escapeHtml(f.fineReason || 'Disciplinary')}</td><td>Rs. ${f.fineAmount.toLocaleString()}</td></tr>`;
         }
         if (f.monthlyFineTotal > 0) {
             rowsHTML += `<tr style="color:#dc2626;"><td>Disciplinary Fines</td><td>${escapeHtml(f.fineDetails || '')}</td><td>Rs. ${f.monthlyFineTotal.toLocaleString()}</td></tr>`;
@@ -5216,7 +6228,7 @@ function printStudentsSequentially(students, emptyMessage, combineSiblings) {
 
 function printAllVouchers() {
     const combineSiblings = _pvCombineSiblingsEnabled();
-    const students = JSON.parse(localStorage.getItem('edu_students') || '[]').filter(isStudentBillable);
+    const students = getRealStudents().filter(isStudentBillable);
     // Sequential by class, then by name, for a predictable print order.
     students.sort((a, b) => (a.studentClass || '').localeCompare(b.studentClass || '') || (a.fullName || '').localeCompare(b.fullName || ''));
     printStudentsSequentially(students, 'No active students found to print.', combineSiblings);
@@ -5224,7 +6236,7 @@ function printAllVouchers() {
 
 function printClassVouchers(className) {
     const combineSiblings = _pvCombineSiblingsEnabled();
-    const students = JSON.parse(localStorage.getItem('edu_students') || '[]')
+    const students = getRealStudents()
         .filter(s => s.studentClass === className)
         .filter(isStudentBillable);
     printStudentsSequentially(students, `No active students found in ${className}.`, combineSiblings);
@@ -5232,7 +6244,7 @@ function printClassVouchers(className) {
 
 function printStudentVoucher(studentId, fullName) {
     const combineSiblings = _pvCombineSiblingsEnabled();
-    const students = JSON.parse(localStorage.getItem('edu_students') || '[]');
+    const students = getRealStudents();
     const student = findStudentExact(students, studentId, fullName);
     if (!student) { showFinanceToast('Student not found.', 'error'); return; }
 
@@ -5278,13 +6290,8 @@ function _escHtml(s) { return typeof escapeHtml === 'function' ? escapeHtml(s) :
 function _escAttr(s) { return typeof escapeForAttr === 'function' ? escapeForAttr(s) : String(s).replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/"/g,'&quot;'); }
 function _monthKey() { return typeof getCurrentMonthKey === 'function' ? getCurrentMonthKey() : new Date().toISOString().slice(0,7); }
 function _isBillable(s) { return typeof isStudentBillable === 'function' ? isStudentBillable(s) : true; }
-function _getStudents() { try { return JSON.parse(localStorage.getItem('edu_students') || '[]'); } catch(e) { return []; } }
-function _getClasses() {
-    let c = [];
-    try { c = JSON.parse(localStorage.getItem('edu_class_configs') || '[]'); } catch(e) {}
-    if (!c.length) c = [];
-    return c;
-}
+function _getStudents() { return _studentsCache; }
+function _getClasses() { return Array.isArray(_classConfigsCache) ? _classConfigsCache : []; }
 
 /* ── Toast ───────────────────────────────────────────────── */
 function _toast(msg, type) {
@@ -5299,8 +6306,11 @@ function _toast(msg, type) {
 }
 
 /* ── Custom Fee Data ─────────────────────────────────────── */
-function getCustomFees() { try { return JSON.parse(localStorage.getItem('eduflow-custom-fees') || '[]'); } catch(e) { return []; } }
-function saveCustomFees(arr) { localStorage.setItem('eduflow-custom-fees', JSON.stringify(arr)); }
+function getCustomFees() { return _customFeesCache; }
+function saveCustomFees(arr) {
+    _customFeesCache = arr;
+    _backendSave(API_BASE, ENDPOINTS.customFees, 'PUT', { items: arr });
+}
 
 /* ── Custom Fee Generate Page ────────────────────────────── */
 let _cfScope = 'all';
@@ -5773,6 +6783,13 @@ async function loadFeeDefaulters() {
     const defaulters = [];
     for (const s of students) {
         if (!_isBillable(s)) continue;
+        // FEATURE — pending fees must be tied to vouchers that have actually
+        // been generated. A student with no generated voucher at all hasn't
+        // been billed anything yet, so they don't belong on the Defaulters
+        // list. See _hasAnyGeneratedVoucher() (backed by the DB-synced
+        // getGeneratedVouchers() list, never localStorage).
+        const studentIdForVoucherCheck = s.regNo || s.id;
+        if (typeof _hasAnyGeneratedVoucher === 'function' && !_hasAnyGeneratedVoucher(studentIdForVoucherCheck)) continue;
         let finance = null;
         try { if (typeof getFeeRowFinance === 'function') finance = await getFeeRowFinance(s, monthKey); } catch(e) {}
         if (!finance) {
@@ -6176,8 +7193,7 @@ function filterSalaryBonusList(panelId) {
     const container = document.getElementById('bonus-members-list-' + panelId);
     if (!container) return;
 
-    const db = getGlobalData();
-    let members = (db.staff && db.staff[category]) ? db.staff[category] : [];
+    let members = getStaffCache(category);
     if (query.trim()) {
         members = members.filter(s => staffMatchesQuery(s, query));
     }
@@ -6239,8 +7255,7 @@ function handleSalaryPageBonus(category) {
     if (!amount || amount < 1) { showFinanceToast('Please enter a valid bonus amount.', 'error'); return; }
     if (!desc) { showFinanceToast('Please enter a bonus description.', 'error'); return; }
 
-    const db = getGlobalData();
-    const members = (db.staff && db.staff[category]) ? db.staff[category] : [];
+    const members = getStaffCache(category);
     const member  = members.find(s => String(s.id) === String(selectedId));
     if (!member) { showFinanceToast('Staff member not found.', 'error'); return; }
 
@@ -6355,17 +7370,16 @@ function _populateSalaryRecordsMonthFilter() {
     if (!sel) return;
 
     const currentMk = getCurrentMonthKey();
-    const [cy, cm] = currentMk.split('-').map(Number);
+    const [currentYear] = currentMk.split('-').map(Number);
 
-    // Always list the trailing 12 months (current month + previous 11),
-    // so the filter covers a full year even for months with no processed
-    // records yet.
-    const months = [];
-    for (let i = 0; i < 12; i++) {
-        const d = new Date(cy, (cm - 1) - i, 1);
-        const mk = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-        months.push(mk);
-    }
+    // Keep one complete calendar year in the filter: January through
+    // December. The previous rolling-window implementation could start in
+    // the middle of a year (for example, August 2025 through July 2026),
+    // which made it difficult to review a staff member's records month by
+    // month within the same year.
+    const months = Array.from({ length: 12 }, (_, index) =>
+        `${currentYear}-${String(index + 1).padStart(2, '0')}`
+    );
 
     sel.innerHTML = months.map(mk => {
         const [y, m] = mk.split('-');
@@ -6413,15 +7427,17 @@ function renderSalaryRecordsTable() {
     const statusFilter = document.getElementById('sr-status-filter');
     const statusVal = (statusFilter && statusFilter.value) || '';
 
-    const db = getGlobalData();
-    const staff = db.staff[category] || [];
+    const isCurrentMonth = monthKey === getCurrentMonthKey();
+    const staff = getStaffCache(category)
+        .filter(s => isStaffActiveForSalaryMonth(s, monthKey))
+        .map(s => ({ staff: s, entry: getSalaryRecordForStaffMonth(s.id, monthKey) }))
+        // Historical salary records are an archive, not a roster preview.
+        // Do not show staff with the "No record" state for a past month.
+        // The current month still shows all active staff so payroll can be
+        // processed and those without a payment remain visibly Pending.
+        .filter(({ entry }) => isCurrentMonth || !!entry);
 
-    // Filter to staff who have a history entry for the selected month
-    let rows = [];
-    staff.forEach(s => {
-        const entry = (s.salaryHistory || []).find(h => h.monthKey === monthKey);
-        rows.push({ staff: s, entry: entry || null });
-    });
+    let rows = staff;
 
     // Apply search filter
     if (q) {
@@ -6435,7 +7451,9 @@ function renderSalaryRecordsTable() {
     // Apply status filter
     if (statusVal) {
         rows = rows.filter(({ entry }) =>
-            statusVal === 'paid' ? !!entry : !entry
+            statusVal === 'paid'
+                ? !!entry
+                : !entry && monthKey === getCurrentMonthKey()
         );
     }
 
@@ -6443,7 +7461,7 @@ function renderSalaryRecordsTable() {
         const emptyMsg = q || statusVal
             ? 'No records match your search / filter.'
             : `No ${category.toLowerCase()} staff found.`;
-        tbody.innerHTML = `<tr><td colspan="8" class="empty-row">${emptyMsg}</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="9" class="empty-row">${emptyMsg}</td></tr>`;
         return;
     }
 
@@ -6452,25 +7470,44 @@ function renderSalaryRecordsTable() {
 
     tbody.innerHTML = rows.map(({ staff: s, entry }) => {
         const role = category === 'Teaching' ? (s.subjects || s.role || 'Teacher') : (s.job || 'Staff');
-        const baseSalary = Number(s.salary) || 0;
-        const finesDeducted = entry ? (Number(entry.absenceFineDeducted) || 0) : 0;
-        const secDeducted   = entry ? (Number(entry.securityDeducted) || 0) : 0;
+        const baseSalary = entry
+            ? (Number(entry.baseSalary) || 0)
+            : (isCurrentMonth ? (Number(s.salary) || 0) : null);
+        const bonus = entry
+            ? (Number(entry.bonus) || 0)
+            : (isCurrentMonth ? getStaffBonusData()
+                .filter(r =>
+                    String(r.staffId ?? r.id) === String(s.id) &&
+                    monthKeyFromDateValue(r.monthKey ?? r.month) === String(monthKey))
+                .reduce((sum, r) => sum + (Number(r.amount) || 0), 0) : null);
+        const finesDeducted = entry
+            ? (Number(entry.fines) || 0)
+            : (isCurrentMonth ? (Number(s.fines) || 0) : null);
+        const secDeducted = entry ? (Number(entry.securityDeducted) || 0) : null;
         const isPaid = !!entry;
         const statusBadge = isPaid
             ? `<span class="status-badge status-paid"><i class="fas fa-check-circle"></i> Paid</span>`
-            : `<span class="status-badge status-pending"><i class="fas fa-clock"></i> Pending</span>`;
-        const finesCell = finesDeducted > 0
+            : isCurrentMonth
+                ? `<span class="status-badge status-pending"><i class="fas fa-clock"></i> Pending</span>`
+                : `<span class="status-badge" style="color:var(--text-secondary);"><i class="fas fa-minus-circle"></i> No record</span>`;
+        const nullCell = `<span style="color:var(--text-secondary);font-size:12px;">—</span>`;
+        const finesCell = finesDeducted == null
+            ? nullCell
+            : finesDeducted > 0
             ? `<span style="color:#ef4444;font-weight:600;">− RS ${finesDeducted.toLocaleString()}</span>`
             : `<span style="color:var(--text-secondary);font-size:12px;">None</span>`;
-        const secCell = secDeducted > 0
+        const secCell = secDeducted == null
+            ? nullCell
+            : secDeducted > 0
             ? `RS ${secDeducted.toLocaleString()}`
-            : `<span style="color:var(--text-secondary);font-size:12px;">—</span>`;
+            : nullCell;
         return `
             <tr>
                 <td><span class="hrk-id-badge">${escapeHtml(s.id)}</span></td>
                 <td><strong>${escapeHtml(s.name)}</strong></td>
                 <td>${escapeHtml(role)}</td>
-                <td><strong>RS ${baseSalary.toLocaleString()}</strong></td>
+                <td>${baseSalary == null ? nullCell : `<strong>RS ${baseSalary.toLocaleString()}</strong>`}</td>
+                <td>${bonus == null ? nullCell : `<strong>RS ${bonus.toLocaleString()}</strong>`}</td>
                 <td>${finesCell}</td>
                 <td>${secCell}</td>
                 <td><span class="salary-month-chip">${monthLabel}</span></td>
@@ -6528,10 +7565,6 @@ function handleExpenseSubmitHub() {
         monthKey: getCurrentMonthKey()
     });
     saveExpensesData(list);
-
-    const db = getGlobalData();
-    db.finances.expenses.other += amount;
-    saveGlobalData(db);
 
     // Show success toast and clear the form — user stays on hub
     showFeeSuccessToast(`Expense of RS ${amount.toLocaleString()} logged successfully.`);

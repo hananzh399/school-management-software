@@ -9,7 +9,10 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <link rel="stylesheet" href="attendance.css">
-    <script>(function(){const t=localStorage.getItem('eduflow-theme')||'dark';document.documentElement.setAttribute('data-theme',t);})()</script>
+    <!-- Default theme applied immediately to avoid a flash of unstyled content.
+         The real saved preference is fetched from the backend (GET /api/settings/theme)
+         and applied by initTheme() in attendance.js — nothing is read from localStorage. -->
+    <script>(function(){document.documentElement.setAttribute('data-theme','dark');})()</script>
     <style>
         .biometric-input-row{display:flex;gap:8px;align-items:stretch;}
         .biometric-input-row .biometric-input{flex:1;}

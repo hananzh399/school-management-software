@@ -3,30 +3,67 @@
    button that jumps directly into analytics (top-right for staff, per class card for students)
 */
  
-// ---------- REAL DATA FROM DATABASE ----------
+// ---------- REAL DATA FROM DATABASE (via backend API — no localStorage) ----------
+
+// Matches StudentController / StaffController / SchoolSettingsController / AttendanceController.
+const STUDENTS_API_BASE = 'http://localhost:8080/api/students';
+const STAFF_API_BASE    = 'http://localhost:8080/api/staff';
+const SETTINGS_API_BASE = 'http://localhost:8080/api/settings';
+const ATTENDANCE_API_BASE = 'http://localhost:8080/api/attendance';
 
 const LEAVE_REASONS = ["Sick Leave","Personal","Family Event","Medical Appointment","Travel","Other"];
 
 /**
- * Load real students from edu_students (managed by manage-students.js).
- * Falls back to empty array if none saved yet.
+ * The logged-in school's real School ID (School.schoolId, e.g. "SS_77_1").
+ * Every controller (Student/Staff/Settings/Attendance) scopes reads & writes
+ * by this value, exactly like manage-students.js / manage-staff.js already
+ * do — access-control.js (loaded on this page) sets up window.SoftSchoolAdmin
+ * at login. Returns '' when there's no school session (demo / superadmin
+ * mode); callers treat that as "nothing to fetch yet".
+ */
+function getCurrentSchoolId() {
+    if (window.SoftSchoolAdmin) {
+        const school = window.SoftSchoolAdmin.getCurrentSchool();
+        if (school && school.schoolId) return school.schoolId;
+    }
+    return '';
+}
+
+/**
+ * Simple GET helper: fetch JSON from the backend, returning `fallback`
+ * (instead of throwing) if the server is unreachable or errors out.
+ */
+async function _apiGet(url, fallback) {
+    try {
+        const res = await fetch(url);
+        if (!res.ok) return fallback;
+        return await res.json();
+    } catch (err) {
+        console.error(`Failed to load ${url} from backend:`, err);
+        return fallback;
+    }
+}
+
+/**
+ * Load real students from the backend student roster API
+ * (GET /api/students?schoolId=... — StudentController, managed by
+ * manage-students.html). Falls back to empty array if there's no school
+ * session yet or the server is unreachable.
  * Normalises to the shape attendance needs: { regNo, name, class, section, guardian }
  */
-function loadRealStudents() {
-    const raw = JSON.parse(localStorage.getItem('edu_students') || '[]');
-    return raw.map(s => {
-        const fullName = s.fullName
-            || ((s.firstName ? s.firstName + ' ' + (s.lastName || '') : '').trim())
-            || s.name
-            || 'Unknown';
-        return {
-            regNo:    s.regNo || s.studentId || s.id || ('STD-' + Math.random().toString(36).slice(2,7).toUpperCase()),
-            name:     fullName.trim(),
-            class:    s.studentClass || s.class || s.grade || s.className || 'Unassigned',
+async function loadRealStudents() {
+    const schoolId = getCurrentSchoolId();
+    if (!schoolId) return [];
+    const raw = await _apiGet(`${STUDENTS_API_BASE}?schoolId=${encodeURIComponent(schoolId)}`, []);
+    return (Array.isArray(raw) ? raw : [])
+        .filter(s => !s.status || s.status === 'active') // hide graduated/dropped students
+        .map(s => ({
+            regNo:    s.regNo || 'STD-' + Math.random().toString(36).slice(2,7).toUpperCase(),
+            name:     s.fullName || 'Unknown',
+            class:    s.studentClass || 'Unassigned',
             section:  s.section || 'A',
-            guardian: s.guardianName || s.fatherName || s.guardian || '—',
-        };
-    });
+            guardian: s.guardianName || '—',
+        }));
 }
 
 /* Ensure every record has a unique key; suffix duplicates so toggling
@@ -47,49 +84,75 @@ function _uniquifyKey(arr, keyName) {
 }
 
 /**
- * Load real staff from the shared DB (eduflow-db → staff Teaching + Non-Teaching).
- * Falls back to empty array.
- * Normalises to: { id, name, role, department }
+ * Load real staff from the backend staff API
+ * (GET /api/staff?schoolId=... — StaffController, managed by manage-staff.html).
+ * Rows come back flat with a `type` field ("Teaching" / "Non-Teaching") and
+ * `staffId` for the display ID (mirrors manage-staff.js's fromApiStaffRecord).
+ * Normalises to: { id, name, role, department }.
+ * Also caches the raw split-by-type roster in STAFF_DB so other (synchronous)
+ * helpers like _getClassTeacher() can read it without hitting the network again.
  */
-function loadRealStaff() {
-    try {
-        const db = JSON.parse(localStorage.getItem('eduflow-db') || '{}');
-        const teaching    = (db.staff && db.staff['Teaching'])    || [];
-        const nonTeaching = (db.staff && db.staff['Non-Teaching']) || [];
-        const all = [];
-        teaching.forEach(s => all.push({
-            id:         s.id   || ('TCH-' + s.name.replace(/\s+/g,'').slice(0,4).toUpperCase()),
-            name:       s.name || 'Unknown',
-            role:       s.role || 'Teacher',
-            department: s.subjects || s.department || 'General',
-        }));
-        nonTeaching.forEach(s => all.push({
-            id:         s.id   || ('NTS-' + s.name.replace(/\s+/g,'').slice(0,4).toUpperCase()),
-            name:       s.name || 'Unknown',
-            role:       s.job  || s.role || 'Staff',
-            department: s.department || 'Support',
-        }));
-        return all;
-    } catch(e) { return []; }
+let STAFF_DB = { 'Teaching': [], 'Non-Teaching': [] };
+
+async function loadRealStaff() {
+    const schoolId = getCurrentSchoolId();
+    if (!schoolId) { STAFF_DB = { 'Teaching': [], 'Non-Teaching': [] }; return []; }
+    const rows = await _apiGet(`${STAFF_API_BASE}?schoolId=${encodeURIComponent(schoolId)}`, []);
+    const list = Array.isArray(rows) ? rows : [];
+
+    const teaching    = list.filter(s => s.type !== 'Non-Teaching');
+    const nonTeaching = list.filter(s => s.type === 'Non-Teaching');
+    STAFF_DB = { 'Teaching': teaching, 'Non-Teaching': nonTeaching };
+
+    const all = [];
+    teaching.forEach(s => all.push({
+        id:         s.staffId || ('TCH-' + (s.name || '').replace(/\s+/g,'').slice(0,4).toUpperCase()),
+        name:       s.name || 'Unknown',
+        role:       s.role || 'Teacher',
+        department: s.subjects || 'General',
+    }));
+    nonTeaching.forEach(s => all.push({
+        id:         s.staffId || ('NTS-' + (s.name || '').replace(/\s+/g,'').slice(0,4).toUpperCase()),
+        name:       s.name || 'Unknown',
+        role:       s.job || s.role || 'Staff',
+        department: s.department || 'Support',
+    }));
+    return all;
 }
 
 /**
- * Derive the list of classes+sections from the real student DB
- * (or from edu_class_configs set in Settings if students not yet added).
+ * Derive the list of classes+sections from the backend Settings API
+ * (GET /api/settings/{schoolId} — SchoolSettingsController, `.classes`
+ * field, set up in Settings), falling back to deriving the list from the
+ * real student roster if no classes are configured yet.
+ * Also caches the converted configs in CLASS_CONFIGS for _getClassTeacher().
  */
-function loadRealClasses() {
-    // Prefer class configs from settings (always present)
-    const configs = JSON.parse(localStorage.getItem('edu_class_configs') || '[]');
-    if (configs.length > 0) {
-        return configs.map(c => ({
+let CLASS_CONFIGS = [];
+
+async function loadRealClasses() {
+    const schoolId = getCurrentSchoolId();
+    let apiClasses = [];
+    if (schoolId) {
+        const settings = await _apiGet(`${SETTINGS_API_BASE}/${encodeURIComponent(schoolId)}`, null);
+        apiClasses = (settings && Array.isArray(settings.classes)) ? settings.classes : [];
+    }
+    // Convert backend shape { className, fee, fund, sections: "A,B" } to the
+    // { name, sections: [] } shape used throughout this file — same mapping
+    // as settings.js's / manage-students.js's _classConfigsApiToLocal().
+    CLASS_CONFIGS = apiClasses.map(c => ({
+        name:     c.className || '',
+        sections: (c.sections || '').split(',').map(s => s.trim()).filter(Boolean),
+    }));
+
+    if (CLASS_CONFIGS.length > 0) {
+        return CLASS_CONFIGS.map(c => ({
             name:     c.name,
-            sections: Array.isArray(c.sections) && c.sections.length ? c.sections : ['A'],
+            sections: c.sections.length ? c.sections : ['A'],
         }));
     }
-    // Derive from real students
-    const students = loadRealStudents();
+    // Derive from real students already loaded into STUDENTS this refresh
     const map = {};
-    students.forEach(s => {
+    STUDENTS.forEach(s => {
         if (!map[s.class]) map[s.class] = new Set();
         map[s.class].add(s.section);
     });
@@ -101,10 +164,15 @@ let STUDENTS = [];
 let STAFF    = [];
 let CLASSES  = [];
 
-function refreshLiveData() {
-    STUDENTS = _uniquifyKey(loadRealStudents(), "regNo");
-    STAFF    = _uniquifyKey(loadRealStaff(), "id");
-    CLASSES  = loadRealClasses();
+/**
+ * Pulls students, staff and class configs from the backend database.
+ * All attendance data now lives server-side — nothing is read from or
+ * written to localStorage.
+ */
+async function refreshLiveData() {
+    STUDENTS = _uniquifyKey(await loadRealStudents(), "regNo");
+    STAFF    = _uniquifyKey(await loadRealStaff(), "id");
+    CLASSES  = await loadRealClasses();
 }
 
 // Build history from saved attendance keys (real data)
@@ -225,10 +293,10 @@ function hideAllStages() {
 
  
 // ---------- INIT ----------
-document.addEventListener("DOMContentLoaded", () => {
+document.addEventListener("DOMContentLoaded", async () => {
     checkDayReset();
     scheduleMidnightRefresh();
-    initTheme();
+    await initTheme();
     initSidebar();
     initDate();
     initAttendanceStats();
@@ -292,14 +360,18 @@ function initAttendanceStats() {
     setInterval(renderAttendanceStats, 5000);
 }
 
+// Theme has no backend field yet — SchoolSettings (SchoolSettingsController)
+// doesn't store a per-user theme, so it's held in-memory for the current
+// page load only (defaults to dark on every visit) instead of localStorage.
+// If you want it to persist, add a `theme` column to SchoolSettings and
+// wire GET/PUT /api/settings/{schoolId} to read/write it — then this can
+// call that instead.
 function initTheme() {
-    const saved = localStorage.getItem("eduflow-theme") || "dark";
-    document.documentElement.setAttribute("data-theme", saved);
+    document.documentElement.setAttribute("data-theme", "dark");
     $("#theme-toggle").addEventListener("click", () => {
         const cur  = document.documentElement.getAttribute("data-theme") || "dark";
         const next = cur === "dark" ? "light" : "dark";
         document.documentElement.setAttribute("data-theme", next);
-        localStorage.setItem("eduflow-theme", next);
     });
 }
  
@@ -312,10 +384,10 @@ function initSidebar() {
  
 function initModeCards() {
     $$("#stage-mode .choice-card").forEach(card => {
-        card.addEventListener("click", () => {
+        card.addEventListener("click", async () => {
             state.mode = card.getAttribute("data-mode");
             state.action = "add";
-            refreshLiveData(); // always pull fresh DB data
+            await refreshLiveData(); // always pull fresh DB data
             hideAllStages();
             if (state.mode === "student") {
                 renderClasses();
@@ -332,18 +404,17 @@ function initModeCards() {
 function initStaffViewAttendanceButton() {
     const btn = $("#staff-view-attendance-btn");
     if (!btn) return;
-    btn.addEventListener("click", () => {
-        refreshLiveData();
-        openStaffMonthly();
+    btn.addEventListener("click", async () => {
+        await openStaffMonthly(); // pulls fresh DB data internally
     });
 }
 
 function initTableViewAttendanceButton() {
     const btn = $("#table-view-attendance-btn");
     if (!btn) return;
-    btn.addEventListener("click", () => {
+    btn.addEventListener("click", async () => {
         if (!state.selectedClass) return;
-        refreshLiveData();
+        await refreshLiveData();
         openClassMonthly(state.selectedClass);
     });
 }
@@ -671,8 +742,9 @@ function initSave() {
 async function loadAttendanceFromDatabase() {
     try {
         const id = state.mode === 'student' ? state.studentRecord.regNo : state.staffRecord.id;
-        
-        const response = await fetch(`http://localhost:8080/api/attendance/history/${id}`);
+        const schoolId = getCurrentSchoolId();
+
+        const response = await fetch(`${ATTENDANCE_API_BASE}/history/${encodeURIComponent(id)}?schoolId=${encodeURIComponent(schoolId)}`);
         const data = await response.json();
 
         // Sort by date descending (newest first)
@@ -1674,17 +1746,17 @@ async function _shareReportNode(node, title, text) {
 /* Find the class teacher / class incharge name for a given class. */
 function _getClassTeacher(className) {
     if (!className) return "Not Assigned";
+    // Reads from CLASS_CONFIGS / STAFF_DB, which are populated from the
+    // backend by refreshLiveData() — no localStorage involved.
     try {
-        const configs = JSON.parse(localStorage.getItem('edu_class_configs') || '[]');
-        const cfg = configs.find(c => c && c.name === className);
+        const cfg = CLASS_CONFIGS.find(c => c && c.name === className);
         if (cfg) {
             const t = cfg.classTeacher || cfg.teacher || cfg.incharge || cfg.classIncharge;
             if (t) return t;
         }
     } catch(e) {}
     try {
-        const db = JSON.parse(localStorage.getItem('eduflow-db') || '{}');
-        const teaching = (db.staff && db.staff['Teaching']) || [];
+        const teaching = STAFF_DB['Teaching'] || [];
         const match = teaching.find(s => {
             const assigned = s.classTeacherOf || s.classTeacher || s.classIncharge || s.assignedClass;
             return assigned && String(assigned).trim() === className;
@@ -2182,8 +2254,8 @@ state.staffRecord        = null;
 state.staffRecordSearch  = "";
 state.staffRecordRange   = "30";
 
-function openStaffMonthly() {
-    refreshLiveData();
+async function openStaffMonthly() {
+    await refreshLiveData();
     state.staffMonthlyDate = new Date();
     state.staffMonthlySearch = "";
     state.staffMonthlyViewPeriod = "week";
@@ -2927,7 +2999,8 @@ function initCamera() {
     async function saveAttendanceToMySQL() {
     const isStudent = state.mode === "student";
     const date = todayKey(); // Gets YYYY-MM-DD
-    
+    const schoolId = getCurrentSchoolId();
+
     // Get the Base64 image from your camera preview
     const photo = document.getElementById('camera-preview-img')?.src || "";
 
@@ -2940,6 +3013,7 @@ function initCamera() {
         finalRecords = filteredStudents.map(s => {
             const entry = state.attendance[s.regNo] || { status: "absent", reason: "" };
             return {
+                schoolId: schoolId,
                 memberId: s.regNo,
                 memberName: s.name,
                 memberType: "STUDENT",
@@ -2956,6 +3030,7 @@ function initCamera() {
         finalRecords = STAFF.map(s => {
             const entry = state.staffAttendance[s.id] || { status: "absent", reason: "" };
             return {
+                schoolId: schoolId,
                 memberId: s.id,
                 memberName: s.name,
                 memberType: "STAFF",
@@ -2970,7 +3045,7 @@ function initCamera() {
 
     // SEND TO JAVA BACKEND
     try {
-        const response = await fetch('http://localhost:8080/api/attendance/save', {
+        const response = await fetch(`${ATTENDANCE_API_BASE}/save`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(finalRecords)
@@ -3002,7 +3077,8 @@ function initCamera() {
 async function syncCurrentSheetWithDatabase() {
     const isStudent = state.mode === "student";
     const date = todayKey(); // Current date YYYY-MM-DD
-    
+    const schoolId = getCurrentSchoolId();
+
     // We capture the photo if one was taken in this session
     const photo = document.getElementById('camera-preview-img')?.src || "";
 
@@ -3015,6 +3091,7 @@ async function syncCurrentSheetWithDatabase() {
         records = STUDENTS.filter(s => s.class === clsName).map(s => {
             const entry = state.attendance[s.regNo] || { status: "absent", reason: "" };
             return {
+                schoolId: schoolId,
                 memberId: s.regNo,
                 memberName: s.name,
                 memberType: "STUDENT",
@@ -3044,6 +3121,7 @@ async function syncCurrentSheetWithDatabase() {
 
             // Only prepare manual records (usually 'absent' or 'leave')
             return {
+                schoolId: schoolId,
                 memberId: s.id,
                 memberName: s.name,
                 memberType: "STAFF",
@@ -3064,7 +3142,7 @@ async function syncCurrentSheetWithDatabase() {
 
     // --- SEND DATA TO JAVA BACKEND ---
     try {
-        const response = await fetch('http://localhost:8080/api/attendance/save', {
+        const response = await fetch(`${ATTENDANCE_API_BASE}/save`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
@@ -3087,7 +3165,9 @@ async function pollBiometricUpdates() {
     if (!stageStaff || stageStaff.classList.contains('hidden')) return;
 
     try {
-        const response = await fetch(`http://localhost:8080/api/attendance/staff?date=${todayKey()}`);
+        const schoolId = getCurrentSchoolId();
+        if (!schoolId) return;
+        const response = await fetch(`${ATTENDANCE_API_BASE}/staff?date=${todayKey()}&schoolId=${encodeURIComponent(schoolId)}`);
         const logs = await response.json();
         if (!Array.isArray(logs) || logs.length === 0) return;
 

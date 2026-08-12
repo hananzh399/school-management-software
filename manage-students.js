@@ -56,14 +56,41 @@ let API_STUDENTS = [];
 // ============================================================================
 // ⚙️  SETTINGS — CLASS / SECTION / FEE / FUND CONFIGURATION
 // ----------------------------------------------------------------------------
-// All class structure, sections, monthly tuition, and annual fund values
-// are now managed centrally on the Settings page (settings.html).
-// They are persisted in localStorage under the key `edu_class_configs` and
-// read here at runtime so the admission form always stays in sync.
+// Class structure, sections, monthly tuition, and annual fund values are
+// managed centrally on the Settings page (settings.html), which saves them
+// to the backend (SchoolSettingsController, PUT /api/settings/{id}). This
+// page mirrors that same backend row into CLASS_CONFIGS_CACHE so every
+// dropdown/class-card here always reflects whatever was last saved in
+// Settings — including changes saved from another tab/device, picked up
+// automatically by the live-sync poll below.
 //
-// The helpers below provide safe defaults if settings have never been saved.
+// NOTE: localStorage is intentionally NOT used as a fallback/cache for this
+// (or any other) data anymore. The ONLY key this app ever reads or writes
+// in localStorage is 'eduflow-theme' (light/dark mode — see initTheme()
+// below). Every other value — classes, school info, staff, students — lives
+// exclusively in the backend database and is held in memory (the *_CACHE
+// variables below) between requests.
 // ============================================================================
-const SETTINGS_CLASSES_KEY = 'edu_class_configs';
+/*
+ * Keep the backend URL configurable. When this page is served by the same
+ * Spring Boot application on port 8080, relative URLs avoid CORS and
+ * preflight surprises. A separate frontend can set
+ * `window.SOFTSCHOOL_API_ORIGIN = 'http://localhost:8080'` before this file
+ * loads.
+ */
+const configuredApiOrigin =
+    typeof window !== 'undefined' &&
+    typeof window.SOFTSCHOOL_API_ORIGIN === 'string'
+        ? window.SOFTSCHOOL_API_ORIGIN.trim().replace(/\/+$/, '')
+        : '';
+const BACKEND_ORIGIN =
+    configuredApiOrigin ||
+    (typeof window !== 'undefined' && window.location.port === '8080'
+        ? ''
+        : 'http://localhost:8080');
+
+const SETTINGS_API_BASE = `${BACKEND_ORIGIN}/api/settings`;
+const STAFF_API_BASE    = `${BACKEND_ORIGIN}/api/staff`;
 
 // Sentinel value for the "All Students" master card in the View / Edit
 // class-card selectors — means "no class filter applied".
@@ -73,13 +100,103 @@ const DEFAULT_CLASS_CONFIGS = [
    
 ];
 
-/** Read class configs from settings page (localStorage), with fallback. */
-function getClassConfigs() {
+// In-memory mirror of the backend's `classes` array, already converted to
+// the {name, fee, fund, sections:[]} shape everything below expects.
+// null = "haven't successfully fetched from the server yet".
+let CLASS_CONFIGS_CACHE = null;
+
+// In-memory mirror of the school's Teaching staff (for class-teacher/incharge
+// badges — see getClassTeacher()). Populated by fetchStaffFromServer(); never
+// persisted to localStorage. Empty array = "none fetched yet / none exist".
+let STAFF_CACHE = [];
+let staffEndpointUnavailable = false;
+
+/**
+ * Fetch the logged-in school's Teaching staff from the backend so
+ * getClassTeacher() can look up class-incharge assignments. Mirrors
+ * fetchClassConfigsFromServer()'s pattern exactly.
+ *
+ * Adjust the endpoint/response shape below if your backend's
+ * StaffController differs — this assumes GET /api/staff?schoolId=... returns
+ * an array of staff rows with a `role` field (or is pre-filtered) and
+ * either an `inchargeAssignments` JSON string or assignedClass/assignedSection.
+ */
+async function fetchStaffFromServer() {
     try {
-        const raw = localStorage.getItem(SETTINGS_CLASSES_KEY);
-        const arr = raw ? JSON.parse(raw) : null;
-        if (Array.isArray(arr) && arr.length) return arr;
-    } catch (e) { /* ignore */ }
+        if (staffEndpointUnavailable) return [];
+        const schoolId = getCurrentSchoolId();
+        if (!schoolId) return null; // demo / no school session — nothing to fetch
+        /*
+         * Staff lists are scoped with a query parameter. The old path-style
+         * request is a write-only route in some versions of the
+         * StaffController and returns 405.
+         */
+        const res = await fetch(`${STAFF_API_BASE}?schoolId=${encodeURIComponent(schoolId)}`);
+        if (res.status === 404 || res.status === 405) {
+            // Staff badges are optional; do not hammer an unavailable
+            // endpoint on every live-sync interval.
+            staffEndpointUnavailable = true;
+            STAFF_CACHE = [];
+            return [];
+        }
+        if (!res.ok) throw new Error(`GET staff -> ${res.status}`);
+        const staff = await res.json();
+        const list = Array.isArray(staff) ? staff : (Array.isArray(staff && staff.staff) ? staff.staff : []);
+        STAFF_CACHE = list.filter(s => !s || !s.role || /teach/i.test(s.role));
+        return STAFF_CACHE;
+    } catch (err) {
+        // Staff is supplementary to student CRUD. Keep the page usable if
+        // that separate endpoint is temporarily unavailable.
+        if (!staffEndpointUnavailable) {
+            console.warn('fetchStaffFromServer: could not reach the server, using last cached staff list.', err.message);
+        }
+        return null;
+    }
+}
+
+/**
+ * Convert the backend's SchoolSettings.ClassFee shape into the shape used
+ * throughout this file. Mirrors settings.js's _classesApiToLocal() exactly,
+ * since that's the same backend row.
+ */
+function _classConfigsApiToLocal(apiClasses) {
+    return (Array.isArray(apiClasses) ? apiClasses : []).map(c => ({
+        name:     c.className || '',
+        fee:      c.fee  != null ? c.fee  : 0,
+        fund:     c.fund != null ? c.fund : 0,
+        sections: (c.sections || '').split(',').map(s => s.trim()).filter(Boolean),
+    }));
+}
+
+/**
+ * Fetch the logged-in school's settings row from the backend and refresh
+ * CLASS_CONFIGS_CACHE (from `classes`) and SCHOOL_INFO_CACHE (from the
+ * school-info fields on that same row: address/phone/etc). Call this on
+ * page load and on every live-sync poll tick so changes made on the
+ * Settings page (even from another tab/device) show up here without a
+ * manual reload. No localStorage involved anywhere in this path.
+ */
+async function fetchClassConfigsFromServer() {
+    try {
+        const schoolId = getCurrentSchoolId();
+        if (!schoolId) return null; // demo / no school session — nothing to fetch
+        const res = await fetch(`${SETTINGS_API_BASE}/${encodeURIComponent(schoolId)}`);
+        if (!res.ok) throw new Error(`GET settings -> ${res.status}`);
+        const settings = await res.json();
+        CLASS_CONFIGS_CACHE = _classConfigsApiToLocal(settings && settings.classes);
+        SCHOOL_INFO_CACHE = (settings && typeof settings === 'object') ? settings : {};
+        return CLASS_CONFIGS_CACHE;
+    } catch (err) {
+        console.warn('fetchClassConfigsFromServer: could not reach the server, using last cached data.', err.message);
+        return null;
+    }
+}
+
+/** Read class configs: server cache first, then built-in defaults (no localStorage). */
+function getClassConfigs() {
+    if (Array.isArray(CLASS_CONFIGS_CACHE) && CLASS_CONFIGS_CACHE.length) {
+        return CLASS_CONFIGS_CACHE;
+    }
     return DEFAULT_CLASS_CONFIGS;
 }
 
@@ -121,7 +238,7 @@ const SIBLING_PREFIX = '00';       // prefix for sibling-group IDs
 
 // ── BACKEND API CONFIG ──────────────────────────────────────────────────
 // Spring Boot backend — StudentController.java exposes CRUD under this base.
-const API_BASE = 'http://localhost:8080/api/students';
+const API_BASE = `${BACKEND_ORIGIN}/api/students`;
 
 /**
  * Derive a short registration prefix from the logged-in school's name.
@@ -190,19 +307,16 @@ function getSchoolLogoUrl() {
     return '';
 }
 
-// Settings page persists the school's contact details (address/phone/etc.)
-// to localStorage under this key — see settings.js SCHOOL_INFO_KEY /
-// saveSchoolInfo(). This page only ever READS it; it is never written here.
-const SCHOOL_INFO_KEY = 'edu_school_info';
+// The school's contact details (address/phone/etc.) live on the same
+// SchoolSettings backend row as the class configs above, saved from the
+// Settings page. SCHOOL_INFO_CACHE is populated by fetchClassConfigsFromServer()
+// (and kept fresh by the live-sync poll) — this page never touches
+// localStorage for it.
+let SCHOOL_INFO_CACHE = {};
 
-/** Read the school info object saved by the Settings page, safely. */
+/** Read the school info object mirrored from the backend, safely. */
 function getSchoolInfo() {
-    try {
-        const raw = localStorage.getItem(SCHOOL_INFO_KEY);
-        const obj = raw ? JSON.parse(raw) : null;
-        return (obj && typeof obj === 'object') ? obj : {};
-    } catch (e) { /* ignore */ }
-    return {};
+    return (SCHOOL_INFO_CACHE && typeof SCHOOL_INFO_CACHE === 'object') ? SCHOOL_INFO_CACHE : {};
 }
 
 /**
@@ -396,6 +510,17 @@ document.addEventListener('DOMContentLoaded', () => {
     /** Days before School.expiryDate the blinking subscription badge starts showing. */
     const EXPIRY_WARNING_DAYS = 30;
 
+    // ── LIVE SYNC (REAL-TIME UPDATES, NO MANUAL RELOAD) ─────────────────────
+    // Polls the Spring Boot backend on an interval and, only when the data has
+    // actually changed, merges it in and re-renders — so admissions/edits/
+    // deletes made from ANY device/tab show up here automatically.
+    const LIVE_SYNC_INTERVAL_MS = 6000;   // how often to check the server
+    let   liveSyncTimer         = null;
+    let   lastServerSnapshot    = null;   // JSON fingerprint of last-seen server data
+    let   isSyncing             = false;  // prevents overlapping fetches
+    let   liveSyncFailStreak    = 0;      // backs off polling if server is unreachable
+    let   suppressNextLiveToast = false;  // true right after THIS tab made its own save/delete
+
     // ── 1. CORE SYSTEM INITIALIZATION ───────────────────────────────────────
 
     // Ensure orphan-filter buttons always start in a known, inactive visual
@@ -415,13 +540,25 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Pull the live roster from MySQL as soon as the page loads, so the
     // tables/dashboard reflect the database instead of a stale local cache.
-    syncWithBackend();
+    // Classes are fetched from Settings' backend row at the same time (they
+    // used to come from localStorage, which Settings no longer writes to).
+    // Then start polling in the background so this page never needs a manual
+    // browser reload to pick up changes made elsewhere (see startLiveSync()).
+    Promise.all([syncWithBackend(), fetchClassConfigsFromServer(), fetchStaffFromServer()]).then(() => {
+        refreshClassUI();
+        startLiveSync();
+    });
 
     // ── THEME TOGGLE ─────────────────────────────────────────────────────────
+    // 'eduflow-theme' ('light' | 'dark') is the ONLY thing this app ever
+    // stores in localStorage — everything else (students, classes, school
+    // info, staff) lives in the backend database. See the block comment
+    // near CLASS_CONFIGS_CACHE above for the full rationale.
     (function initTheme() {
         const toggleBtn = document.getElementById('theme-toggle');
         const root = document.documentElement;
-        const savedTheme = localStorage.getItem('eduflow-theme') || 'dark';
+        const stored = localStorage.getItem('eduflow-theme');
+        const savedTheme = (stored === 'light' || stored === 'dark') ? stored : 'dark';
         root.setAttribute('data-theme', savedTheme);
         if (toggleBtn) {
             toggleBtn.addEventListener('click', () => {
@@ -769,13 +906,9 @@ document.addEventListener('DOMContentLoaded', () => {
     populateClassDropdown();
     populateSectionDropdown('');
 
-    // Re-sync when the Settings page saves changes in another tab
-    window.addEventListener('storage', (e) => {
-        if (e.key === SETTINGS_CLASSES_KEY) {
-            populateClassDropdown();
-            populateSectionDropdown(classSelect ? classSelect.value : '');
-        }
-    });
+    // NOTE: class-list changes made on the Settings page (even from another
+    // tab/device) are picked up via the backend poll in pollClassConfigs()
+    // (see startLiveSync()) — no localStorage 'storage' event needed here.
 
     if (classSelect) {
         classSelect.addEventListener('change', function() {
@@ -1100,6 +1233,25 @@ if (certUploadInput) {
         'standardFee', 'admissionFee', 'tuitionDiscount',
         'transportDiscount', 'siblingDiscount', 'transportFee', 'netPayable'
     ];
+    const INTEGER_FIELDS = ['age'];
+
+    /*
+     * These are the properties represented by StudentController's Student
+     * entity. The page also keeps UI-only properties (id, siblingGroupId,
+     * hasSiblings, annual-fund controls, etc.) in memory. Sending those
+     * properties to Jackson can cause an "unrecognized field" 400 before
+     * StudentRepository.save() is reached.
+     */
+    const API_STUDENT_FIELDS = [
+        'regNo', 'schoolId', 'fullName', 'rollNo', 'studentClass', 'section',
+        'admissionDate', 'gender', 'dob', 'age', 'studentBform',
+        'medicalIssues', 'orphanStatus', 'previousSchool', 'previousClass',
+        'guardianName', 'guardianRole', 'guardianCnic', 'phone1', 'phone2',
+        'permanentAddress', 'mailingAddress', 'standardFee', 'admissionFee',
+        'tuitionDiscount', 'transportDiscount', 'siblingDiscount',
+        'transportMode', 'transportType', 'transportFee', 'netPayable',
+        'otherFeesData', 'status', 'photo', 'certData'
+    ];
 
     /**
      * Build a payload safe to POST to the Spring Boot API.
@@ -1111,26 +1263,48 @@ if (certUploadInput) {
      * - Coerces numeric-looking strings into real numbers for the Double fields.
      */
     function toApiPayload(studentData) {
-        const payload = Object.assign({}, studentData);
-        delete payload.id;
-        NUMERIC_FIELDS.forEach(f => {
-            if (payload[f] !== undefined && payload[f] !== null && payload[f] !== '') {
-                const n = parseFloat(payload[f]);
-                payload[f] = isNaN(n) ? 0 : n;
+        const payload = {};
+        API_STUDENT_FIELDS.forEach(field => {
+            if (Object.prototype.hasOwnProperty.call(studentData, field)) {
+                payload[field] = studentData[field];
             }
         });
+
+        NUMERIC_FIELDS.forEach(f => {
+            if (payload[f] !== undefined && payload[f] !== null && String(payload[f]).trim() !== '') {
+                const n = parseFloat(payload[f]);
+                payload[f] = isNaN(n) ? 0 : n;
+            } else {
+                delete payload[f];
+            }
+        });
+        INTEGER_FIELDS.forEach(f => {
+            if (payload[f] !== undefined && payload[f] !== null && String(payload[f]).trim() !== '') {
+                const n = parseInt(payload[f], 10);
+                payload[f] = isNaN(n) ? 0 : n;
+            } else {
+                delete payload[f];
+            }
+        });
+
         // StudentController rejects any write without schoolId — always stamp
         // the logged-in school's real ID on the way out, regardless of what
         // (if anything) was already on the local record.
         payload.schoolId = getCurrentSchoolId();
+        if (!payload.schoolId) {
+            throw new Error('No school is selected. Sign in to a school before saving students.');
+        }
         return payload;
     }
 
     /** Thin fetch() wrapper that throws a readable error on non-2xx responses. */
     async function apiRequest(method, url, body) {
+        const headers = body !== undefined
+            ? { 'Content-Type': 'application/json' }
+            : {};
         const res = await fetch(url, {
             method,
-            headers: { 'Content-Type': 'application/json' },
+            headers,
             body: body !== undefined ? JSON.stringify(body) : undefined
         });
         if (!res.ok) {
@@ -1141,15 +1315,41 @@ if (certUploadInput) {
         return contentType.includes('application/json') ? res.json() : null;
     }
 
+    function getApiErrorMessage(err) {
+        const message = err && err.message ? String(err.message) : '';
+        if (message.includes('No school is selected')) {
+            return 'Sign in to a school before saving students.';
+        }
+        if (message.includes('Failed to fetch') || message.includes('NetworkError')) {
+            return 'The server could not be reached. Nothing was saved.';
+        }
+        if (message.includes('400')) {
+            return 'The server rejected the student data. Check the required fields.';
+        }
+        if (message.includes('401') || message.includes('403')) {
+            return 'You are not authorized to save students for this school.';
+        }
+        return 'The server could not save this record. Nothing was saved.';
+    }
+
     /** Save (create or update) a student in MySQL. Returns the row Spring saved. */
-    function apiSaveStudent(studentData) {
-        return apiRequest('POST', API_BASE, toApiPayload(studentData));
+    async function apiSaveStudent(studentData) {
+        const result = await apiRequest('POST', API_BASE, toApiPayload(studentData));
+        // This tab already knows about the change it just made — invalidate
+        // the change-detection fingerprint so the next background poll
+        // re-syncs silently (no redundant "Live Update" toast for your own edit).
+        lastServerSnapshot = null;
+        suppressNextLiveToast = true;
+        return result;
     }
 
     /** Remove a student on the backend (StudentController does a soft delete — status -> "dropped"). */
-    function apiDeleteStudent(regNo) {
+    async function apiDeleteStudent(regNo) {
         const schoolId = getCurrentSchoolId();
-        return apiRequest('DELETE', `${API_BASE}/${encodeURIComponent(regNo)}?schoolId=${encodeURIComponent(schoolId)}`);
+        const result = await apiRequest('DELETE', `${API_BASE}/${encodeURIComponent(regNo)}?schoolId=${encodeURIComponent(schoolId)}`);
+        lastServerSnapshot = null;
+        suppressNextLiveToast = true;
+        return result;
     }
 
     /**
@@ -1164,18 +1364,74 @@ if (certUploadInput) {
      * time this runs. If you want those to be fully server-backed too, add
      * matching columns to Student.java.
      */
-    async function syncWithBackend() {
+    /**
+     * Find the nearest scrollable ancestor of an element (or null). Used so a
+     * background refresh never yanks the user's scroll position back to the
+     * top of a long student table.
+     */
+    function findScrollParent(el) {
+        let node = el && el.parentElement;
+        while (node && node !== document.body) {
+            const style = getComputedStyle(node);
+            if (/(auto|scroll)/.test(style.overflowY) && node.scrollHeight > node.clientHeight) {
+                return node;
+            }
+            node = node.parentElement;
+        }
+        return window; // fall back to page scroll
+    }
+
+    /** Run fn() while preserving the scroll position of whatever container holds tbodyId. */
+    function withScrollPreserved(tbodyId, fn) {
+        const tbody = document.getElementById(tbodyId);
+        const scrollTarget = tbody ? findScrollParent(tbody) : null;
+        const scrollTop = scrollTarget
+            ? (scrollTarget === window ? window.scrollY : scrollTarget.scrollTop)
+            : null;
+
+        fn();
+
+        if (scrollTarget && scrollTop != null) {
+            if (scrollTarget === window) window.scrollTo(0, scrollTop);
+            else scrollTarget.scrollTop = scrollTop;
+        }
+    }
+
+    /**
+     * Pull the current roster from MySQL and — ONLY if something actually
+     * changed since the last check — merge it in and re-render. This is what
+     * powers real-time updates: any admission/edit/delete made elsewhere
+     * (another tab, another admin, another device) shows up here within one
+     * poll interval, with no manual browser refresh required.
+     *
+     * @param {boolean} isBackgroundPoll  true when called by the live-sync
+     *        timer (suppresses noisy console warnings on transient failures).
+     */
+    async function syncWithBackend(isBackgroundPoll = false) {
+        if (isSyncing) return;   // don't let overlapping polls stack up
+        isSyncing = true;
         try {
             const schoolId = getCurrentSchoolId();
             if (!schoolId) {
                 // No school session (demo / superadmin preview) — nothing to
                 // scope the request to, so skip the call instead of sending
                 // a schoolId-less request the backend will always reject.
-                console.warn('syncWithBackend: no logged-in school, staying on local cache.');
+                if (!isBackgroundPoll) console.warn('syncWithBackend: no logged-in school, staying on local cache.');
                 return;
             }
             const serverStudents = await apiRequest('GET', `${API_BASE}?schoolId=${encodeURIComponent(schoolId)}`);
             if (!Array.isArray(serverStudents)) return;
+
+            liveSyncFailStreak = 0;
+            setLiveSyncIndicator('online');
+
+            // Cheap fingerprint of the server response — if nothing changed,
+            // skip the merge/render entirely so background polling never
+            // causes flicker, lost scroll position, or reset filters.
+            const snapshot = JSON.stringify(serverStudents);
+            const isFirstLoad = lastServerSnapshot === null;
+            if (snapshot === lastServerSnapshot) return;
+            lastServerSnapshot = snapshot;
 
             const local        = getDatabase();
             const localByRegNo = new Map(local.map(s => [s.regNo, s]));
@@ -1185,14 +1441,121 @@ if (certUploadInput) {
 
             saveDatabase(merged);
             updateDashboardStats();
-            if (typeof renderStudentTable === 'function') renderStudentTable();
-            if (typeof renderViewOnlyTable === 'function') renderViewOnlyTable();
+
+            withScrollPreserved('student-list-tbody', () => {
+                if (typeof renderStudentTable === 'function') renderStudentTable();
+            });
+            withScrollPreserved('vo-student-tbody', () => {
+                if (typeof renderViewOnlyTable === 'function') renderViewOnlyTable();
+            });
+
+            // Only announce "live" updates for changes that arrived in the
+            // background after the page had already loaded once — not for
+            // the very first fetch on page load.
+            if (isBackgroundPoll && !isFirstLoad && !suppressNextLiveToast && typeof showToast === 'function') {
+                showToast('Live Update', 'Student records were updated.', 'info');
+            }
+            suppressNextLiveToast = false;
         } catch (err) {
             // Backend not reachable (e.g. Spring Boot not running) — keep working
-            // off the local cache instead of breaking the page.
-            console.warn('syncWithBackend: could not reach the server, using local cache.', err.message);
+            // off the local cache instead of breaking the page. Back off the
+            // polling interval a bit so we don't hammer a dead server.
+            liveSyncFailStreak++;
+            setLiveSyncIndicator('offline');
+            if (!isBackgroundPoll) {
+                console.warn('syncWithBackend: could not reach the server, using local cache.', err.message);
+            }
+        } finally {
+            isSyncing = false;
         }
     }
+
+    /** Optional small visual indicator (id="live-sync-status") showing connection state. */
+    function setLiveSyncIndicator(state) {
+        const el = document.getElementById('live-sync-status');
+        if (!el) return;
+        el.classList.remove('live-sync-online', 'live-sync-offline');
+        if (state === 'online') {
+            el.classList.add('live-sync-online');
+            el.title = 'Live — connected';
+            el.innerHTML = '<i class="fas fa-circle"></i> Live';
+        } else {
+            el.classList.add('live-sync-offline');
+            el.title = 'Offline — showing last-known data';
+            el.innerHTML = '<i class="fas fa-circle"></i> Offline';
+        }
+    }
+
+    /** Start polling the backend for changes. Safe to call more than once. */
+    function startLiveSync() {
+        stopLiveSync();
+        liveSyncTimer = setInterval(() => {
+            if (document.visibilityState !== 'visible') return; // save battery/bandwidth on hidden tabs
+            // Back off (poll every 3rd tick) after repeated failures so a
+            // downed server doesn't get hammered every 6 seconds forever.
+            if (liveSyncFailStreak >= 3 && liveSyncFailStreak % 3 !== 0) {
+                liveSyncFailStreak++;
+                return;
+            }
+            syncWithBackend(true);
+            pollClassConfigs();
+            fetchStaffFromServer().then(fetched => {
+                if (fetched !== null) { updRefreshTeacherBadge(); voRefreshTeacherBadge(); }
+            });
+        }, LIVE_SYNC_INTERVAL_MS);
+    }
+
+    /**
+     * Re-render every place classes show up: the admission form's Class/
+     * Section dropdowns and both class-card grids (Edit-modal + View-modal).
+     * Safe to call at any time — each render function reads getClassConfigs()
+     * fresh, so this always reflects whatever's currently in CLASS_CONFIGS_CACHE.
+     */
+    function refreshClassUI() {
+        if (typeof populateClassDropdown === 'function') populateClassDropdown();
+        if (typeof populateSectionDropdown === 'function') populateSectionDropdown(classSelect ? classSelect.value : '');
+        if (typeof updRenderClassCards === 'function') updRenderClassCards();
+        if (typeof voRenderClassCards === 'function') voRenderClassCards();
+    }
+
+    // Fingerprint of the last-fetched class list, so background polling only
+    // re-renders when a class was actually added/edited/removed in Settings.
+    let lastClassConfigsSnapshot = null;
+
+    /** Poll tick: re-fetch classes from the backend, re-render only if changed. */
+    async function pollClassConfigs() {
+        const before = JSON.stringify(CLASS_CONFIGS_CACHE);
+        const fetched = await fetchClassConfigsFromServer();
+        if (fetched === null) return; // fetch failed — keep showing last-known classes
+        const after = JSON.stringify(CLASS_CONFIGS_CACHE);
+        if (after !== before) refreshClassUI();
+    }
+
+    function stopLiveSync() {
+        if (liveSyncTimer) clearInterval(liveSyncTimer);
+        liveSyncTimer = null;
+    }
+
+    // Expose for debugging / for other pages that may want to trigger a
+    // manual refresh (e.g. a "Refresh now" button).
+    window.EduFlowLiveSync = {
+        start: startLiveSync,
+        stop: stopLiveSync,
+        refreshNow: () => syncWithBackend(false)
+    };
+
+    // Refresh immediately the moment the tab regains focus/visibility or the
+    // browser comes back online — covers the common case of someone editing
+    // in another tab, then switching back to this one.
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') { syncWithBackend(true); pollClassConfigs(); }
+    });
+    window.addEventListener('focus', () => { syncWithBackend(true); pollClassConfigs(); });
+    window.addEventListener('online', () => {
+        liveSyncFailStreak = 0;
+        syncWithBackend(true);
+        pollClassConfigs();
+    });
 
     // ── FORM SUBMISSION ──────────────────────────────────────────────────────
 
@@ -1225,21 +1588,22 @@ if (certUploadInput) {
                 showToast("Error", "Could not find student.", "danger");
                 return;
             }
-            db[index] = Object.assign({}, db[index], studentData);
-            saveDatabase(db);
-            showToast("Updated", "Record updated successfully", "info");
-            closeModal('student-modal');
-
-            // Push the update to MySQL. StudentController matches on regNo and
-            // reuses the existing row's primary key, so this is a true UPDATE
-            // rather than a duplicate insert.
             try {
-                const saved = await apiSaveStudent(db[index]);
-                if (saved) db[index] = Object.assign({}, db[index], saved, { id: db[index].id });
+                /*
+                 * Write to the backend first. Previously the in-memory record
+                 * was updated before the request, so a failed POST looked
+                 * successful until the next refresh replaced it.
+                 */
+                const candidate = Object.assign({}, db[index], studentData);
+                const saved = await apiSaveStudent(candidate);
+                db[index] = Object.assign({}, candidate, saved || {}, { id: db[index].id });
                 saveDatabase(db);
+                showToast("Updated", "Record updated successfully", "info");
+                closeModal('student-modal');
             } catch (err) {
                 console.error('Backend sync failed (update):', err);
-                showToast("Offline", "Saved locally — couldn't reach the server.", "danger");
+                showToast("Save failed", getApiErrorMessage(err), "danger");
+                return;
             }
         } else {
             // NEW ADMISSION
@@ -1254,18 +1618,19 @@ if (certUploadInput) {
                 const regNo = resolveFreshRegNo(db, admissionForm.dataset.pendingRegNo);
                 studentData.regNo = regNo;
                 studentData.id    = regNo;
-                
-                db.push(studentData);
-                saveDatabase(db);
-                showToast("Admission Complete", `${studentData.fullName} registered.`, "success");
-                closeModal('student-modal');
-                showAdmissionPrintPrompt(studentData);
 
                 try {
-                    await apiSaveStudent(studentData);
+                    const saved = await apiSaveStudent(studentData);
+                    const persistedStudent = Object.assign({}, studentData, saved || {}, { id: regNo });
+                    db.push(persistedStudent);
+                    saveDatabase(db);
+                    showToast("Admission Complete", `${studentData.fullName} registered.`, "success");
+                    closeModal('student-modal');
+                    showAdmissionPrintPrompt(persistedStudent);
                 } catch (err) {
                     console.error('Backend sync failed (new admission):', err);
-                    showToast("Offline", "Saved locally — couldn't reach the server.", "danger");
+                    showToast("Save failed", getApiErrorMessage(err), "danger");
+                    return;
                 }
             }
         }
@@ -1317,62 +1682,86 @@ if (certUploadInput) {
 
         // ── YES: register as sibling ─────────────────────────────────────────
         document.getElementById('sibling-yes-btn').addEventListener('click', async () => {
+            // Work on a copy until every affected record has been accepted by
+            // the backend. This prevents a partial sibling update from looking
+            // saved when one of the POST requests fails.
+            const workingDb = db.map(student => ({
+                ...student,
+                hasSiblings: Array.isArray(student.hasSiblings)
+                    ? student.hasSiblings.map(sibling => ({ ...sibling }))
+                    : student.hasSiblings
+            }));
+            const workingMatchedStudent = workingDb.find(student =>
+                student.regNo === matchedStudent.regNo || student.id === matchedStudent.id
+            ) || { ...matchedStudent };
 
             // 1. Get or create the shared sibling-group id (00X)
             const groupId = getOrCreateSiblingGroupId(matchedStudent);
 
             // 2. Generate a real registration number (school prefix) for the new student
-            const newRegNo = resolveFreshRegNo(db, admissionForm.dataset.pendingRegNo);
+            const newRegNo = resolveFreshRegNo(workingDb, admissionForm.dataset.pendingRegNo);
 
             // 3. Configure the NEW student
-            studentData.regNo         = newRegNo;
-            studentData.id            = groupId;   // shared 00X — NOT shown in main table
-            studentData.isSibling     = true;
-            studentData.siblingGroupId= groupId;
+            const newSibling = {
+                ...studentData,
+                regNo: newRegNo,
+                id: groupId,   // shared 00X — NOT shown in main table
+                isSibling: true,
+                siblingGroupId: groupId
+            };
 
             // 4. If the ORIGINAL student is not yet in a group, update their id too
-            const originalIndex = db.findIndex(s => s.id === matchedStudent.id || s.regNo === matchedStudent.regNo);
+            const originalIndex = workingDb.findIndex(s =>
+                s.id === workingMatchedStudent.id || s.regNo === workingMatchedStudent.regNo
+            );
             if (originalIndex !== -1) {
-                if (!db[originalIndex].siblingGroupId) {
+                if (!workingDb[originalIndex].siblingGroupId) {
                     // First time a sibling is added — bring the original into the group
-                    db[originalIndex].id             = groupId;
-                    db[originalIndex].isSibling      = true;
-                    db[originalIndex].siblingGroupId = groupId;
-                    if (!db[originalIndex].hasSiblings) db[originalIndex].hasSiblings = [];
+                    workingDb[originalIndex].id             = groupId;
+                    workingDb[originalIndex].isSibling      = true;
+                    workingDb[originalIndex].siblingGroupId = groupId;
+                    if (!workingDb[originalIndex].hasSiblings) workingDb[originalIndex].hasSiblings = [];
                 }
                 // Record the new student in the original's hasSiblings list
-                db[originalIndex].hasSiblings.push({
-                    name : studentData.fullName,
+                workingDb[originalIndex].hasSiblings.push({
+                    name : newSibling.fullName,
                     regNo: newRegNo
                 });
             }
 
             // 5. Also build hasSiblings on the new student (pointing back to all others)
-            const groupMembersBeforeAdd = db.filter(s => s.siblingGroupId === groupId);
-            studentData.hasSiblings = groupMembersBeforeAdd.map(s => ({
+            const groupMembersBeforeAdd = workingDb.filter(s => s.siblingGroupId === groupId);
+            newSibling.hasSiblings = groupMembersBeforeAdd.map(s => ({
                 name : s.fullName,
                 regNo: s.regNo
             }));
 
             // 6. Save the new student
-            db.push(studentData);
+            workingDb.push(newSibling);
 
             // 7. Refresh "Sibling of …" strings for EVERY group member
-            refreshSiblingOfStrings(db, groupId);
-
-            saveDatabase(db);
-            overlay.remove();
-            showToast("Sibling Registered", `${studentData.fullName} linked as sibling. Group ID: ${groupId}`, "success");
-            closeModal('student-modal');
-            showAdmissionPrintPrompt(studentData);
-            updateDashboardStats();
-            renderStudentTable();
+            refreshSiblingOfStrings(workingDb, groupId);
 
             try {
-                await apiSaveStudent(studentData);
+                const membersToSave = workingDb.filter(s => s.siblingGroupId === groupId);
+                for (const member of membersToSave) {
+                    const saved = await apiSaveStudent(member);
+                    const index = workingDb.findIndex(s => s.regNo === member.regNo);
+                    if (index !== -1 && saved) {
+                        workingDb[index] = Object.assign({}, workingDb[index], saved, { id: workingDb[index].id });
+                    }
+                }
+                db.splice(0, db.length, ...workingDb);
+                saveDatabase(db);
+                overlay.remove();
+                showToast("Sibling Registered", `${newSibling.fullName} linked as sibling. Group ID: ${groupId}`, "success");
+                closeModal('student-modal');
+                showAdmissionPrintPrompt(newSibling);
+                updateDashboardStats();
+                renderStudentTable();
             } catch (err) {
                 console.error('Backend sync failed (sibling registration):', err);
-                showToast("Offline", "Saved locally — couldn't reach the server.", "danger");
+                showToast("Save failed", getApiErrorMessage(err), "danger");
             }
         });
 
@@ -1381,20 +1770,21 @@ if (certUploadInput) {
             const regNo       = resolveFreshRegNo(db, admissionForm.dataset.pendingRegNo);
             studentData.regNo = regNo;
             studentData.id    = regNo;
-            db.push(studentData);
-            saveDatabase(db);
-            overlay.remove();
-            showToast("Admission Complete", `${studentData.fullName} registered independently.`, "success");
-            closeModal('student-modal');
-            showAdmissionPrintPrompt(studentData);
-            updateDashboardStats();
-            renderStudentTable();
 
             try {
-                await apiSaveStudent(studentData);
+                const saved = await apiSaveStudent(studentData);
+                const persistedStudent = Object.assign({}, studentData, saved || {}, { id: regNo });
+                db.push(persistedStudent);
+                saveDatabase(db);
+                overlay.remove();
+                showToast("Admission Complete", `${persistedStudent.fullName} registered independently.`, "success");
+                closeModal('student-modal');
+                showAdmissionPrintPrompt(persistedStudent);
+                updateDashboardStats();
+                renderStudentTable();
             } catch (err) {
                 console.error('Backend sync failed (independent registration):', err);
-                showToast("Offline", "Saved locally — couldn't reach the server.", "danger");
+                showToast("Save failed", getApiErrorMessage(err), "danger");
             }
         });
     }
@@ -2443,33 +2833,16 @@ if (certUploadInput) {
     let updActiveSection = null;
 
     /**
-     * Get the class teacher for a given class+section from staff management localStorage.
-     * Staff data expected in 'edu_staff' key as array of {fullName, assignedClass, assignedSection, role}.
+     * Get the class teacher for a given class+section from STAFF_CACHE — the
+     * in-memory mirror of the backend's Teaching staff list, populated by
+     * fetchStaffFromServer() on page load and kept fresh by the live-sync
+     * poll. No localStorage involved: this used to read staff data out of
+     * shared-data.js's localStorage-backed store, which is why it silently
+     * broke whenever that key went stale; it now always reflects the DB.
      */
     function getClassTeacher(className, section) {
         try {
-            // Staff Management (manage-staff.js) persists via shared-data.js, which
-            // stores everything under the 'eduflow-db' localStorage key. Reading from
-            // 'edu_global_data' here was the bug — that key is never written to, so
-            // the class-teacher lookup always silently failed.
-            let allTeachers = [];
-            try {
-                const gd = (typeof getGlobalData === 'function')
-                    ? getGlobalData()
-                    : JSON.parse(localStorage.getItem('eduflow-db') || '{}');
-                allTeachers = (gd.staff && Array.isArray(gd.staff['Teaching'])) ? gd.staff['Teaching'] : [];
-            } catch(e) {}
-
-            // Legacy fallbacks, kept in case older data was ever saved under these keys
-            if (!allTeachers.length) {
-                try {
-                    const gd2 = JSON.parse(localStorage.getItem('edu_global_data') || '{}');
-                    if (gd2.staff && Array.isArray(gd2.staff['Teaching'])) allTeachers = gd2.staff['Teaching'];
-                } catch(e) {}
-            }
-            if (!allTeachers.length) {
-                try { allTeachers = JSON.parse(localStorage.getItem('edu_staff') || '[]'); } catch(e) {}
-            }
+            const allTeachers = Array.isArray(STAFF_CACHE) ? STAFF_CACHE : [];
 
             for (const s of allTeachers) {
                 // Check inchargeAssignments JSON (new format)
@@ -3072,17 +3445,9 @@ if (certUploadInput) {
     const updSearchEl = document.getElementById('upd-search-input');
     if (updSearchEl) updSearchEl.addEventListener('input', renderStudentTable);
 
-    // Re-sync class cards if settings change in another tab
-    window.addEventListener('storage', (e) => {
-        if (e.key === SETTINGS_CLASSES_KEY) {
-            if (document.getElementById('vo-stage-classes') && !document.getElementById('vo-stage-classes').classList.contains('hidden')) {
-                voRenderClassCards();
-            }
-            if (document.getElementById('upd-stage-classes') && !document.getElementById('upd-stage-classes').classList.contains('hidden')) {
-                updRenderClassCards();
-            }
-        }
-    });
+    // NOTE: class-card re-rendering when Settings changes classes (even from
+    // another tab/device) already happens via refreshClassUI(), called from
+    // the backend poll tick in pollClassConfigs() — see startLiveSync().
 
     // ── PROMOTE ALL STUDENTS ─────────────────────────────────────────────────
 

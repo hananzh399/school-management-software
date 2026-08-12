@@ -10,7 +10,7 @@
     <link rel="stylesheet" href="manage-staff.css">
     <link rel="stylesheet" href="manage-finance.css">
 
-    <script>(function(){const t=localStorage.getItem('eduflow-theme')||'dark';document.documentElement.setAttribute('data-theme',t);})()</script>
+    <script>(function(){const s=localStorage.getItem('eduflow-theme');const t=(s==='light'||s==='dark')?s:'dark';document.documentElement.setAttribute('data-theme',t);})()</script>
     <script src="access-control.js"></script>
 </head>
 <body>
@@ -136,6 +136,13 @@
                             <span class="fee-stat-value" id="fee-stat-pending">Rs. 0</span>
                         </div>
                     </div>
+                    <div class="fee-stat-card fee-stat-totalfine">
+                        <div class="fee-stat-icon"><i class="fas fa-coins"></i></div>
+                        <div class="fee-stat-info">
+                            <span class="fee-stat-label" id="fee-stat-totalfine-label">Total with Fine</span>
+                            <span class="fee-stat-value" id="fee-stat-totalfine">Rs. 0</span>
+                        </div>
+                    </div>
                 </div>
             </section>
 
@@ -195,6 +202,13 @@
                         <div class="fee-stat-info">
                             <span class="fee-stat-label" id="class-fee-stat-pending-label">Pending</span>
                             <span class="fee-stat-value" id="class-fee-stat-pending">Rs. 0</span>
+                        </div>
+                    </div>
+                    <div class="fee-stat-card fee-stat-totalfine">
+                        <div class="fee-stat-icon"><i class="fas fa-coins"></i></div>
+                        <div class="fee-stat-info">
+                            <span class="fee-stat-label" id="class-fee-stat-totalfine-label">Total with Fine</span>
+                            <span class="fee-stat-value" id="class-fee-stat-totalfine">Rs. 0</span>
                         </div>
                     </div>
                 </div>
@@ -362,6 +376,8 @@
                             <select id="fr-student-section-filter" onchange="onFrStudentFilterChange()">
                                 <option value="">-- All Sections --</option>
                             </select>
+                            <select id="fr-student-month-filter" onchange="onFrMonthFilterChange()">
+                            </select>
                         </div>
 
                         <div class="table-container">
@@ -374,10 +390,11 @@
                                         <th>Section</th>
                                         <th>Father Name</th>
                                         <th>Monthly Total Fine & Reason</th>
+                                        <th>Status</th>
                                     </tr>
                                 </thead>
                                 <tbody id="student-fines-tbody">
-                                    <tr><td colspan="6" class="empty-row">No fines recorded yet.</td></tr>
+                                    <tr><td colspan="7" class="empty-row">No fines recorded yet.</td></tr>
                                 </tbody>
                             </table>
                         </div>
@@ -786,7 +803,7 @@
             <input type="text" id="sr-search-input" placeholder="Search by name or ID…" oninput="filterSalaryRecordsTable()">
         </div>
         <div class="salary-records-month-filter">
-            <label class="sr-month-label"><i class="fas fa-calendar-alt"></i> Month</label>
+            <label class="sr-month-label"><i class="fas fa-calendar-alt"></i> Month (Jan–Dec)</label>
             <select id="sr-month-select" onchange="onSalaryRecordsMonthChange()">
                 <!-- Populated by JS -->
             </select>
@@ -810,6 +827,7 @@
                     <th>Name</th>
                     <th>Role / Job</th>
                     <th>Base Salary</th>
+                    <th>Bonus</th>
                     <th>Fines Deducted</th>
                     <th>Security Deducted</th>
                     <th>Month</th>
@@ -817,7 +835,7 @@
                 </tr>
             </thead>
             <tbody id="salary-records-tbody">
-                <tr><td colspan="8" class="empty-row">Loading records…</td></tr>
+                <tr><td colspan="9" class="empty-row">Loading records…</td></tr>
             </tbody>
         </table>
     </div>
@@ -1009,7 +1027,7 @@
             <button type="button" class="sbp-btn sbp-btn-cancel" onclick="closeSalaryBreakdown()">
                 <i class="fas fa-times"></i> Cancel
             </button>
-            <button type="button" class="sbp-btn sbp-btn-pay" onclick="payCurrentSalary()">
+            <button type="button" class="sbp-btn sbp-btn-pay" id="sbp-pay-salary-btn" onclick="payCurrentSalary()">
                 <i class="fas fa-check-circle"></i> Pay Salary
             </button>
         </div>

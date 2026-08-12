@@ -195,7 +195,7 @@ function normalizePlanFromServer(p) {
     label: p.label,
     price: p.price,
     studentLimit: p.studentLimit,
-    archiveStudentLimit: p.archiveStudentLimit,
+    staffLimit: p.staffLimit,
     defaultLocks,
     features: SSA.FEATURES.map(f => f.key).filter(k => defaultLocks.indexOf(k) === -1),
     custom: true
@@ -207,7 +207,7 @@ function planToServerShape(plan) {
     label: plan.label,
     price: plan.price,
     studentLimit: plan.studentLimit,
-    archiveStudentLimit: plan.archiveStudentLimit,
+    staffLimit: plan.staffLimit,
     locks: (plan.defaultLocks || []).join(",")
   };
 }
@@ -331,7 +331,7 @@ function renderPlanCards() {
       <div class="plan-name">${plan.label}</div>
       <div class="plan-price">Rs ${Number(plan.price).toLocaleString()}<span>/year</span></div>
       <div class="sa-hint" style="margin-bottom:2px;">${plan.studentLimit} students or less</div>
-      <div class="sa-hint" style="margin-bottom:2px;">Archive up to ${plan.archiveStudentLimit || 0} students</div>
+      <div class="sa-hint" style="margin-bottom:2px;">${plan.staffLimit || 0} staff members or less</div>
       ${planFeatureList(plan.id)}
     </div>
   `).join("");
@@ -366,7 +366,7 @@ function planToText(plan) {
   t += `Rs ${Number(plan.price).toLocaleString()} / year (annual plan)\n`;
   t += `Validity: 1 year from the date of registration\n`;
   t += `Up to ${plan.studentLimit} students\n`;
-  t += `Archive limit: up to ${plan.archiveStudentLimit || 0} archived students\n`;
+  t += `Up to ${plan.staffLimit || 0} staff members\n`;
   t += `Included: ${included.length ? included.join(", ") : "—"}\n`;
   if (excluded.length) t += `Not included: ${excluded.join(", ")}\n`;
   return t;
@@ -495,7 +495,7 @@ async function openAddSchoolModal() {
   document.getElementById("newSchoolName").value = "";
   document.getElementById("newSchoolPrefix").value = "";
   document.getElementById("newSchoolStudentLimit").value = "";
-  document.getElementById("newSchoolArchiveLimit").value = "";
+  document.getElementById("newSchoolStaffLimit").value = "";
   newSchoolLogoData = "";
   document.getElementById("newSchoolLogoPreview").src = "logo-icon.png";
   currentPlanId = firstPlanId();
@@ -543,7 +543,7 @@ document.getElementById("saveNewSchool").addEventListener("click", async functio
   const name = document.getElementById("newSchoolName").value.trim();
   const prefix = document.getElementById("newSchoolPrefix").value.trim().toUpperCase().replace(/[^A-Z]/g, "").slice(0, 4);
   const customLimit = document.getElementById("newSchoolStudentLimit").value;
-  const customArchiveLimit = document.getElementById("newSchoolArchiveLimit").value;
+  const customStaffLimit = document.getElementById("newSchoolStaffLimit").value;
   const extraLock = document.getElementById("newSchoolExtraLock").value;
 
   if (!name) { saToast("Please enter a school name.", "error"); return; }
@@ -562,7 +562,7 @@ document.getElementById("saveNewSchool").addEventListener("click", async functio
       name, prefix,
       planId: currentPlanId,
       studentLimit: customLimit ? parseInt(customLimit, 10) : plan.studentLimit,
-      archiveStudentLimit: customArchiveLimit ? parseInt(customArchiveLimit, 10) : plan.archiveStudentLimit,
+      staffLimit: customStaffLimit ? parseInt(customStaffLimit, 10) : plan.staffLimit,
       locks,
       logo: newSchoolLogoData
     });
@@ -612,6 +612,76 @@ document.getElementById("copyCredAll").addEventListener("click", () => {
   copyText(`School ID: ${id}\nSecurity code: ${c}`, "School ID & security code copied.");
 });
 
+/* ── USAGE (student/staff limits) ────────────────────────────
+   A school's "used" count (studentCount/staffCount) comes live
+   from the server on every /schools fetch — see SchoolWithUsage
+   on the backend. state:
+     "ok"   → under 90% used, nothing to show
+     "warn" → 90%+ used (10% or less of the limit left)
+     "full" → at or over the limit
+   ═══════════════════════════════════════════════════════════ */
+const USAGE_WARN_PCT = 90;
+
+function usageInfo(count, limit) {
+  const c = Number(count) || 0;
+  const l = Number(limit) || 0;
+  if (!l) return { count: c, limit: l, pct: 0, state: "ok" };
+  const pct = Math.min(100, Math.round((c / l) * 100));
+  let state = "ok";
+  if (c >= l) state = "full";
+  else if (pct >= USAGE_WARN_PCT) state = "warn";
+  return { count: c, limit: l, pct, state };
+}
+
+function usageCell(info) {
+  const cls = info.state === "full" ? "danger" : info.state === "warn" ? "warn" : "";
+  const icon = info.state !== "ok"
+    ? `<i class="fas fa-triangle-exclamation sa-usage-alert-icon ${cls}" title="${info.state === "full" ? "Limit reached" : "Nearing limit"}"></i>`
+    : "";
+  return `
+    <div class="sa-usage-cell">
+      <div class="sa-usage-nums">${info.count} / ${info.limit || "—"} ${icon}</div>
+      <div class="sa-usage-bar"><div class="sa-usage-fill ${cls}" style="width:${info.limit ? info.pct : 0}%;"></div></div>
+    </div>`;
+}
+
+/** Renders the "close to limit" banner above the table, and wires clicks to open that school. */
+function renderLimitAlerts() {
+  const wrap = document.getElementById("limitAlertBanner");
+  if (!wrap) return;
+
+  const flagged = [];
+  cachedSchools.forEach(s => {
+    const stu = usageInfo(s.studentCount, s.studentLimit);
+    const staff = usageInfo(s.staffCount, s.staffLimit);
+    if (stu.state !== "ok") flagged.push({ school: s, type: "student", info: stu });
+    if (staff.state !== "ok") flagged.push({ school: s, type: "staff", info: staff });
+  });
+
+  if (!flagged.length) { wrap.innerHTML = ""; return; }
+
+  wrap.innerHTML = `
+    <div class="sa-limit-banner">
+      <div class="sa-limit-banner-head">
+        <i class="fas fa-triangle-exclamation"></i>
+        <span>${flagged.length} limit${flagged.length > 1 ? "s are" : " is"} close to being reached</span>
+      </div>
+      <div class="sa-limit-banner-list">
+        ${flagged.map(item => `
+          <div class="sa-limit-chip ${item.info.state === "full" ? "danger" : "warn"}" data-id="${item.school.id}">
+            <i class="fas ${item.type === "student" ? "fa-user-graduate" : "fa-chalkboard-teacher"}"></i>
+            <b>${item.school.name}</b>
+            <span>${item.info.count}/${item.info.limit} ${item.type === "student" ? "students" : "staff"}${item.info.state === "full" ? " — full" : ""}</span>
+          </div>
+        `).join("")}
+      </div>
+    </div>`;
+
+  wrap.querySelectorAll(".sa-limit-chip").forEach(chip => {
+    chip.addEventListener("click", () => openManageSchool(chip.getAttribute("data-id")));
+  });
+}
+
 /* ── SCHOOLS TABLE ────────────────────────────────────────── */
 function planBadgeClass(planId) { return allPlans()[planId] ? "sa-badge-basic" : "sa-badge-blocked"; }
 
@@ -641,7 +711,7 @@ function renderSchoolsTable(filterText) {
     <table class="sa-table">
       <thead>
         <tr>
-          <th>School</th><th>School ID</th><th>Plan</th><th>Students</th><th>Registered</th><th>Expires</th><th>Status</th>
+          <th>School</th><th>School ID</th><th>Plan</th><th>Students</th><th>Staff</th><th>Registered</th><th>Expires</th><th>Status</th>
         </tr>
       </thead>
       <tbody>
@@ -657,7 +727,8 @@ function renderSchoolsTable(filterText) {
             </td>
             <td><span class="sa-school-id">${s.schoolId || "—"}</span></td>
             <td><span class="sa-badge ${planBadgeClass(s.planId)}">${plan.label}</span></td>
-            <td>${s.studentLimit} max</td>
+            <td>${usageCell(usageInfo(s.studentCount, s.studentLimit))}</td>
+            <td>${usageCell(usageInfo(s.staffCount, s.staffLimit))}</td>
             <td>${fmtDate(s.registeredAt)}</td>
             <td>
               <div>${fmtDate(s.expiryDate)}</div>
@@ -694,6 +765,7 @@ async function renderAll() {
     cachedSchools = await apiGetSchools();
     renderStats();
     renderSchoolsTable(document.getElementById("schoolSearch").value);
+    renderLimitAlerts();
   } catch (error) {
     console.error("Backend Error:", error);
     saToast("Could not load schools. Is the Java server running?", "error");
@@ -739,6 +811,11 @@ function openManageSchool(id) {
     ? plans.map(p => `<option value="${p.id}" ${p.id === school.planId ? "selected" : ""}>${p.label} — Rs ${Number(p.price).toLocaleString()}/year</option>`).join("")
     : `<option value="">No plans created yet</option>`;
   const orphanPlan = school.planId && !allPlans()[school.planId];
+  const studentUsage = usageInfo(school.studentCount, school.studentLimit);
+  const staffUsage = usageInfo(school.staffCount, school.staffLimit);
+  const usageHint = (info, noun) => info.state === "ok"
+    ? `<p class="sa-hint">${info.count} ${noun} currently in use.</p>`
+    : `<p class="sa-hint"><span class="sa-usage-alert-inline ${info.state === "full" ? "danger" : "warn"}"><i class="fas fa-triangle-exclamation"></i> ${info.state === "full" ? `Limit reached — ${info.count}/${info.limit} ${noun}` : `${info.count}/${info.limit} ${noun} used, nearing the limit`}</span></p>`;
 
   document.getElementById("manageSchoolBody").innerHTML = `
     <div class="sa-form-row full">
@@ -783,13 +860,15 @@ function openManageSchool(id) {
       <div class="sa-field-group">
         <label>Student limit</label>
         <input type="number" id="mgStudentLimit" value="${school.studentLimit}">
+        ${usageHint(studentUsage, "students")}
       </div>
     </div>
 
     <div class="sa-form-row">
       <div class="sa-field-group">
-        <label>Archive student limit</label>
-        <input type="number" id="mgArchiveLimit" min="0" value="${school.archiveStudentLimit || 0}">
+        <label>Staff limit</label>
+        <input type="number" id="mgStaffLimit" min="1" value="${school.staffLimit || 0}">
+        ${usageHint(staffUsage, "staff")}
       </div>
     </div>
 
@@ -929,7 +1008,7 @@ document.getElementById("saveManageSchool").addEventListener("click", async func
   const prefix = document.getElementById("mgPrefix").value.trim().toUpperCase().replace(/[^A-Z]/g, "").slice(0, 4);
   const planId = document.getElementById("mgPlan").value;
   const studentLimit = parseInt(document.getElementById("mgStudentLimit").value, 10) || getPlan(planId).studentLimit;
-  const archiveStudentLimit = parseInt(document.getElementById("mgArchiveLimit").value, 10) || 0;
+  const staffLimit = parseInt(document.getElementById("mgStaffLimit").value, 10) || getPlan(planId).staffLimit;
 
   if (!name) { saToast("School name can't be empty.", "error"); return; }
   if (!planId) { saToast("Create a plan first, then assign it to this school.", "error"); return; }
@@ -938,7 +1017,7 @@ document.getElementById("saveManageSchool").addEventListener("click", async func
     .filter(cb => cb.checked)
     .map(cb => cb.getAttribute("data-feature"));
 
-  const patch = { name, prefix, planId, studentLimit, archiveStudentLimit, locks };
+  const patch = { name, prefix, planId, studentLimit, staffLimit, locks };
   if (managingLogoData !== null) patch.logo = managingLogoData;
 
   const btn = this;
@@ -1015,7 +1094,7 @@ function renderExistingPlans() {
       <div class="sa-plan-row">
         <div class="info">
           <b>${p.label}</b>
-          <small>Rs ${Number(p.price).toLocaleString()}/year · up to ${p.studentLimit} students · archive up to ${p.archiveStudentLimit || 0} · ${included}/${SSA.FEATURES.length} features</small>
+          <small>Rs ${Number(p.price).toLocaleString()}/year · up to ${p.studentLimit} students · up to ${p.staffLimit || 0} staff · ${included}/${SSA.FEATURES.length} features</small>
         </div>
         <div class="row-actions">
           <button class="icon-btn wa" data-share="${p.id}" title="Share on WhatsApp"><i class="fab fa-whatsapp"></i></button>
@@ -1061,7 +1140,7 @@ async function openCreatePlanModal() {
   document.getElementById("newPlanName").value = "";
   document.getElementById("newPlanPrice").value = "";
   document.getElementById("newPlanLimit").value = "";
-  document.getElementById("newPlanArchiveLimit").value = "";
+  document.getElementById("newPlanStaffLimit").value = "";
   renderPlanFeatureToggles();
   document.getElementById("createPlanOverlay").classList.add("open");
   try {
@@ -1086,13 +1165,12 @@ document.getElementById("saveNewPlan").addEventListener("click", async function 
   const label = document.getElementById("newPlanName").value.trim();
   const price = parseInt(document.getElementById("newPlanPrice").value, 10);
   const limit = parseInt(document.getElementById("newPlanLimit").value, 10);
-  const archiveLimitRaw = document.getElementById("newPlanArchiveLimit").value;
-  const archiveLimit = archiveLimitRaw ? parseInt(archiveLimitRaw, 10) : 0;
+  const staffLimit = parseInt(document.getElementById("newPlanStaffLimit").value, 10);
 
   if (!label) { saToast("Please enter a plan name.", "error"); return; }
   if (isNaN(price) || price < 0) { saToast("Please enter the plan amount.", "error"); return; }
   if (isNaN(limit) || limit < 1) { saToast("Please enter the initial student limit.", "error"); return; }
-  if (archiveLimitRaw && (isNaN(archiveLimit) || archiveLimit < 0)) { saToast("Please enter a valid archive student limit.", "error"); return; }
+  if (isNaN(staffLimit) || staffLimit < 1) { saToast("Please enter the initial staff limit.", "error"); return; }
   if (planList().some(p => p.label.toLowerCase() === label.toLowerCase())) {
     saToast("A plan with that name already exists.", "error"); return;
   }
@@ -1104,7 +1182,7 @@ document.getElementById("saveNewPlan").addEventListener("click", async function 
   const plan = {
     id: planIdFromName(label),
     label, price, studentLimit: limit,
-    archiveStudentLimit: archiveLimit,
+    staffLimit,
     features: chosen,
     defaultLocks,
     custom: true
@@ -1121,7 +1199,7 @@ document.getElementById("saveNewPlan").addEventListener("click", async function 
     document.getElementById("newPlanName").value = "";
     document.getElementById("newPlanPrice").value = "";
     document.getElementById("newPlanLimit").value = "";
-    document.getElementById("newPlanArchiveLimit").value = "";
+    document.getElementById("newPlanStaffLimit").value = "";
     renderAll();
     saToast(`Plan "${plan.label}" created.`, "success");
   } catch (err) {
@@ -1174,7 +1252,7 @@ function renderManagePlansList() {
       <div class="sa-plan-row">
         <div class="info">
           <b>${p.label}</b>
-          <small>Rs ${Number(p.price).toLocaleString()}/year · up to ${p.studentLimit} students · archive up to ${p.archiveStudentLimit || 0} · ${included}/${SSA.FEATURES.length} features</small>
+          <small>Rs ${Number(p.price).toLocaleString()}/year · up to ${p.studentLimit} students · up to ${p.staffLimit || 0} staff · ${included}/${SSA.FEATURES.length} features</small>
         </div>
         <div class="row-actions">
           <button class="icon-btn" data-edit="${p.id}" title="Edit plan"><i class="fas fa-pen"></i></button>
@@ -1235,14 +1313,14 @@ function renderManagePlanEditForm(planId) {
     </div>
     <div class="sa-form-row">
       <div class="sa-field-group">
-        <label>Archive student limit</label>
-        <input type="number" id="editPlanArchiveLimit" min="0" value="${plan.archiveStudentLimit || 0}">
+        <label>Staff limit</label>
+        <input type="number" id="editPlanStaffLimit" min="1" value="${plan.staffLimit || 0}">
       </div>
     </div>
     <div class="sa-limits-box">
       <h4><i class="fas fa-unlock"></i> Features included in this plan — toggle ON to include</h4>
       <div class="sa-lock-list" id="editPlanFeatureToggles"></div>
-      <p class="sa-hint" style="color:var(--red-600);"><i class="fas fa-triangle-exclamation"></i> Saving applies the student limit and locked features here to <strong>every school currently on this plan</strong> right away, overriding any per-school customizations they had.</p>
+      <p class="sa-hint" style="color:var(--red-600);"><i class="fas fa-triangle-exclamation"></i> Saving applies the student limit, staff limit, and locked features here to <strong>every school currently on this plan</strong> right away, overriding any per-school customizations they had.</p>
     </div>`;
 
   document.getElementById("editPlanFeatureToggles").innerHTML = SSA.FEATURES.map(f => {
@@ -1271,12 +1349,12 @@ function renderManagePlanEditForm(planId) {
     const label = document.getElementById("editPlanName").value.trim();
     const price = parseInt(document.getElementById("editPlanPrice").value, 10);
     const limit = parseInt(document.getElementById("editPlanLimit").value, 10);
-    const archiveLimit = parseInt(document.getElementById("editPlanArchiveLimit").value, 10);
+    const staffLimit = parseInt(document.getElementById("editPlanStaffLimit").value, 10);
 
     if (!label) { saToast("Please enter a plan name.", "error"); return; }
     if (isNaN(price) || price < 0) { saToast("Please enter the plan amount.", "error"); return; }
     if (isNaN(limit) || limit < 1) { saToast("Please enter the student limit.", "error"); return; }
-    if (isNaN(archiveLimit) || archiveLimit < 0) { saToast("Please enter a valid archive student limit.", "error"); return; }
+    if (isNaN(staffLimit) || staffLimit < 1) { saToast("Please enter a valid staff limit.", "error"); return; }
     if (planList().some(p => p.id !== editingPlanId && p.label.toLowerCase() === label.toLowerCase())) {
       saToast("A plan with that name already exists.", "error"); return;
     }
@@ -1288,7 +1366,7 @@ function renderManagePlanEditForm(planId) {
     const updated = {
       id: editingPlanId,
       label, price, studentLimit: limit,
-      archiveStudentLimit: archiveLimit,
+      staffLimit,
       defaultLocks
     };
 

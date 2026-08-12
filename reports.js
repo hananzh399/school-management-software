@@ -1,10 +1,12 @@
 /**
  * EDUFLOW PRO - REPORTS & ANALYTICS
- * Reads the same LocalStorage data sources used by the rest of the app
- * (fee payments, expenses, bonuses, fines, attendance marks, staff records)
- * and renders period-based charts (Week / Month / Year), cross-module
- * quick links, class-level breakdowns, and a recent transactions feed.
+ * Reads the same backend records used by Student Management and Finance
+ * (fee ledgers, expenses, bonuses, fines, attendance marks, and staff
+ * records) and renders period-based charts (Week / Month / Year),
+ * cross-module quick links, class-level breakdowns, and a recent
+ * transactions feed.
  * No other page's data is modified — this page is read-only.
+ * No report data is written to localStorage.
  */
 
 let currentPeriod = 'month';
@@ -55,14 +57,14 @@ function initTheme() {
     const toggleBtn = document.getElementById('theme-toggle');
     const root = document.documentElement;
 
-    const savedTheme = localStorage.getItem('eduflow-theme') || 'dark';
-    root.setAttribute('data-theme', savedTheme);
+    // Reports data is never persisted in browser storage. Keep the theme
+    // in memory for this page only.
+    root.setAttribute('data-theme', 'dark');
 
-    toggleBtn.addEventListener('click', () => {
+    if (toggleBtn) toggleBtn.addEventListener('click', () => {
         const currentTheme = root.getAttribute('data-theme');
         const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
         root.setAttribute('data-theme', newTheme);
-        localStorage.setItem('eduflow-theme', newTheme);
         // Re-render so chart colors (read from CSS vars) follow the new theme
         setTimeout(renderReports, 50);
     });
@@ -232,7 +234,11 @@ let _reportsDataCache = {
     staffBonus: [],
     studentFines: [],
     staffFines: [],
-    attendance: {}
+    attendance: {},
+    students: [],
+    staff: [],
+    salaryRecords: [],
+    feeStatus: []
 };
 
 function _getSchoolId() {
@@ -243,20 +249,194 @@ function _getSchoolId() {
     return '';
 }
 
-async function loadReportsDataFromBackend() {
-    try {
-        const schoolId = _getSchoolId();
-        const url = `http://localhost:8080/api/reports?schoolId=${encodeURIComponent(schoolId)}`;
-        const res = await fetch(url, { headers: { "Content-Type": "application/json" } });
-        if (res.ok) {
-            const data = await res.json();
-            if (data) {
-                _reportsDataCache = Object.assign(_reportsDataCache, data);
-            }
-        }
-    } catch (e) {
-        console.error("Failed to load reports data from backend", e);
+const REPORTS_BACKEND_ORIGIN = 'http://localhost:8080';
+
+function _reportsArray(data, keys = []) {
+    if (Array.isArray(data)) return data;
+    if (!data || typeof data !== 'object') return [];
+    for (const key of keys) {
+        if (Array.isArray(data[key])) return data[key];
     }
+    return [];
+}
+
+function _reportsStaffArray(data) {
+    if (Array.isArray(data)) return data;
+    if (!data || typeof data !== 'object') return [];
+    const result = [];
+    ['staff', 'employees', 'members', 'items', 'content', 'data',
+        'Teaching', 'Non-Teaching', 'teaching', 'nonTeaching'].forEach(key => {
+        if (Array.isArray(data[key])) result.push(...data[key]);
+    });
+    return result;
+}
+
+function _reportsIsActiveStudent(student) {
+    const status = String((student && student.status) || '').trim().toLowerCase();
+    return !status || status === 'active';
+}
+
+function _reportsNumber(value) {
+    const number = Number(value);
+    return Number.isFinite(number) ? number : 0;
+}
+
+function _reportsMonthKey(date = new Date()) {
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+}
+
+function _reportsMonthKeys(count = 12) {
+    const now = new Date();
+    return Array.from({ length: count }, (_, index) => {
+        const date = new Date(now.getFullYear(), now.getMonth() - index, 1);
+        return _reportsMonthKey(date);
+    });
+}
+
+function _reportsDate(value, monthKey) {
+    const parsed = value ? new Date(value) : new Date(`${monthKey}-01T00:00:00`);
+    return Number.isNaN(parsed.getTime())
+        ? new Date(`${monthKey}-01T00:00:00`)
+        : parsed;
+}
+
+async function _reportsGet(path, fallback) {
+    const schoolId = _getSchoolId();
+    const separator = path.includes('?') ? '&' : '?';
+    try {
+        const response = await fetch(
+            `${REPORTS_BACKEND_ORIGIN}${path}${separator}schoolId=${encodeURIComponent(schoolId)}`,
+            { headers: { 'Content-Type': 'application/json' } }
+        );
+        if (!response.ok) return fallback;
+        const text = await response.text();
+        return text ? JSON.parse(text) : fallback;
+    } catch (error) {
+        console.warn(`[Reports] Could not read ${path}:`, error);
+        return fallback;
+    }
+}
+
+function _reportsEvent(item, monthKey, fallbackLabel) {
+    return {
+        date: _reportsDate(
+            item.date || item.paymentDate || item.payDate || item.paidAt ||
+            item.generatedAt || item.createdAt || item.applyDate,
+            monthKey
+        ),
+        amount: _reportsNumber(item.amount || item.netPaid || item.value),
+        label: item.label || item.description || item.reason || fallbackLabel
+    };
+}
+
+function _reportsAttendanceMap(data) {
+    const map = {};
+    if (Array.isArray(data)) {
+        data.forEach(record => {
+            const date = record.date || record.dateKey || record.attendanceDate;
+            if (date) map[String(date).slice(0, 10)] = record;
+        });
+        return map;
+    }
+    if (data && typeof data === 'object') {
+        const source = data.attendance && typeof data.attendance === 'object'
+            ? data.attendance
+            : data;
+        Object.entries(source).forEach(([key, value]) => {
+            if (value && typeof value === 'object' && /^\d{4}-\d{2}-\d{2}/.test(key)) {
+                map[key.slice(0, 10)] = value;
+            }
+        });
+    }
+    return map;
+}
+
+async function loadReportsDataFromBackend() {
+    const months = _reportsMonthKeys();
+    const [
+        studentsData,
+        staffData,
+        customFeesData,
+        staffBonusData,
+        staffFinesData,
+        expensesData,
+        salaryRecordsData,
+        attendanceData,
+        statusResponses,
+        fineResponses
+    ] = await Promise.all([
+        _reportsGet('/api/students', []),
+        _reportsGet('/api/staff', []),
+        _reportsGet('/api/finance/custom-fees', []),
+        _reportsGet('/api/finance/staff-bonus', []),
+        _reportsGet('/api/finance/staff-fines', []),
+        _reportsGet('/api/finance/expenses', []),
+        _reportsGet('/api/finance/salary/records', []),
+        _reportsGet('/api/attendance', []),
+        Promise.all(months.map(month =>
+            _reportsGet(`/api/finance/status-all/${encodeURIComponent(month)}`, [])
+        )),
+        Promise.all(months.map(month =>
+            _reportsGet(`/api/finance/all-fines/${encodeURIComponent(month)}`, [])
+        ))
+    ]);
+
+    const students = _reportsArray(studentsData).filter(_reportsIsActiveStudent);
+    const statusRows = statusResponses.flatMap((rows, index) =>
+        _reportsArray(rows).map(row => ({ ...row, monthKey: row.monthKey || months[index] }))
+    );
+    const feePayments = statusRows
+        .filter(row => _reportsNumber(row.paidAmount) > 0)
+        .map(row => ({
+            date: _reportsDate(
+                row.paymentDate || row.paidAt || row.updatedAt || row.createdAt,
+                row.monthKey
+            ),
+            amount: _reportsNumber(row.paidAmount),
+            label: `Fee payment${row.studentName ? ` · ${row.studentName}` : ''}`
+        }));
+
+    const customFees = _reportsArray(customFeesData);
+    customFees.forEach(fee => {
+        const monthKey = fee.monthKey || _reportsMonthKey();
+        const records = Array.isArray(fee.records) ? fee.records : [];
+        records.filter(record => record.paid).forEach(record => {
+            feePayments.push({
+                date: _reportsDate(record.paidAt || record.paymentDate || fee.generatedAt, monthKey),
+                amount: _reportsNumber(fee.amount),
+                label: fee.feeName || 'Custom fee'
+            });
+        });
+    });
+
+    const studentFines = fineResponses.flatMap((rows, index) =>
+        _reportsArray(rows)
+            .filter(row => _reportsNumber(row.fineAmount) > 0)
+            .map(row => ({
+                date: _reportsDate(row.paymentDate || row.updatedAt, months[index]),
+                amount: _reportsNumber(row.fineAmount),
+                label: row.studentName ? `Student fine · ${row.studentName}` : 'Student fine'
+            }))
+    );
+
+    _reportsDataCache = {
+        feePayments,
+        otherExpenses: _reportsArray(expensesData).map(item =>
+            _reportsEvent(item, item.monthKey || _reportsMonthKey(), 'Operational expense')
+        ),
+        staffBonus: _reportsArray(staffBonusData).map(item =>
+            _reportsEvent(item, item.monthKey || _reportsMonthKey(), 'Bonus')
+        ),
+        studentFines,
+        staffFines: _reportsArray(staffFinesData).map(item =>
+            _reportsEvent(item, item.monthKey || _reportsMonthKey(), 'Staff fine')
+        ),
+        attendance: _reportsAttendanceMap(attendanceData),
+        students,
+        staff: _reportsStaffArray(staffData),
+        salaryRecords: _reportsArray(salaryRecordsData),
+        feeStatus: statusRows
+    };
 }
 
 function getAllFeePayments() {
@@ -463,11 +643,22 @@ function renderReports() {
     const studentFines = getAllStudentFines();
     const staffFines = getAllStaffFines();
 
-    // ---------- Staff payroll (used to prorate salary cost into the period) ----------
-    const db = safeParse('eduflow-db', { staff: { Teaching: [], 'Non-Teaching': [] } });
-    const teaching = (db.staff && db.staff['Teaching']) || [];
-    const nonTeaching = (db.staff && db.staff['Non-Teaching']) || [];
-    const totalSalaries = [...teaching, ...nonTeaching].reduce((s, m) => s + (Number(m.salary) || 0), 0);
+    // ---------- Staff payroll (loaded from the Staff API) ----------
+    const staff = Array.isArray(_reportsDataCache.staff) ? _reportsDataCache.staff : [];
+    const teaching = staff.filter(member => {
+        const category = String(member.category || member.staffCategory || member.type || '').toLowerCase();
+        return !/non[\s-]*teach|support|admin|office/.test(category);
+    });
+    const nonTeaching = staff.filter(member => {
+        const category = String(member.category || member.staffCategory || member.type || '').toLowerCase();
+        return /non[\s-]*teach|support|admin|office/.test(category);
+    });
+    const salaryRows = Array.isArray(_reportsDataCache.salaryRecords)
+        ? _reportsDataCache.salaryRecords
+        : [];
+    const totalSalaries = salaryRows.length
+        ? salaryRows.reduce((total, row) => total + _reportsNumber(row.netPaid || row.baseSalary || row.amount), 0)
+        : staff.reduce((total, member) => total + _reportsNumber(member.salary), 0);
     const dailySalaryRate = totalSalaries / 30; // monthly payroll prorated to a daily rate
 
     // ---------- Per-bucket revenue / expense series (salary-aware) ----------
@@ -569,12 +760,22 @@ function renderReports() {
     const totalBonusAll = staffBonus.reduce((s, b) => s + b.amount, 0);
     const totalOtherAll = otherExpenses.reduce((s, e) => s + e.amount, 0);
 
-    // ---------- Fee collection status (real students, current global picture) ----------
-    const students = safeParse('edu_students', []);
+    // ---------- Fee collection status (active students from the Student API) ----------
+    const students = Array.isArray(_reportsDataCache.students)
+        ? _reportsDataCache.students
+        : [];
+    const currentStatusMonth = currentMonthValue || _reportsMonthKey();
+    const currentStatus = _reportsDataCache.feeStatus.filter(row =>
+        row.monthKey === currentStatusMonth
+    );
+    const statusByStudent = new Map(currentStatus
+        .filter(row => row && row.regNo)
+        .map(row => [String(row.regNo), row]));
     let expected = 0, collected = 0;
     students.forEach(s => {
         expected += (Number(s.standardFee) || 0) + (Number(s.transportFee) || 0);
-        (s.feePayments || []).forEach(p => { collected += Number(p.amount) || 0; });
+        const status = statusByStudent.get(String(s.regNo || s.id || ''));
+        collected += _reportsNumber(status && status.paidAmount);
     });
     const pending = Math.max(0, expected - collected);
 

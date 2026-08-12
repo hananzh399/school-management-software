@@ -165,7 +165,7 @@
         <div class="section-header">
           <div class="section-header-info">
             <h2><i class="fas fa-university"></i> Class Fee Structure</h2>
-            <p>Set monthly tuition and annual funds for each class. Changes apply to new admissions.</p>
+            <p>Set monthly tuition and annual funds for each class. Existing students update automatically. A voucher already generated for this month keeps its saved amount; the new fee starts with the next voucher.</p>
           </div>
           <button class="btn-primary" onclick="addClassCard()">
             <i class="fas fa-plus"></i> Add Class
@@ -305,7 +305,7 @@
         <div class="section-header">
           <div class="section-header-info">
             <h2><i class="fas fa-clock"></i> Attendance Timing Control</h2>
-            <p>Configure two automatic staff attendance save times. At each scheduled time the current staff attendance snapshot is saved locally and pushed to the database.</p>
+            <p>Configure two automatic staff attendance save times. At each scheduled time the current staff attendance snapshot is saved to the database.</p>
           </div>
         </div>
 
@@ -384,7 +384,7 @@
   <div class="modal-box">
     <div class="modal-icon"><i class="fas fa-trash-alt"></i></div>
     <h3 id="modal-title">Delete this class?</h3>
-    <p id="modal-body">This will permanently remove the class and its fee configuration. Students already admitted won't be affected.</p>
+    <p id="modal-body">This will permanently remove the class and its fee configuration. Existing student records are not deleted, but they will no longer receive a class fee from Settings.</p>
     <div class="modal-actions">
       <button class="btn-cancel" onclick="closeModal()">Cancel</button>
       <button class="btn-danger" id="modal-confirm-btn">Delete</button>
@@ -401,7 +401,7 @@
 <script src="shared-data.js"></script>
 <script src="settings.js"></script>
 <script>
-  // Dark mode init (runs before settings.js fully loads to avoid flash)
+  // Dark mode init (runs before the page paints to avoid a flash)
   (function() {
     const saved = localStorage.getItem('eduflow-theme');
     if (saved === 'dark') document.documentElement.setAttribute('data-theme', 'dark');

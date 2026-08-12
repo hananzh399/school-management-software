@@ -312,47 +312,46 @@ function apiDeleteStaff(staffId) {
 
 /**
  * Pull the current staff roster from MySQL on page load and refresh the
- * shared localStorage store so counts/directory reflect the database
- * instead of whatever was last cached in the browser. Server rows are
- * merged ON TOP OF the local cache (matched by id) so nothing local-only
- * gets wiped, then re-split into the Teaching / Non-Teaching buckets
- * shared-data.js expects (mirrors syncWithBackend() in manage-students.js).
+ * in-memory `staffData` store so counts/directory reflect the database
+ * instead of whatever was last held in the browser. Server rows are merged
+ * ON TOP OF the in-memory cache (matched by id) so nothing local-only (e.g.
+ * an edit still in flight) gets wiped, then re-split into the Teaching /
+ * Non-Teaching buckets the rest of this file expects. Nothing here touches
+ * localStorage — `staffData` is a plain in-memory object for the lifetime
+ * of this page load, hydrated from and written back to the backend only.
  */
 async function syncStaffWithBackend() {
     try {
         const schoolId = getCurrentSchoolId();
         if (!schoolId) {
             // No school session (demo / superadmin preview) — nothing to
-            // scope the request to, so stay on the local cache instead of
-            // sending a schoolId-less request the backend will reject.
-            console.warn('syncStaffWithBackend: no logged-in school, staying on local cache.');
+            // scope the request to, so stay on the in-memory cache instead
+            // of sending a schoolId-less request the backend will reject.
+            console.warn('syncStaffWithBackend: no logged-in school, staying on in-memory cache.');
             return;
         }
         const serverRows = await staffApiRequest('GET', `${STAFF_API_BASE}?schoolId=${encodeURIComponent(schoolId)}`);
         if (!Array.isArray(serverRows)) return;
 
-        const db = getGlobalData();
         const localById = new Map(
-            [].concat(db.staff['Teaching'] || [], db.staff['Non-Teaching'] || []).map(s => [s.id, s])
+            [].concat(staffData['Teaching'] || [], staffData['Non-Teaching'] || []).map(s => [s.id, s])
         );
 
         const merged = serverRows.map(fromApiStaffRecord).map(srv =>
             Object.assign({}, localById.get(srv.id) || {}, srv)
         );
 
-        db.staff['Teaching']     = merged.filter(s => s.type !== 'Non-Teaching');
-        db.staff['Non-Teaching'] = merged.filter(s => s.type === 'Non-Teaching');
-        saveGlobalData(db);
+        staffData['Teaching']     = merged.filter(s => s.type !== 'Non-Teaching');
+        staffData['Non-Teaching'] = merged.filter(s => s.type === 'Non-Teaching');
 
-        staffData = db.staff;
         loadStaffCounts(false);
         if (currentCategory && !document.getElementById('directory-view').classList.contains('d-none')) {
             populateDirectory(currentCategory);
         }
     } catch (err) {
         // Backend not reachable (e.g. Spring Boot not running) — keep working
-        // off the local cache instead of breaking the page.
-        console.warn('syncStaffWithBackend: could not reach the server, using local cache.', err.message);
+        // off the in-memory cache instead of breaking the page.
+        console.warn('syncStaffWithBackend: could not reach the server, using in-memory cache.', err.message);
     }
 }
 
@@ -370,6 +369,10 @@ document.addEventListener('DOMContentLoaded', () => {
     // Pull the live roster from MySQL as soon as the page loads, so the
     // counters/directory reflect the database instead of a stale local cache.
     syncStaffWithBackend();
+
+    // Pull class configs (for the class-assignment / incharge pickers on
+    // the Add/Edit form) from the backend Settings API.
+    fetchClassConfigsFromServer();
 
     // ── PLAN ENFORCEMENT: initial pass ──────────────────────────────────
     applyFeatureLocks();
@@ -452,31 +455,21 @@ function _looksNonTeachingMS(s) {
     return false;
 }
 function sanitizeStaffBuckets() {
-    const db = getGlobalData();
-    if (!db || !db.staff) return;
-    const teaching = Array.isArray(db.staff['Teaching']) ? db.staff['Teaching'] : [];
-    const nonTeaching = Array.isArray(db.staff['Non-Teaching']) ? db.staff['Non-Teaching'] : [];
+    if (!staffData) return;
+    const teaching = Array.isArray(staffData['Teaching']) ? staffData['Teaching'] : [];
+    const nonTeaching = Array.isArray(staffData['Non-Teaching']) ? staffData['Non-Teaching'] : [];
     const cleanT = [];
     const cleanNT = [...nonTeaching];
-    let changed = false;
     teaching.forEach(s => {
         if (_looksNonTeachingMS(s)) {
             cleanNT.push({ ...s, type: 'Non-Teaching' });
-            changed = true;
         } else {
-            if (!s.type) changed = true;
             cleanT.push({ ...s, type: s.type || 'Teaching' });
         }
     });
-    const stampedNT = cleanNT.map(s => {
-        if (!s.type) { changed = true; return { ...s, type: 'Non-Teaching' }; }
-        return s;
-    });
-    if (changed) {
-        db.staff['Teaching'] = cleanT;
-        db.staff['Non-Teaching'] = stampedNT;
-        saveGlobalData(db);
-    }
+    const stampedNT = cleanNT.map(s => s.type ? s : { ...s, type: 'Non-Teaching' });
+    staffData['Teaching'] = cleanT;
+    staffData['Non-Teaching'] = stampedNT;
 }
 
 /* ============================================
@@ -485,7 +478,6 @@ function sanitizeStaffBuckets() {
 function loadStaffCounts(animate = true) {
     // Repair any cross-bucket leakage before counting.
     sanitizeStaffBuckets();
-    staffData = getGlobalData().staff;
     const teachingCount = staffData['Teaching'].length;
     const nonTeachingCount = staffData['Non-Teaching'].length;
     const total = teachingCount + nonTeachingCount;
@@ -609,9 +601,10 @@ function showDirectoryView(category) {
 /* ============================================
    SAMPLE DATA & TABLE POPULATION
    ============================================ */
-// Read from global state instead of local variable
-sanitizeStaffBuckets();
-let staffData = getGlobalData().staff;
+// In-memory only — hydrated from the backend by syncStaffWithBackend() on
+// page load (see DOMContentLoaded below) and kept current by every
+// add/edit/delete after that. Never read from or written to localStorage.
+let staffData = { 'Teaching': [], 'Non-Teaching': [] };
 
 let currentProfileId = null;
 
@@ -769,18 +762,13 @@ function closeConfirmModal() {
 function executeRemove() {
     const removedId = currentProfileId;
 
-    // Remove from array
+    // Remove from the in-memory roster
     staffData[currentCategory] = staffData[currentCategory].filter(s => s.id !== removedId);
-    
-    // Save to global state
-    const db = getGlobalData();
-    db.staff = staffData;
-    saveGlobalData(db);
 
-    // Mirror the delete to MySQL (fire-and-forget, same pattern as the save above).
+    // Delete on the backend — this is the real persistence now (no localStorage).
     if (getCurrentSchoolId()) {
         apiDeleteStaff(removedId).catch(err =>
-            console.warn('apiDeleteStaff failed, removal kept locally only:', err.message));
+            console.warn('apiDeleteStaff failed, removal kept in-memory only until next sync:', err.message));
     }
 
     // Update counts silently
@@ -1148,10 +1136,11 @@ function deductSecurityMonth(staffId) {
     const deductAmount = Math.min(s.monthly, s.remaining);
     staffData[currentCategory][idx].securityCollected = (s.collected + deductAmount);
 
-    // Persist
-    const db = getGlobalData();
-    db.staff = staffData;
-    saveGlobalData(db);
+    // Persist to the backend (no localStorage — this is the real save now).
+    if (getCurrentSchoolId()) {
+        apiSaveStaff(staffData[currentCategory][idx]).catch(err =>
+            console.warn('apiSaveStaff failed, security deduction kept in-memory only until next sync:', err.message));
+    }
 
     // Refresh profile
     showProfileView(staffId, currentCategory);
@@ -1167,39 +1156,38 @@ function deductSecurityMonth(staffId) {
    ============================================================
    ============================================================ */
 
-/* ---- Read classes (with sections) from settings storage ---- */
+// ============================================================================
+// CLASS CONFIGS — sourced from the backend Settings API instead of
+// localStorage (SchoolSettingsController, GET /api/settings/{schoolId}).
+// Fetched once on page load (and refreshed whenever syncStaffWithBackend()
+// runs) into this in-memory cache; getSettingsClasses() below just reads it.
+// ============================================================================
+const SETTINGS_API_BASE = 'http://localhost:8080/api/settings';
+let CLASS_CONFIGS_CACHE = [];
+
+/** Convert backend SchoolSettings.ClassFee shape into {name, sections:[]}. */
+function _classConfigsApiToLocal(apiClasses) {
+    return (Array.isArray(apiClasses) ? apiClasses : []).map(c => ({
+        name:     c.className || c.name || '',
+        sections: (c.sections || '').split(',').map(s => s.trim()).filter(Boolean),
+    })).filter(c => c.name);
+}
+
+/** Fetch this school's class configs from the backend into CLASS_CONFIGS_CACHE. */
+async function fetchClassConfigsFromServer() {
+    try {
+        const schoolId = getCurrentSchoolId();
+        if (!schoolId) return;
+        const settings = await staffApiRequest('GET', `${SETTINGS_API_BASE}/${encodeURIComponent(schoolId)}`);
+        CLASS_CONFIGS_CACHE = _classConfigsApiToLocal(settings && settings.classes);
+    } catch (err) {
+        console.warn('fetchClassConfigsFromServer: could not reach the server, keeping last known classes.', err.message);
+    }
+}
+
+/* ---- Read classes (with sections) — backed by CLASS_CONFIGS_CACHE, no localStorage ---- */
 function getSettingsClasses() {
-    // Primary source: settings.js localStorage key
-    try {
-        const raw = localStorage.getItem('edu_class_configs');
-        if (raw) {
-            const arr = JSON.parse(raw);
-            if (Array.isArray(arr)) {
-                return arr.map(c => ({
-                    name: c.name || c.className || c.class || '',
-                    sections: Array.isArray(c.sections) ? c.sections.filter(Boolean) : []
-                })).filter(c => c.name);
-            }
-        }
-    } catch (e) { /* ignore */ }
-
-    // Fallback: shared global data
-    try {
-        const db = (typeof getGlobalData === 'function') ? getGlobalData() : {};
-        const settings = db.settings || {};
-        const src = settings.classes || settings.classConfigs || db.classes || [];
-        if (Array.isArray(src)) {
-            return src.map(c => {
-                if (typeof c === 'string') return { name: c, sections: [] };
-                return {
-                    name: c.name || c.className || '',
-                    sections: Array.isArray(c.sections) ? c.sections : []
-                };
-            }).filter(c => c.name);
-        }
-    } catch (e) { /* ignore */ }
-
-    return [];
+    return CLASS_CONFIGS_CACHE;
 }
 
 /* ---- CNIC single input with auto-formatting (xxxxx-xxxxxxx-x) ---- */
@@ -2540,18 +2528,15 @@ function handleFormSubmit(e) {
         staffData[currentCategory].push(newData);
     }
 
-    const db = getGlobalData();
-    db.staff = staffData;
-    saveGlobalData(db);
-
-    // Push the full, merged record to MySQL (fire-and-forget — the UI
-    // already reflects the change from localStorage above, and
-    // syncStaffWithBackend() will reconcile on next page load either way).
+    // Push the full, merged record to MySQL. This is now the sole source of
+    // truth — nothing is written to localStorage. The change is reflected
+    // in the in-memory `staffData` immediately (below), and persisted here;
+    // if this fails, syncStaffWithBackend() will reconcile on next load.
     const savedId = isEditMode ? currentProfileId : newData.id;
     const finalRecord = staffData[currentCategory].find(s => s.id === savedId);
     if (finalRecord && getCurrentSchoolId()) {
         apiSaveStaff(finalRecord).catch(err =>
-            console.warn('apiSaveStaff failed, change kept locally only:', err.message));
+            console.warn('apiSaveStaff failed, change kept in-memory only until next sync:', err.message));
     }
 
     populateDirectory(currentCategory);
@@ -2841,8 +2826,10 @@ function _getSchoolIdentity() {
     let name = '';
 
     try {
-        // 1. Authoritative source: the school record from Super Admin, via
-        //    the same window.SoftSchoolAdmin API access-control.js exposes.
+        // Authoritative (and now only) source: the school record from Super
+        // Admin, via the same window.SoftSchoolAdmin API access-control.js
+        // exposes. No localStorage fallback — if this page has no school
+        // session, the caller just gets the default name below.
         if (window.SoftSchoolAdmin) {
             const currentSchool = window.SoftSchoolAdmin.getCurrentSchool();
             if (currentSchool) {
@@ -2850,32 +2837,9 @@ function _getSchoolIdentity() {
                 if (currentSchool.name) name = currentSchool.name;
             }
         }
-
-        // 2. Check Global Data (shared-data.js) — legacy fallback
-        const db = (typeof getGlobalData === 'function') ? getGlobalData() : {};
-
-        // Comprehensive search for logo in the database object
-        if (!logo) {
-            if (db.settings?.schoolLogo) logo = db.settings.schoolLogo;
-            else if (db.schoolLogo) logo = db.schoolLogo;
-            else if (db.config?.logo) logo = db.config.logo;
-        }
-
-        if (!name) {
-            if (db.settings?.schoolName) name = db.settings.schoolName;
-            else if (db.schoolName) name = db.schoolName;
-        }
-
-        // 3. Search LocalStorage directly (older Super Admin builds saved here)
-        if (!logo) {
-            logo = localStorage.getItem('schoolLogo') || 
-                   localStorage.getItem('admin_logo') || 
-                   JSON.parse(localStorage.getItem('school_settings') || '{}').logo;
-        }
-
     } catch (e) { console.warn("Search interrupted:", e); }
 
-    // 4. Last Resort: previously fell back to the sidebar's .brand-logo,
+    // Last Resort: previously fell back to the sidebar's .brand-logo,
     //    but that element is always the fixed SoftSchool product logo now,
     //    never the school's own logo — so there is nothing useful to read
     //    from it. Leave logo blank if not found above; callers already

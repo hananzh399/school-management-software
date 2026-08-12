@@ -5141,6 +5141,8 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 .fee-stat-collected .fee-stat-value { color: #16a34a; }
 .fee-stat-pending   .fee-stat-value { color: #ef4444; }
 .fee-stat-neutral   .fee-stat-icon { background: rgba(139,92,246,0.12); color: #8b5cf6; }
+.fee-stat-totalfine .fee-stat-icon { background: rgba(245,158,11,0.12); color: #f59e0b; }
+.fee-stat-totalfine .fee-stat-value { color: #f59e0b; }
 
 @media (max-width: 720px) {
     .fee-stats-row { flex-direction: column; align-items: stretch; }

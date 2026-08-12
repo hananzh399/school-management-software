@@ -3,6 +3,19 @@
  * Manages global state via LocalStorage across all pages.
  */
 
+// ── DOUBLE-LOAD GUARD ────────────────────────────────────────────────────
+// If a page accidentally includes this file more than once (two <script>
+// tags, or it's pulled in both directly and via another bundled script),
+// a second run of top-level `const`/`let` declarations throws
+// "Identifier 'DEFAULT_DATA' has already been declared" and breaks the
+// whole page. Wrapping everything in this IIFE means each <script> tag
+// gets its own function scope, so re-including the file is harmless — and
+// the flag below skips the extra work entirely on repeat loads.
+if (window.__EDUFLOW_SHARED_DATA_LOADED__) {
+    console.warn('shared-data.js was included more than once on this page — skipping duplicate load. Check your HTML for a repeated <script src="shared-data.js"> tag.');
+} else {
+window.__EDUFLOW_SHARED_DATA_LOADED__ = true;
+
 const DEFAULT_DATA = {
     staff: {
         'Teaching': [],
@@ -146,3 +159,14 @@ function calculateFinancials() {
         lastMonthProfit: db.finances.historical.lastMonthProfit || 0
     };
 }
+
+// Attach to window explicitly. In a classic (non-module) script, unqualified
+// references like `getGlobalData()` from other files already resolve against
+// `window`, so this keeps every other page's existing calls working exactly
+// as before while still being safely scoped inside this IIFE.
+window.DEFAULT_DATA        = DEFAULT_DATA;
+window.getGlobalData       = getGlobalData;
+window.saveGlobalData      = saveGlobalData;
+window.calculateFinancials = calculateFinancials;
+
+} // end double-load guard
