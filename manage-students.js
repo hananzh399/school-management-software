@@ -1094,16 +1094,20 @@ if (certUploadInput) {
      * Format: 001, 002, 003 … (always 3 digits after "00")
      */
     function getOrCreateSiblingGroupId(matchedStudent) {
+        // Defensive String(...) coercion: `id` is meant to be a string here
+        // (a regNo or a "00X" group code), but guard against it ever coming
+        // through as something else (e.g. a number) so this can't throw and
+        // silently kill the whole "Mark as Sibling" action again.
         // Already has a group id?
-        if (matchedStudent.id && matchedStudent.id.startsWith(SIBLING_PREFIX)) {
-            return matchedStudent.id;
+        if (matchedStudent.id && String(matchedStudent.id).startsWith(SIBLING_PREFIX)) {
+            return String(matchedStudent.id);
         }
         // Generate next group number
         const db = getDatabase();
         let maxGroup = 0;
         db.forEach(s => {
             if (s.id) {
-                const match = s.id.match(/^00(\d+)$/);
+                const match = String(s.id).match(/^00(\d+)$/);
                 if (match) maxGroup = Math.max(maxGroup, parseInt(match[1], 10));
             }
         });
@@ -1435,9 +1439,29 @@ if (certUploadInput) {
 
             const local        = getDatabase();
             const localByRegNo = new Map(local.map(s => [s.regNo, s]));
-            const merged        = serverStudents.map(srv =>
-                Object.assign({}, localByRegNo.get(srv.regNo) || {}, srv)
-            );
+            const merged        = serverStudents.map(srv => {
+                const localMatch = localByRegNo.get(srv.regNo);
+                const mergedStudent = Object.assign({}, localMatch || {}, srv);
+                // BUGFIX: `srv.id` is the Student entity's numeric database
+                // primary key. The frontend has ALWAYS used `id` for its own
+                // purposes instead — a student's regNo, or a shared "00X"
+                // sibling-group code (see getOrCreateSiblingGroupId). Because
+                // `srv` was spread last, its numeric id was silently
+                // clobbering that string on every sync (page load, every
+                // poll tick, and on window focus), which is what made
+                // "Mark as Sibling" fail right after load: it calls
+                // `matchedStudent.id.startsWith(...)`, and `.startsWith`
+                // doesn't exist on a Number — an uncaught TypeError that
+                // happens outside the click handler's try/catch, so the
+                // whole action silently did nothing. Always keep the
+                // frontend's own id (falling back to regNo for a student
+                // this tab has never seen before, matching what a fresh
+                // admission assigns).
+                mergedStudent.id = (localMatch && localMatch.id !== undefined && localMatch.id !== null)
+                    ? localMatch.id
+                    : (srv.regNo || srv.id);
+                return mergedStudent;
+            });
 
             saveDatabase(merged);
             updateDashboardStats();
@@ -1682,67 +1706,74 @@ if (certUploadInput) {
 
         // ── YES: register as sibling ─────────────────────────────────────────
         document.getElementById('sibling-yes-btn').addEventListener('click', async () => {
-            // Work on a copy until every affected record has been accepted by
-            // the backend. This prevents a partial sibling update from looking
-            // saved when one of the POST requests fails.
-            const workingDb = db.map(student => ({
-                ...student,
-                hasSiblings: Array.isArray(student.hasSiblings)
-                    ? student.hasSiblings.map(sibling => ({ ...sibling }))
-                    : student.hasSiblings
-            }));
-            const workingMatchedStudent = workingDb.find(student =>
-                student.regNo === matchedStudent.regNo || student.id === matchedStudent.id
-            ) || { ...matchedStudent };
-
-            // 1. Get or create the shared sibling-group id (00X)
-            const groupId = getOrCreateSiblingGroupId(matchedStudent);
-
-            // 2. Generate a real registration number (school prefix) for the new student
-            const newRegNo = resolveFreshRegNo(workingDb, admissionForm.dataset.pendingRegNo);
-
-            // 3. Configure the NEW student
-            const newSibling = {
-                ...studentData,
-                regNo: newRegNo,
-                id: groupId,   // shared 00X — NOT shown in main table
-                isSibling: true,
-                siblingGroupId: groupId
-            };
-
-            // 4. If the ORIGINAL student is not yet in a group, update their id too
-            const originalIndex = workingDb.findIndex(s =>
-                s.id === workingMatchedStudent.id || s.regNo === workingMatchedStudent.regNo
-            );
-            if (originalIndex !== -1) {
-                if (!workingDb[originalIndex].siblingGroupId) {
-                    // First time a sibling is added — bring the original into the group
-                    workingDb[originalIndex].id             = groupId;
-                    workingDb[originalIndex].isSibling      = true;
-                    workingDb[originalIndex].siblingGroupId = groupId;
-                    if (!workingDb[originalIndex].hasSiblings) workingDb[originalIndex].hasSiblings = [];
-                }
-                // Record the new student in the original's hasSiblings list
-                workingDb[originalIndex].hasSiblings.push({
-                    name : newSibling.fullName,
-                    regNo: newRegNo
-                });
-            }
-
-            // 5. Also build hasSiblings on the new student (pointing back to all others)
-            const groupMembersBeforeAdd = workingDb.filter(s => s.siblingGroupId === groupId);
-            newSibling.hasSiblings = groupMembersBeforeAdd.map(s => ({
-                name : s.fullName,
-                regNo: s.regNo
-            }));
-
-            // 6. Save the new student
-            workingDb.push(newSibling);
-
-            // 7. Refresh "Sibling of …" strings for EVERY group member
-            refreshSiblingOfStrings(workingDb, groupId);
-
+            // BUGFIX: everything below used to run OUTSIDE this try/catch —
+            // only the final save loop was guarded. That meant if any step
+            // before the save (e.g. getOrCreateSiblingGroupId) threw, the
+            // click did absolutely nothing: no save, no toast, no console
+            // hint beyond an uncaught error — which is exactly what made
+            // "Mark as Sibling" look silently broken. Everything now runs
+            // inside the try block so a real failure is always visible.
             try {
+                // Work on a copy until every affected record has been accepted by
+                // the backend. This prevents a partial sibling update from looking
+                // saved when one of the POST requests fails.
+                const workingDb = db.map(student => ({
+                    ...student,
+                    hasSiblings: Array.isArray(student.hasSiblings)
+                        ? student.hasSiblings.map(sibling => ({ ...sibling }))
+                        : student.hasSiblings
+                }));
+                const workingMatchedStudent = workingDb.find(student =>
+                    student.regNo === matchedStudent.regNo || student.id === matchedStudent.id
+                ) || { ...matchedStudent };
+
+                // 1. Get or create the shared sibling-group id (00X)
+                const groupId = getOrCreateSiblingGroupId(matchedStudent);
+
+                // 2. Generate a real registration number (school prefix) for the new student
+                const newRegNo = resolveFreshRegNo(workingDb, admissionForm.dataset.pendingRegNo);
+
+                // 3. Configure the NEW student
+                const newSibling = {
+                    ...studentData,
+                    regNo: newRegNo,
+                    id: groupId,   // shared 00X — NOT shown in main table
+                    isSibling: true,
+                    siblingGroupId: groupId
+                };
+
+                // 4. If the ORIGINAL student is not yet in a group, update their id too
+                const originalIndex = workingDb.findIndex(s =>
+                    s.id === workingMatchedStudent.id || s.regNo === workingMatchedStudent.regNo
+                );
+                if (originalIndex !== -1) {
+                    if (!workingDb[originalIndex].siblingGroupId) {
+                        // First time a sibling is added — bring the original into the group
+                        workingDb[originalIndex].id             = groupId;
+                        workingDb[originalIndex].isSibling      = true;
+                        workingDb[originalIndex].siblingGroupId = groupId;
+                        if (!workingDb[originalIndex].hasSiblings) workingDb[originalIndex].hasSiblings = [];
+                    }
+                    // Record the new student in the original's hasSiblings list
+                    workingDb[originalIndex].hasSiblings.push({
+                        name : newSibling.fullName,
+                        regNo: newRegNo
+                    });
+                }
+
+                // 5. Also build hasSiblings on the new student (pointing back to all others)
+                const groupMembersBeforeAdd = workingDb.filter(s => s.siblingGroupId === groupId);
+                newSibling.hasSiblings = groupMembersBeforeAdd.map(s => ({
+                    name : s.fullName,
+                    regNo: s.regNo
+                }));
+
+                // 6. Save the new student
+                workingDb.push(newSibling);
+
+                // 7. Refresh "Sibling of …" strings for EVERY group member
+                refreshSiblingOfStrings(workingDb, groupId);
+
                 const membersToSave = workingDb.filter(s => s.siblingGroupId === groupId);
                 for (const member of membersToSave) {
                     const saved = await apiSaveStudent(member);
