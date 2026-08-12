@@ -173,6 +173,7 @@ async function refreshLiveData() {
     STUDENTS = _uniquifyKey(await loadRealStudents(), "regNo");
     STAFF    = _uniquifyKey(await loadRealStaff(), "id");
     CLASSES  = await loadRealClasses();
+    await hydrateTodayAttendanceCaches();
 }
 
 // Build history from saved attendance keys (real data)
@@ -223,7 +224,24 @@ state.staffMonthlyViewPeriod = "week";
 state.staffMonthlyWeekStart  = null;
  
 // ---------- DATE HELPERS ----------
-function todayKey() { return new Date().toISOString().slice(0, 10); }
+// BUGFIX — "today's attendance sometimes shows 0 on the dashboard even
+// after marking it": this used to build the date key from
+// new Date().toISOString(), which is UTC — so for any school west of
+// UTC (or east, depending on time of day), the key saved here could be a
+// day off from the LOCAL calendar date the dashboard (main.js's
+// _dashboardAttendance, which builds its key from getFullYear()/
+// getMonth()/getDate() — all local time) is asking for. A student marked
+// present at 11pm local time could get saved under tomorrow's UTC date,
+// so the dashboard's "today" query for the local date would find nothing.
+// Build the key from local date parts instead, so this always matches
+// exactly what main.js queries.
+function todayKey() {
+    const d = new Date();
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
+}
  
 const todayAttendanceCache = {}; // class name -> records
 let todayStaffAttendanceCache = null; // staffId -> records
@@ -243,6 +261,66 @@ function checkDayReset() {
     }
 }
  
+/**
+ * Rebuild todayAttendanceCache / todayStaffAttendanceCache from the backend.
+ *
+ * These two caches are what the UI uses to know "who's already been marked
+ * today" (to show the green/locked rows, the "Saved Today" badge on class
+ * cards, and the on-page attendance stats strip). They used to only ever get
+ * filled in-session — right after clicking Save, or from a live biometric
+ * scan — which meant a simple page reload wiped them back to empty even
+ * though the records were sitting safely in the database. That's why
+ * attendance looked like it "reset" on reload and could be marked (and
+ * saved — creating duplicate rows) a second time.
+ *
+ * Called every time we pull fresh data from the backend (refreshLiveData),
+ * so the caches always reflect what's actually saved.
+ */
+async function hydrateTodayAttendanceCaches() {
+    const schoolId = getCurrentSchoolId();
+    const date = todayKey();
+
+    for (const key in todayAttendanceCache) delete todayAttendanceCache[key];
+    todayStaffAttendanceCache = null;
+
+    if (!schoolId) return;
+
+    // ---- Students: group every record already saved today by class ----
+    const studentLogs = await _apiGet(
+        `${ATTENDANCE_API_BASE}/students?date=${encodeURIComponent(date)}&schoolId=${encodeURIComponent(schoolId)}`,
+        []
+    );
+    (Array.isArray(studentLogs) ? studentLogs : []).forEach(log => {
+        const cls = log.className;
+        if (!cls || !log.memberId) return;
+        if (!todayAttendanceCache[cls]) todayAttendanceCache[cls] = {};
+        todayAttendanceCache[cls][log.memberId] = {
+            status: log.status || "absent",
+            reason: log.reason || ""
+        };
+    });
+
+    // ---- Staff: one flat map, keyed by staff id ----
+    const staffLogs = await _apiGet(
+        `${ATTENDANCE_API_BASE}/staff?date=${encodeURIComponent(date)}&schoolId=${encodeURIComponent(schoolId)}`,
+        []
+    );
+    if (Array.isArray(staffLogs) && staffLogs.length > 0) {
+        const staffMap = {};
+        staffLogs.forEach(log => {
+            if (!log.memberId) return;
+            staffMap[log.memberId] = {
+                status: log.status || (log.checkIn ? "present" : "absent"),
+                reason: log.reason || "",
+                checkIn: log.checkIn || null,
+                checkOut: log.checkOut || null,
+                isFromDB: !!log.checkIn
+            };
+        });
+        todayStaffAttendanceCache = staffMap;
+    }
+}
+
 function scheduleMidnightRefresh() {
     const now = new Date();
     const midnight = new Date(now);
@@ -296,6 +374,7 @@ function hideAllStages() {
 document.addEventListener("DOMContentLoaded", async () => {
     checkDayReset();
     scheduleMidnightRefresh();
+    await hydrateTodayAttendanceCaches(); // pull today's real saved state before anything renders
     await initTheme();
     initSidebar();
     initDate();
@@ -3207,7 +3286,14 @@ async function pollBiometricUpdates() {
             }
         });
 
-        if (changed) renderStaff();
+        if (changed) {
+            // Keep the cache in sync too — otherwise a live biometric scan
+            // would update the on-screen row but get lost again the moment
+            // the user navigates away and back (initStaffAttendance rebuilds
+            // state.staffAttendance from this cache, not from state itself).
+            todayStaffAttendanceCache = { ...state.staffAttendance };
+            renderStaff();
+        }
     } catch (e) {
         console.error("Biometric Polling error:", e);
     }

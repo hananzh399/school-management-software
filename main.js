@@ -91,8 +91,13 @@ async function loadDashboardFromBackend() {
     const data = await calculateFinancials();
     
     // 1. CALCULATE TOTALS FIRST
-    // Net Expenses = Salaries + Bonuses + Other Expenses
-    const netExp = data.salaries.total + data.staffBonusTotal + data.otherExpensesTotal;
+    // Net Expenses = only money that has actually gone out the door:
+    // Paid Salaries (posted payroll + advances) + Bonuses given + Other
+    // Expenses logged. Pending Salaries is deliberately left out — it's
+    // what's still owed, not a cost incurred yet, so Net Expenses should
+    // stay at 0 (plus whatever's genuinely been paid) until a salary,
+    // bonus, or expense is actually recorded.
+    const netExp = data.salaries.paid + data.staffBonusTotal + data.otherExpensesTotal;
     
     // Total Revenue = Collected Fees + all fines (late, manual student+staff, staff absence) + Admission Fees + Custom Fees Collected
     const totalRev = data.fees.collected
@@ -113,8 +118,13 @@ async function loadDashboardFromBackend() {
     animateCounter('expected-fees', data.fees.expected);
     animateCounter('collected-fees', data.fees.collected);
     animateCounter('pending-fees', data.fees.pending);
-    animateCounter('student-late-fines', data.fines.studentLate); 
-    animateCounter('student-other-fines', data.fines.studentOther + data.fines.staffTotal); 
+    animateCounter('student-late-fines', data.fines.studentLate);
+    // FEATURE — this box now shows STAFF FINE only (Manage Finance > Staff
+    // Fines), no longer student fine + staff fine combined. Student "other"
+    // fines still exist in data.fines.studentOther and still count toward
+    // Total Revenue below — they just aren't shown in this particular box
+    // anymore.
+    animateCounter('student-other-fines', data.fines.staffTotal);
     animateCounter('teacher-absence-fines', data.fines.teacherAbsence);
 
     // 3b. ADMISSION FEES
@@ -128,7 +138,10 @@ async function loadDashboardFromBackend() {
     animateCounter('total-revenue', totalRev);
 
     // 4. UPDATE THE UI (Expenses)
-    animateCounter('base-salaries', data.salaries.total);
+    animateCounter('payable-salaries', data.salaries.payable);
+    animateCounter('paid-salaries', data.salaries.paid);
+    animateCounter('pending-salaries', data.salaries.pending);
+    animateCounter('advance-salaries', data.salaries.advance);
     animateCounter('staff-bonus', data.staffBonusTotal);
     animateCounter('other-expenses', data.otherExpensesTotal);
     
@@ -369,15 +382,64 @@ function _dashboardStaffAmount(items, monthKey) {
 }
 
 function _dashboardSalaryAmount(salaryRecords, staff, monthKey) {
+    // Payable = the roster's full monthly salary obligation, regardless of
+    // what's actually been posted/paid yet. Mirrors Staff.getSalary(), the
+    // same field FinanceController#paySalary reads as `baseSalary`.
+    const payable = staff.reduce((total, member) => total + _dashboardNumber(member.salary), 0);
+
+    // Paid (payroll-only) = whatever's actually posted for this month
+    // (Finance TYPE_SALARY rows). netPaid is the true amount disbursed
+    // (base + bonus − fines − advance settled − security); fall back for
+    // older rows. Advances get folded in on top of this by the caller
+    // (_dashboardSnapshot), since money already handed out as an advance is
+    // just as "paid" as a posted payroll run — see the note in
+    // _dashboardAdvanceTotal.
     const paidRows = _dashboardArray(salaryRecords)
         .filter(row => !row.monthKey || row.monthKey === monthKey);
-    if (paidRows.length) {
-        return paidRows.reduce((total, row) =>
-            total + _dashboardNumber(row.netPaid || row.baseSalary || row.amount), 0);
-    }
-    // If payroll has not been posted yet, show the roster's monthly salary
-    // obligation rather than an unexplained zero.
-    return staff.reduce((total, member) => total + _dashboardNumber(member.salary), 0);
+    const paidFromPayroll = paidRows.reduce((total, row) =>
+        total + _dashboardNumber(row.netPaid ?? row.baseSalary ?? row.amount), 0);
+
+    return { payable, paidFromPayroll };
+}
+
+/**
+ * Advance = salary staff have drawn ahead of payroll and not yet settled.
+ * Real data comes from GET /api/finance/staff-advances, which merges live
+ * Finance TYPE_ADVANCE rows (paymentStatus "Advance" = outstanding,
+ * "Settled" = already deducted from a paid salary, see
+ * FinanceController#paySalary) with the legacy staff-advances bulk bucket.
+ * Only unsettled rows for the current month count here — once a payroll run
+ * settles an advance, it's folded into that run's netPaid instead, so
+ * counting a settled row here too would double it. An unsettled advance is
+ * still real cash that's already left the building, so it's added into
+ * Paid Salaries by the caller (_dashboardSnapshot), which then also
+ * recomputes Pending Salaries and Total Net Expenses off that updated
+ * paid figure.
+ */
+function _dashboardAdvanceTotal(staffAdvances, monthKey) {
+    return _dashboardArray(staffAdvances)
+        .filter(item => !item.monthKey || item.monthKey === monthKey)
+        .filter(item => String(item.paymentStatus || '').toLowerCase() !== 'settled')
+        .reduce((total, item) => total + _dashboardNumber(item.amount), 0);
+}
+
+/**
+ * Manual staff fines (Manage Finance > Staff Fines) vs. auto absence fines.
+ * These are NOT the same bucket: manual fines live in the TYPE_STAFF_FINE
+ * bulk list (field `amount`, no "absence" reason ever appears there), while
+ * absence fines are written straight onto each staff member's own `fines`
+ * field by attendance.js and never appear in the fines list at all.
+ */
+function _dashboardStaffFineTotals(staffFines, staff, monthKey) {
+    const staffTotal = _dashboardArray(staffFines)
+        .filter(item => !item.monthKey || item.monthKey === monthKey)
+        .reduce((total, item) => total + _dashboardNumber(item.amount), 0);
+
+    const teacherAbsence = staff.reduce(
+        (total, member) => total + _dashboardNumber(member.fines), 0
+    );
+
+    return { staffTotal, teacherAbsence };
 }
 
 async function _dashboardAttendance() {
@@ -402,29 +464,29 @@ async function _dashboardAttendance() {
 }
 
 async function _dashboardSnapshot(
-    monthKey, students, staff, statusRows, customFees, staffBonus, staffFines, expenses, salaryRecords
+    monthKey, students, staff, statusRows, customFees, staffBonus, staffFines,
+    expenses, salaryRecords, staffAdvances
 ) {
     const activeStudents = students.filter(_dashboardIsActiveStudent);
     const statusByStudent = new Map(_dashboardArray(statusRows)
         .filter(row => row && row.regNo)
         .map(row => [String(row.regNo), row]));
-    // BUGFIX — "Expected Fees" didn't match Manage Finance's fine-inclusive
-    // totals and never moved when a fine was added. This used to be a
-    // static `standardFee + transportFee` per student, completely ignoring
-    // the live backend fee record (arrears rolled over from last month,
-    // and any fine applied this month). Manage Finance's "Total with Fine"
-    // is built from each student's live `netPayable` (base fee + arrears +
-    // fine — see FinanceController#calculateNetPayable), so we now mirror
-    // that here: use the student's current-month Finance master row when
-    // one exists (i.e. a fee record has actually been generated for them),
-    // and only fall back to the plain base fee for students who haven't
-    // been billed yet this month.
+    // Expected Fees = exactly Manage Finance's "Total with Fine" figure
+    // (updateFeeStatsHeader()'s fee-stat-totalfine box: totalCollected +
+    // totalPending). That box only ever includes students who've actually
+    // been billed this month (a generated voucher / Finance fee-master row
+    // exists) — an unbilled student contributes nothing there, even though
+    // they have a standardFee on their roster record. So unlike our old
+    // fallback (which added base fee + transport for unbilled students,
+    // inflating Expected Fees above what Manage Finance shows), we now
+    // only sum `netPayable` — base fee + rolled-over arrears + any fine,
+    // see FinanceController#calculateNetPayable — for students who have a
+    // live fee-master row this month, and skip students with none. This
+    // also means Expected Fees updates automatically the moment a fine or
+    // a newly generated fee touches that row, with no caching in between.
     const expected = activeStudents.reduce((total, student) => {
         const row = statusByStudent.get(String(student.regNo || student.id || ''));
-        if (row && row.netPayable != null) {
-            return total + _dashboardNumber(row.netPayable);
-        }
-        return total + _dashboardNumber(student.standardFee) + _dashboardNumber(student.transportFee);
+        return (row && row.netPayable != null) ? total + _dashboardNumber(row.netPayable) : total;
     }, 0);
     const collected = activeStudents.reduce((total, student) => {
         const row = statusByStudent.get(String(student.regNo || student.id || ''));
@@ -440,16 +502,19 @@ async function _dashboardSnapshot(
         .filter(fine => !/late|overdue|delay/i.test(String(fine.reason || '')))
         .reduce((total, fine) => total + _dashboardNumber(fine.amount), 0);
 
-    const staffFineRows = _dashboardArray(staffFines);
-    const staffTotal = staffFineRows
-        .filter(item => !/absence/i.test(String(item.reason || item.label || '')))
-        .reduce((total, item) => total + _dashboardNumber(item.amount), 0);
-    const teacherAbsence = staffFineRows
-        .filter(item => /absence/i.test(String(item.reason || item.label || '')))
-        .reduce((total, item) => total + _dashboardNumber(item.amount), 0);
+    const { staffTotal, teacherAbsence } = _dashboardStaffFineTotals(staffFines, staff, monthKey);
     const admissionFees = activeStudents.reduce(
         (total, student) => total + _dashboardNumber(student.admissionFee), 0
     );
+
+    // Paid Salaries = posted payroll + any still-outstanding advances (cash
+    // already handed to staff counts as paid even before it's formally
+    // settled through a payroll run). Pending then reflects what's left of
+    // the obligation after that combined figure.
+    const { payable, paidFromPayroll } = _dashboardSalaryAmount(salaryRecords, staff, monthKey);
+    const advance = _dashboardAdvanceTotal(staffAdvances, monthKey);
+    const paid = paidFromPayroll + advance;
+    const pending = Math.max(0, payable - paid);
 
     return {
         realStudentCount: activeStudents.length,
@@ -457,7 +522,7 @@ async function _dashboardSnapshot(
         fines: { studentLate, studentOther, staffTotal, teacherAbsence },
         admissionFees,
         customFeesCollected: _dashboardCustomFeesCollected(customFees, monthKey),
-        salaries: { total: _dashboardSalaryAmount(salaryRecords, staff, monthKey) },
+        salaries: { payable, paid, pending, advance },
         staffBonusTotal: _dashboardStaffAmount(staffBonus, monthKey),
         otherExpensesTotal: _dashboardStaffAmount(expenses, monthKey)
     };
@@ -476,6 +541,7 @@ async function calculateFinancials() {
         staffFines,
         expenses,
         salaryRecords,
+        staffAdvances,
         attendance
     ] = await Promise.all([
         _dashboardGet('/api/students', []),
@@ -487,6 +553,7 @@ async function calculateFinancials() {
         _dashboardGet('/api/finance/staff-fines', []),
         _dashboardGet('/api/finance/expenses', []),
         _dashboardGet('/api/finance/salary/records', []),
+        _dashboardGet('/api/finance/staff-advances', []),
         _dashboardAttendance()
     ]);
 
@@ -494,11 +561,11 @@ async function calculateFinancials() {
     const staff = _dashboardStaffArray(staffData);
     const current = await _dashboardSnapshot(
         currentMonth, students, staff, currentStatus, customFees,
-        staffBonus, staffFines, expenses, salaryRecords
+        staffBonus, staffFines, expenses, salaryRecords, staffAdvances
     );
     const previous = await _dashboardSnapshot(
         previousMonth, students, staff, previousStatus, customFees,
-        staffBonus, staffFines, expenses, salaryRecords
+        staffBonus, staffFines, expenses, salaryRecords, staffAdvances
     );
 
     const revenue = snapshot => snapshot.fees.collected
@@ -508,16 +575,46 @@ async function calculateFinancials() {
         + snapshot.fines.teacherAbsence
         + snapshot.admissionFees
         + snapshot.customFeesCollected;
-    const expensesTotal = snapshot => snapshot.salaries.total
+    const expensesTotal = snapshot => snapshot.salaries.paid
         + snapshot.staffBonusTotal
         + snapshot.otherExpensesTotal;
+
+    // FEATURE — "Past Month Profit should read 0 for a brand-new school":
+    // admissionFees (above) isn't actually scoped to the month being
+    // snapshotted — it's just each active student's current admissionFee
+    // field, summed regardless of monthKey — so it can never be used as a
+    // signal that a month had real activity. Every other figure here IS
+    // properly scoped to the snapshot's month (fee-master rows, salary
+    // records, fines, staff bonus/expenses, custom fees), so a school with
+    // no billing history yet — i.e. one that only started using the
+    // software this month — will have all of them at 0 for "previous
+    // month". Once "Generate Monthly Fees", a salary payment, a fine, etc.
+    // has actually happened in a given month, that month's snapshot will
+    // trip this and lastMonthProfit reflects the real number from then on.
+    const hasRealActivity = snapshot =>
+        snapshot.fees.expected > 0 ||
+        snapshot.fees.collected > 0 ||
+        snapshot.fines.studentLate > 0 ||
+        snapshot.fines.studentOther > 0 ||
+        snapshot.fines.staffTotal > 0 ||
+        snapshot.fines.teacherAbsence > 0 ||
+        snapshot.customFeesCollected > 0 ||
+        snapshot.salaries.payable > 0 ||
+        snapshot.salaries.paid > 0 ||
+        snapshot.salaries.advance > 0 ||
+        snapshot.staffBonusTotal > 0 ||
+        snapshot.otherExpensesTotal > 0;
+
+    const lastMonthProfit = hasRealActivity(previous)
+        ? (revenue(previous) - expensesTotal(previous))
+        : 0;
 
     return {
         ...current,
         totalStaff: staff.length,
         netExpenses: expensesTotal(current),
         netProfit: revenue(current) - expensesTotal(current),
-        lastMonthProfit: revenue(previous) - expensesTotal(previous),
+        lastMonthProfit,
         todayAttendance: attendance
     };
 }

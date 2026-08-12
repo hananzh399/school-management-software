@@ -114,6 +114,21 @@ public class FinanceController {
         f.setTransportFee(student.getTransportFee());
         f.setOtherCharges(previousArrears); // roll-over arrears
         f.setMonthKey(monthKey);
+
+        // BUGFIX — "Dashboard Expected/Pending doesn't match Manage Finance":
+        // this row's netPayable used to be computed purely from gross fee +
+        // arrears + fine, with totalDiscountApplied left at 0 — the
+        // student's profile discounts (tuitionDiscount/transportDiscount/
+        // siblingDiscount) were only ever applied client-side in Manage
+        // Finance's computeFeeBreakdown(), never persisted here. Seed the
+        // ledger with them now so /status-all's netPayable (which the
+        // Dashboard sums for Expected/Pending Fees) matches the discounted
+        // total Manage Finance already shows.
+        double profileDiscount = nz(student.getTuitionDiscount())
+                + nz(student.getTransportDiscount())
+                + nz(student.getSiblingDiscount());
+        f.setTotalDiscountApplied(profileDiscount);
+
         f.calculateNetPayable();
         return financeRepository.save(f);
     }
