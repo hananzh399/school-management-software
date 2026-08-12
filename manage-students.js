@@ -1216,6 +1216,18 @@ if (certUploadInput) {
     function saveDatabase(d)  {
         API_STUDENTS = d; // in-memory mirror only — backend is the real store
     }
+    // BUGFIX: getDatabase/saveDatabase are declared inside this
+    // DOMContentLoaded closure, so they were only ever visible to code
+    // written *inside* it. exportStudentsToExcel(), importStudentsFromExcel(),
+    // slcSearchStudents() and charSearchStudents() are all defined further
+    // down the file, OUTSIDE this closure (same pattern as `showToast` just
+    // above), so calling the bare getDatabase()/saveDatabase() from any of
+    // them threw an immediate "getDatabase is not defined" — which is why
+    // clicking "Export Data" silently did nothing. Exposing them on
+    // `window`, exactly like showToast already is, makes them reachable
+    // from anywhere in the file.
+    window.getDatabase  = getDatabase;
+    window.saveDatabase = saveDatabase;
 
     // ── ARCHIVE HELPERS ──────────────────────────────────────────────────────
     // A student with no `status` (or status "active") is on the live roster.
@@ -1346,6 +1358,12 @@ if (certUploadInput) {
         suppressNextLiveToast = true;
         return result;
     }
+    // BUGFIX: same closure-scope problem as getDatabase/saveDatabase above —
+    // importStudentsFromExcel() (the "Import" side of Data Export & Import)
+    // is defined outside this closure and calls apiSaveStudent() to push
+    // each imported row to the backend. Without this it also failed with
+    // "apiSaveStudent is not defined" the moment an import was run.
+    window.apiSaveStudent = apiSaveStudent;
 
     /** Remove a student on the backend (StudentController does a soft delete — status -> "dropped"). */
     async function apiDeleteStudent(regNo) {
