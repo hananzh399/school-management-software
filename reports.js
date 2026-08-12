@@ -9,8 +9,6 @@
  * No report data is written to localStorage.
  */
 
-let currentPeriod = 'month';
-let currentMonthValue = ''; // 'YYYY-MM', set in initMonthFilter()
 let currentTxnFilter = 'all';
 let allPeriodTxnRows = []; // full (unsliced) set of transactions for the active period+filter, used by CSV export
 let charts = { revExp: null, attendance: null, expenseBreak: null, feeStatus: null, cashFlow: null };
@@ -41,8 +39,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     initSidebar();
     initNavSearch();
     initDate();
-    initPeriodSwitch();
-    initMonthFilter();
     initTxnControls();
     
     await loadReportsDataFromBackend();
@@ -161,55 +157,6 @@ function initDate() {
 }
 
 /* ============================================
-   PERIOD SWITCH (Week / Month / Year)
-   ============================================ */
-function initPeriodSwitch() {
-    const wrap = document.getElementById('period-switch');
-    if (!wrap) return;
-    wrap.addEventListener('click', (e) => {
-        const btn = e.target.closest('.period-btn');
-        if (!btn) return;
-        wrap.querySelectorAll('.period-btn').forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-        currentPeriod = btn.dataset.period;
-        updateMonthFilterVisibility();
-        renderReports();
-    });
-    updateMonthFilterVisibility();
-}
-
-function updateMonthFilterVisibility() {
-    const sel = document.getElementById('month-filter');
-    if (sel) sel.style.display = currentPeriod === 'month' ? '' : 'none';
-}
-
-/* ============================================
-   MONTH FILTER (populates last 12 months, most recent first)
-   ============================================ */
-function initMonthFilter() {
-    const sel = document.getElementById('month-filter');
-    if (!sel) return;
-
-    const now = new Date();
-    const options = [];
-    for (let i = 0; i < 12; i++) {
-        const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-        const value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-        const label = d.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
-        options.push({ value, label });
-    }
-
-    currentMonthValue = options[0].value; // current month by default
-    sel.innerHTML = options.map(o => `<option value="${o.value}">${o.label}</option>`).join('');
-    sel.value = currentMonthValue;
-
-    sel.addEventListener('change', () => {
-        currentMonthValue = sel.value;
-        renderReports();
-    });
-}
-
-/* ============================================
    TRANSACTIONS: FILTER + EXPORT CONTROLS
    ============================================ */
 function initTxnControls() {
@@ -249,7 +196,7 @@ function exportTransactionsCSV() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `transactions-${currentPeriod}-${toDateKey(new Date())}.csv`;
+    a.download = `transactions-${toDateKey(new Date())}.csv`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -352,6 +299,22 @@ async function _reportsGet(path, fallback) {
         console.warn(`[Reports] Could not read ${path}:`, error);
         return fallback;
     }
+}
+
+/**
+ * Net expense means only money that's actually gone out the door. A
+ * record counts as paid/disbursed unless it's explicitly flagged
+ * otherwise — a `paid: false` boolean, or a status field (status /
+ * paymentStatus / paidStatus) that reads as pending/unpaid/due/etc.
+ * Records with no such field at all (the common case for the operational
+ * expenses & bonus endpoints) are treated as paid, same as before.
+ */
+function _reportsIsPaidRecord(item) {
+    if (!item || typeof item !== 'object') return true;
+    if (item.paid === false) return false;
+    const status = String(item.status || item.paymentStatus || item.paidStatus || '').trim().toLowerCase();
+    if (status && /pending|unpaid|due|outstanding|scheduled|upcoming|unsettled/.test(status)) return false;
+    return true;
 }
 
 function _reportsEvent(item, monthKey, fallbackLabel) {
@@ -458,10 +421,12 @@ async function loadReportsDataFromBackend() {
 
     _reportsDataCache = {
         feePayments,
-        otherExpenses: _reportsArray(expensesData).map(item =>
+        // Net expense only — anything still pending/unpaid is excluded so
+        // every chart and total on this page reflects money actually spent.
+        otherExpenses: _reportsArray(expensesData).filter(_reportsIsPaidRecord).map(item =>
             _reportsEvent(item, item.monthKey || _reportsMonthKey(), 'Operational expense')
         ),
-        staffBonus: _reportsArray(staffBonusData).map(item =>
+        staffBonus: _reportsArray(staffBonusData).filter(_reportsIsPaidRecord).map(item =>
             _reportsEvent(item, item.monthKey || _reportsMonthKey(), 'Bonus')
         ),
         studentFines,
@@ -542,56 +507,34 @@ function getAttendanceForDate(dateKey) {
    ============================================ */
 function toDateKey(d) { return d.toISOString().slice(0, 10); }
 
-function getBuckets(period, monthValue) {
+/**
+ * Builds `count` calendar-month buckets, oldest first, ending at the
+ * current month — e.g. for count=12 that's this month plus the 11 before
+ * it. Every chart on this page (Revenue vs Expenses, Attendance Trend,
+ * Net Cash Flow Trend) is driven off this same list so they always agree
+ * on which months are being shown. The last bucket doubles as "this
+ * month" for the stat-pill totals, and the second-to-last as "last
+ * month" for their trend badges — there's no separate week/day view
+ * anymore, everything on this page is monthly.
+ */
+/**
+ * Builds 12 calendar-month buckets for one calendar year, Jan through
+ * Dec — defaults to the current year. Every chart on this page (Revenue
+ * vs Expenses, Attendance Trend, Net Cash Flow Trend) is driven off this
+ * same list so they always agree on which months are being shown. Months
+ * later than the current one will simply have no data yet.
+ */
+function getMonthlyBuckets(year = new Date().getFullYear()) {
     const buckets = [];
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    if (period === 'week') {
-        // Calendar week (Mon–Sun) containing today, not a trailing 7-day window.
-        const dow = today.getDay(); // 0 = Sun ... 6 = Sat
-        const diffToMonday = (dow === 0 ? -6 : 1 - dow);
-        const monday = new Date(today);
-        monday.setDate(monday.getDate() + diffToMonday);
-        for (let i = 0; i < 7; i++) {
-            const d = new Date(monday);
-            d.setDate(d.getDate() + i);
-            const end = new Date(d); end.setHours(23, 59, 59, 999);
-            buckets.push({ label: d.toLocaleDateString('en-US', { weekday: 'short' }), start: new Date(d), end, days: [new Date(d)] });
-        }
-    } else { // month — the specific calendar month picked in the month filter (defaults to current month)
-        let year = today.getFullYear(), month = today.getMonth();
-        if (monthValue) {
-            const [y, m] = monthValue.split('-').map(Number);
-            if (!isNaN(y) && !isNaN(m)) { year = y; month = m - 1; }
-        }
-        const monthStart = new Date(year, month, 1);
-        const monthEnd = new Date(year, month + 1, 0, 23, 59, 59, 999);
-
-        // Always exactly 4 week buckets, whatever the month length. A plain
-        // "every 7 days" walk produces a stray 5th bucket for any month
-        // longer than 28 days (i.e. every month except a non-leap February),
-        // since 29-31 days doesn't divide evenly into 7-day chunks. Instead,
-        // the first 3 buckets are a clean 7 days each, and the 4th bucket
-        // absorbs whatever remains of the month (7-10 days) so the whole
-        // month is still fully covered by exactly 4 weeks.
-        const WEEKS_PER_MONTH = 4;
-        for (let weekIdx = 1; weekIdx <= WEEKS_PER_MONTH; weekIdx++) {
-            const bStart = new Date(monthStart);
-            bStart.setDate(bStart.getDate() + (weekIdx - 1) * 7);
-            let bEnd;
-            if (weekIdx < WEEKS_PER_MONTH) {
-                bEnd = new Date(bStart);
-                bEnd.setDate(bEnd.getDate() + 6);
-            } else {
-                bEnd = new Date(monthEnd); // last bucket takes the remainder of the month
-            }
-            if (bEnd > monthEnd) bEnd = new Date(monthEnd);
-            const bEndOfDay = new Date(bEnd); bEndOfDay.setHours(23, 59, 59, 999);
-            const days = [];
-            for (let day = new Date(bStart); day <= bEnd; day.setDate(day.getDate() + 1)) days.push(new Date(day));
-            buckets.push({ label: `Week ${weekIdx}`, start: bStart, end: bEndOfDay, days });
-        }
+    for (let month = 0; month < 12; month++) {
+        const start = new Date(year, month, 1);
+        const end = new Date(year, month + 1, 0, 23, 59, 59, 999);
+        const days = [];
+        for (let day = new Date(start); day <= end; day.setDate(day.getDate() + 1)) days.push(new Date(day));
+        buckets.push({
+            label: start.toLocaleDateString('en-US', { month: 'short' }),
+            start, end, days
+        });
     }
     return buckets;
 }
@@ -694,19 +637,25 @@ function renderTrendBadge(elId, current, previous, goodDirection) {
    MAIN RENDER
    ============================================ */
 function renderReports() {
-    const buckets = getBuckets(currentPeriod, currentMonthValue);
-    const periodStart = buckets[0].start;
-    const periodEnd = buckets[buckets.length - 1].end;
-    const prevRange = getPreviousRange(periodStart, periodEnd);
+    // One shared bucket list (Jan → Dec of the current year) drives every
+    // trend chart, so they're always looking at the same months. "This
+    // month" and "last month" (used for the stat-pill totals and their
+    // trend badges) are picked out by the current calendar month index,
+    // since December — not necessarily today's month — is always last.
+    const buckets = getMonthlyBuckets();
+    const now = new Date();
+    const currentMonthIdx = now.getMonth();
+    const currentBucket = buckets[currentMonthIdx];
+    const prevBucket = currentMonthIdx > 0 ? buckets[currentMonthIdx - 1] : null;
+    const periodStart = currentBucket.start;
+    const periodEnd = currentBucket.end;
+    const prevRange = prevBucket
+        ? { start: prevBucket.start, end: prevBucket.end }
+        : getPreviousRange(periodStart, periodEnd);
 
     const labelEl = document.getElementById('period-range-label');
     if (labelEl) {
-        if (currentPeriod === 'week') {
-            labelEl.textContent = '· ' + periodStart.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) +
-                ' – ' + periodEnd.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-        } else {
-            labelEl.textContent = '· ' + periodStart.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
-        }
+        labelEl.textContent = '· ' + periodStart.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
     }
 
     const feePayments = getAllFeePayments();
@@ -733,12 +682,15 @@ function renderReports() {
         ? salaryRows.reduce((total, row) => total + _reportsNumber(row.netPaid || row.baseSalary || row.amount), 0)
         : staff.reduce((total, member) => total + _reportsNumber(member.salary), 0);
 
-    // ---------- Per-bucket revenue / expense series ----------
-    // Expenses only count what was actually applied/paid in each bucket's
-    // date range (salary records, bonuses, operational expenses) — no
-    // estimating or prorating. totalSalaries above (whole payroll figure)
-    // is still used for the Expense Breakdown donut and Payroll Snapshot,
-    // which are explicitly labeled as whole-of-record, not period totals.
+    // ---------- Monthly revenue / net-expense series (last 12 months) ----------
+    // "Expense" here is *net* expense — salary, bonus & operational costs
+    // that were actually paid/disbursed (otherExpenses/staffBonus are
+    // already filtered to paid-only records when loaded from the backend,
+    // and salaryEvents only ever contains records that were really paid) —
+    // nothing pending/unpaid, estimated, or prorated. totalSalaries above
+    // (whole payroll figure) is still used for the Expense Breakdown donut
+    // and Payroll Snapshot, which are explicitly labeled as whole-of-record,
+    // not month totals.
     const revenueSeries = buckets.map(b =>
         sumInRange(feePayments, b.start, b.end) +
         sumInRange(studentFines, b.start, b.end) +
@@ -750,20 +702,20 @@ function renderReports() {
         sumInRange(salaryEvents, b.start, b.end)
     );
 
-    const periodRevenue = revenueSeries.reduce((a, b) => a + b, 0);
-    const periodExpense = expenseSeries.reduce((a, b) => a + b, 0);
+    // This month / last month totals come from the matching index in the
+    // same series — no separate range sum needed.
+    const periodRevenue = revenueSeries[currentMonthIdx];
+    const periodExpense = expenseSeries[currentMonthIdx];
     const netFlow = periodRevenue - periodExpense;
 
-    // ---------- Previous-period comparison (trend badges) ----------
-    const prevRevenue =
-        sumInRange(feePayments, prevRange.start, prevRange.end) +
-        sumInRange(studentFines, prevRange.start, prevRange.end) +
-        sumInRange(staffFines, prevRange.start, prevRange.end);
-    const prevExpense =
-        sumInRange(otherExpenses, prevRange.start, prevRange.end) +
-        sumInRange(staffBonus, prevRange.start, prevRange.end) +
-        sumInRange(salaryEvents, prevRange.start, prevRange.end);
+    const prevRevenue = currentMonthIdx > 0 ? revenueSeries[currentMonthIdx - 1] : 0;
+    const prevExpense = currentMonthIdx > 0 ? expenseSeries[currentMonthIdx - 1] : 0;
     const prevNetFlow = prevRevenue - prevExpense;
+
+    // Totals across the full 12-month window, used to decide whether the
+    // Revenue vs Expenses / Net Cash Flow Trend charts have anything to show.
+    const totalRevenueAllMonths = revenueSeries.reduce((a, b) => a + b, 0);
+    const totalExpenseAllMonths = expenseSeries.reduce((a, b) => a + b, 0);
 
     setText('rp-total-revenue', 'RS ' + Math.round(periodRevenue).toLocaleString());
     setText('rp-total-expense', 'RS ' + Math.round(periodExpense).toLocaleString());
@@ -785,51 +737,35 @@ function renderReports() {
             : '<i class="fas fa-circle" style="font-size:7px;"></i> No activity yet';
     }
 
-    // ---------- Attendance series ----------
+    // ---------- Attendance series (recalculated every month) ----------
+    // One average student/staff attendance % per month across the same
+    // 12-month window as the other trend charts.
     const attendanceStudentSeries = [];
     const attendanceStaffSeries = [];
     let attendanceHasAnyData = false;
-    let sumStudentPct = 0, sumStaffPct = 0, countStudentDays = 0, countStaffDays = 0;
 
     buckets.forEach(b => {
-        let sPresent = 0, sTotal = 0, stPresent = 0, stTotal = 0, dayHasData = false;
+        let sPresent = 0, sTotal = 0, stPresent = 0, stTotal = 0;
         b.days.forEach(day => {
             const rec = getAttendanceForDate(toDateKey(day));
-            if (rec.hasData) { dayHasData = true; attendanceHasAnyData = true; }
+            if (rec.hasData) attendanceHasAnyData = true;
             sPresent += rec.presentStudents; sTotal += rec.totalStudents;
             stPresent += rec.presentStaff; stTotal += rec.totalStaff;
         });
-        const sPct = sTotal > 0 ? Math.round((sPresent / sTotal) * 100) : null;
-        const stPct = stTotal > 0 ? Math.round((stPresent / stTotal) * 100) : null;
-        attendanceStudentSeries.push(sPct);
-        attendanceStaffSeries.push(stPct);
-        if (sPct !== null) { sumStudentPct += sPct; countStudentDays++; }
-        if (stPct !== null) { sumStaffPct += stPct; countStaffDays++; }
+        attendanceStudentSeries.push(sTotal > 0 ? Math.round((sPresent / sTotal) * 100) : null);
+        attendanceStaffSeries.push(stTotal > 0 ? Math.round((stPresent / stTotal) * 100) : null);
     });
 
-    const avgStudentPct = countStudentDays ? Math.round(sumStudentPct / countStudentDays) : 0;
-    const avgStaffPct = countStaffDays ? Math.round(sumStaffPct / countStaffDays) : 0;
-    const avgOverall = (countStudentDays || countStaffDays)
-        ? Math.round((avgStudentPct * (countStudentDays ? 1 : 0) + avgStaffPct * (countStaffDays ? 1 : 0)) /
-            ((countStudentDays ? 1 : 0) + (countStaffDays ? 1 : 0) || 1))
-        : 0;
-    setText('rp-avg-attendance', avgOverall + '%');
-
-    // Previous-period attendance average, for the trend badge
-    let prevAvgOverall = 0;
-    {
-        const prevDayList = [];
-        for (let d = new Date(prevRange.start); d <= prevRange.end; d.setDate(d.getDate() + 1)) prevDayList.push(new Date(d));
-        let pSumS = 0, pCountS = 0, pSumSt = 0, pCountSt = 0;
-        prevDayList.forEach(day => {
-            const rec = getAttendanceForDate(toDateKey(day));
-            if (rec.totalStudents > 0) { pSumS += Math.round((rec.presentStudents / rec.totalStudents) * 100); pCountS++; }
-            if (rec.totalStaff > 0) { pSumSt += Math.round((rec.presentStaff / rec.totalStaff) * 100); pCountSt++; }
-        });
-        const pAvgS = pCountS ? pSumS / pCountS : 0;
-        const pAvgSt = pCountSt ? pSumSt / pCountSt : 0;
-        prevAvgOverall = (pCountS || pCountSt) ? Math.round((pAvgS * (pCountS ? 1 : 0) + pAvgSt * (pCountSt ? 1 : 0)) / ((pCountS ? 1 : 0) + (pCountSt ? 1 : 0) || 1)) : 0;
+    // "Avg Attendance" stat pill = this month; its trend badge compares
+    // against last month — both are just the series' last two points.
+    function overallPct(studentPct, staffPct) {
+        const parts = [studentPct, staffPct].filter(v => v !== null);
+        return parts.length ? Math.round(parts.reduce((a, b) => a + b, 0) / parts.length) : 0;
     }
+    const avgOverall = overallPct(attendanceStudentSeries[currentMonthIdx], attendanceStaffSeries[currentMonthIdx]);
+    const prevAvgOverall = currentMonthIdx > 0 ? overallPct(attendanceStudentSeries[currentMonthIdx - 1], attendanceStaffSeries[currentMonthIdx - 1]) : 0;
+
+    setText('rp-avg-attendance', avgOverall + '%');
     renderTrendBadge('rp-attendance-trend', avgOverall, prevAvgOverall, 'up');
 
     // ---------- Expense breakdown (whole-of-record totals, matches Fees & Finance) ----------
@@ -860,7 +796,7 @@ function renderReports() {
     safeRenderChart('Fee Collection Status', () => renderFeeStatus(collected, pending));
 
     document.getElementById('chart-revenue-expense-empty').style.display =
-        (periodRevenue === 0 && periodExpense === 0) ? 'block' : 'none';
+        (totalRevenueAllMonths === 0 && totalExpenseAllMonths === 0) ? 'block' : 'none';
     document.getElementById('chart-attendance-trend-empty').style.display =
         attendanceHasAnyData ? 'none' : 'block';
 
@@ -868,7 +804,7 @@ function renderReports() {
     const netSeries = revenueSeries.map((r, i) => r - expenseSeries[i]);
     safeRenderChart('Net Cash Flow Trend', () => renderCashFlowTrend(buckets.map(b => b.label), netSeries));
     document.getElementById('chart-cash-flow-trend-empty').style.display =
-        (periodRevenue === 0 && periodExpense === 0) ? 'block' : 'none';
+        (totalRevenueAllMonths === 0 && totalExpenseAllMonths === 0) ? 'block' : 'none';
 
     const cashflowBadge = document.getElementById('rp-cashflow-badge');
     if (cashflowBadge) {
@@ -1355,7 +1291,7 @@ function renderTransactions(feePayments, otherExpenses, staffBonus, studentFines
     inPeriod.sort((a, b) => b.date - a.date);
 
     allPeriodTxnRows = inPeriod; // full set, used by CSV export
-    const shown = inPeriod.slice(0, 15);
+    const shown = inPeriod.slice(0, 14);
 
     const tbody = document.getElementById('txn-tbody');
     const countEl = document.getElementById('rp-txn-count');

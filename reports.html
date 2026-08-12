@@ -66,7 +66,7 @@
         </nav>
 
         <div class="sidebar-footer">
-            <a href="index.html" class="nav-link logout-btn" onclick="try{if(window.SoftSchoolAdmin&&typeof window.SoftSchoolAdmin.clearSession==='function'){window.SoftSchoolAdmin.clearSession();}}catch(e){} try{localStorage.removeItem('softschool_session');}catch(e){}">
+            <a href="index.html" class="nav-link logout-btn" onclick="try{var __sess=JSON.parse(localStorage.getItem('softschool_session')||'null');var __u=__sess&&__sess.school&&__sess.school.username;if(__u){fetch('http://localhost:8080/api/school/logout',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:__u})}).catch(function(){});}}catch(e){} try{if(window.SoftSchoolAdmin&&typeof window.SoftSchoolAdmin.clearSession==='function'){window.SoftSchoolAdmin.clearSession();}}catch(e){} try{localStorage.removeItem('softschool_session');}catch(e){} try{localStorage.removeItem('softschool_remember');}catch(e){}">
                 <i class="fas fa-sign-out-alt"></i>
                 <span>Logout</span>
             </a>
@@ -100,17 +100,12 @@
         <div class="glow-spot glow-1"></div>
         <div class="glow-spot glow-2"></div>
 
-        <!-- PAGE TITLE + PERIOD SWITCHER -->
+        <!-- PAGE TITLE -->
         <section class="reports-toolbar">
             <div class="reports-title">
                 <h2><i class="fas fa-chart-pie"></i> Reports &amp; Analytics</h2>
                 <p>Expenses, payments &amp; attendance at a glance <span id="period-range-label"></span></p>
             </div>
-            <div class="period-switch" id="period-switch">
-                <button class="period-btn" data-period="week">This Week</button>
-                <button class="period-btn active" data-period="month">By Month</button>
-            </div>
-            <select id="month-filter" class="month-filter-select" aria-label="Select month"></select>
         </section>
 
         <!-- QUICK JUMP LINKS TO OTHER MODULES -->
@@ -183,7 +178,7 @@
             <!-- Revenue vs Expenses -->
             <div class="dash-card report-card chart-card-wide">
                 <div class="dash-card-header">
-                    <h3><span class="card-icon icon-revenue"><i class="fas fa-chart-column"></i></span> Revenue vs Expenses</h3>
+                    <h3><span class="card-icon icon-revenue"><i class="fas fa-chart-column"></i></span> Revenue vs Expenses <span class="header-subtag">This Year</span></h3>
                     <div class="card-header-actions">
                         <span class="trend neutral" id="rp-trend-badge"><i class="fas fa-circle" style="font-size:7px;"></i> Live</span>
                         <a href="manage-finance.html" class="card-link-btn" title="Open Fees &amp; Finance"><i class="fas fa-up-right-from-square"></i></a>
@@ -193,15 +188,15 @@
                     <div class="chart-wrap">
                         <canvas id="chart-revenue-expense"></canvas>
                     </div>
-                    <p class="chart-empty-note" id="chart-revenue-expense-empty" style="display:none;">No financial activity recorded for this period yet.</p>
-                    <p class="chart-foot-note">Expenses include salary, bonus &amp; operational costs actually recorded/paid within the selected period — nothing is estimated or prorated.</p>
+                    <p class="chart-empty-note" id="chart-revenue-expense-empty" style="display:none;">No financial activity recorded yet.</p>
+                    <p class="chart-foot-note">One bar pair per month, Jan–Dec of the current year. Expenses are net expenses — salary, bonus &amp; operational costs actually paid/disbursed, excluding anything still pending — nothing is estimated or prorated.</p>
                 </div>
             </div>
 
             <!-- Attendance Trend -->
             <div class="dash-card report-card chart-card-wide">
                 <div class="dash-card-header">
-                    <h3><span class="card-icon icon-attendance"><i class="fas fa-clipboard-check"></i></span> Attendance Trend</h3>
+                    <h3><span class="card-icon icon-attendance"><i class="fas fa-clipboard-check"></i></span> Attendance Trend <span class="header-subtag">This Year</span></h3>
                     <div class="card-header-actions">
                         <a href="attendance.html" class="card-link-btn" title="Open Attendance"><i class="fas fa-up-right-from-square"></i></a>
                     </div>
@@ -210,14 +205,15 @@
                     <div class="chart-wrap">
                         <canvas id="chart-attendance-trend"></canvas>
                     </div>
-                    <p class="chart-empty-note" id="chart-attendance-trend-empty" style="display:none;">No attendance marked for this period yet.</p>
+                    <p class="chart-empty-note" id="chart-attendance-trend-empty" style="display:none;">No attendance marked yet.</p>
+                    <p class="chart-foot-note">Average student &amp; staff attendance recalculated for each month, Jan–Dec of the current year.</p>
                 </div>
             </div>
 
             <!-- Net Cash Flow Trend -->
             <div class="dash-card report-card chart-card-wide">
                 <div class="dash-card-header">
-                    <h3><span class="card-icon icon-profit"><i class="fas fa-chart-line"></i></span> Net Cash Flow Trend</h3>
+                    <h3><span class="card-icon icon-profit"><i class="fas fa-chart-line"></i></span> Net Cash Flow Trend <span class="header-subtag">This Year</span></h3>
                     <div class="card-header-actions">
                         <span class="trend neutral" id="rp-cashflow-badge">—</span>
                         <a href="manage-finance.html" class="card-link-btn" title="Open Fees &amp; Finance"><i class="fas fa-up-right-from-square"></i></a>
@@ -227,8 +223,8 @@
                     <div class="chart-wrap">
                         <canvas id="chart-cash-flow-trend"></canvas>
                     </div>
-                    <p class="chart-empty-note" id="chart-cash-flow-trend-empty" style="display:none;">No financial activity recorded for this period yet.</p>
-                    <p class="chart-foot-note">Revenue minus expenses for each bucket in the selected period — teal segments are surplus, red segments are deficit.</p>
+                    <p class="chart-empty-note" id="chart-cash-flow-trend-empty" style="display:none;">No financial activity recorded yet.</p>
+                    <p class="chart-foot-note">Revenue minus net (paid) expenses for each month, Jan–Dec of the current year — teal segments are surplus, red segments are deficit.</p>
                 </div>
             </div>
 

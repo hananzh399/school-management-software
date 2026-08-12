@@ -6,19 +6,13 @@
    so it inherits dark/light theme automatically.
    ============================================ */
 
-/* ---------- Toolbar: title + period switch ----------
-   Fixed 3-column grid (title | switch | month select) instead of a flex
-   row with space-between. With flex + space-between, hiding the month
-   select on "This Week" collapsed the row to 2 items and shoved the
-   period switch to the far right; it then jumped back to the middle the
-   moment "By Month" re-added the 3rd item. The two outer grid tracks are
-   always equal-width (1fr/1fr) whether or not the month select is
-   visible, so the switch stays perfectly centered either way. */
+/* ---------- Toolbar: title ----------
+   All charts are now fixed to a rolling 12-month view, so there's no
+   period to switch and nothing to filter here anymore — just the page
+   title and its live "as of" label. */
 .reports-toolbar {
-    display: grid;
-    grid-template-columns: 1fr auto 1fr;
+    display: flex;
     align-items: center;
-    gap: 16px;
     max-width: 1200px;
     margin: 0 auto 22px;
     position: relative;
@@ -26,16 +20,7 @@
 }
 
 .reports-title {
-    justify-self: start;
     min-width: 0;
-}
-
-.period-switch {
-    justify-self: center;
-}
-
-.month-filter-select {
-    justify-self: end;
 }
 
 .reports-title h2 {
@@ -57,56 +42,6 @@
     font-size: 12.5px;
     color: var(--text-secondary);
     font-weight: 500;
-}
-
-.period-switch {
-    display: flex;
-    gap: 4px;
-    background: var(--bg-card);
-    border: 1px solid var(--border-subtle);
-    border-radius: var(--radius-md);
-    padding: 4px;
-}
-
-.period-btn {
-    border: none;
-    background: transparent;
-    color: var(--text-secondary);
-    font-family: inherit;
-    font-size: 12.5px;
-    font-weight: 600;
-    padding: 8px 16px;
-    border-radius: calc(var(--radius-md) - 4px);
-    cursor: pointer;
-    transition: all var(--transition);
-    white-space: nowrap;
-}
-
-.period-btn:hover {
-    color: var(--text-primary);
-    background: rgba(255, 255, 255, 0.05);
-}
-
-[data-theme="light"] .period-btn:hover {
-    background: rgba(0, 0, 0, 0.04);
-}
-
-.period-btn.active {
-    background: #17716A;
-    color: #ffffff;
-    box-shadow: 0 4px 14px rgba(23, 113, 106, 0.35);
-}
-
-.month-filter-select {
-    background: var(--bg-card);
-    border: 1px solid var(--border-subtle);
-    color: var(--text-primary);
-    font-family: inherit;
-    font-size: 12.5px;
-    font-weight: 600;
-    padding: 9px 14px;
-    border-radius: var(--radius-md);
-    cursor: pointer;
 }
 
 #period-range-label {
@@ -619,29 +554,6 @@
 }
 
 @media (max-width: 768px) {
-    .reports-toolbar {
-        grid-template-columns: 1fr;
-    }
-
-    .reports-title,
-    .period-switch,
-    .month-filter-select {
-        justify-self: stretch;
-    }
-
-    .period-switch {
-        width: 100%;
-    }
-
-    .month-filter-select {
-        width: 100%;
-    }
-
-    .period-btn {
-        flex: 1;
-        text-align: center;
-    }
-
     .chart-wrap {
         height: 220px;
     }
