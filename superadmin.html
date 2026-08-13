@@ -14,9 +14,9 @@
 <body>
 
 <!-- ══════════════ MAIN APP ══════════════
-     No login here on purpose — this file isn't linked from
-     anywhere in the app, so it's only reachable by whoever has
-     the direct URL / repo access. ══════════════ -->
+     Gated behind a real login (see the auth gate + initSuperAdminApp()
+     in superadmin.js) — this div stays hidden until a valid short-lived
+     admin session token has been issued by the backend. ══════════════ -->
 <div id="saApp">
   <div class="sa-topbar">
     <div class="sa-topbar-brand">

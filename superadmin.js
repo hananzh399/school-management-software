@@ -2,10 +2,15 @@
  * ============================================================
  * SOFT SCHOOL — SUPER ADMIN PANEL LOGIC
  * ------------------------------------------------------------
- * There's no login screen here on purpose: this file is only
- * ever opened directly from the repo/hosting by you — it isn't
- * linked from anywhere inside the app itself, so that's what
- * keeps it private.
+ * SECURITY FIX: this panel used to have "no login on purpose",
+ * relying only on the URL being unpublicized — not a real
+ * protection, especially in a public repo. It now requires a
+ * real login (see the auth gate below): the browser exchanges a
+ * username/password for a short-lived signed session token from
+ * the backend (/api/admin-auth/login) and sends that token on
+ * every admin API call. No static API key is ever embedded in
+ * this file or stored long-term in the browser — see
+ * AdminSessionService.java on the backend for why that's safe.
  *
  * UPDATED:
  *  • No built-in plans anymore — every plan is one you create.
@@ -14,6 +19,78 @@
  */
 
 const SSA = window.SoftSchoolAdmin; // from access-control.js — still used for the static FEATURES catalog
+
+/* ══════════════ ADMIN AUTH GATE ══════════════
+   Session token lives ONLY in sessionStorage (cleared when the tab
+   closes) — never localStorage, never hardcoded in this file, and
+   never logged. Every admin API call below attaches it as
+   "Authorization: Bearer <token>"; a 401 clears it and re-shows the
+   login screen.
+   ══════════════════════════════════════════════ */
+const ADMIN_TOKEN_KEY = "ssa_admin_token";
+
+function getAdminToken() {
+  return sessionStorage.getItem(ADMIN_TOKEN_KEY);
+}
+function setAdminToken(token) {
+  sessionStorage.setItem(ADMIN_TOKEN_KEY, token);
+}
+function clearAdminToken() {
+  sessionStorage.removeItem(ADMIN_TOKEN_KEY);
+}
+
+function showAdminLoginGate() {
+  const app = document.getElementById("saApp");
+  if (app) app.style.display = "none";
+
+  let gate = document.getElementById("saLoginGate");
+  if (!gate) {
+    gate = document.createElement("div");
+    gate.id = "saLoginGate";
+    gate.style.cssText =
+      "position:fixed;inset:0;display:flex;align-items:center;justify-content:center;" +
+      "background:#0f1115;font-family:Inter,sans-serif;z-index:9999;";
+    gate.innerHTML = `
+      <form id="saLoginForm" style="background:#181b22;padding:32px;border-radius:12px;width:280px;box-shadow:0 8px 30px rgba(0,0,0,.4);">
+        <h2 style="color:#fff;font-size:18px;margin:0 0 16px;">Super Admin Login</h2>
+        <input id="saLoginUsername" type="text" placeholder="Username" autocomplete="username"
+          style="width:100%;padding:10px;margin-bottom:10px;border-radius:6px;border:1px solid #333;background:#0f1115;color:#fff;box-sizing:border-box;" required>
+        <input id="saLoginPassword" type="password" placeholder="Password" autocomplete="current-password"
+          style="width:100%;padding:10px;margin-bottom:14px;border-radius:6px;border:1px solid #333;background:#0f1115;color:#fff;box-sizing:border-box;" required>
+        <button type="submit" style="width:100%;padding:10px;border-radius:6px;border:none;background:#4f7cff;color:#fff;font-weight:600;cursor:pointer;">Log in</button>
+        <div id="saLoginError" style="color:#ff6b6b;font-size:13px;margin-top:10px;min-height:16px;"></div>
+      </form>`;
+    document.body.appendChild(gate);
+
+    gate.querySelector("#saLoginForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const username = gate.querySelector("#saLoginUsername").value.trim();
+      const password = gate.querySelector("#saLoginPassword").value;
+      const errorEl = gate.querySelector("#saLoginError");
+      errorEl.textContent = "";
+      try {
+        const res = await fetch(ADMIN_AUTH_LOGIN_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ username, password })
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || !data.token) {
+          errorEl.textContent = data.error || "Login failed.";
+          return;
+        }
+        setAdminToken(data.token);
+        gate.remove();
+        if (app) app.style.display = "";
+        if (typeof initSuperAdminApp === "function") initSuperAdminApp();
+      } catch (err) {
+        errorEl.textContent = "Could not reach the server.";
+      }
+    });
+  } else {
+    gate.style.display = "flex";
+  }
+}
 
 /* ── NEW LOCKABLE FEATURES ────────────────────────────────────
    Registered here (rather than requiring an edit to access-control.js)
@@ -118,16 +195,30 @@ function compressLogoFile(file, maxSizeKB = 40, maxDimension = 512) {
    (see PLAN STORE below) — only school records themselves are server-backed.
    ═══════════════════════════════════════════════════════════════════════════ */
 const API_BASE_URL = "http://localhost:8080/api/admin";
+const ADMIN_AUTH_LOGIN_URL = "http://localhost:8080/api/admin-auth/login";
 
 // Local cache of the last list fetched from the server, so search/stats/expiry
 // checks don't need to hit the network on every keystroke.
 let cachedSchools = [];
 
 async function apiRequest(path, options) {
+  const token = getAdminToken();
   const res = await fetch(API_BASE_URL + path, {
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { "Authorization": "Bearer " + token } : {})
+    },
     ...options
   });
+
+  if (res.status === 401) {
+    // Session expired or missing — drop the stale token and force a
+    // fresh login rather than silently failing every call after this.
+    clearAdminToken();
+    showAdminLoginGate();
+    throw new Error("Your admin session expired. Please log in again.");
+  }
+
   if (!res.ok) {
     let message = "Request failed (" + res.status + ")";
     try {
@@ -1534,14 +1625,25 @@ function startExpiryWatcher() {
   setInterval(() => checkExpiries(false), EXPIRY_RECHECK_MS);
 }
 
-/* ── BOOT (runs last so all consts are initialized) ── */
-document.getElementById("saApp").classList.add("show");
-(async function boot() {
+/* ── BOOT (runs last so all consts are initialized) ──
+   Gated behind admin auth: if there's no valid session token yet, show
+   the login form instead of loading any data. initSuperAdminApp() is
+   called either immediately below (token already present, e.g. same
+   tab/session) or after a successful login (see showAdminLoginGate). */
+async function initSuperAdminApp() {
+  document.getElementById("saApp").classList.add("show");
   try {
     await loadPlans();
   } catch (err) {
+    if (err && /session expired/i.test(err.message)) return; // already redirected to login
     saToast("Couldn't load plans from server: " + err.message, "error");
   }
   await renderAll();
   startExpiryWatcher();
-})();
+}
+
+if (getAdminToken()) {
+  initSuperAdminApp();
+} else {
+  showAdminLoginGate();
+}
