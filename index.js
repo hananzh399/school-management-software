@@ -393,6 +393,7 @@ const SoftSchoolAuth = (function () {
   const API_BASE_URL = "http://localhost:8080/api/school";
   const SESSION_KEY = "softschool_session";
   const REMEMBER_KEY = "softschool_remember";
+  const API_TOKEN_KEY = "softschool_api_token";
   const CODE_RE = /^(?=.*[a-z])(?=.*[0-9])[a-z0-9]{7}$/;
 
   function isValidCode(code) {
@@ -404,7 +405,7 @@ const SoftSchoolAuth = (function () {
     try {
       res = await fetch(API_BASE_URL + path, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: Object.assign({ "Content-Type": "application/json" }, getApiToken() ? { "Authorization": "Bearer " + getApiToken() } : {}),
         body: JSON.stringify(body),
       });
     } catch (err) {
@@ -448,13 +449,21 @@ const SoftSchoolAuth = (function () {
     return apiRequest("/reset-password", { schoolId, code, username, newPassword });
   }
 
+  function getApiToken() {
+    return sessionStorage.getItem(API_TOKEN_KEY);
+  }
+
   function startSession(result) {
     /* rememberToken is a one-time credential, not part of the school's
        profile — strip it before the school object gets stored as the
        "logged in" session (which access-control.js may read back out
        elsewhere in the app). It's persisted separately via saveRememberMe(). */
     const school = result.school ? Object.assign({}, result.school) : null;
-    if (school) delete school.rememberToken;
+    if (school) {
+      if (school.sessionToken) sessionStorage.setItem(API_TOKEN_KEY, school.sessionToken);
+      delete school.sessionToken;
+      delete school.rememberToken;
+    }
 
     const payload = {
       schoolId: school ? school.schoolId : null,

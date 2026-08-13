@@ -101,6 +101,7 @@
   }
   function clearSession() {
     localStorage.removeItem(SESSION_KEY);
+    sessionStorage.removeItem("softschool_api_token");
   }
 
   /* Re-checks the logged-in school's live status against the real backend

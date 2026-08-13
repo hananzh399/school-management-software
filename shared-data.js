@@ -1,3 +1,35 @@
+/*
+ * Attach the short-lived school session issued by /api/school/login to every
+ * operational API request. The token is deliberately kept in sessionStorage,
+ * never localStorage, and is not attached to public or super-admin routes.
+ */
+(function installSchoolApiAuth() {
+    if (window.__softSchoolApiAuthInstalled) return;
+    window.__softSchoolApiAuthInstalled = true;
+    const nativeFetch = window.fetch.bind(window);
+    const protectedPrefixes = [
+        "/api/students", "/api/staff", "/api/finance", "/api/attendance",
+        "/api/biometric", "/api/settings"
+    ];
+
+    window.fetch = function schoolAuthenticatedFetch(input, init) {
+        const url = typeof input === "string" ? input : (input && input.url) || "";
+        const path = (() => {
+            try { return new URL(url, window.location.href).pathname; }
+            catch (_) { return url; }
+        })();
+        const isProtected = protectedPrefixes.some((prefix) =>
+            path === prefix || path.startsWith(prefix + "/"));
+        if (!isProtected) return nativeFetch(input, init);
+
+        const token = sessionStorage.getItem("softschool_api_token");
+        if (!token) return nativeFetch(input, init);
+        const headers = new Headers((init && init.headers) || (input instanceof Request ? input.headers : undefined));
+        if (!headers.has("Authorization")) headers.set("Authorization", "Bearer " + token);
+        return nativeFetch(input, Object.assign({}, init || {}, { headers }));
+    };
+})();
+
 /**
  * EDUFLOW PRO - SHARED DATA LAYER
  * Manages global state via LocalStorage across all pages.
