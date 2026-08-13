@@ -905,6 +905,44 @@ async function saveAll() {
   // — School Info —
   const schoolInfo = collectSchoolInfo();
 
+  // SECURITY: schema-validate the school profile fields (same shared
+  // library used across every other form in the app) before they're
+  // sent to the backend and rendered on every page via `.school-name`
+  // etc. Rejects invalid input with a toast instead of saving it.
+  const schoolInfoCheck = SSValidate.validate(schoolInfo, {
+    name:      SSValidate.rules.name({ required: true, maxLength: 120, label: "School name" }),
+    address:   SSValidate.rules.address({ required: false, maxLength: 300, label: "School address" }),
+    phone:     SSValidate.rules.phone({ required: false, label: "School phone" }),
+    phoneAlt:  SSValidate.rules.phone({ required: false, label: "Alternate phone" }),
+    email:     SSValidate.rules.email({ required: false, label: "School email" }),
+    website:   SSValidate.rules.text({ required: false, maxLength: 200, label: "Website" }),
+    principal: SSValidate.rules.name({ required: false, maxLength: 80, label: "Principal name" }),
+    regNo:     SSValidate.rules.id({ required: false, maxLength: 40, label: "Registration number" }),
+  });
+  if (!schoolInfoCheck.ok) {
+    const firstError = Object.values(schoolInfoCheck.errors).find(Boolean);
+    if (typeof showToast === 'function') showToast(firstError, 'error');
+    return;
+  }
+  Object.assign(schoolInfo, schoolInfoCheck.values);
+
+  // SECURITY: validate class name / fee / fund the same way (allow-list
+  // text + non-negative money) before they're pushed into `classes`.
+  const classSchema = {
+    name: SSValidate.rules.name({ required: true, maxLength: 60, label: "Class name" }),
+    fee:  SSValidate.rules.money({ required: false, max: 10000000, label: "Class fee" }),
+    fund: SSValidate.rules.money({ required: false, max: 10000000, label: "Class fund" }),
+  };
+  for (const cls of classes) {
+    const check = SSValidate.validate(cls, classSchema);
+    if (!check.ok) {
+      const firstError = Object.values(check.errors).find(Boolean);
+      if (typeof showToast === 'function') showToast(firstError, 'error');
+      return;
+    }
+    Object.assign(cls, check.values);
+  }
+
   // — Pay Variables —
   const vars = {
     penaltyType:  document.getElementById('var-penalty-type').value,

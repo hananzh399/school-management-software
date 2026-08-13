@@ -538,16 +538,43 @@ document.getElementById("newSchoolLogoInput").addEventListener("change", async f
   }
 });
 
+/* SECURITY: Add School is a privileged super-admin action, so every
+   field is run through the shared schema validator (allow-list text
+   for the name, real integer checks with sane bounds for the seat
+   limits) instead of only checking "name is non-empty". Prefix
+   sanitization is unchanged (still forced to A-Z, max 4 chars) since
+   it feeds directly into generated student/staff IDs. */
 document.getElementById("saveNewSchool").addEventListener("click", async function () {
   const btn = this;
-  const name = document.getElementById("newSchoolName").value.trim();
+  const nameField = document.getElementById("newSchoolName");
   const prefix = document.getElementById("newSchoolPrefix").value.trim().toUpperCase().replace(/[^A-Z]/g, "").slice(0, 4);
-  const customLimit = document.getElementById("newSchoolStudentLimit").value;
-  const customStaffLimit = document.getElementById("newSchoolStaffLimit").value;
+  const customLimitField = document.getElementById("newSchoolStudentLimit");
+  const customStaffLimitField = document.getElementById("newSchoolStaffLimit");
   const extraLock = document.getElementById("newSchoolExtraLock").value;
 
-  if (!name) { saToast("Please enter a school name.", "error"); return; }
+  const addSchoolSchema = {
+    name: SSValidate.rules.name({ required: true, maxLength: 120, label: "School name" }),
+    studentLimit: SSValidate.rules.integer({ required: false, min: 1, max: 100000, label: "Student limit" }),
+    staffLimit: SSValidate.rules.integer({ required: false, min: 1, max: 10000, label: "Staff limit" }),
+  };
+  const { ok, values, errors } = SSValidate.validate(
+    {
+      name: nameField.value,
+      studentLimit: customLimitField.value,
+      staffLimit: customStaffLimitField.value,
+    },
+    addSchoolSchema
+  );
+
+  if (!ok) {
+    saToast(errors.name || errors.studentLimit || errors.staffLimit, "error");
+    return;
+  }
   if (!currentPlanId) { saToast("Please create and choose a plan first.", "error"); return; }
+
+  const name = values.name;
+  const customLimit = values.studentLimit;
+  const customStaffLimit = values.staffLimit;
 
   // No username is generated or set here — schools log in with their
   // School ID + the auto-generated permanent security code (password).
@@ -561,8 +588,8 @@ document.getElementById("saveNewSchool").addEventListener("click", async functio
     const created = await apiCreateSchool({
       name, prefix,
       planId: currentPlanId,
-      studentLimit: customLimit ? parseInt(customLimit, 10) : plan.studentLimit,
-      staffLimit: customStaffLimit ? parseInt(customStaffLimit, 10) : plan.staffLimit,
+      studentLimit: customLimit || plan.studentLimit,
+      staffLimit: customStaffLimit || plan.staffLimit,
       locks,
       logo: newSchoolLogoData
     });
@@ -722,10 +749,10 @@ function renderSchoolsTable(filterText) {
             <td>
               <div class="sa-school-cell">
                 ${schoolLogoCell(s)}
-                <div><div class="sa-school-name">${s.name}</div></div>
+                <div><div class="sa-school-name">${SSValidate.escapeHtml(s.name)}</div></div>
               </div>
             </td>
-            <td><span class="sa-school-id">${s.schoolId || "—"}</span></td>
+            <td><span class="sa-school-id">${SSValidate.escapeHtml(s.schoolId || "—")}</span></td>
             <td><span class="sa-badge ${planBadgeClass(s.planId)}">${plan.label}</span></td>
             <td>${usageCell(usageInfo(s.studentCount, s.studentLimit))}</td>
             <td>${usageCell(usageInfo(s.staffCount, s.staffLimit))}</td>
@@ -803,7 +830,7 @@ function openManageSchool(id) {
   const schoolLocks = school.locks ? school.locks.split(",").filter(Boolean) : [];
   managingSchoolId = id;
   managingLogoData = null;
-  document.getElementById("manageSchoolTitle").innerHTML = `<i class="fas fa-school"></i> ${school.name}`;
+  document.getElementById("manageSchoolTitle").innerHTML = `<i class="fas fa-school"></i> ${SSValidate.escapeHtml(school.name)}`;
 
   const isBlocked = school.status === "blocked";
   const plans = planList();
@@ -1002,16 +1029,31 @@ document.getElementById("manageSchoolOverlay").addEventListener("click", functio
   if (e.target === this) closeManageSchool();
 });
 
+/* SECURITY: same allow-list/length-limit schema as Add School. */
 document.getElementById("saveManageSchool").addEventListener("click", async function () {
   if (!managingSchoolId) return;
-  const name = document.getElementById("mgName").value.trim();
   const prefix = document.getElementById("mgPrefix").value.trim().toUpperCase().replace(/[^A-Z]/g, "").slice(0, 4);
   const planId = document.getElementById("mgPlan").value;
-  const studentLimit = parseInt(document.getElementById("mgStudentLimit").value, 10) || getPlan(planId).studentLimit;
-  const staffLimit = parseInt(document.getElementById("mgStaffLimit").value, 10) || getPlan(planId).staffLimit;
 
-  if (!name) { saToast("School name can't be empty.", "error"); return; }
+  const mgSchema = {
+    name: SSValidate.rules.name({ required: true, maxLength: 120, label: "School name" }),
+    studentLimit: SSValidate.rules.integer({ required: false, min: 1, max: 100000, label: "Student limit" }),
+    staffLimit: SSValidate.rules.integer({ required: false, min: 1, max: 10000, label: "Staff limit" }),
+  };
+  const { ok, values, errors } = SSValidate.validate(
+    {
+      name: document.getElementById("mgName").value,
+      studentLimit: document.getElementById("mgStudentLimit").value,
+      staffLimit: document.getElementById("mgStaffLimit").value,
+    },
+    mgSchema
+  );
+  if (!ok) { saToast(errors.name || errors.studentLimit || errors.staffLimit, "error"); return; }
   if (!planId) { saToast("Create a plan first, then assign it to this school.", "error"); return; }
+
+  const name = values.name;
+  const studentLimit = values.studentLimit || getPlan(planId).studentLimit;
+  const staffLimit = values.staffLimit || getPlan(planId).staffLimit;
 
   const locks = Array.from(document.querySelectorAll(".mgLockToggle"))
     .filter(cb => cb.checked)

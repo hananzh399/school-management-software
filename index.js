@@ -91,43 +91,57 @@ function togglePw() {
   }
 }
 
-/* ── LOGIN FORM ── */
+/* ── LOGIN FORM ──
+   SECURITY: input is now validated through the shared SSValidate
+   schema (input-validation.js) before it is ever sent to
+   SoftSchoolAuth.authenticate(). This rejects empty/oversized/
+   malformed values up front (allow-list validation, length limits)
+   instead of only checking "is it non-empty". The actual credential
+   check still happens server-side — this only stops obviously bad
+   input from being submitted. */
 async function handleLogin(e) {
   e.preventDefault();
   const phone = document.getElementById("phone");
   const pass = document.getElementById("password");
   const btn = document.getElementById("loginBtn");
-  let valid = true;
 
   [phone, pass].forEach((el) => el.classList.remove("error"));
 
-  if (!phone.value.trim()) {
-    phone.classList.add("error");
+  const loginSchema = {
+    // The field is labeled "phone" in the markup but is actually used
+    // as the school's login identifier (username/phone/email), so it
+    // is validated as free-form text with a firm length cap rather
+    // than a strict phone format, to avoid rejecting legitimate
+    // usernames or emails already registered by existing schools.
+    phone: SSValidate.rules.text({ required: true, maxLength: 100, label: "Phone number / username" }),
+    password: SSValidate.rules.password({ required: true, minLength: 1, maxLength: 128, label: "Password" }),
+  };
+  const { ok, values, errors } = SSValidate.validate(
+    { phone: phone.value, password: pass.value },
+    loginSchema
+  );
+
+  function shakeLoginCard() {
     phone.closest(".login-card").classList.add("shake");
     phone.closest(".login-card").addEventListener(
       "animationend",
-      () => {
-        phone.closest(".login-card").classList.remove("shake");
-      },
+      () => phone.closest(".login-card").classList.remove("shake"),
       { once: true },
     );
-    showToast("Please enter your phone number.", "error");
-    valid = false;
-  } else if (!pass.value.trim()) {
-    pass.classList.add("error");
-    pass.closest(".login-card").classList.add("shake");
-    pass.closest(".login-card").addEventListener(
-      "animationend",
-      () => {
-        pass.closest(".login-card").classList.remove("shake");
-      },
-      { once: true },
-    );
-    showToast("Please enter your password.", "error");
-    valid = false;
   }
 
-  if (!valid) return;
+  if (!ok) {
+    if (errors.phone) {
+      phone.classList.add("error");
+      shakeLoginCard();
+      showToast(errors.phone, "error");
+    } else if (errors.password) {
+      pass.classList.add("error");
+      shakeLoginCard();
+      showToast(errors.password, "error");
+    }
+    return;
+  }
 
   const origText = btn.textContent;
   btn.textContent = "Signing in…";
@@ -137,7 +151,12 @@ async function handleLogin(e) {
   const rememberBox = document.getElementById("rememberAdmin");
   const remember = !!(rememberBox && rememberBox.checked);
 
-  const result = await SoftSchoolAuth.authenticate(phone.value.trim(), pass.value, remember);
+  // Note: the password is intentionally NOT run through the
+  // canonicalizing/allow-list string validator beyond a length cap —
+  // passwords must be sent to auth exactly as typed (trimming or
+  // restricting characters would silently reject valid passwords
+  // that use punctuation/symbols/whitespace).
+  const result = await SoftSchoolAuth.authenticate(values.phone, pass.value, remember);
 
   btn.textContent = origText;
   btn.disabled = false;
@@ -655,6 +674,12 @@ function shakeRegisterCard(field) {
   if (field) field.focus();
 }
 
+/* SECURITY: schema-based validation (allow-list character set +
+   length limits) replaces the previous ad-hoc checks. School ID is
+   restricted to the alnum/hyphen/underscore ID format actually issued
+   by the super admin (see access-control.js genSchoolId()), and
+   username is restricted to a safe character set so it can't smuggle
+   markup/script content into anything that later renders it. */
 async function handleRegister(e) {
   e.preventDefault();
 
@@ -667,26 +692,36 @@ async function handleRegister(e) {
 
   [schoolId, username, password, password2, code].forEach((el) => el.classList.remove("error"));
 
-  const schoolIdVal = schoolId.value.trim();
-  const usernameVal = username.value.trim();
-  const codeVal = code.value.trim().toLowerCase();
+  const registerSchema = {
+    schoolId: SSValidate.rules.id({ required: true, maxLength: 40, label: "School ID" }),
+    username: SSValidate.rules.username({ required: true, label: "Username" }),
+    password: SSValidate.rules.password({ required: true, label: "Password" }),
+    // Security code format is enforced by SoftSchoolAuth.isValidCode()
+    // below (7 lowercase-alnum chars); here we just cap length/type so
+    // an oversized/garbage value never reaches that check or the API.
+    code: SSValidate.rules.text({ required: true, maxLength: 20, label: "Security code" }),
+  };
+  const { ok, values, errors } = SSValidate.validate(
+    {
+      schoolId: schoolId.value,
+      username: username.value,
+      password: password.value,
+      code: code.value,
+    },
+    registerSchema
+  );
 
-  if (!schoolIdVal) {
-    showToast("Please enter the School ID given to you.", "error");
-    return shakeRegisterCard(schoolId);
+  if (!ok) {
+    if (errors.schoolId) { showToast(errors.schoolId, "error"); return shakeRegisterCard(schoolId); }
+    if (errors.username) { showToast(errors.username, "error"); return shakeRegisterCard(username); }
+    if (errors.password) { showToast(errors.password, "error"); return shakeRegisterCard(password); }
+    if (errors.code) { showToast(errors.code, "error"); return shakeRegisterCard(code); }
   }
-  if (usernameVal.length < 4) {
-    showToast("Username must be at least 4 characters.", "error");
-    return shakeRegisterCard(username);
-  }
-  if (/\s/.test(usernameVal)) {
-    showToast("Username cannot contain spaces.", "error");
-    return shakeRegisterCard(username);
-  }
-  if (password.value.length < 6) {
-    showToast("Password must be at least 6 characters.", "error");
-    return shakeRegisterCard(password);
-  }
+
+  const schoolIdVal = values.schoolId;
+  const usernameVal = values.username;
+  const codeVal = values.code.toLowerCase();
+
   if (password.value !== password2.value) {
     showToast("Passwords do not match.", "error");
     return shakeRegisterCard(password2);
@@ -797,6 +832,7 @@ function shakeForgotPasswordCard(field) {
   if (field) field.focus();
 }
 
+/* SECURITY: same shared schema validation as login/register. */
 async function handleForgotPassword(e) {
   e.preventDefault();
 
@@ -809,25 +845,36 @@ async function handleForgotPassword(e) {
 
   [schoolId, code, username, password, password2].forEach((el) => el.classList.remove("error"));
 
-  const schoolIdVal = schoolId.value.trim();
-  const codeVal = code.value.trim().toLowerCase();
-  const usernameVal = username.value.trim();
+  const fpSchema = {
+    schoolId: SSValidate.rules.id({ required: true, maxLength: 40, label: "School ID" }),
+    code: SSValidate.rules.text({ required: true, maxLength: 20, label: "Security code" }),
+    username: SSValidate.rules.username({ required: true, label: "Username" }),
+    password: SSValidate.rules.password({ required: true, label: "New password" }),
+  };
+  const { ok, values, errors } = SSValidate.validate(
+    {
+      schoolId: schoolId.value,
+      code: code.value,
+      username: username.value,
+      password: password.value,
+    },
+    fpSchema
+  );
 
-  if (!schoolIdVal) {
-    showToast("Please enter the School ID given to you.", "error");
-    return shakeForgotPasswordCard(schoolId);
+  if (!ok) {
+    if (errors.schoolId) { showToast(errors.schoolId, "error"); return shakeForgotPasswordCard(schoolId); }
+    if (errors.code) { showToast(errors.code, "error"); return shakeForgotPasswordCard(code); }
+    if (errors.username) { showToast(errors.username, "error"); return shakeForgotPasswordCard(username); }
+    if (errors.password) { showToast(errors.password, "error"); return shakeForgotPasswordCard(password); }
   }
+
+  const schoolIdVal = values.schoolId;
+  const codeVal = values.code.toLowerCase();
+  const usernameVal = values.username;
+
   if (!SoftSchoolAuth.isValidCode(codeVal)) {
     showToast("Security code must be 7 characters using lowercase letters and numbers.", "error");
     return shakeForgotPasswordCard(code);
-  }
-  if (!usernameVal) {
-    showToast("Please enter your username.", "error");
-    return shakeForgotPasswordCard(username);
-  }
-  if (password.value.length < 6) {
-    showToast("New password must be at least 6 characters.", "error");
-    return shakeForgotPasswordCard(password);
   }
   if (password.value !== password2.value) {
     showToast("Passwords do not match.", "error");

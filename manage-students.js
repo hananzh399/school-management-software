@@ -1601,6 +1601,36 @@ if (certUploadInput) {
 
     // ── FORM SUBMISSION ──────────────────────────────────────────────────────
 
+    /* SECURITY: schema for every free-typed field on the admission
+       form (schema-based type/length/allow-list checks, per OWASP
+       Input Validation Cheat Sheet). Dropdown/select/radio fields
+       (class, section, gender, guardian role, orphan status,
+       transport mode/type) are left to the existing HTML5 `required`
+       checks since their values are already constrained to the
+       options the page renders. Money fields are validated as
+       non-negative decimals so a typed value like "1e9" or
+       "-100abc" can't silently reach storage/financial totals. */
+    const ADMISSION_SCHEMA = {
+        fullName:          SSValidate.rules.name({ required: true, maxLength: 80, label: "Student full name" }),
+        guardianName:      SSValidate.rules.name({ required: true, maxLength: 80, label: "Guardian name" }),
+        studentBform:      SSValidate.rules.text({ required: true, maxLength: 15, pattern: /^\d{5}-\d{7}-\d$/, patternMessage: "B-Form number must look like XXXXX-XXXXXXX-X.", label: "Student B-Form number" }),
+        guardianCnic:      SSValidate.rules.text({ required: true, maxLength: 15, pattern: /^\d{5}-\d{7}-\d$/, patternMessage: "Guardian CNIC must look like XXXXX-XXXXXXX-X.", label: "Guardian CNIC" }),
+        medicalIssues:     SSValidate.rules.note({ required: false, maxLength: 300, label: "Medical issues" }),
+        previousSchool:    SSValidate.rules.name({ required: false, maxLength: 120, label: "Previous school" }),
+        previousClass:     SSValidate.rules.text({ required: false, maxLength: 40, label: "Previous class" }),
+        phone1:            SSValidate.rules.phone({ required: true, label: "Primary phone number" }),
+        phone2:            SSValidate.rules.phone({ required: false, label: "Secondary phone number" }),
+        permanentAddress:  SSValidate.rules.address({ required: true, maxLength: 300, label: "Permanent address" }),
+        mailingAddress:    SSValidate.rules.address({ required: true, maxLength: 300, label: "Mailing address" }),
+        transportFee:      SSValidate.rules.money({ required: false, max: 10000000, label: "Transport fee" }),
+        admissionFee:      SSValidate.rules.money({ required: false, max: 10000000, label: "Admission fee" }),
+        tuitionDiscount:   SSValidate.rules.money({ required: false, max: 10000000, label: "Tuition discount" }),
+        transportDiscount: SSValidate.rules.money({ required: false, max: 10000000, label: "Transport discount" }),
+        siblingDiscount:   SSValidate.rules.money({ required: false, max: 10000000, label: "Sibling discount" }),
+        dob:               SSValidate.rules.date({ required: true, max: new Date().toISOString().slice(0, 10), label: "Date of birth" }),
+        admissionDate:     SSValidate.rules.date({ required: true, label: "Admission date" }),
+    };
+
     if (admissionForm) {
     admissionForm.onsubmit = async function(e) {
         e.preventDefault();
@@ -1608,6 +1638,19 @@ if (certUploadInput) {
         const db         = getDatabase();
         const formData   = new FormData(admissionForm);
         const studentData= Object.fromEntries(formData);
+
+        // SECURITY: validate + canonicalize every free-typed field
+        // before it touches storage/API/DOM. Rejects the submission
+        // (instead of silently truncating/"fixing" it) and surfaces
+        // the first error so the existing toast UI explains what to
+        // fix, exactly like the page's other validation messages.
+        const admissionCheck = SSValidate.validate(studentData, ADMISSION_SCHEMA);
+        if (!admissionCheck.ok) {
+            const firstError = Object.values(admissionCheck.errors)[0];
+            showToast("Check the form", firstError, "danger");
+            return;
+        }
+        Object.assign(studentData, admissionCheck.values);
 
         // Standardize properties
         delete studentData['_editRegNo'];
@@ -1693,6 +1736,12 @@ if (certUploadInput) {
 
         const overlay = document.createElement('div');
         overlay.id = 'sibling-dialog-overlay';
+        /* SECURITY: fullName/matchedName are user-entered strings —
+           HTML-escaped here before being placed into innerHTML so a
+           name like `<img src=x onerror=...>` can't execute as
+           markup (stored/reflected XSS defense). */
+        const safeStudentName = SSValidate.escapeHtml(studentData.fullName);
+        const safeMatchedName = SSValidate.escapeHtml(matchedName);
         overlay.innerHTML = `
             <div class="sibling-dialog-box">
                 <div class="sibling-dialog-icon">
@@ -1700,15 +1749,15 @@ if (certUploadInput) {
                 </div>
                 <h3 class="sibling-dialog-title">Sibling Detected</h3>
                 <p class="sibling-dialog-body">
-                    The guardian details for <strong>${studentData.fullName}</strong> match an existing record for:
+                    The guardian details for <strong>${safeStudentName}</strong> match an existing record for:
                 </p>
                 <div class="sibling-match-card">
                     <i class="fas fa-user-graduate"></i>
-                    <span>${matchedName}</span>
+                    <span>${safeMatchedName}</span>
                 </div>
                 <p class="sibling-dialog-question">
-                    Would you like to register <strong>${studentData.fullName}</strong>
-                    as a sibling of <strong>${matchedName}</strong>?
+                    Would you like to register <strong>${safeStudentName}</strong>
+                    as a sibling of <strong>${safeMatchedName}</strong>?
                 </p>
                 <div class="sibling-dialog-actions">
                     <button id="sibling-yes-btn" class="sibling-btn-yes">
@@ -3190,8 +3239,9 @@ if (certUploadInput) {
     // Render Rows
     filtered.forEach((s, idx) => {
         const displayId = s.regNo || s.id;
+        // SECURITY: escape at render time (see note above render loop).
         const siblingTag = (s.isSibling && s.siblingOf)
-            ? `<br><span class="sibling-tag"><i class="fas fa-user-friends"></i> Sibling of ${s.siblingOf}</span>`
+            ? `<br><span class="sibling-tag"><i class="fas fa-user-friends"></i> Sibling of ${SSValidate.escapeHtml(s.siblingOf)}</span>`
             : '';
 
         // Checkbox for Promotion Mode
@@ -3210,26 +3260,42 @@ if (certUploadInput) {
             ? `${s.studentClass || '—'}${s.section ? ' ' + s.section : ''}`
             : (s.section || '—');
 
+        // SECURITY: every value below originates from stored student
+        // records (typed in via the admission form, possibly edited
+        // long before this file's validation existed). HTML-escape
+        // each one at render time — this is the actual XSS defense
+        // (output encoding), independent of whatever validation ran
+        // when the record was created. regNo additionally goes inside
+        // an onclick="...('...')" attribute, so it's also stripped of
+        // quote characters that could break out of that attribute.
+        const safeFullName     = SSValidate.escapeHtml(s.fullName);
+        const safeGuardianName = SSValidate.escapeHtml(s.guardianName);
+        const safeDisplayId    = SSValidate.escapeHtml(displayId);
+        const safeRollNo       = SSValidate.escapeHtml(s.rollNo || '—');
+        const safeClassSection = SSValidate.escapeHtml(classSectionCell);
+        const safeGender       = SSValidate.escapeHtml(s.gender);
+        const safeRegNoAttr    = String(s.regNo || '').replace(/['"\\]/g, '');
+
         const row = `
             <tr class="${s.orphanStatus === 'Orphan' ? 'orphan-highlight' : ''}">
                 ${checkboxCell}
                 <td class="msc-sr-cell">${idx + 1}</td>
-                <td><span class="hrk-id-badge">${displayId}</span></td>
-                <td>${s.rollNo || '—'}</td>
+                <td><span class="hrk-id-badge">${safeDisplayId}</span></td>
+                <td>${safeRollNo}</td>
                 <td>
-                    <strong>${s.fullName}</strong>
+                    <strong>${safeFullName}</strong>
                     ${s.orphanStatus === 'Orphan' ? ' <i class="fas fa-heart" style="color:#ef4444; font-size:10px;" title="Orphan"></i>' : ''}
                     ${siblingTag}
                 </td>
-                <td>${s.guardianName}</td>
-                <td><span class="class-chip">${classSectionCell}</span></td>
-                <td>${s.gender}</td>
+                <td>${safeGuardianName}</td>
+                <td><span class="class-chip">${safeClassSection}</span></td>
+                <td>${safeGender}</td>
                 ${statusCell}
                 <td>
                     <div class="action-btn-group">
-                        <button class="btn-icon view" onclick="viewFullProfile('${s.regNo}')" title="View Profile"><i class="fas fa-eye"></i></button>
-                        <button class="btn-icon edit" onclick="editStudentInfo('${s.regNo}')" title="Edit Record"><i class="fas fa-user-edit"></i></button>
-                        <button class="btn-icon delete" onclick="deleteRecord('${s.regNo}')" title="Delete"><i class="fas fa-trash-alt"></i></button>
+                        <button class="btn-icon view" onclick="viewFullProfile('${safeRegNoAttr}')" title="View Profile"><i class="fas fa-eye"></i></button>
+                        <button class="btn-icon edit" onclick="editStudentInfo('${safeRegNoAttr}')" title="Edit Record"><i class="fas fa-user-edit"></i></button>
+                        <button class="btn-icon delete" onclick="deleteRecord('${safeRegNoAttr}')" title="Delete"><i class="fas fa-trash-alt"></i></button>
                     </div>
                 </td>
             </tr>
@@ -3456,31 +3522,41 @@ if (certUploadInput) {
     // Render Rows
     filtered.forEach((s, idx) => {
         const displayId = s.regNo || s.id;
+        // SECURITY: escape at render time (see note above render loop).
         const siblingTag = (s.isSibling && s.siblingOf)
-            ? `<br><span class="sibling-tag"><i class="fas fa-user-friends"></i> Sibling of ${s.siblingOf}</span>`
+            ? `<br><span class="sibling-tag"><i class="fas fa-user-friends"></i> Sibling of ${SSValidate.escapeHtml(s.siblingOf)}</span>`
             : '';
         
         const classSectionCell = showClassCol
             ? `${s.studentClass || '—'}${s.section ? ' ' + s.section : ''}`
             : (s.section || '—');
 
+        // SECURITY: same output-encoding as the main table render above.
+        const safeFullName     = SSValidate.escapeHtml(s.fullName);
+        const safeGuardianName = SSValidate.escapeHtml(s.guardianName);
+        const safeDisplayId    = SSValidate.escapeHtml(displayId);
+        const safeRollNo       = SSValidate.escapeHtml(s.rollNo || '—');
+        const safeClassSection = SSValidate.escapeHtml(classSectionCell);
+        const safeGender       = SSValidate.escapeHtml(s.gender);
+        const safeRegNoAttr    = String(s.regNo || '').replace(/['"\\]/g, '');
+
         tbody.innerHTML += `
             <tr class="${s.orphanStatus === 'Orphan' ? 'orphan-highlight' : ''}">
                 <td class="msc-sr-cell">${idx + 1}</td>
-                <td><span class="hrk-id-badge">${displayId}</span></td>
-                <td>${s.rollNo || '—'}</td>
+                <td><span class="hrk-id-badge">${safeDisplayId}</span></td>
+                <td>${safeRollNo}</td>
                 <td>
-                    <strong>${s.fullName}</strong>
+                    <strong>${safeFullName}</strong>
                     ${s.orphanStatus === 'Orphan' ? ' <i class="fas fa-heart" style="color:#ef4444; font-size:10px;" title="Orphan"></i>' : ''}
                     ${siblingTag}
                 </td>
-                <td>${s.guardianName}</td>
-                <td><span class="class-chip">${classSectionCell}</span></td>
-                <td>${s.gender}</td>
+                <td>${safeGuardianName}</td>
+                <td><span class="class-chip">${safeClassSection}</span></td>
+                <td>${safeGender}</td>
                 <td style="text-align:center;">
                     <div class="action-btn-group">
-                        <button class="btn-icon view" onclick="viewFullProfile('${s.regNo}')" title="View Profile"><i class="fas fa-eye"></i></button>
-                        <button class="btn-icon print-record" onclick="printStudentRecordForStudent('${s.regNo}')" title="Print Student Record"><i class="fas fa-print"></i></button>
+                        <button class="btn-icon view" onclick="viewFullProfile('${safeRegNoAttr}')" title="View Profile"><i class="fas fa-eye"></i></button>
+                        <button class="btn-icon print-record" onclick="printStudentRecordForStudent('${safeRegNoAttr}')" title="Print Student Record"><i class="fas fa-print"></i></button>
                     </div>
                 </td>
             </tr>`;

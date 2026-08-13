@@ -1070,10 +1070,27 @@ document.addEventListener('click', function(e) {
     if (combo && !combo.contains(e.target)) closeFineStudentOptions();
 });
 
+/* SECURITY: schema-validated before hitting the API — amount must be
+   a real non-negative number (not "1e9" or empty-string coerced to
+   0) and the reason is length-capped free text, per the shared
+   SSValidate library used across the app. */
 async function handleAddStudentFine() {
-    const amount = document.getElementById('student-fine-amount').value;
-    const desc = document.getElementById('student-fine-desc').value.trim();
-    if (!sfSelectedId || !amount) return showFinanceToast("Please select a class, section, student and enter a fine amount.", 'error');
+    const amountRaw = document.getElementById('student-fine-amount').value;
+    const descRaw = document.getElementById('student-fine-desc').value;
+
+    const fineCheck = SSValidate.validate(
+        { amount: amountRaw, reason: descRaw },
+        {
+            amount: SSValidate.rules.money({ required: true, max: 10000000, label: "Fine amount" }),
+            reason: SSValidate.rules.note({ required: false, maxLength: 300, label: "Reason" }),
+        }
+    );
+    if (!sfSelectedId || !fineCheck.ok) {
+        const firstError = Object.values(fineCheck.errors).find(Boolean);
+        return showFinanceToast(firstError || "Please select a class, section, student and enter a fine amount.", 'error');
+    }
+    const amount = fineCheck.values.amount;
+    const desc = fineCheck.values.reason;
 
     // NOTE: apiRequest() (unlike apiCall()) never throws on a failed
     // request — it logs the error and resolves to null so callers can
@@ -1473,12 +1490,27 @@ function selectStaffMember(id) {
     selectedStaffId = id;
 }
 
+/* SECURITY: schema-validated amount/description (see handleAddStudentFine above). */
 function handleAddStaffFine() {
     if (!selectedStaffId) { showFinanceToast('Please select a staff member.', 'error'); return; }
-    const amount = Number(document.getElementById('staff-fine-amount').value);
-    const desc = document.getElementById('staff-fine-desc').value.trim();
-    if (!amount || amount < 1) { showFinanceToast('Please enter a valid fine amount.', 'error'); return; }
-    if (!desc) { showFinanceToast('Please enter a fine description/cause.', 'error'); return; }
+
+    const fineCheck = SSValidate.validate(
+        {
+            amount: document.getElementById('staff-fine-amount').value,
+            cause: document.getElementById('staff-fine-desc').value,
+        },
+        {
+            amount: SSValidate.rules.money({ required: true, min: 1, max: 10000000, label: "Fine amount" }),
+            cause: SSValidate.rules.note({ required: true, maxLength: 300, label: "Fine description/cause" }),
+        }
+    );
+    if (!fineCheck.ok) {
+        const firstError = Object.values(fineCheck.errors).find(Boolean);
+        showFinanceToast(firstError, 'error');
+        return;
+    }
+    const amount = fineCheck.values.amount;
+    const desc = fineCheck.values.cause;
 
     const members = getStaffCache(selectedStaffCategory);
     const idx = members.findIndex(s => String(s.id) === String(selectedStaffId));
@@ -1679,11 +1711,25 @@ function saveExpensesData(arr) {
     _backendSave(API_BASE, ENDPOINTS.expenses, 'PUT', { items: arr });
 }
 
+/* SECURITY: schema-validated amount/description (see handleAddStudentFine above). */
 function handleExpenseSubmitNew() {
-    const amount = Number(document.getElementById('exp-amount').value);
-    const desc = document.getElementById('exp-desc').value.trim();
-    if (!amount || amount < 1) { showFinanceToast('Please enter a valid expense amount.', 'error'); return; }
-    if (!desc) { showFinanceToast('Please enter an expense description.', 'error'); return; }
+    const expCheck = SSValidate.validate(
+        {
+            amount: document.getElementById('exp-amount').value,
+            description: document.getElementById('exp-desc').value,
+        },
+        {
+            amount: SSValidate.rules.money({ required: true, min: 1, max: 10000000, label: "Expense amount" }),
+            description: SSValidate.rules.note({ required: true, maxLength: 300, label: "Expense description" }),
+        }
+    );
+    if (!expCheck.ok) {
+        const firstError = Object.values(expCheck.errors).find(Boolean);
+        showFinanceToast(firstError, 'error');
+        return;
+    }
+    const amount = expCheck.values.amount;
+    const desc = expCheck.values.description;
 
     const list = getExpensesData();
     const now = new Date();
@@ -4613,16 +4659,30 @@ function toggleInlineBonus() {
     }
 }
 
+/* SECURITY: schema-validated amount/description (see handleAddStudentFine above). */
 function addBonusFromSalaryPanel() {
     const panel = document.getElementById('salary-breakdown-panel');
     const staffId  = panel && panel.dataset.teacherId;
     const category = (panel && panel.dataset.category) || 'Teaching';
     if (!staffId) return;
 
-    const amount = Number(document.getElementById('sbp-inline-bonus-amount').value);
-    const desc = document.getElementById('sbp-inline-bonus-desc').value.trim();
-    if (!amount || amount < 1) { showFinanceToast('Please enter a valid bonus amount.', 'error'); return; }
-    if (!desc) { showFinanceToast('Please enter a bonus reason.', 'error'); return; }
+    const bonusCheck = SSValidate.validate(
+        {
+            amount: document.getElementById('sbp-inline-bonus-amount').value,
+            reason: document.getElementById('sbp-inline-bonus-desc').value,
+        },
+        {
+            amount: SSValidate.rules.money({ required: true, min: 1, max: 10000000, label: "Bonus amount" }),
+            reason: SSValidate.rules.note({ required: true, maxLength: 300, label: "Bonus reason" }),
+        }
+    );
+    if (!bonusCheck.ok) {
+        const firstError = Object.values(bonusCheck.errors).find(Boolean);
+        showFinanceToast(firstError, 'error');
+        return;
+    }
+    const amount = bonusCheck.values.amount;
+    const desc = bonusCheck.values.reason;
 
     const members = getStaffCache(category);
     const member = members.find(s => s.id === staffId);
@@ -7549,11 +7609,25 @@ function addExpenseQuickAmount(val) {
     amtEl.focus();
 }
 
+/* SECURITY: schema-validated amount/description (see handleAddStudentFine above). */
 function handleExpenseSubmitHub() {
-    const amount = Number(document.getElementById('hub-exp-amount').value);
-    const desc = document.getElementById('hub-exp-desc').value.trim();
-    if (!amount || amount < 1) { showFinanceToast('Please enter a valid expense amount.', 'error'); return; }
-    if (!desc) { showFinanceToast('Please enter an expense description.', 'error'); return; }
+    const expCheck = SSValidate.validate(
+        {
+            amount: document.getElementById('hub-exp-amount').value,
+            description: document.getElementById('hub-exp-desc').value,
+        },
+        {
+            amount: SSValidate.rules.money({ required: true, min: 1, max: 10000000, label: "Expense amount" }),
+            description: SSValidate.rules.note({ required: true, maxLength: 300, label: "Expense description" }),
+        }
+    );
+    if (!expCheck.ok) {
+        const firstError = Object.values(expCheck.errors).find(Boolean);
+        showFinanceToast(firstError, 'error');
+        return;
+    }
+    const amount = expCheck.values.amount;
+    const desc = expCheck.values.description;
 
     const list = getExpensesData();
     const now = new Date();

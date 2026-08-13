@@ -645,20 +645,20 @@ function populateDirectory(category, filterText = '') {
         
         if (category === 'Teaching') {
             tr.innerHTML = `
-                <td><span class="id-badge">${s.id}</span></td>
-                <td class="td-bold">${s.name}</td>
-                <td>${s.qualification}</td>
-                <td>${s.subjects}</td>
-                <td>${s.classes}</td>
-                <td>${s.incharge}</td>
+                <td><span class="id-badge">${SSValidate.escapeHtml(s.id)}</span></td>
+                <td class="td-bold">${SSValidate.escapeHtml(s.name)}</td>
+                <td>${SSValidate.escapeHtml(s.qualification)}</td>
+                <td>${SSValidate.escapeHtml(s.subjects)}</td>
+                <td>${SSValidate.escapeHtml(s.classes)}</td>
+                <td>${SSValidate.escapeHtml(s.incharge)}</td>
             `;
         } else {
             tr.innerHTML = `
-                <td><span class="id-badge">${s.id}</span></td>
-                <td class="td-bold">${s.name}</td>
-                <td>${s.job}</td>
-                <td>${s.startTime}</td>
-                <td>${s.endTime}</td>
+                <td><span class="id-badge">${SSValidate.escapeHtml(s.id)}</span></td>
+                <td class="td-bold">${SSValidate.escapeHtml(s.name)}</td>
+                <td>${SSValidate.escapeHtml(s.job)}</td>
+                <td>${SSValidate.escapeHtml(s.startTime)}</td>
+                <td>${SSValidate.escapeHtml(s.endTime)}</td>
             `;
         }
         tbody.appendChild(tr);
@@ -704,10 +704,13 @@ function showProfileView(staffId, category) {
     const grid = document.getElementById('profile-details-grid');
     grid.innerHTML = '';
 
+    // SECURITY: `val` is stored staff data (typed in via the Add/Edit
+    // Staff form) — HTML-escape it before it goes into innerHTML so a
+    // value like `<img src=x onerror=...>` can't execute as markup.
     const createItem = (label, val, fullWidth = false) => {
         return `<div class="detail-item ${fullWidth ? 'full-width' : ''}">
-            <span class="detail-label">${label}</span>
-            <span class="detail-value">${val}</span>
+            <span class="detail-label">${SSValidate.escapeHtml(label)}</span>
+            <span class="detail-value">${SSValidate.escapeHtml(val)}</span>
         </div>`;
     };
 
@@ -1703,10 +1706,11 @@ function showProfileView(staffId, category) {
     const grid = document.getElementById('profile-details-grid');
     grid.innerHTML = '';
 
+    // SECURITY: escape stored staff data before it reaches innerHTML.
     const createItem = (label, val, fullWidth = false) => `
         <div class="detail-item ${fullWidth ? 'full-width' : ''}">
-            <span class="detail-label">${label}</span>
-            <span class="detail-value">${val || '—'}</span>
+            <span class="detail-label">${SSValidate.escapeHtml(label)}</span>
+            <span class="detail-value">${val ? SSValidate.escapeHtml(val) : '—'}</span>
         </div>`;
 
     if (category === 'Teaching') {
@@ -1781,22 +1785,27 @@ function populateDirectory(category, filterText = '') {
             ? `<img class="row-avatar" src="${s.photo}" alt="">`
             : `<span class="row-avatar-fallback">${initials}</span>`;
 
+        // SECURITY: escape every stored field before it lands in
+        // innerHTML — these are all values typed into the Add/Edit
+        // Staff form (see createItem() above for the same treatment
+        // on the profile view).
+        const esc = SSValidate.escapeHtml;
         if (category === 'Teaching') {
             tr.innerHTML = `
-                <td><span class="id-badge">${s.id}</span></td>
-                <td class="td-bold">${avatarHTML}${s.name}</td>
-                <td>${s.qualification || ''}</td>
-                <td>${s.subjects || ''}</td>
-                <td>${s.classes || ''}</td>
-                <td>${s.incharge || ''}</td>
+                <td><span class="id-badge">${esc(s.id)}</span></td>
+                <td class="td-bold">${avatarHTML}${esc(s.name)}</td>
+                <td>${esc(s.qualification || '')}</td>
+                <td>${esc(s.subjects || '')}</td>
+                <td>${esc(s.classes || '')}</td>
+                <td>${esc(s.incharge || '')}</td>
             `;
         } else {
             tr.innerHTML = `
-                <td><span class="id-badge">${s.id}</span></td>
-                <td class="td-bold">${avatarHTML}${s.name}</td>
-                <td>${s.job || ''}</td>
-                <td>${s.startTime || ''}</td>
-                <td>${s.endTime || ''}</td>
+                <td><span class="id-badge">${esc(s.id)}</span></td>
+                <td class="td-bold">${avatarHTML}${esc(s.name)}</td>
+                <td>${esc(s.job || '')}</td>
+                <td>${esc(s.startTime || '')}</td>
+                <td>${esc(s.endTime || '')}</td>
             `;
         }
         tbody.appendChild(tr);
@@ -2458,20 +2467,60 @@ function openEditForm() {
     document.getElementById('form-modal').classList.remove('d-none');
 }
 
+/* SECURITY: shared schema validation (allow-list text + length
+   limits) for every free-typed staff field, per OWASP Input
+   Validation Cheat Sheet — same library/pattern used on the login
+   and student-admission forms. Dropdowns (gender, guardian type,
+   category) are left to the existing <select> constraints. */
+const STAFF_FORM_SCHEMA = {
+    name:          SSValidate.rules.name({ required: true, maxLength: 80, label: "Staff name" }),
+    guardianName:  SSValidate.rules.name({ required: false, maxLength: 80, label: "Guardian name" }),
+    phone:         SSValidate.rules.phone({ required: true, label: "Phone number" }),
+    address:       SSValidate.rules.address({ required: false, maxLength: 300, label: "Address" }),
+    salary:        SSValidate.rules.money({ required: false, max: 100000000, label: "Salary" }),
+    qualification: SSValidate.rules.text({ required: false, maxLength: 150, label: "Qualification" }),
+    subjects:      SSValidate.rules.text({ required: false, maxLength: 200, label: "Subjects" }),
+    job:           SSValidate.rules.text({ required: false, maxLength: 100, label: "Job title" }),
+};
+
 /* ---- OVERRIDE: handleFormSubmit ---- */
 function handleFormSubmit(e) {
     e.preventDefault();
 
     const guardianInput = document.getElementById('f-guardian-name');
 
+    // SECURITY: validate the free-typed fields before they're merged
+    // into newData / sent to apiSaveStaff(). Rejects (does not
+    // silently truncate) invalid input and reuses the page's own
+    // showToast() so the failure reads like every other validation
+    // message already on this page.
+    const staffCheck = SSValidate.validate(
+        {
+            name: document.getElementById('f-name').value,
+            guardianName: guardianInput ? guardianInput.value : '',
+            phone: document.getElementById('f-phone').value,
+            address: document.getElementById('f-address').value,
+            salary: document.getElementById('f-salary').value,
+            qualification: currentCategory === 'Teaching' ? document.getElementById('f-qualification').value : '',
+            subjects: currentCategory === 'Teaching' ? document.getElementById('f-subjects').value : '',
+            job: currentCategory !== 'Teaching' ? document.getElementById('f-job').value : '',
+        },
+        STAFF_FORM_SCHEMA
+    );
+    if (!staffCheck.ok) {
+        const firstError = Object.values(staffCheck.errors).find(Boolean);
+        showToast(firstError, 'error', 'Check the form');
+        return;
+    }
+
     let newData = {
-        name: document.getElementById('f-name').value,
+        name: staffCheck.values.name,
         gender: document.getElementById('f-gender').value,
         guardianType: _guardianType,
-        guardianName: guardianInput ? guardianInput.value.trim() : '',
+        guardianName: staffCheck.values.guardianName,
         salary: document.getElementById('f-salary').value,
-        phone: document.getElementById('f-phone').value,
-        address: document.getElementById('f-address').value,
+        phone: staffCheck.values.phone,
+        address: staffCheck.values.address,
         photo: _pendingPhoto || '',
         agreement: _pendingAgreement || null,
         cnic: readCnicField('f-cnic')
@@ -2583,10 +2632,11 @@ function showProfileView(staffId, category) {
     const grid = document.getElementById('profile-details-grid');
     grid.innerHTML = '';
 
+    // SECURITY: escape stored staff data before it reaches innerHTML.
     const createItem = (label, val, fullWidth = false) => `
         <div class="detail-item ${fullWidth ? 'full-width' : ''}">
-            <span class="detail-label">${label}</span>
-            <span class="detail-value">${val || '—'}</span>
+            <span class="detail-label">${SSValidate.escapeHtml(label)}</span>
+            <span class="detail-value">${val ? SSValidate.escapeHtml(val) : '—'}</span>
         </div>`;
 
     const guardianLabel = (staff.guardianType || 'Father') + ' Name';
