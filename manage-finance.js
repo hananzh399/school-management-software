@@ -120,7 +120,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (headerNameEl) headerNameEl.textContent = getSchoolIdentity().name;
 });
 
-const API_BASE = "http://localhost:8080/api/finance";
+const API_BASE = "https://softschool-production.up.railway.app/api/finance";
 
 // ---------------------------------------------------------------------------
 // SCHOOL SCOPING — every finance record (student fee ledgers, fines, salary
@@ -262,9 +262,9 @@ function isMonthlyFeePaid(finance) {
    _staffCache, fetched from the backend exactly like every other entity
    on this page.
    ============================================================================ */
-const STUDENTS_API_BASE = "http://localhost:8080/api/students";  // ⚠️ ASSUMED
-const SETTINGS_API_BASE = "http://localhost:8080/api/settings";  // ⚠️ ASSUMED
-const STAFF_API_BASE    = "http://localhost:8080/api/staff";     // ⚠️ ASSUMED — see manage-students.js
+const STUDENTS_API_BASE = "https://softschool-production.up.railway.app/api/students";  // ⚠️ ASSUMED
+const SETTINGS_API_BASE = "https://softschool-production.up.railway.app/api/settings";  // ⚠️ ASSUMED
+const STAFF_API_BASE    = "https://softschool-production.up.railway.app/api/staff";     // ⚠️ ASSUMED — see manage-students.js
 
 const ENDPOINTS = {
     customFees:    '/custom-fees',
@@ -6350,6 +6350,34 @@ function _escHtml(s) { return typeof escapeHtml === 'function' ? escapeHtml(s) :
 function _escAttr(s) { return typeof escapeForAttr === 'function' ? escapeForAttr(s) : String(s).replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/"/g,'&quot;'); }
 function _monthKey() { return typeof getCurrentMonthKey === 'function' ? getCurrentMonthKey() : new Date().toISOString().slice(0,7); }
 function _isBillable(s) { return typeof isStudentBillable === 'function' ? isStudentBillable(s) : true; }
+
+/**
+ * FEATURE — a month's fee only counts as "due" (i.e. can make a student a
+ * defaulter) once that month has actually arrived, and — for the CURRENT
+ * calendar month specifically — only from the 27th onward. Parents get
+ * until the 27th of the month to pay before that month's fee is treated
+ * as overdue. Past months are always due; future months never are.
+ */
+function _isMonthDue(monthKey) {
+    const curKey = _monthKey();
+    if (monthKey < curKey) return true;
+    if (monthKey > curKey) return false;
+    return new Date().getDate() >= 27;
+}
+
+/**
+ * FEATURE — returns the YYYY-MM the student was admitted in, or null if
+ * unknown. Used to stop the Defaulters list from inventing "pending"
+ * months that predate the student even joining the school (e.g. a school
+ * created this month showing 6 months of fake back-dated dues).
+ */
+function _admissionMonthKey(student) {
+    const raw = (student && (student.admissionDate || student.dateOfAdmission)) || '';
+    if (!raw) return null;
+    const d = new Date(raw);
+    if (isNaN(d.getTime())) return null;
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
 function _getStudents() { return _studentsCache; }
 function _getClasses() { return Array.isArray(_classConfigsCache) ? _classConfigsCache : []; }
 
@@ -6840,6 +6868,19 @@ async function loadFeeDefaulters() {
         return;
     }
 
+    // FEATURE — the current month only becomes "due" from the 27th onward.
+    // If that's the month being viewed and we haven't reached the 27th yet,
+    // nobody can be a defaulter for it, so skip the work entirely and show
+    // a clear message instead of the generic empty-state one.
+    const monthIsDue = _isMonthDue(monthKey);
+    if (!monthIsDue) {
+        tbody.innerHTML = `<tr><td colspan="7" class="empty-row"><i class="fas fa-check-circle" style="color:#16a34a;"></i>&nbsp; This month's fee becomes overdue on the 27th. No defaulters yet for this period.</td></tr>`;
+        if (countEl) countEl.textContent = '0 defaulters found';
+        _fdAllData = [];
+        updateFdOverviewStats([]);
+        return;
+    }
+
     const defaulters = [];
     for (const s of students) {
         if (!_isBillable(s)) continue;
@@ -6850,6 +6891,11 @@ async function loadFeeDefaulters() {
         // getGeneratedVouchers() list, never localStorage).
         const studentIdForVoucherCheck = s.regNo || s.id;
         if (typeof _hasAnyGeneratedVoucher === 'function' && !_hasAnyGeneratedVoucher(studentIdForVoucherCheck)) continue;
+        // FEATURE — a student can't owe fees for a month before they were
+        // even admitted (e.g. a newly created school/newly admitted student
+        // should never show months of back-dated dues that never existed).
+        const admissionKey = _admissionMonthKey(s);
+        if (admissionKey && monthKey < admissionKey) continue;
         let finance = null;
         try { if (typeof getFeeRowFinance === 'function') finance = await getFeeRowFinance(s, monthKey); } catch(e) {}
         if (!finance) {
@@ -6880,9 +6926,15 @@ async function loadFeeDefaulters() {
 
 function _computePendingMonths(student) {
     const now = new Date(), pending = [];
+    const admissionKey = _admissionMonthKey(student);
     for (let i = 0; i < 6; i++) {
         const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
         const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+        // FEATURE — never count a month before the student was admitted
+        // (fixes new schools/students showing months of fake back-dated
+        // pending fees), and never count the current month until the 27th.
+        if (admissionKey && key < admissionKey) continue;
+        if (!_isMonthDue(key)) continue;
         const lbl = d.toLocaleDateString('en-US', { month:'short', year:'numeric' });
         const payments = (student.feePayments || []).filter(p => p.monthKey === key);
         const paidAmount = payments.reduce((s, p) => s + (Number(p.amount) || 0), 0);

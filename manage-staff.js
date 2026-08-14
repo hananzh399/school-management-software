@@ -217,7 +217,7 @@ function showToast(message, type = 'error', title) {
 // by schoolId exactly like StudentController does for students (see
 // manage-students.js's identical apiRequest/toApiPayload/syncWithBackend).
 // ============================================================================
-const STAFF_API_BASE = 'http://localhost:8080/api/staff';
+const STAFF_API_BASE = 'https://softschool-production.up.railway.app/api/staff';
 
 /**
  * The logged-in school's real School ID (School.schoolId, e.g. "SS_77_1") —
@@ -1165,7 +1165,7 @@ function deductSecurityMonth(staffId) {
 // Fetched once on page load (and refreshed whenever syncStaffWithBackend()
 // runs) into this in-memory cache; getSettingsClasses() below just reads it.
 // ============================================================================
-const SETTINGS_API_BASE = 'http://localhost:8080/api/settings';
+const SETTINGS_API_BASE = 'https://softschool-production.up.railway.app/api/settings';
 let CLASS_CONFIGS_CACHE = [];
 
 /** Convert backend SchoolSettings.ClassFee shape into {name, sections:[]}. */
@@ -2633,10 +2633,14 @@ function showProfileView(staffId, category) {
     grid.innerHTML = '';
 
     // SECURITY: escape stored staff data before it reaches innerHTML.
-    const createItem = (label, val, fullWidth = false) => `
+    // isHtml=true is used ONLY for values we've already built ourselves as
+    // safe markup (class tags / agreement button), where any staff-entered
+    // text inside them has already been run through _esc at build time —
+    // never for raw staff-entered text.
+    const createItem = (label, val, fullWidth = false, isHtml = false) => `
         <div class="detail-item ${fullWidth ? 'full-width' : ''}">
             <span class="detail-label">${SSValidate.escapeHtml(label)}</span>
-            <span class="detail-value">${val ? SSValidate.escapeHtml(val) : '—'}</span>
+            <span class="detail-value">${val ? (isHtml ? val : SSValidate.escapeHtml(val)) : '—'}</span>
         </div>`;
 
     const guardianLabel = (staff.guardianType || 'Father') + ' Name';
@@ -2661,7 +2665,7 @@ function showProfileView(staffId, category) {
 
         grid.innerHTML += createItem('Qualification', staff.qualification);
         grid.innerHTML += createItem('Subjects', staff.subjects);
-        grid.innerHTML += createItem('Class Assignment', tags, true);
+        grid.innerHTML += createItem('Class Assignment', tags, true, true);
         grid.innerHTML += createItem('Class Incharge', staff.incharge || 'Not assigned', true);
         grid.innerHTML += createItem('Gender', staff.gender);
         grid.innerHTML += createItem(guardianLabel, staff.guardianName || staff.fatherName);
@@ -2670,7 +2674,7 @@ function showProfileView(staffId, category) {
         grid.innerHTML += createItem('CNIC', staff.cnic);
         grid.innerHTML += createItem('Phone Number', staff.phone);
         grid.innerHTML += createItem('Address', staff.address, true);
-        grid.innerHTML += createItem('Staff Agreement', agreementHTML, true);
+        grid.innerHTML += createItem('Staff Agreement', agreementHTML, true, true);
         grid.innerHTML += buildSecurityHTML(staff);
     } else {
         grid.innerHTML += createItem('Job Title', staff.job);
@@ -2682,7 +2686,7 @@ function showProfileView(staffId, category) {
         grid.innerHTML += createItem('CNIC', staff.cnic);
         grid.innerHTML += createItem('Phone Number', staff.phone);
         grid.innerHTML += createItem('Address', staff.address, true);
-        grid.innerHTML += createItem('Staff Agreement', agreementHTML, true);
+        grid.innerHTML += createItem('Staff Agreement', agreementHTML, true, true);
         grid.innerHTML += buildSecurityHTML(staff);
     }
 }

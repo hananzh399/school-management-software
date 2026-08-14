@@ -169,8 +169,21 @@ async function handleLogin(e) {
       showToast("Your school's plan has expired. Please contact support to renew.", "error");
     } else if (result.reason === "network") {
       showToast(result.message, "error");
+    } else if (result.reason === "locked") {
+      // Too many failed attempts in a row — backend has locked the
+      // account out for a cooldown. Disable the form client-side too so
+      // the person can't just keep mashing the button (server still
+      // enforces this either way).
+      showToast(result.message || "Too many failed login attempts. Please try again later.", "error");
+      startLoginLockoutCountdown(result.retryAfterSeconds || 420);
+    } else if (result.reason === "invalid_login") {
+      // For attempts 3+ this message already includes how many attempts
+      // have been made and how many are left before lockout (see
+      // SchoolAuthController#handleFailedLogin) — show it as-is instead
+      // of a generic message so that warning actually reaches the user.
+      showToast(result.message || "Invalid username or password.", "error");
     } else {
-      showToast("Invalid username or password.", "error");
+      showToast(result.message || "Invalid username or password.", "error");
     }
     pass.classList.add("error");
     phone.closest(".login-card").classList.add("shake");
@@ -191,6 +204,45 @@ async function handleLogin(e) {
   SoftSchoolAuth.startSession(result);
   showToast("Redirecting to your dashboard…", "success");
   setTimeout(() => { window.location.href = "main.html"; }, 900);
+}
+
+/* ── LOGIN LOCKOUT COUNTDOWN ──
+   Purely a client-side UX nicety: disables the login button and shows a
+   live "Try again in M:SS" countdown for the lockout period the backend
+   already enforces. The server is the real source of truth — this just
+   stops someone from repeatedly mashing "Sign In" during the cooldown. */
+function startLoginLockoutCountdown(seconds) {
+  const btn = document.getElementById("loginBtn");
+  const phone = document.getElementById("phone");
+  const pass = document.getElementById("password");
+  if (!btn) return;
+
+  let remaining = Math.max(1, Math.round(seconds));
+  const originalText = btn.dataset.origText || btn.textContent;
+  btn.dataset.origText = originalText;
+  btn.disabled = true;
+  if (phone) phone.disabled = true;
+  if (pass) pass.disabled = true;
+
+  function render() {
+    const mins = Math.floor(remaining / 60);
+    const secs = String(remaining % 60).padStart(2, "0");
+    btn.textContent = `Try again in ${mins}:${secs}`;
+  }
+  render();
+
+  const timer = setInterval(() => {
+    remaining -= 1;
+    if (remaining <= 0) {
+      clearInterval(timer);
+      btn.disabled = false;
+      if (phone) phone.disabled = false;
+      if (pass) pass.disabled = false;
+      btn.textContent = originalText;
+      return;
+    }
+    render();
+  }, 1000);
 }
 
 /* ════════════════════════════════════════
@@ -390,7 +442,7 @@ function closeVideoOutside(e) {
 const SoftSchoolAuth = (function () {
   // Point this at your deployed backend in production, e.g.
   // "https://api.yourdomain.com/api/school"
-  const API_BASE_URL = "http://localhost:8080/api/school";
+  const API_BASE_URL = "https://softschool-production.up.railway.app/api/school";
   const SESSION_KEY = "softschool_session";
   const REMEMBER_KEY = "softschool_remember";
   const API_TOKEN_KEY = "softschool_api_token";
@@ -426,7 +478,17 @@ const SoftSchoolAuth = (function () {
       else if (res.status === 403 && message === "blocked") reason = "blocked";
       else if (res.status === 403 && message === "expired") reason = "expired";
       else if (res.status === 409) reason = "conflict";
-      return { ok: false, reason: reason, message: message };
+      // 429 = too many failed login attempts in a row — the account is
+      // locked out for a cooldown period (see SchoolAuthController).
+      else if (res.status === 429) reason = "locked";
+      return {
+        ok: false,
+        reason: reason,
+        message: message,
+        attemptCount: data && data.attemptCount,
+        attemptsLeft: data && data.attemptsLeft,
+        retryAfterSeconds: data && data.retryAfterSeconds,
+      };
     }
 
     return { ok: true, school: data };

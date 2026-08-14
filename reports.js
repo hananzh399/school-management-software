@@ -233,7 +233,7 @@ function _getSchoolId() {
     return '';
 }
 
-const REPORTS_BACKEND_ORIGIN = 'http://localhost:8080';
+const REPORTS_BACKEND_ORIGIN = 'https://softschool-production.up.railway.app';
 
 function _reportsArray(data, keys = []) {
     if (Array.isArray(data)) return data;
@@ -331,20 +331,78 @@ function _reportsEvent(item, monthKey, fallbackLabel) {
 
 function _reportsAttendanceMap(data) {
     const map = {};
+
+    // Ensures every date key has the {presentStudents, totalStudents,
+    // presentStaff, totalStaff, hasData} shape getAttendanceForDate() and
+    // the trend chart expect, creating it on first touch.
+    function bucket(dateKey) {
+        if (!map[dateKey]) {
+            map[dateKey] = {
+                presentStudents: 0, totalStudents: 0,
+                presentStaff: 0, totalStaff: 0,
+                hasData: false
+            };
+        }
+        return map[dateKey];
+    }
+
     if (Array.isArray(data)) {
+        // GET /api/attendance returns the FLAT list of individual
+        // member-level rows exactly as POST /api/attendance/save wrote
+        // them (one row per student/staff per day — memberType +
+        // status), NOT a pre-aggregated per-date summary. Previously this
+        // just kept the *last* raw row for each date (overwriting every
+        // other member marked that day), so presentStudents/totalStudents/
+        // presentStaff/totalStaff were always undefined → 0 and the
+        // Reports & Analytics page showed no attendance even though the
+        // Dashboard and Attendance pages (which read differently-shaped,
+        // already-aggregated endpoints) showed it fine. Aggregate the raw
+        // rows into real per-date present/total counts instead.
         data.forEach(record => {
-            const date = record.date || record.dateKey || record.attendanceDate;
-            if (date) map[String(date).slice(0, 10)] = record;
+            if (!record || typeof record !== 'object') return;
+            const rawDate = record.date || record.dateKey || record.attendanceDate;
+            if (!rawDate) return;
+            const dateKey = String(rawDate).slice(0, 10);
+            const entry = bucket(dateKey);
+
+            const memberType = String(record.memberType || record.type || '').toUpperCase();
+            const status = String(record.status || '').toLowerCase();
+            const isPresent = status === 'present' || status === 'late';
+            // "leave" and "absent" still count the person as marked for
+            // the day (part of the total), just not present.
+            const isMarked = status === 'present' || status === 'absent' ||
+                status === 'leave' || status === 'late';
+            if (!isMarked) return;
+
+            if (memberType === 'STAFF') {
+                entry.totalStaff++;
+                if (isPresent) entry.presentStaff++;
+            } else {
+                // Default to STUDENT so unlabeled rows still count —
+                // every row saved so far has been one or the other.
+                entry.totalStudents++;
+                if (isPresent) entry.presentStudents++;
+            }
+            entry.hasData = true;
         });
         return map;
     }
+
     if (data && typeof data === 'object') {
         const source = data.attendance && typeof data.attendance === 'object'
             ? data.attendance
             : data;
         Object.entries(source).forEach(([key, value]) => {
             if (value && typeof value === 'object' && /^\d{4}-\d{2}-\d{2}/.test(key)) {
-                map[key.slice(0, 10)] = value;
+                const dateKey = key.slice(0, 10);
+                const entry = bucket(dateKey);
+                entry.presentStudents = _reportsNumber(value.presentStudents ?? value.studentsPresent);
+                entry.totalStudents = _reportsNumber(value.totalStudents ?? value.studentsTotal);
+                entry.presentStaff = _reportsNumber(value.presentStaff ?? value.staffPresent ?? value.presentTeachers);
+                entry.totalStaff = _reportsNumber(value.totalStaff ?? value.staffTotal);
+                entry.hasData = value.hasData !== undefined
+                    ? Boolean(value.hasData)
+                    : (entry.totalStudents > 0 || entry.totalStaff > 0);
             }
         });
     }
@@ -361,6 +419,7 @@ async function loadReportsDataFromBackend() {
         staffFinesData,
         expensesData,
         salaryRecordsData,
+        staffAdvancesData,
         attendanceData,
         statusResponses,
         fineResponses
@@ -372,6 +431,7 @@ async function loadReportsDataFromBackend() {
         _reportsGet('/api/finance/staff-fines', []),
         _reportsGet('/api/finance/expenses', []),
         _reportsGet('/api/finance/salary/records', []),
+        _reportsGet('/api/finance/staff-advances', []),
         _reportsGet('/api/attendance', []),
         Promise.all(months.map(month =>
             _reportsGet(`/api/finance/status-all/${encodeURIComponent(month)}`, [])
@@ -439,6 +499,132 @@ async function loadReportsDataFromBackend() {
         salaryRecords: _reportsArray(salaryRecordsData),
         feeStatus: statusRows
     };
+
+    // FEATURE — Report & Analytics' "Total Revenue" / "Total Expense" stat
+    // cards must show the exact same figures as the Dashboard's Total
+    // Revenue and Total Net Expenses boxes, not an independently-rounded
+    // approximation. This mirrors main.js's calculateFinancials()/
+    // _dashboardSnapshot() formula (and its 27th-of-the-month "fee month"
+    // rollover) exactly, using the same raw records and the same
+    // per-student fine-details endpoint, so the two pages can never drift
+    // apart. See _computeExactDashboardTotals() below.
+    const staffForTotals = _reportsStaffArray(staffData);
+    const feeMonthKey = _rdFeeMonthKey();
+    const prevFeeMonthKey = _rdFeeMonthKey(new Date(
+        Number(feeMonthKey.slice(0, 4)), Number(feeMonthKey.slice(5, 7)) - 2, 1
+    ));
+    const rawFinanceData = {
+        customFeesRaw: customFeesData,
+        staffBonusRaw: staffBonusData,
+        staffFinesRaw: staffFinesData,
+        expensesRaw: expensesData,
+        salaryRecordsRaw: salaryRecordsData,
+        staffAdvancesRaw: staffAdvancesData
+    };
+    const [current, previous] = await Promise.all([
+        _computeExactDashboardTotals(feeMonthKey, students, staffForTotals, rawFinanceData),
+        _computeExactDashboardTotals(prevFeeMonthKey, students, staffForTotals, rawFinanceData)
+    ]);
+    _reportsDataCache.exactTotals = { current, previous };
+    // Authoritative per-student fee state for the CURRENT fee month — the
+    // same netPayable/paidAmount rows Manage Finance and the Dashboard use
+    // to decide whether a student has paid. Used by the "Top Pending Fees"
+    // list and "Fee Collection Status" chart below instead of a local
+    // recompute, so a student marked Paid in Finance can never still show
+    // up here as pending.
+    _reportsDataCache.currentFeeStatusRows = current.statusRows;
+}
+
+/* ============================================
+   EXACT DASHBOARD TOTALS
+   Ported line-for-line from main.js's dashboard calculation so the
+   Reports "Total Revenue" / "Total Expense" cards can never disagree
+   with the Dashboard's "Total Revenue" / "Total Net Expenses" boxes.
+   ============================================ */
+
+// Mirrors _dashboardFeeMonthKey(): the "current" fee month rolls over to
+// next calendar month once the 27th is reached (parents get until the
+// 27th to pay before that month is treated as due).
+function _rdFeeMonthKey(date = new Date()) {
+    const d = new Date(date);
+    if (d.getDate() >= 27) d.setMonth(d.getMonth() + 1);
+    return _reportsMonthKey(d);
+}
+
+function _rdPaidFine(fine) {
+    const status = String(fine && (fine.paymentStatus ?? fine.status) || '').toLowerCase();
+    return status === 'paid' || status === 'settled';
+}
+
+async function _rdFineRecords(students, monthKey) {
+    const records = [];
+    await Promise.all(students.map(async student => {
+        const id = student.regNo || student.id;
+        if (!id) return;
+        const data = await _reportsGet(
+            `/api/finance/fine-details/${encodeURIComponent(id)}/${encodeURIComponent(monthKey)}`, []
+        );
+        if (Array.isArray(data)) records.push(...data);
+    }));
+    return records;
+}
+
+function _rdCustomFeesCollected(customFees, monthKey) {
+    return _reportsArray(customFees).reduce((total, fee) => {
+        if (fee.monthKey && fee.monthKey !== monthKey) return total;
+        const records = Array.isArray(fee.records) ? fee.records : [];
+        return total + records.filter(record => record.paid).length * _reportsNumber(fee.amount);
+    }, 0);
+}
+
+function _rdMonthFilteredAmount(items, monthKey) {
+    return _reportsArray(items).reduce((total, item) => {
+        if (item.monthKey && item.monthKey !== monthKey) return total;
+        return total + _reportsNumber(item.amount ?? item.netPaid ?? item.value);
+    }, 0);
+}
+
+function _rdSalaryPaid(salaryRecords, staffAdvances, monthKey) {
+    const paidFromPayroll = _reportsArray(salaryRecords)
+        .filter(row => !row.monthKey || row.monthKey === monthKey)
+        .reduce((total, row) => total + _reportsNumber(row.netPaid ?? row.baseSalary ?? row.amount), 0);
+    const advance = _reportsArray(staffAdvances)
+        .filter(item => !item.monthKey || item.monthKey === monthKey)
+        .filter(item => String(item.paymentStatus || '').toLowerCase() !== 'settled')
+        .reduce((total, item) => total + _reportsNumber(item.amount), 0);
+    return paidFromPayroll + advance;
+}
+
+async function _computeExactDashboardTotals(monthKey, activeStudents, staff, raw) {
+    const statusRows = await _reportsGet(`/api/finance/status-all/${encodeURIComponent(monthKey)}`, []);
+    const statusByStudent = new Map(_reportsArray(statusRows)
+        .filter(row => row && row.regNo)
+        .map(row => [String(row.regNo), row]));
+    const collected = activeStudents.reduce((total, student) => {
+        const row = statusByStudent.get(String(student.regNo || student.id || ''));
+        return total + _reportsNumber(row && row.paidAmount);
+    }, 0);
+
+    const fineRecords = await _rdFineRecords(activeStudents, monthKey);
+    const studentFinesTotal = fineRecords.filter(_rdPaidFine)
+        .reduce((total, fine) => total + _reportsNumber(fine.amount), 0);
+
+    const staffFineTotal = _reportsArray(raw.staffFinesRaw)
+        .filter(item => !item.monthKey || item.monthKey === monthKey)
+        .reduce((total, item) => total + _reportsNumber(item.amount), 0);
+    const teacherAbsenceTotal = staff.reduce((total, member) => total + _reportsNumber(member.fines), 0);
+    const admissionFeesTotal = activeStudents.reduce((total, student) => total + _reportsNumber(student.admissionFee), 0);
+    const customFeesTotal = _rdCustomFeesCollected(raw.customFeesRaw, monthKey);
+
+    const totalRevenue = collected + studentFinesTotal + staffFineTotal
+        + teacherAbsenceTotal + admissionFeesTotal + customFeesTotal;
+
+    const paidSalaries = _rdSalaryPaid(raw.salaryRecordsRaw, raw.staffAdvancesRaw, monthKey);
+    const staffBonusTotal = _rdMonthFilteredAmount(raw.staffBonusRaw, monthKey);
+    const otherExpensesTotal = _rdMonthFilteredAmount(raw.expensesRaw, monthKey);
+    const totalNetExpenses = paidSalaries + staffBonusTotal + otherExpensesTotal;
+
+    return { totalRevenue, totalNetExpenses, statusRows: _reportsArray(statusRows) };
 }
 
 function getAllFeePayments() {
@@ -702,14 +888,21 @@ function renderReports() {
         sumInRange(salaryEvents, b.start, b.end)
     );
 
-    // This month / last month totals come from the matching index in the
-    // same series — no separate range sum needed.
-    const periodRevenue = revenueSeries[currentMonthIdx];
-    const periodExpense = expenseSeries[currentMonthIdx];
+    // ---------- This month / last month totals — EXACT dashboard figures ----------
+    // Pulled from _computeExactDashboardTotals() (computed once in
+    // loadReportsDataFromBackend), which mirrors the Dashboard's Total
+    // Revenue / Total Net Expenses formula exactly. The 12-month
+    // revenueSeries/expenseSeries above stay in use for the Revenue vs
+    // Expenses and Net Cash Flow trend charts (they need a full year, and
+    // small definitional differences there don't affect a single card),
+    // but the stat cards themselves now always match the Dashboard.
+    const exactTotals = _reportsDataCache.exactTotals || { current: { totalRevenue: 0, totalNetExpenses: 0 }, previous: { totalRevenue: 0, totalNetExpenses: 0 } };
+    const periodRevenue = exactTotals.current.totalRevenue;
+    const periodExpense = exactTotals.current.totalNetExpenses;
     const netFlow = periodRevenue - periodExpense;
 
-    const prevRevenue = currentMonthIdx > 0 ? revenueSeries[currentMonthIdx - 1] : 0;
-    const prevExpense = currentMonthIdx > 0 ? expenseSeries[currentMonthIdx - 1] : 0;
+    const prevRevenue = exactTotals.previous.totalRevenue;
+    const prevExpense = exactTotals.previous.totalNetExpenses;
     const prevNetFlow = prevRevenue - prevExpense;
 
     // Totals across the full 12-month window, used to decide whether the
@@ -772,18 +965,28 @@ function renderReports() {
     const totalBonusAll = staffBonus.reduce((s, b) => s + b.amount, 0);
     const totalOtherAll = otherExpenses.reduce((s, e) => s + e.amount, 0);
 
-    // ---------- Fee collection status (active students from the Student API) ----------
-    // Labeled "All-Time" in the UI, so it needs to sum each student's full
-    // payment history — not just one month's status snapshot. It now uses
-    // the exact same per-student calculation as "Top Pending Fees" below,
-    // so the two cards can never disagree with each other.
+    // ---------- Fee collection status (current billing month, matches Manage Finance) ----------
+    // FEATURE — this used to sum each student's raw standardFee+transportFee
+    // (ignoring discounts) against their lifetime feePayments total, so a
+    // student who'd already paid in full — especially with a discount
+    // applied — could still show up as "pending" forever. It now reads the
+    // same netPayable/paidAmount fee-status rows Manage Finance itself uses
+    // to mark a student Paid, for the current fee month, so this chart and
+    // "Top Pending Fees" below can never disagree with what's actually been
+    // collected.
     const students = Array.isArray(_reportsDataCache.students)
         ? _reportsDataCache.students
         : [];
+    const currentStatusRows = _reportsDataCache.currentFeeStatusRows || [];
+    const currentStatusByStudent = new Map(currentStatusRows
+        .filter(row => row && row.regNo)
+        .map(row => [String(row.regNo), row]));
     let expected = 0, collected = 0;
     students.forEach(s => {
-        expected += (Number(s.standardFee) || 0) + (Number(s.transportFee) || 0);
-        collected += (s.feePayments || []).reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
+        const row = currentStatusByStudent.get(String(s.regNo || s.id || ''));
+        if (!row) return; // not billed for the current month yet
+        expected += _reportsNumber(row.netPayable);
+        collected += _reportsNumber(row.paidAmount);
     });
     const pending = Math.max(0, expected - collected);
 
@@ -1195,16 +1398,28 @@ function renderPendingFees(students) {
     const list = document.getElementById('pending-fees-list');
     if (!list) return;
 
+    // FEATURE — was comparing lifetime feePayments against a raw,
+    // discount-unaware standardFee+transportFee, so a fully-paid student
+    // (especially one with any discount applied) could still show up here
+    // as pending even right after being marked Paid in Manage Finance.
+    // Now reads the same netPayable/paidAmount fee-status rows Manage
+    // Finance itself uses for the current fee month.
+    const statusRows = _reportsDataCache.currentFeeStatusRows || [];
+    const statusByStudent = new Map(statusRows
+        .filter(row => row && row.regNo)
+        .map(row => [String(row.regNo), row]));
+
     const rows = students.map(s => {
-        const expected = (Number(s.standardFee) || 0) + (Number(s.transportFee) || 0);
-        const collected = (s.feePayments || []).reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
-        const pendingAmt = Math.max(0, expected - collected);
+        const row = statusByStudent.get(String(s.regNo || s.id || ''));
+        if (!row) return null; // not billed for the current month — not pending
+        const pendingAmt = Math.max(0, _reportsNumber(row.netPayable) - _reportsNumber(row.paidAmount));
+        if (pendingAmt <= 0) return null;
         return {
             name: s.fullName || 'Unnamed Student',
             cls: `${s.studentClass || '—'}${s.section ? ' - ' + s.section : ''}`,
             pending: pendingAmt
         };
-    }).filter(r => r.pending > 0).sort((a, b) => b.pending - a.pending).slice(0, 5);
+    }).filter(Boolean).sort((a, b) => b.pending - a.pending).slice(0, 5);
 
     if (rows.length === 0) {
         list.innerHTML = '<li class="pending-empty">No pending fees — everything is collected.</li>';
@@ -1263,10 +1478,18 @@ function renderQuickLinks(students) {
     }).length;
     setText('ql-students-dropped-count', droppedThisMonth);
 
+    // FEATURE — was using the same stale calculation as the old "Top
+    // Pending Fees" bug (raw fee minus lifetime payments, no discounts),
+    // so this card kept counting already-paid students. Now reads the
+    // same netPayable/paidAmount fee-status rows Manage Finance uses.
+    const statusRows = _reportsDataCache.currentFeeStatusRows || [];
+    const statusByStudent = new Map(statusRows
+        .filter(row => row && row.regNo)
+        .map(row => [String(row.regNo), row]));
     const pendingCount = students.filter(s => {
-        const expected = (Number(s.standardFee) || 0) + (Number(s.transportFee) || 0);
-        const collected = (s.feePayments || []).reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
-        return expected - collected > 0;
+        const row = statusByStudent.get(String(s.regNo || s.id || ''));
+        if (!row) return false; // not billed for the current month yet
+        return _reportsNumber(row.netPayable) - _reportsNumber(row.paidAmount) > 0;
     }).length;
     setText('ql-pending-count', pendingCount);
 }

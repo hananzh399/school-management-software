@@ -194,8 +194,8 @@ function compressLogoFile(file, maxSizeKB = 40, maxDimension = 512) {
    Schools now live in the Spring Boot / MySQL backend. Plans stay client-side
    (see PLAN STORE below) — only school records themselves are server-backed.
    ═══════════════════════════════════════════════════════════════════════════ */
-const API_BASE_URL = "http://localhost:8080/api/admin";
-const ADMIN_AUTH_LOGIN_URL = "http://localhost:8080/api/admin-auth/login";
+const API_BASE_URL = "https://softschool-production.up.railway.app/api/admin";
+const ADMIN_AUTH_LOGIN_URL = "https://softschool-production.up.railway.app/api/admin-auth/login";
 
 // Local cache of the last list fetched from the server, so search/stats/expiry
 // checks don't need to hit the network on every keystroke.

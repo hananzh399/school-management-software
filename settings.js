@@ -70,9 +70,9 @@ const CLASS_COLORS = ['#1a9e6e','#3b82f6','#8b5cf6','#f59e0b','#ef4444','#06b6d4
 // ═══════════════════════════════════════════════
 // Same-origin relative path — works when this page is served by the same
 // Spring Boot app / behind the same reverse proxy as the API. Point this
-// at an absolute URL (e.g. 'http://localhost:8080/api/settings') if the
+// at an absolute URL (e.g. 'https://softschool-production.up.railway.app/api/settings') if the
 // frontend and backend are hosted separately.
-const SETTINGS_API_BASE = 'http://localhost:8080/api/settings';
+const SETTINGS_API_BASE = 'https://softschool-production.up.railway.app/api/settings';
 
 // Last-known settings row fetched from the backend (the single source of truth).
 let _serverSettings = null;

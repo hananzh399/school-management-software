@@ -75,7 +75,7 @@ let API_STUDENTS = [];
  * Keep the backend URL configurable. When this page is served by the same
  * Spring Boot application on port 8080, relative URLs avoid CORS and
  * preflight surprises. A separate frontend can set
- * `window.SOFTSCHOOL_API_ORIGIN = 'http://localhost:8080'` before this file
+ * `window.SOFTSCHOOL_API_ORIGIN = 'https://softschool-production.up.railway.app'` before this file
  * loads.
  */
 const configuredApiOrigin =
@@ -87,7 +87,7 @@ const BACKEND_ORIGIN =
     configuredApiOrigin ||
     (typeof window !== 'undefined' && window.location.port === '8080'
         ? ''
-        : 'http://localhost:8080');
+        : 'https://softschool-production.up.railway.app');
 
 const SETTINGS_API_BASE = `${BACKEND_ORIGIN}/api/settings`;
 const STAFF_API_BASE    = `${BACKEND_ORIGIN}/api/staff`;
@@ -4059,8 +4059,15 @@ if (certUploadInput) {
             showToast("Error", "Could not find that student to delete.", "danger");
             return;
         }
-        const regNo = db[index].regNo;
-        db.splice(index, 1);
+        const student = db[index];
+        const regNo   = student.regNo;
+
+        // Move into the Archive Center's "dropped" list instead of wiping the
+        // record outright — mirrors the graduation path (status + a *Date
+        // stamp, record stays in db). Without setting droppedDate here, the
+        // Archive Center had nothing to show but "-" in the Date column.
+        student.status      = 'dropped';
+        student.droppedDate = new Date().toISOString().slice(0, 10);
         saveDatabase(db);
 
         showToast("Success", "Student removed from the database", "success");
@@ -4068,6 +4075,7 @@ if (certUploadInput) {
         updateDashboardStats();
         renderStudentTable();
         if (typeof renderViewOnlyTable === 'function') renderViewOnlyTable();
+        if (typeof renderArchiveDroppedTable === 'function') renderArchiveDroppedTable();
 
         // NOTE: StudentController's DELETE endpoint is a SOFT delete — it sets
         // status = "dropped" rather than removing the MySQL row. That's fine for
@@ -6266,7 +6274,7 @@ window.toggleVoOrphanFilter = function() {
         btn.innerHTML = '<i class="fas fa-check"></i> Showing Orphans';
     } else {
         btn.classList.remove('active-filter');
-        btn.setAttribute('aria-pressed', 'false');
+        ftn.setAttribute('aria-pressed', 'false');
         btn.innerHTML = '<i class="fas fa-child"></i> Show Orphans Only';
     }
     renderViewOnlyTable();

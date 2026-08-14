@@ -269,7 +269,7 @@ function _getSchoolId() {
     return '';
 }
 
-const DASHBOARD_BACKEND_ORIGIN = 'http://localhost:8080';
+const DASHBOARD_BACKEND_ORIGIN = 'https://softschool-production.up.railway.app';
 
 function _dashboardMonthKey(date = new Date()) {
     return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
@@ -366,22 +366,39 @@ async function _dashboardFineRecords(students, monthKey) {
     return records;
 }
 
-function _dashboardCustomFeesCollected(customFees, monthKey) {
+/**
+ * FIX — "Past Month Profit changes after adding a record this month":
+ * A handful of records/fields are untagged or otherwise not truly scoped to
+ * the month they're being read for (legacy rows saved before `monthKey`
+ * existed, or fields that only ever reflect "right now"). The old filters
+ * below (`!item.monthKey || item.monthKey === monthKey`) treated an
+ * untagged item as matching *every* month it was asked about — so the same
+ * record got counted into both the current AND the previous month's totals
+ * at once, and "last month" drifted every time something new was added
+ * this month. An untagged/legacy item should only ever count toward the
+ * *current* month (never retroactively toward a prior one).
+ */
+function _dashboardBelongsToMonth(itemMonthKey, targetMonthKey, currentMonthKey) {
+    if (itemMonthKey) return itemMonthKey === targetMonthKey;
+    return targetMonthKey === currentMonthKey;
+}
+
+function _dashboardCustomFeesCollected(customFees, monthKey, currentMonthKey) {
     return _dashboardArray(customFees).reduce((total, fee) => {
-        if (fee.monthKey && fee.monthKey !== monthKey) return total;
+        if (!_dashboardBelongsToMonth(fee.monthKey, monthKey, currentMonthKey)) return total;
         const records = Array.isArray(fee.records) ? fee.records : [];
         return total + records.filter(record => record.paid).length * _dashboardNumber(fee.amount);
     }, 0);
 }
 
-function _dashboardStaffAmount(items, monthKey) {
+function _dashboardStaffAmount(items, monthKey, currentMonthKey) {
     return _dashboardArray(items).reduce((total, item) => {
-        if (item.monthKey && item.monthKey !== monthKey) return total;
+        if (!_dashboardBelongsToMonth(item.monthKey, monthKey, currentMonthKey)) return total;
         return total + _dashboardNumber(item.amount || item.netPaid || item.value);
     }, 0);
 }
 
-function _dashboardSalaryAmount(salaryRecords, staff, monthKey) {
+function _dashboardSalaryAmount(salaryRecords, staff, monthKey, currentMonthKey) {
     // Payable = the roster's full monthly salary obligation, regardless of
     // what's actually been posted/paid yet. Mirrors Staff.getSalary(), the
     // same field FinanceController#paySalary reads as `baseSalary`.
@@ -395,7 +412,7 @@ function _dashboardSalaryAmount(salaryRecords, staff, monthKey) {
     // just as "paid" as a posted payroll run — see the note in
     // _dashboardAdvanceTotal.
     const paidRows = _dashboardArray(salaryRecords)
-        .filter(row => !row.monthKey || row.monthKey === monthKey);
+        .filter(row => _dashboardBelongsToMonth(row.monthKey, monthKey, currentMonthKey));
     const paidFromPayroll = paidRows.reduce((total, row) =>
         total + _dashboardNumber(row.netPaid ?? row.baseSalary ?? row.amount), 0);
 
@@ -416,9 +433,9 @@ function _dashboardSalaryAmount(salaryRecords, staff, monthKey) {
  * recomputes Pending Salaries and Total Net Expenses off that updated
  * paid figure.
  */
-function _dashboardAdvanceTotal(staffAdvances, monthKey) {
+function _dashboardAdvanceTotal(staffAdvances, monthKey, currentMonthKey) {
     return _dashboardArray(staffAdvances)
-        .filter(item => !item.monthKey || item.monthKey === monthKey)
+        .filter(item => _dashboardBelongsToMonth(item.monthKey, monthKey, currentMonthKey))
         .filter(item => String(item.paymentStatus || '').toLowerCase() !== 'settled')
         .reduce((total, item) => total + _dashboardNumber(item.amount), 0);
 }
@@ -429,15 +446,22 @@ function _dashboardAdvanceTotal(staffAdvances, monthKey) {
  * bulk list (field `amount`, no "absence" reason ever appears there), while
  * absence fines are written straight onto each staff member's own `fines`
  * field by attendance.js and never appear in the fines list at all.
+ *
+ * `member.fines` is a live, current-state field — it's never stamped with a
+ * monthKey and is only ever meaningful for "right now" (see manage-finance.js,
+ * which itself only reads it when `isCurrentMonth` is true and otherwise
+ * treats it as unavailable). So it must never be attributed to a past
+ * month's snapshot — otherwise a fine issued today shows up as if it also
+ * happened last month.
  */
-function _dashboardStaffFineTotals(staffFines, staff, monthKey) {
+function _dashboardStaffFineTotals(staffFines, staff, monthKey, currentMonthKey) {
     const staffTotal = _dashboardArray(staffFines)
-        .filter(item => !item.monthKey || item.monthKey === monthKey)
+        .filter(item => _dashboardBelongsToMonth(item.monthKey, monthKey, currentMonthKey))
         .reduce((total, item) => total + _dashboardNumber(item.amount), 0);
 
-    const teacherAbsence = staff.reduce(
-        (total, member) => total + _dashboardNumber(member.fines), 0
-    );
+    const teacherAbsence = monthKey === currentMonthKey
+        ? staff.reduce((total, member) => total + _dashboardNumber(member.fines), 0)
+        : 0;
 
     return { staffTotal, teacherAbsence };
 }
@@ -463,9 +487,22 @@ async function _dashboardAttendance() {
     return { presentStudents, presentStaff, hasData };
 }
 
+/**
+ * A student's admissionDate tells us which real-world month their admission
+ * fee actually belongs to. Falls back to null (unknown) when the date is
+ * missing/unparseable, in which case the fee is only ever attributed to the
+ * current month (see _dashboardSnapshot below) — never retroactively to a
+ * past month.
+ */
+function _dashboardAdmissionMonthKey(student) {
+    if (!student || !student.admissionDate) return null;
+    const parsed = new Date(student.admissionDate);
+    return Number.isNaN(parsed.getTime()) ? null : _dashboardFeeMonthKey(parsed);
+}
+
 async function _dashboardSnapshot(
     monthKey, students, staff, statusRows, customFees, staffBonus, staffFines,
-    expenses, salaryRecords, staffAdvances
+    expenses, salaryRecords, staffAdvances, currentMonthKey
 ) {
     const activeStudents = students.filter(_dashboardIsActiveStudent);
     const statusByStudent = new Map(_dashboardArray(statusRows)
@@ -502,17 +539,31 @@ async function _dashboardSnapshot(
         .filter(fine => !/late|overdue|delay/i.test(String(fine.reason || '')))
         .reduce((total, fine) => total + _dashboardNumber(fine.amount), 0);
 
-    const { staffTotal, teacherAbsence } = _dashboardStaffFineTotals(staffFines, staff, monthKey);
-    const admissionFees = activeStudents.reduce(
-        (total, student) => total + _dashboardNumber(student.admissionFee), 0
+    const { staffTotal, teacherAbsence } = _dashboardStaffFineTotals(
+        staffFines, staff, monthKey, currentMonthKey
     );
+    // FIX — admission fees now scoped to the month the student was actually
+    // admitted in (see _dashboardAdmissionMonthKey), instead of every active
+    // student's admissionFee being summed into every month unconditionally.
+    // That old behaviour meant "last month" always showed the exact same
+    // admission-fee total as "this month", for a figure that never actually
+    // happened last month.
+    const admissionFees = activeStudents.reduce((total, student) => {
+        const admissionMonth = _dashboardAdmissionMonthKey(student);
+        const belongsHere = admissionMonth
+            ? admissionMonth === monthKey
+            : monthKey === currentMonthKey;
+        return belongsHere ? total + _dashboardNumber(student.admissionFee) : total;
+    }, 0);
 
     // Paid Salaries = posted payroll + any still-outstanding advances (cash
     // already handed to staff counts as paid even before it's formally
     // settled through a payroll run). Pending then reflects what's left of
     // the obligation after that combined figure.
-    const { payable, paidFromPayroll } = _dashboardSalaryAmount(salaryRecords, staff, monthKey);
-    const advance = _dashboardAdvanceTotal(staffAdvances, monthKey);
+    const { payable, paidFromPayroll } = _dashboardSalaryAmount(
+        salaryRecords, staff, monthKey, currentMonthKey
+    );
+    const advance = _dashboardAdvanceTotal(staffAdvances, monthKey, currentMonthKey);
     const paid = paidFromPayroll + advance;
     const pending = Math.max(0, payable - paid);
 
@@ -521,10 +572,10 @@ async function _dashboardSnapshot(
         fees: { expected, collected, pending: Math.max(0, expected - collected) },
         fines: { studentLate, studentOther, staffTotal, teacherAbsence },
         admissionFees,
-        customFeesCollected: _dashboardCustomFeesCollected(customFees, monthKey),
+        customFeesCollected: _dashboardCustomFeesCollected(customFees, monthKey, currentMonthKey),
         salaries: { payable, paid, pending, advance },
-        staffBonusTotal: _dashboardStaffAmount(staffBonus, monthKey),
-        otherExpensesTotal: _dashboardStaffAmount(expenses, monthKey)
+        staffBonusTotal: _dashboardStaffAmount(staffBonus, monthKey, currentMonthKey),
+        otherExpensesTotal: _dashboardStaffAmount(expenses, monthKey, currentMonthKey)
     };
 }
 
@@ -561,11 +612,11 @@ async function calculateFinancials() {
     const staff = _dashboardStaffArray(staffData);
     const current = await _dashboardSnapshot(
         currentMonth, students, staff, currentStatus, customFees,
-        staffBonus, staffFines, expenses, salaryRecords, staffAdvances
+        staffBonus, staffFines, expenses, salaryRecords, staffAdvances, currentMonth
     );
     const previous = await _dashboardSnapshot(
         previousMonth, students, staff, previousStatus, customFees,
-        staffBonus, staffFines, expenses, salaryRecords, staffAdvances
+        staffBonus, staffFines, expenses, salaryRecords, staffAdvances, currentMonth
     );
 
     const revenue = snapshot => snapshot.fees.collected
@@ -579,18 +630,22 @@ async function calculateFinancials() {
         + snapshot.staffBonusTotal
         + snapshot.otherExpensesTotal;
 
-    // FEATURE — "Past Month Profit should read 0 for a brand-new school":
-    // admissionFees (above) isn't actually scoped to the month being
-    // snapshotted — it's just each active student's current admissionFee
-    // field, summed regardless of monthKey — so it can never be used as a
-    // signal that a month had real activity. Every other figure here IS
-    // properly scoped to the snapshot's month (fee-master rows, salary
-    // records, fines, staff bonus/expenses, custom fees), so a school with
-    // no billing history yet — i.e. one that only started using the
-    // software this month — will have all of them at 0 for "previous
-    // month". Once "Generate Monthly Fees", a salary payment, a fine, etc.
-    // has actually happened in a given month, that month's snapshot will
-    // trip this and lastMonthProfit reflects the real number from then on.
+    // FEATURE — "Past Month Profit should read 0 for a brand-new school,
+    // and must stay untouched by anything added to the CURRENT month":
+    // every figure that feeds this check is now properly scoped to the
+    // snapshot's own month (fee-master rows, salary records, fines, staff
+    // bonus/expenses, custom fees, and — as of this fix — admission fees
+    // and staff-absence fines too, see _dashboardAdmissionMonthKey and
+    // _dashboardStaffFineTotals). `salaries.payable` is deliberately left
+    // out here: it's just the staff roster's current salary total, not
+    // scoped to any month at all, so it can never be used as a signal that
+    // a *specific* month had real activity — a school with staff on the
+    // books but zero transactions would otherwise always look "active".
+    // A school with no billing history yet will have every one of these at
+    // 0 for "previous month". Once a fee voucher, salary payment, fine, an
+    // admission, etc. has actually happened in a given month, that month's
+    // snapshot trips this and lastMonthProfit reflects the real number —
+    // and only for the month it truly happened in.
     const hasRealActivity = snapshot =>
         snapshot.fees.expected > 0 ||
         snapshot.fees.collected > 0 ||
@@ -599,7 +654,7 @@ async function calculateFinancials() {
         snapshot.fines.staffTotal > 0 ||
         snapshot.fines.teacherAbsence > 0 ||
         snapshot.customFeesCollected > 0 ||
-        snapshot.salaries.payable > 0 ||
+        snapshot.admissionFees > 0 ||
         snapshot.salaries.paid > 0 ||
         snapshot.salaries.advance > 0 ||
         snapshot.staffBonusTotal > 0 ||
