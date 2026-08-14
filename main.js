@@ -404,17 +404,33 @@ function _dashboardSalaryAmount(salaryRecords, staff, monthKey, currentMonthKey)
     // same field FinanceController#paySalary reads as `baseSalary`.
     const payable = staff.reduce((total, member) => total + _dashboardNumber(member.salary), 0);
 
-    // Paid (payroll-only) = whatever's actually posted for this month
-    // (Finance TYPE_SALARY rows). netPaid is the true amount disbursed
-    // (base + bonus − fines − advance settled − security); fall back for
-    // older rows. Advances get folded in on top of this by the caller
-    // (_dashboardSnapshot), since money already handed out as an advance is
-    // just as "paid" as a posted payroll run — see the note in
-    // _dashboardAdvanceTotal.
+    // Only count payroll rows for staff that are still on this roster. This
+    // prevents a historical/orphaned salary row from being assigned to a
+    // newly-added staff member in the dashboard aggregate.
+    const staffIds = new Set(
+        staff
+            .map(member => member && (member.staffId ?? member.id))
+            .filter(id => id != null && String(id).trim() !== '')
+            .map(id => String(id))
+    );
     const paidRows = _dashboardArray(salaryRecords)
-        .filter(row => _dashboardBelongsToMonth(row.monthKey, monthKey, currentMonthKey));
-    const paidFromPayroll = paidRows.reduce((total, row) =>
-        total + _dashboardNumber(row.netPaid ?? row.baseSalary ?? row.amount), 0);
+        .filter(row => _dashboardBelongsToMonth(row.monthKey, monthKey, currentMonthKey))
+        .filter(row => {
+            const staffId = row && (row.staffId ?? row.staff_id);
+            return staffId != null && staffIds.has(String(staffId));
+        });
+
+    // A salary row's netPaid is the cash paid on payroll day:
+    // base + bonus − fines − security − advance. Once the advance is
+    // settled, it must be moved into Paid Salaries rather than becoming
+    // Pending again. Add advanceDeducted back for the dashboard's
+    // obligation-level Paid figure; outstanding advances are added separately
+    // by _dashboardSnapshot.
+    const paidFromPayroll = paidRows.reduce((total, row) => {
+        const netPaid = _dashboardNumber(row.netPaid ?? row.baseSalary ?? row.amount);
+        const advanceDeducted = _dashboardNumber(row.advanceDeducted);
+        return total + netPaid + advanceDeducted;
+    }, 0);
 
     return { payable, paidFromPayroll };
 }

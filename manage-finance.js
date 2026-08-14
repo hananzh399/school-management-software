@@ -4265,6 +4265,7 @@ function saveAdvanceRecords(list) {
 function getTotalAdvance(staffId) {
     return getAdvanceRecords()
         .filter(r => String(r.staffId) === String(staffId))
+        .filter(r => String(r.paymentStatus || '').toLowerCase() !== 'settled')
         .reduce((s, r) => s + (Number(r.amount) || 0), 0);
 }
 
