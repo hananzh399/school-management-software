@@ -831,12 +831,14 @@
                     <th>Bonus</th>
                     <th>Fines Deducted</th>
                     <th>Security Deducted</th>
+                    <th>Paid Amount</th>
+                    <th>Pending Amount</th>
                     <th>Month</th>
                     <th>Status</th>
                 </tr>
             </thead>
             <tbody id="salary-records-tbody">
-                <tr><td colspan="9" class="empty-row">Loading records…</td></tr>
+                <tr><td colspan="11" class="empty-row">Loading records…</td></tr>
             </tbody>
         </table>
     </div>
@@ -1004,8 +1006,12 @@
                 <label><i class="fas fa-hand-holding"></i> Advance Taken</label>
                 <input type="text" id="sbp-advance-taken" readonly>
             </div>
+            <div class="sbp-card sbp-c-green">
+                <label><i class="fas fa-check-circle"></i> Paid Amount<span style="font-weight:400;opacity:0.7;font-size:9px;margin-left:2px;">(incl. advance)</span></label>
+                <input type="text" id="sbp-paid-amount" readonly>
+            </div>
             <div class="sbp-card sbp-c-grand">
-                <label><i class="fas fa-hand-holding-usd"></i> Net Payable</label>
+                <label><i class="fas fa-hand-holding-usd"></i> Pending Amount</label>
                 <input type="text" id="sbp-net-payable" readonly>
             </div>
         </div>

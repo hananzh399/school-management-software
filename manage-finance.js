@@ -4262,10 +4262,21 @@ function saveAdvanceRecords(list) {
     _staffAdvancesCache = list;
     _backendSave(API_BASE, ENDPOINTS.staffAdvances, 'PUT', { items: list });
 }
+// BUGFIX — "Advance Salary status stays Pending after the full salary is
+// paid": this used to sum every advance ever taken for the staff member,
+// with no regard for paymentStatus. Once a payroll run settles an advance
+// (FinanceController#paySalary flips it "Advance" -> "Settled"), the raw
+// GET /staff-advances list still returns that row forever (it's an
+// append-only ledger) — so the old sum kept showing the same "outstanding"
+// amount even after it had been fully paid off, making it look like the
+// advance was still Pending. Only "Advance" (i.e. not yet settled) rows
+// represent money the staff member has drawn that hasn't been reconciled
+// against a salary payment yet — that's the only figure that belongs in
+// an "outstanding advance" total.
 function getTotalAdvance(staffId) {
     return getAdvanceRecords()
         .filter(r => String(r.staffId) === String(staffId))
-        .filter(r => String(r.paymentStatus || '').toLowerCase() !== 'settled')
+        .filter(r => String(r.paymentStatus || 'Advance').toLowerCase() !== 'settled')
         .reduce((s, r) => s + (Number(r.amount) || 0), 0);
 }
 
@@ -4478,8 +4489,35 @@ function showSalaryBreakdown(staffId, category = 'Teaching') {
     const absenceFine   = Number(staff.fines) || 0;
     const absentDays    = Number(staff.absentDaysThisMonth) || 0;
 
-    const netPayable    = baseSalary + totalBonus - security - totalFine - absenceFine - advanceTaken;
     const fmt = n => 'RS ' + Math.max(0, n).toLocaleString();
+
+    // BUGFIX — "Fine not subtracted correctly from Pending / Paid shows
+    // less than what was given": this panel already has an authoritative
+    // source of truth once a payment for this month exists — the SALARY
+    // record itself, whose totalDue/amountPaid/pendingAmount were computed
+    // server-side by Finance#calculateSalaryDue() (Total Due = Gross -
+    // Fines - Security; Paid = Advance + Current Payment; Pending =
+    // Total Due - Paid). Before that payment happens, show the same
+    // preview formula payCurrentSalary() is about to send (see below —
+    // it now sends manual fine + absence fine combined), so what's on
+    // screen always matches what actually gets processed.
+    const currentMonthKey2 = getCurrentMonthKey();
+    const existingRecord = getSalaryRecordForStaffMonth(staffId, currentMonthKey2);
+    const combinedFine = totalFine + absenceFine;
+
+    let totalDue, paidAmount, pendingAmount;
+    if (existingRecord) {
+        // Authoritative — straight from the backend, never recomputed here.
+        totalDue     = Number(existingRecord.totalDue)     || 0;
+        paidAmount   = Number(existingRecord.amountPaid)   || 0;
+        pendingAmount = Number(existingRecord.pendingAmount) != null
+            ? Number(existingRecord.pendingAmount)
+            : Math.max(0, totalDue - paidAmount);
+    } else {
+        totalDue = Math.max(0, baseSalary + totalBonus - security - combinedFine);
+        paidAmount = advanceTaken; // nothing paid yet this run beyond any advance already drawn
+        pendingAmount = Math.max(0, totalDue - paidAmount);
+    }
 
     document.getElementById('sbp-teacher-name').textContent = staff.name;
     document.getElementById('sbp-teacher-id').textContent   = staff.id;
@@ -4490,7 +4528,12 @@ function showSalaryBreakdown(staffId, category = 'Teaching') {
         : fmt(security);
     document.getElementById('sbp-fine').value           = fmt(totalFine);
     document.getElementById('sbp-advance-taken').value  = fmt(advanceTaken);
-    document.getElementById('sbp-net-payable').value    = 'RS ' + netPayable.toLocaleString();
+    // "Net Payable" card now always shows the Pending Amount (Total Due
+    // minus everything already paid, advance included) — exact and
+    // consistent with the Salary Records table and the Dashboard.
+    document.getElementById('sbp-net-payable').value    = fmt(pendingAmount);
+    const paidAmountEl = document.getElementById('sbp-paid-amount');
+    if (paidAmountEl) paidAmountEl.value = fmt(paidAmount);
 
     // Absence fine — auto from attendance
     const absEl = document.getElementById('sbp-absence-fine');
@@ -4554,6 +4597,13 @@ async function payCurrentSalary() {
     // We remove "RS " and commas to get a clean number for the backend
     const bonus = parseFloat(document.getElementById('sbp-bonus').value.replace(/[^0-9.]/g, '')) || 0;
     const manualFine = parseFloat(document.getElementById('sbp-fine').value.replace(/[^0-9.]/g, '')) || 0;
+    // BUGFIX — the Absence Fine shown in this panel (and folded into the
+    // displayed Pending Amount above) was never actually sent to the
+    // backend, so Total Due on the saved SALARY record only ever reflected
+    // the Manual Fine. Send both, combined, so what the staff member is
+    // shown here is exactly what gets deducted.
+    const absenceFineVal = parseFloat((document.getElementById('sbp-absence-fine') || {}).value?.replace(/[^0-9.]/g, '') || '0') || 0;
+    const totalFineToApply = manualFine + absenceFineVal;
     const monthKey = getCurrentMonthKey();
 
     const paySalaryConfirmed = await ssConfirm(
@@ -4568,7 +4618,7 @@ async function payCurrentSalary() {
             staffId: staffId,
             monthKey: monthKey,
             bonus: bonus,
-            fine: manualFine
+            fine: totalFineToApply
         });
         // The payment response is the authoritative database record. Update
         // the in-memory cache immediately so both salary tables change from
@@ -7561,20 +7611,24 @@ function renderSalaryRecordsTable() {
         );
     }
 
-    // Apply status filter
+    // Apply status filter — "Paid" means the SALARY record's own
+    // paymentStatus is actually "Paid" (Pending Amount caught up to Total
+    // Due), not merely that a record exists — a Partial record still
+    // belongs in "Pending".
     if (statusVal) {
-        rows = rows.filter(({ entry }) =>
-            statusVal === 'paid'
-                ? !!entry
-                : !entry && monthKey === getCurrentMonthKey()
-        );
+        rows = rows.filter(({ entry }) => {
+            const isFullyPaid = !!entry && String(entry.paymentStatus || '').toLowerCase() === 'paid';
+            return statusVal === 'paid'
+                ? isFullyPaid
+                : !isFullyPaid && (monthKey === getCurrentMonthKey() || !!entry);
+        });
     }
 
     if (rows.length === 0) {
         const emptyMsg = q || statusVal
             ? 'No records match your search / filter.'
             : `No ${category.toLowerCase()} staff found.`;
-        tbody.innerHTML = `<tr><td colspan="9" class="empty-row">${emptyMsg}</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="11" class="empty-row">${emptyMsg}</td></tr>`;
         return;
     }
 
@@ -7597,13 +7651,37 @@ function renderSalaryRecordsTable() {
             ? (Number(entry.fines) || 0)
             : (isCurrentMonth ? (Number(s.fines) || 0) : null);
         const secDeducted = entry ? (Number(entry.securityDeducted) || 0) : null;
-        const isPaid = !!entry;
+        // BUGFIX — status used to be "Paid" the instant ANY record existed,
+        // even a Partial one whose Pending Amount hadn't reached zero yet
+        // (e.g. an advance settled but the current-month cash still owed).
+        // Read the record's own paymentStatus — the single source of truth
+        // computed server-side by Finance#calculateSalaryDue() — instead.
+        const recordStatus = entry ? String(entry.paymentStatus || '').trim() : '';
+        const isPaid = recordStatus.toLowerCase() === 'paid';
+        const isPartial = recordStatus.toLowerCase() === 'partial';
         const statusBadge = isPaid
             ? `<span class="status-badge status-paid"><i class="fas fa-check-circle"></i> Paid</span>`
-            : isCurrentMonth
-                ? `<span class="status-badge status-pending"><i class="fas fa-clock"></i> Pending</span>`
-                : `<span class="status-badge" style="color:var(--text-secondary);"><i class="fas fa-minus-circle"></i> No record</span>`;
+            : isPartial
+                ? `<span class="status-badge status-pending"><i class="fas fa-adjust"></i> Partial</span>`
+                : (entry || isCurrentMonth)
+                    ? `<span class="status-badge status-pending"><i class="fas fa-clock"></i> Pending</span>`
+                    : `<span class="status-badge" style="color:var(--text-secondary);"><i class="fas fa-minus-circle"></i> No record</span>`;
+        // Exact Paid Amount (advance + current payment) and Pending Amount
+        // (Total Due − Paid), straight from the record calculateSalaryDue()
+        // produced — never recomputed on the frontend.
+        const paidAmount = entry ? (Number(entry.amountPaid) != null ? Number(entry.amountPaid) : null) : null;
+        const pendingAmountVal = entry
+            ? (Number(entry.pendingAmount) != null ? Number(entry.pendingAmount) : null)
+            : (isCurrentMonth ? Math.max(0, baseSalary - finesDeducted) : null);
         const nullCell = `<span style="color:var(--text-secondary);font-size:12px;">—</span>`;
+        const paidCell = paidAmount == null
+            ? nullCell
+            : `<strong style="color:#22c55e;">RS ${paidAmount.toLocaleString()}</strong>`;
+        const pendingCell = pendingAmountVal == null
+            ? nullCell
+            : pendingAmountVal > 0
+                ? `<strong style="color:#ef4444;">RS ${pendingAmountVal.toLocaleString()}</strong>`
+                : `<span style="color:var(--text-secondary);font-size:12px;">RS 0</span>`;
         const finesCell = finesDeducted == null
             ? nullCell
             : finesDeducted > 0
@@ -7623,6 +7701,8 @@ function renderSalaryRecordsTable() {
                 <td>${bonus == null ? nullCell : `<strong>RS ${bonus.toLocaleString()}</strong>`}</td>
                 <td>${finesCell}</td>
                 <td>${secCell}</td>
+                <td>${paidCell}</td>
+                <td>${pendingCell}</td>
                 <td><span class="salary-month-chip">${monthLabel}</span></td>
                 <td>${statusBadge}</td>
             </tr>`;

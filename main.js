@@ -101,16 +101,29 @@ async function loadDashboardFromBackend() {
     // salary, bonus, expense, or dropout payout is actually recorded.
     const netExp = data.salaries.paid + data.staffBonusTotal + data.otherExpensesTotal + data.dropoutStaffTotal;
     
-    // Total Revenue = Collected Fees + all fines (late, manual student+staff, staff absence) + Admission Fees + Custom Fees Collected
+    // Total Revenue = Collected Fees + Admission Fees + Custom Fees
+    // Collected + student fines (late/other — real cash actually collected
+    // from students, a genuine inflow) + staff-absence-fine "revenue"
+    // (Attendance page's own quick-stat card; not part of Net Profit — see
+    // note below).
+    //
+    // BUGFIX — Net Profit was double-counting staff fines: a staff fine
+    // (manual or absence) is not new cash coming in, it's cash that was
+    // NOT paid out — Paid Salaries (data.salaries.paid, netExp above)
+    // already comes out lower by exactly the fine amount, via each SALARY
+    // record's totalDue = Gross − Fines (Finance#calculateSalaryDue()).
+    // Adding the same fine into Total Revenue on top of that counted its
+    // effect on profit twice. Student fines are different — they're real
+    // money collected from a student's fee ledger, not a deduction from
+    // someone's pay, so those still belong in revenue.
     const totalRev = data.fees.collected
         + data.fines.studentLate
         + data.fines.studentOther
-        + data.fines.staffTotal
-        + data.fines.teacherAbsence
         + data.admissionFees
         + data.customFeesCollected;
-    
-    // Net Profit = Revenue - Expenses
+
+    // Net Profit = Revenue - Expenses (Actual Paid Salaries already nets
+    // out staff fines, so they aren't added back in here either).
     const netProfit = totalRev - netExp;
 
     // 2. HEADCOUNT (feeds the quick-stats strip, no dedicated card anymore)
@@ -401,25 +414,66 @@ function _dashboardStaffAmount(items, monthKey, currentMonthKey) {
     }, 0);
 }
 
-function _dashboardSalaryAmount(salaryRecords, staff, monthKey, currentMonthKey) {
+/**
+ * Sums the manual STAFF_FINE list plus (current month only) the staff
+ * member's live absence-fine field for ONE staff member — the same two
+ * sources FinanceController#paySalary / manage-finance.js's salary panel
+ * combine into "Fines" when a payroll run actually happens. Used below so
+ * an un-paid staff member's contribution to Total Due already reflects
+ * fines on file, instead of assuming their full roster salary is owed.
+ */
+function _dashboardStaffFineFor(staffFines, staff, staffId, monthKey, currentMonthKey) {
+    const manual = _dashboardArray(staffFines)
+        .filter(item => String(item.staffId ?? item.id) === String(staffId))
+        .filter(item => _dashboardBelongsToMonth(item.monthKey, monthKey, currentMonthKey))
+        .reduce((total, item) => total + _dashboardNumber(item.amount), 0);
+    const absence = monthKey === currentMonthKey
+        ? _dashboardNumber((staff.find(m => String(m.id) === String(staffId)) || {}).fines)
+        : 0;
+    return manual + absence;
+}
+
+function _dashboardSalaryAmount(salaryRecords, staff, staffFines, monthKey, currentMonthKey) {
     // Payable = the roster's full monthly salary obligation, regardless of
-    // what's actually been posted/paid yet. Mirrors Staff.getSalary(), the
-    // same field FinanceController#paySalary reads as `baseSalary`.
+    // what's actually been posted/paid yet, fines included. Mirrors
+    // Staff.getSalary(), the same field FinanceController#paySalary reads
+    // as `baseSalary`. Shown as its own "Payable Salaries" figure — it is
+    // NOT used for Pending below (see totalDue).
     const payable = staff.reduce((total, member) => total + _dashboardNumber(member.salary), 0);
 
-    // Paid (payroll-only) = whatever's actually posted for this month
-    // (Finance TYPE_SALARY rows). netPaid is the true amount disbursed
-    // (base + bonus − fines − advance settled − security); fall back for
-    // older rows. Advances get folded in on top of this by the caller
-    // (_dashboardSnapshot), since money already handed out as an advance is
-    // just as "paid" as a posted payroll run — see the note in
+    // Paid = whatever's actually posted for this month (Finance TYPE_SALARY
+    // rows), using amountPaid — the record's authoritative "Advance +
+    // Current Payment" total (Finance#calculateSalaryDue) — so a settled
+    // advance that was folded into a payroll run stays counted here
+    // instead of silently dropping out of "Paid Salaries" the moment it's
+    // reconciled. Falls back to netPaid/baseSalary for older rows that
+    // predate amountPaid. Any advance NOT yet reconciled into a payroll run
+    // is added on top by the caller (_dashboardSnapshot) — see
     // _dashboardAdvanceTotal.
     const paidRows = _dashboardArray(salaryRecords)
         .filter(row => _dashboardBelongsToMonth(row.monthKey, monthKey, currentMonthKey));
-    const paidFromPayroll = paidRows.reduce((total, row) =>
-        total + _dashboardNumber(row.netPaid ?? row.baseSalary ?? row.amount), 0);
+    const paidFromPayroll = paidRows.reduce((total, row) => {
+        const amountPaid = row.amountPaid != null
+            ? row.amountPaid
+            : _dashboardNumber(row.netPaid) + _dashboardNumber(row.advanceDeducted);
+        return total + _dashboardNumber(amountPaid ?? row.baseSalary ?? row.amount);
+    }, 0);
 
-    return { payable, paidFromPayroll };
+    // Total Due = Gross Salary − Fines (per staff member), aggregated. For
+    // staff already paid this month, use the SALARY record's own totalDue —
+    // authoritative, computed server-side. For staff not yet paid, estimate
+    // it as roster salary minus whatever fine is on file for them, so
+    // Pending already reflects the fine before payroll actually runs.
+    const paidByStaffId = new Map(paidRows.map(row => [String(row.staffId), row]));
+    const totalDue = staff.reduce((total, member) => {
+        const paidRow = paidByStaffId.get(String(member.id));
+        if (paidRow && paidRow.totalDue != null) return total + _dashboardNumber(paidRow.totalDue);
+        const gross = _dashboardNumber(member.salary);
+        const fine = _dashboardStaffFineFor(staffFines, staff, member.id, monthKey, currentMonthKey);
+        return total + Math.max(0, gross - fine);
+    }, 0);
+
+    return { payable, paidFromPayroll, totalDue };
 }
 
 /**
@@ -561,14 +615,22 @@ async function _dashboardSnapshot(
 
     // Paid Salaries = posted payroll + any still-outstanding advances (cash
     // already handed to staff counts as paid even before it's formally
-    // settled through a payroll run). Pending then reflects what's left of
-    // the obligation after that combined figure.
-    const { payable, paidFromPayroll } = _dashboardSalaryAmount(
-        salaryRecords, staff, monthKey, currentMonthKey
+    // settled through a payroll run).
+    //
+    // BUGFIX — "Pending doesn't subtract fines correctly": Pending used to
+    // be computed as roster Payable Salaries (raw, unreduced) minus Paid —
+    // so a fine that lowered what a staff member actually owed never
+    // showed up here; Pending stayed inflated by the fine amount even
+    // though the fine had already been deducted the moment payroll ran.
+    // Pending is now Total Due (Gross − Fines, see _dashboardSalaryAmount)
+    // minus Paid, matching the same formula used everywhere else on this
+    // page.
+    const { payable, paidFromPayroll, totalDue } = _dashboardSalaryAmount(
+        salaryRecords, staff, staffFines, monthKey, currentMonthKey
     );
     const advance = _dashboardAdvanceTotal(staffAdvances, monthKey, currentMonthKey);
     const paid = paidFromPayroll + advance;
-    const pending = Math.max(0, payable - paid);
+    const pending = Math.max(0, totalDue - paid);
 
     return {
         realStudentCount: activeStudents.length,
@@ -632,11 +694,13 @@ async function calculateFinancials() {
         staffBonus, staffFines, expenses, salaryRecords, staffAdvances, currentMonth
     );
 
+    // Same fix as Total Revenue above (staff fines already reduce Paid
+    // Salaries via each SALARY record's totalDue — don't add them into
+    // revenue too, or Past Month Profit double-counts them just like
+    // This Month's Profit used to).
     const revenue = snapshot => snapshot.fees.collected
         + snapshot.fines.studentLate
         + snapshot.fines.studentOther
-        + snapshot.fines.staffTotal
-        + snapshot.fines.teacherAbsence
         + snapshot.admissionFees
         + snapshot.customFeesCollected;
     const expensesTotal = snapshot => snapshot.salaries.paid
