@@ -93,11 +93,13 @@ async function loadDashboardFromBackend() {
     // 1. CALCULATE TOTALS FIRST
     // Net Expenses = only money that has actually gone out the door:
     // Paid Salaries (posted payroll + advances) + Bonuses given + Other
-    // Expenses logged. Pending Salaries is deliberately left out — it's
-    // what's still owed, not a cost incurred yet, so Net Expenses should
-    // stay at 0 (plus whatever's genuinely been paid) until a salary,
-    // bonus, or expense is actually recorded.
-    const netExp = data.salaries.paid + data.staffBonusTotal + data.otherExpensesTotal;
+    // Expenses logged + Dropout Staff Paid Salary (money already paid to
+    // staff who have since been deleted — see the dropout-staff fetch in
+    // calculateFinancials). Pending Salaries is deliberately left out —
+    // it's what's still owed, not a cost incurred yet, so Net Expenses
+    // should stay at 0 (plus whatever's genuinely been paid) until a
+    // salary, bonus, expense, or dropout payout is actually recorded.
+    const netExp = data.salaries.paid + data.staffBonusTotal + data.otherExpensesTotal + data.dropoutStaffTotal;
     
     // Total Revenue = Collected Fees + all fines (late, manual student+staff, staff absence) + Admission Fees + Custom Fees Collected
     const totalRev = data.fees.collected
@@ -144,6 +146,7 @@ async function loadDashboardFromBackend() {
     animateCounter('advance-salaries', data.salaries.advance);
     animateCounter('staff-bonus', data.staffBonusTotal);
     animateCounter('other-expenses', data.otherExpensesTotal);
+    animateCounter('dropout-staff-salary', data.dropoutStaffTotal);
     
     // 5. UPDATE THE UI (Net Totals)
     animateCounter('net-expenses', netExp);
@@ -404,33 +407,17 @@ function _dashboardSalaryAmount(salaryRecords, staff, monthKey, currentMonthKey)
     // same field FinanceController#paySalary reads as `baseSalary`.
     const payable = staff.reduce((total, member) => total + _dashboardNumber(member.salary), 0);
 
-    // Only count payroll rows for staff that are still on this roster. This
-    // prevents a historical/orphaned salary row from being assigned to a
-    // newly-added staff member in the dashboard aggregate.
-    const staffIds = new Set(
-        staff
-            .map(member => member && (member.staffId ?? member.id))
-            .filter(id => id != null && String(id).trim() !== '')
-            .map(id => String(id))
-    );
+    // Paid (payroll-only) = whatever's actually posted for this month
+    // (Finance TYPE_SALARY rows). netPaid is the true amount disbursed
+    // (base + bonus − fines − advance settled − security); fall back for
+    // older rows. Advances get folded in on top of this by the caller
+    // (_dashboardSnapshot), since money already handed out as an advance is
+    // just as "paid" as a posted payroll run — see the note in
+    // _dashboardAdvanceTotal.
     const paidRows = _dashboardArray(salaryRecords)
-        .filter(row => _dashboardBelongsToMonth(row.monthKey, monthKey, currentMonthKey))
-        .filter(row => {
-            const staffId = row && (row.staffId ?? row.staff_id);
-            return staffId != null && staffIds.has(String(staffId));
-        });
-
-    // A salary row's netPaid is the cash paid on payroll day:
-    // base + bonus − fines − security − advance. Once the advance is
-    // settled, it must be moved into Paid Salaries rather than becoming
-    // Pending again. Add advanceDeducted back for the dashboard's
-    // obligation-level Paid figure; outstanding advances are added separately
-    // by _dashboardSnapshot.
-    const paidFromPayroll = paidRows.reduce((total, row) => {
-        const netPaid = _dashboardNumber(row.netPaid ?? row.baseSalary ?? row.amount);
-        const advanceDeducted = _dashboardNumber(row.advanceDeducted);
-        return total + netPaid + advanceDeducted;
-    }, 0);
+        .filter(row => _dashboardBelongsToMonth(row.monthKey, monthKey, currentMonthKey));
+    const paidFromPayroll = paidRows.reduce((total, row) =>
+        total + _dashboardNumber(row.netPaid ?? row.baseSalary ?? row.amount), 0);
 
     return { payable, paidFromPayroll };
 }
@@ -609,6 +596,7 @@ async function calculateFinancials() {
         expenses,
         salaryRecords,
         staffAdvances,
+        dropoutStaff,
         attendance
     ] = await Promise.all([
         _dashboardGet('/api/students', []),
@@ -621,6 +609,15 @@ async function calculateFinancials() {
         _dashboardGet('/api/finance/expenses', []),
         _dashboardGet('/api/finance/salary/records', []),
         _dashboardGet('/api/finance/staff-advances', []),
+        // Dropout Staff Paid Salary: lifetime snapshot total (see
+        // FinanceController#getDropoutStaffSalaries), not scoped to any
+        // month — a staff member's paid salary/bonus/fine total is
+        // archived here the moment they're deleted. Fetched once, not
+        // per-snapshot, and folded only into the CURRENT month's totals
+        // below (see dropoutStaffTotal) — there's no way to say which past
+        // month it "belongs" to, so it must never leak into the previous-
+        // month snapshot or it would distort Past Month Profit.
+        _dashboardGet('/api/finance/dropout-staff', { total: 0, records: [] }),
         _dashboardAttendance()
     ]);
 
@@ -645,6 +642,11 @@ async function calculateFinancials() {
     const expensesTotal = snapshot => snapshot.salaries.paid
         + snapshot.staffBonusTotal
         + snapshot.otherExpensesTotal;
+
+    // Dropout Staff Paid Salary total — see the fetch above for why this is
+    // computed once and applied only to the current month, never to
+    // `previous`.
+    const dropoutStaffTotal = _dashboardNumber(dropoutStaff && dropoutStaff.total);
 
     // FEATURE — "Past Month Profit should read 0 for a brand-new school,
     // and must stay untouched by anything added to the CURRENT month":
@@ -683,8 +685,9 @@ async function calculateFinancials() {
     return {
         ...current,
         totalStaff: staff.length,
-        netExpenses: expensesTotal(current),
-        netProfit: revenue(current) - expensesTotal(current),
+        dropoutStaffTotal,
+        netExpenses: expensesTotal(current) + dropoutStaffTotal,
+        netProfit: revenue(current) - (expensesTotal(current) + dropoutStaffTotal),
         lastMonthProfit,
         todayAttendance: attendance
     };
