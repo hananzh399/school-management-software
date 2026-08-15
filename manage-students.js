@@ -1143,9 +1143,15 @@ if (certUploadInput) {
 
         if (groupMembers.length === 0) return;
 
-        const allNames = groupMembers.map(s => s.fullName);
+        // Only ACTIVE members count as a live sibling connection. A graduated
+        // or dropped-out member should no longer be named in an active
+        // sibling's "Sibling of ..." text, and should stop having active
+        // members named in their own (their record keeps whatever it last
+        // said, as a historical snapshot, instead of being rewritten here).
+        const activeMembers = groupMembers.filter(isActiveStudent);
+        const allNames = activeMembers.map(s => s.fullName);
 
-        groupMembers.forEach(member => {
+        activeMembers.forEach(member => {
             const otherNames = allNames.filter(n => n !== member.fullName);
             member.siblingOf = buildSiblingOfString(otherNames);
         });
@@ -1192,9 +1198,16 @@ if (certUploadInput) {
     /**
      * Check if the new student's guardian details match an existing record.
      * Match criteria: Guardian Name, Guardian CNIC, Permanent Address, Guardian Role.
+     *
+     * A graduated or dropped-out student is intentionally excluded from this
+     * search: once a student has left the school (status !== 'active'), a
+     * new admission that shares their guardian info should NOT be offered a
+     * sibling link to them. Siblings should only ever be connected while
+     * both records are on the live/active roster.
      */
     function findGuardianMatch(newData, db) {
         return db.find(s =>
+            isActiveStudent(s) &&
             normalizeForCompare(s.guardianName)    === normalizeForCompare(newData.guardianName)    &&
             normalizeForCompare(s.guardianCnic)    === normalizeForCompare(newData.guardianCnic)    &&
             normalizeForCompare(s.permanentAddress)=== normalizeForCompare(newData.permanentAddress) &&
@@ -1912,8 +1925,11 @@ if (certUploadInput) {
                     });
                 }
 
-                // 5. Also build hasSiblings on the new student (pointing back to all others)
-                const groupMembersBeforeAdd = workingDb.filter(s => s.siblingGroupId === groupId);
+                // 5. Also build hasSiblings on the new student (pointing back to all others).
+                // Only ACTIVE members of the group are listed — a graduated or
+                // dropped-out family member should not show up as a connected
+                // sibling on a brand-new (active) admission.
+                const groupMembersBeforeAdd = workingDb.filter(s => s.siblingGroupId === groupId && isActiveStudent(s));
                 newSibling.hasSiblings = groupMembersBeforeAdd.map(s => ({
                     name : s.fullName,
                     regNo: s.regNo
@@ -2078,13 +2094,25 @@ if (certUploadInput) {
     //     sibling of one or more names already in the system (reverse-lookup string).
     //   • studentData.hasSiblings — {name, regNo}[] of the other student(s) in the
     //     same sibling group; looked up against the live DB for current class/section.
-    const siblingList = Array.isArray(studentData.hasSiblings) ? studentData.hasSiblings : [];
-    const isSiblingLinked = !!(studentData.isSibling && studentData.siblingOf);
+    const rawSiblingList = Array.isArray(studentData.hasSiblings) ? studentData.hasSiblings : [];
     let siblingsSectionHtml = '';
-    if (siblingList.length > 0 || isSiblingLinked) {
+    {
         let fullDb = [];
         try { fullDb = getDatabase(); } catch (e) { fullDb = []; }
 
+        // A sibling row only counts as a live connection while the OTHER
+        // student is still active. If they've since graduated or dropped
+        // out, they're dropped from this list — a graduated/dropped student
+        // is no longer shown as "connected" to an active sibling. (If we
+        // can't find the record at all — e.g. it was deleted — leave it
+        // shown rather than silently hiding data we can't verify.)
+        const siblingList = rawSiblingList.filter(sib => {
+            const matched = fullDb.find(s => s.regNo === sib.regNo || s.id === sib.regNo);
+            return !matched || isActiveStudent(matched);
+        });
+        const isSiblingLinked = !!(studentData.isSibling && studentData.siblingOf && isActiveStudent(studentData));
+
+        if (siblingList.length > 0 || isSiblingLinked) {
         const siblingOfNoticeHtml = isSiblingLinked ? `
             <div class="sibling-of-notice">
                 <i class="fas fa-user-friends"></i>
@@ -2124,6 +2152,7 @@ if (certUploadInput) {
             ${siblingOfNoticeHtml}
             ${siblingTableHtml}
         </section>`;
+        }
     }
 
     const safeFileName = (studentData.fullName || 'student').replace(/[^a-z0-9]+/gi, '_');
@@ -2444,8 +2473,15 @@ if (certUploadInput) {
         const registrationNo = s.regNo || s.id || '—';
 
         // ── Sibling info (mirrors the Profile modal's two independent signals) ──
-        const isSiblingLinked = !!(s.isSibling && s.siblingOf);
-        const hasSiblingsList = Array.isArray(s.hasSiblings) ? s.hasSiblings : [];
+        // Same rule as the Profile modal: a graduated/dropped-out member of
+        // the family group is no longer shown as a live sibling connection.
+        let recFullDb = [];
+        try { recFullDb = getDatabase(); } catch (e) { recFullDb = []; }
+        const isSiblingLinked = !!(s.isSibling && s.siblingOf && isActiveStudent(s));
+        const hasSiblingsList = (Array.isArray(s.hasSiblings) ? s.hasSiblings : []).filter(sib => {
+            const matched = recFullDb.find(rs => rs.regNo === sib.regNo || rs.id === sib.regNo);
+            return !matched || isActiveStudent(matched);
+        });
         let siblingHtml = '';
         if (isSiblingLinked || hasSiblingsList.length > 0) {
             const linkedNotice = isSiblingLinked ? `
