@@ -693,7 +693,7 @@ async function calculateFinancials() {
         // below (see dropoutStaffTotal) — there's no way to say which past
         // month it "belongs" to, so it must never leak into the previous-
         // month snapshot or it would distort Past Month Profit.
-        _dashboardGet('/api/finance/dropout-staff', { total: 0, records: [] }),
+        _dashboardGet('/api/finance/dropout-staff', { total: 0, finesTotal: 0, records: [] }),
         _dashboardAttendance()
     ]);
 
@@ -725,6 +725,15 @@ async function calculateFinancials() {
     // computed once and applied only to the current month, never to
     // `previous`.
     const dropoutStaffTotal = _dashboardNumber(dropoutStaff && dropoutStaff.total);
+
+    // FEATURE — "deleting a staff member makes their fine disappear from
+    // the dashboard's Staff Fine box": the STAFF_FINE rows for a deleted
+    // staff member are wiped (StaffController#delete()), but their fine
+    // total is archived into the same dropout-staff snapshot as the paid
+    // salary above (see FinanceController#getDropoutStaffSalaries). Same
+    // rule as dropoutStaffTotal: a lifetime figure, folded only into the
+    // CURRENT month's Staff Fine total, never into `previous`.
+    const dropoutStaffFinesTotal = _dashboardNumber(dropoutStaff && dropoutStaff.finesTotal);
 
     // FEATURE — "Past Month Profit should read 0 for a brand-new school,
     // and must stay untouched by anything added to the CURRENT month":
@@ -762,6 +771,7 @@ async function calculateFinancials() {
 
     return {
         ...current,
+        fines: { ...current.fines, staffTotal: current.fines.staffTotal + dropoutStaffFinesTotal },
         totalStaff: staff.length,
         dropoutStaffTotal,
         netExpenses: expensesTotal(current) + dropoutStaffTotal,

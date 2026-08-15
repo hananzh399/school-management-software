@@ -4322,6 +4322,57 @@ function isSalaryPaid(staffId, monthKey) {
     return !!getSalaryRecordForStaffMonth(staffId, monthKey);
 }
 
+/**
+ * FEATURE — "salary to give becomes RS 0 should show Paid, not Pending":
+ * previews this month's Total Due for a staff member using the exact same
+ * formula payCurrentSalary()/showSalaryBreakdown() use (Gross Salary +
+ * Bonus − Security − Fines, floored at 0) — WITHOUT requiring an actual
+ * SALARY record to exist yet. Fines (manual + absence) alone can already
+ * wipe out a small base salary, in which case there's genuinely nothing
+ * left to pay, so this lets every "is this staff member Paid?" check
+ * below treat RS 0 due the same as an actual RS 0 payroll entry, instead
+ * of leaving it stuck on "Pending" until an admin runs a $0 payment just
+ * to clear the badge.
+ */
+function getEffectiveSalaryDuePreview(staff, monthKey) {
+    const staffId = staff && staff.id;
+    const bonusRecords = getStaffBonusData();
+    const fineRecords  = getStaffFinesData();
+    const matchStaff = r => String(r.staffId) === String(staffId) || String(r.id) === String(staffId);
+    const matchMonth = r => !r.monthKey || r.monthKey === monthKey;
+
+    const totalBonus = bonusRecords
+        .filter(r => matchStaff(r) && matchMonth(r))
+        .reduce((s, r) => s + (Number(r.amount) || 0), 0);
+    const totalFine = fineRecords
+        .filter(r => matchStaff(r) && matchMonth(r))
+        .reduce((s, r) => s + (Number(r.amount) || 0), 0);
+
+    const baseSalary = Number(staff.salary) || 0;
+    const secInfo = computeMonthlySecurity(staff);
+    const manualSecurity = Number(staff.security) || 0;
+    const security = secInfo.monthlyDue + manualSecurity;
+    const absenceFine = Number(staff.fines) || 0;
+    const combinedFine = totalFine + absenceFine;
+
+    return Math.max(0, baseSalary + totalBonus - security - combinedFine);
+}
+
+/**
+ * Whether a staff member's salary for this month should read "Paid" —
+ * either because a SALARY record already exists for the month, or
+ * because there's nothing left to pay in the first place (see
+ * getEffectiveSalaryDuePreview above). Only applies to the CURRENT
+ * month — a past month with no record genuinely has no data to preview
+ * from, so it's left alone (see isCurrentMonth guards elsewhere on this
+ * page for the same reasoning).
+ */
+function isSalaryEffectivelyPaid(staff, monthKey) {
+    if (isSalaryPaid(staff.id, monthKey)) return true;
+    if (monthKey !== getCurrentMonthKey()) return false;
+    return getEffectiveSalaryDuePreview(staff, monthKey) <= 0;
+}
+
 /* ============================================
    TEACHING SALARY PAGE
    ============================================ */
@@ -4352,7 +4403,7 @@ function renderTeachingSalaries(filterText = '') {
     }
 
     tbody.innerHTML = filtered.map(t => {
-        const isPaid = isSalaryPaid(t.id, currentMonthKey);
+        const isPaid = isSalaryEffectivelyPaid(t, currentMonthKey);
         const advance = getTotalAdvance(t.id);
         const absenceFine = Number(t.fines) || 0;
         const absentDays  = Number(t.absentDaysThisMonth) || 0;
@@ -4413,7 +4464,7 @@ function renderNonTeachingSalaries(filterText = '') {
     }
 
     tbody.innerHTML = filtered.map(w => {
-        const isPaid = isSalaryPaid(w.id, currentMonthKey);
+        const isPaid = isSalaryEffectivelyPaid(w, currentMonthKey);
         const advance = getTotalAdvance(w.id);
         const absenceFine = Number(w.fines) || 0;
         const absentDays  = Number(w.absentDaysThisMonth) || 0;
@@ -4555,13 +4606,19 @@ function showSalaryBreakdown(staffId, category = 'Teaching') {
     if (backdrop) backdrop.classList.remove('d-none');
     document.body.style.overflow = 'hidden';
 
-    // Show or hide the green "Paid" overlay
-    const isPaidThisMonth = isSalaryPaid(staff.id, getCurrentMonthKey());
+    // Show or hide the green "Paid" overlay.
+    // FEATURE — also treat "nothing left to pay" (totalDue already 0,
+    // e.g. fines wiped out the base salary) as Paid, same as
+    // isSalaryEffectivelyPaid() elsewhere on this page — no reason to
+    // force a $0 payroll run just to clear the badge.
+    const isPaidThisMonth = isSalaryPaid(staff.id, getCurrentMonthKey()) || totalDue <= 0;
     const paySalaryButton = document.getElementById('sbp-pay-salary-btn');
     if (paySalaryButton) {
         paySalaryButton.disabled = isPaidThisMonth;
         paySalaryButton.title = isPaidThisMonth
-            ? 'Salary for this month is already paid'
+            ? (totalDue <= 0 && !isSalaryPaid(staff.id, getCurrentMonthKey())
+                ? 'Nothing left to pay this month'
+                : 'Salary for this month is already paid')
             : 'Pay salary';
     }
     let paidOverlay = panel.querySelector('.sbp-paid-overlay');
@@ -7651,13 +7708,31 @@ function renderSalaryRecordsTable() {
             ? (Number(entry.fines) || 0)
             : (isCurrentMonth ? (Number(s.fines) || 0) : null);
         const secDeducted = entry ? (Number(entry.securityDeducted) || 0) : null;
+        // Exact Paid Amount (advance + current payment) and Pending Amount
+        // (Total Due − Paid), straight from the record calculateSalaryDue()
+        // produced — never recomputed on the frontend. For staff with no
+        // record yet this month, preview Pending using the same full
+        // formula (bonus + security + manual/absence fines combined) that
+        // getEffectiveSalaryDuePreview()/payCurrentSalary() use, so this
+        // figure always matches what the badge below is based on.
+        const paidAmount = entry ? (Number(entry.amountPaid) != null ? Number(entry.amountPaid) : null) : null;
+        const pendingAmountVal = entry
+            ? (Number(entry.pendingAmount) != null ? Number(entry.pendingAmount) : null)
+            : (isCurrentMonth ? getEffectiveSalaryDuePreview(s, monthKey) : null);
         // BUGFIX — status used to be "Paid" the instant ANY record existed,
         // even a Partial one whose Pending Amount hadn't reached zero yet
         // (e.g. an advance settled but the current-month cash still owed).
         // Read the record's own paymentStatus — the single source of truth
         // computed server-side by Finance#calculateSalaryDue() — instead.
+        //
+        // FEATURE — "salary to give becomes RS 0 should show Paid": when
+        // there's no record yet but this month's previewed Pending Amount
+        // is already 0 (fines/security wiped out the base salary), there's
+        // nothing left to actually pay, so treat it the same as Paid
+        // instead of leaving it stuck on Pending.
         const recordStatus = entry ? String(entry.paymentStatus || '').trim() : '';
-        const isPaid = recordStatus.toLowerCase() === 'paid';
+        const zeroDueNoRecord = !entry && isCurrentMonth && pendingAmountVal != null && pendingAmountVal <= 0;
+        const isPaid = recordStatus.toLowerCase() === 'paid' || zeroDueNoRecord;
         const isPartial = recordStatus.toLowerCase() === 'partial';
         const statusBadge = isPaid
             ? `<span class="status-badge status-paid"><i class="fas fa-check-circle"></i> Paid</span>`
@@ -7666,13 +7741,6 @@ function renderSalaryRecordsTable() {
                 : (entry || isCurrentMonth)
                     ? `<span class="status-badge status-pending"><i class="fas fa-clock"></i> Pending</span>`
                     : `<span class="status-badge" style="color:var(--text-secondary);"><i class="fas fa-minus-circle"></i> No record</span>`;
-        // Exact Paid Amount (advance + current payment) and Pending Amount
-        // (Total Due − Paid), straight from the record calculateSalaryDue()
-        // produced — never recomputed on the frontend.
-        const paidAmount = entry ? (Number(entry.amountPaid) != null ? Number(entry.amountPaid) : null) : null;
-        const pendingAmountVal = entry
-            ? (Number(entry.pendingAmount) != null ? Number(entry.pendingAmount) : null)
-            : (isCurrentMonth ? Math.max(0, baseSalary - finesDeducted) : null);
         const nullCell = `<span style="color:var(--text-secondary);font-size:12px;">—</span>`;
         const paidCell = paidAmount == null
             ? nullCell
