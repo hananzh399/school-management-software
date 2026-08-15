@@ -1,13 +1,13 @@
-**
- * EDUFLOW PRO - REPORTS & ANALYTICS
- * Reads the same backend records used by Student Management and Finance
- * (fee ledgers, expenses, bonuses, fines, attendance marks, and staff
- * records) and renders period-based charts (Week / Month / Year),
- * cross-module quick links, class-level breakdowns, and a recent
- * transactions feed.
- * No other page's data is modified — this page is read-only.
- * No report data is written to localStorage.
- */
+// **
+//  * EDUFLOW PRO - REPORTS & ANALYTICS
+//  * Reads the same backend records used by Student Management and Finance
+//  * (fee ledgers, expenses, bonuses, fines, attendance marks, and staff
+//  * records) and renders period-based charts (Week / Month / Year),
+//  * cross-module quick links, class-level breakdowns, and a recent
+//  * transactions feed.
+//  * No other page's data is modified — this page is read-only.
+//  * No report data is written to localStorage.
+//  */
 
 let currentTxnFilter = 'all';
 let allPeriodTxnRows = []; // full (unsliced) set of transactions for the active period+filter, used by CSV export
