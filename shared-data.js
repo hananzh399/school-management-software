@@ -97,10 +97,8 @@ function calculateFinancials() {
     const realStudentCount = allStudents.length;
 
     // ── REAL fee totals computed from every student's feePayments ────────
-    const currentMonthKey = (() => {
-        const n = new Date();
-        return `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,'0')}`;
-    })();
+    const now = new Date();
+    const currentMonthKey = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
 
     let totalCollected = 0;
     let totalPending   = 0;
@@ -115,9 +113,29 @@ function calculateFinancials() {
         const sibDisc   = Number(s.siblingDiscount)    || 0;
         const monthly   = Math.max(0, tuition + transport - tDisc - trDisc - sibDisc);
 
+        // BUGFIX — "next month logic causing wrong pending/collected totals":
+        // manage-finance.js stamps every payment's monthKey using
+        // getCurrentFeeMonthKey(), which rolls over to NEXT calendar month
+        // starting the 27th (so admins can generate next month's vouchers
+        // early). This dashboard, however, was matching payments against the
+        // plain REAL calendar month only. Any payment made on the 27th-31st
+        // — almost always a student catching up on THIS month's overdue fee
+        // — was tagged with next month's key, so it silently failed the
+        // `p.monthKey === currentMonthKey` check here and the dashboard kept
+        // showing that fee as still pending even though it had been paid.
+        // Fix: match by the payment's actual timestamp against the real
+        // calendar month instead of trusting the (possibly rolled-forward)
+        // label, falling back to the old label match only for legacy
+        // records that have no timestamp at all.
         const payments   = s.feePayments || [];
         const paidThisMonth = payments
-            .filter(p => p.monthKey === currentMonthKey)
+            .filter(p => {
+                if (p.date) {
+                    const d = new Date(p.date);
+                    return !isNaN(d.getTime()) && d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
+                }
+                return p.monthKey === currentMonthKey;
+            })
             .reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
 
         // Lifetime collected
