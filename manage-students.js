@@ -5315,7 +5315,8 @@ body{font-family:'Cormorant Garamond',Georgia,serif;background:#eef2f7;padding:2
 .slc-l-stamp-ring span{font-size:8px;font-weight:700;letter-spacing:.12em;line-height:1.2}
 
 @media print{
-  html,body{padding:0;margin:0;background:#fff;width:100%;height:100%}
+  html,body{padding:0;margin:0;background:#fff;width:100%;height:auto;min-height:0}
+  body{display:block !important;min-height:0 !important}
   @page{size:A4 landscape;margin:6mm}
   .slc-cert-outer.slc-landscape{box-shadow:none;border-radius:0;margin:0 auto;page-break-after:avoid;page-break-inside:avoid}
 }
@@ -5653,7 +5654,8 @@ body{font-family:'Cormorant Garamond',Georgia,serif;background:#eef2f7;padding:2
 .char-sig-line{width:200px;height:1px;background:#334155;margin:0 auto 8px}
 .char-sig-title{font-family:'Inter',sans-serif;font-size:12px;font-weight:700;color:#0f172a;text-transform:uppercase;letter-spacing:.06em}
 @media print{
-  html,body{padding:0;margin:0;background:#fff;width:100%;height:100%}
+  html,body{padding:0;margin:0;background:#fff;width:100%;height:auto;min-height:0}
+  body{display:block !important;min-height:0 !important}
   @page{size:A4 portrait;margin:5mm}
   .char-cert-outer{box-shadow:none;border-radius:0;margin:0 auto;page-break-after:avoid;page-break-inside:avoid}
 }
