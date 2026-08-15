@@ -391,6 +391,12 @@ function appendClassCard(name, fee, fund, isNew = false, sections = []) {
   const icon  = CLASS_ICONS[grid.children.length % CLASS_ICONS.length];
   const color = CLASS_COLORS[grid.children.length % CLASS_COLORS.length];
 
+  // Remember the name this card started with (empty for a brand-new card).
+  // saveAll() compares the CURRENT input value against this at save time to
+  // detect a rename and cascade it to every student already in that class —
+  // see _collectClassSectionRenames()/cascadeClassSectionRenames() below.
+  div.dataset.originalName = isNew ? '' : (name || '');
+
   div.innerHTML = `
     <button class="delete-card-btn" title="Remove class">
       <i class="fas fa-times"></i>
@@ -451,6 +457,9 @@ function appendClassCard(name, fee, fund, isNew = false, sections = []) {
 function buildSectionChip(value, cardEl, isNew = false) {
   const chip = document.createElement('span');
   chip.className = 'section-chip' + (isNew ? ' is-new' : '');
+  // Same original-value tracking as the class card, scoped to this section
+  // chip — see _collectClassSectionRenames() below.
+  chip.dataset.originalValue = isNew ? '' : (value || '');
   chip.innerHTML = `
     <input type="text" class="section-chip-input" value="${value || ''}" placeholder="A" maxlength="20">
     <button type="button" class="section-chip-remove" title="Remove section">
@@ -871,11 +880,146 @@ function _sanitizeStaffBuckets() {
 }
 
 // ═══════════════════════════════════════════════
+//  CLASS / SECTION RENAME CASCADE
+// ═══════════════════════════════════════════════
+// Renaming a class or section here used to only ever update this Settings
+// row — every student already admitted into that class/section kept the
+// OLD name on their own record, so they silently fell out of that class's
+// roster, fee totals, and the promotion ladder. This detects a rename at
+// save time and rewrites the old name to the new one on every matching
+// student record in the backend (the single source of truth — same
+// pattern manage-students.js uses, no localStorage involved).
+const STUDENTS_API_BASE = 'https://softschool-production.up.railway.app/api/students';
+
+/**
+ * Compare each class card's/section chip's CURRENT value against the
+ * `data-original-*` value stamped on it when the page loaded (see
+ * appendClassCard/buildSectionChip). A card/chip with no original value
+ * (brand new, never saved before) is never treated as a rename.
+ */
+function _collectClassSectionRenames() {
+  const classRenames   = []; // { from, to }
+  const sectionRenames = []; // { classFrom, from, to }  (classFrom = that class's ORIGINAL name)
+
+  document.querySelectorAll('.class-card').forEach(card => {
+    const originalName = (card.dataset.originalName || '').trim();
+    const nameInput = card.querySelector('.class-name-input');
+    const newName = nameInput ? nameInput.value.trim() : '';
+    if (originalName && newName && originalName !== newName) {
+      classRenames.push({ from: originalName, to: newName });
+    }
+    // Sections are matched against students by their class's ORIGINAL name,
+    // since that's still what's stored on every student record at save time
+    // — even if this same save also renames the class itself.
+    const classKeyForSections = originalName || newName;
+
+    card.querySelectorAll('.section-chip').forEach(chip => {
+      const originalValue = (chip.dataset.originalValue || '').trim();
+      const input = chip.querySelector('.section-chip-input');
+      const newValue = input ? input.value.trim() : '';
+      if (originalValue && newValue && originalValue !== newValue) {
+        sectionRenames.push({ classFrom: classKeyForSections, from: originalValue, to: newValue });
+      }
+    });
+  });
+
+  return { classRenames, sectionRenames };
+}
+
+/** PUT a full student record back to the backend — same shape the GET returns. */
+function _apiUpdateStudent(student, schoolId) {
+  return apiRequest(
+    `${STUDENTS_API_BASE}/${encodeURIComponent(student.regNo)}?schoolId=${encodeURIComponent(schoolId)}`,
+    { method: 'PUT', body: JSON.stringify(student) }
+  );
+}
+
+/**
+ * Walk every student belonging to this school and rewrite any class/section
+ * name that was just renamed in Settings. Also updates the graduated-
+ * student archive snapshot (graduatedClass/graduatedSection) so the Archive
+ * Center's filters stay in step with the school's current class names.
+ * Best-effort: reports how many records were updated/failed via a toast,
+ * same as the rest of this page.
+ */
+async function cascadeClassSectionRenames(renames) {
+  const { classRenames, sectionRenames } = renames;
+  if (!classRenames.length && !sectionRenames.length) return;
+
+  let schoolId;
+  try { schoolId = _getSchoolId(); } catch (e) { return; }
+  if (!schoolId) return;
+
+  let students;
+  try {
+    students = await apiRequest(`${STUDENTS_API_BASE}?schoolId=${encodeURIComponent(schoolId)}`);
+  } catch (err) {
+    console.error('[Settings] Could not load students to cascade the rename:', err);
+    showToast('Renamed in Settings, but existing students could not be updated automatically.', 'error');
+    return;
+  }
+  if (!Array.isArray(students) || !students.length) return;
+
+  const classMap = new Map(classRenames.map(r => [r.from, r.to]));
+  let updatedCount = 0;
+  let failedCount  = 0;
+
+  for (const student of students) {
+    let changed = false;
+    const originalClass     = student.studentClass;
+    const originalGradClass = student.graduatedClass;
+
+    if (originalClass && classMap.has(originalClass)) {
+      student.studentClass = classMap.get(originalClass);
+      changed = true;
+    }
+    const sectionRename = sectionRenames.find(r => r.classFrom === originalClass && r.from === student.section);
+    if (sectionRename) {
+      student.section = sectionRename.to;
+      changed = true;
+    }
+
+    if (originalGradClass && classMap.has(originalGradClass)) {
+      student.graduatedClass = classMap.get(originalGradClass);
+      changed = true;
+    }
+    const gradSectionRename = sectionRenames.find(r => r.classFrom === originalGradClass && r.from === student.graduatedSection);
+    if (gradSectionRename) {
+      student.graduatedSection = gradSectionRename.to;
+      changed = true;
+    }
+
+    if (!changed) continue;
+
+    try {
+      await _apiUpdateStudent(student, schoolId);
+      updatedCount++;
+    } catch (err) {
+      failedCount++;
+      console.error('[Settings] Failed to update student', student.regNo, 'during rename cascade:', err);
+    }
+  }
+
+  if (updatedCount) {
+    showToast(
+      `Updated ${updatedCount} student record(s) to match the renamed class/section.` +
+      (failedCount ? ` ${failedCount} could not be updated — try Save again.` : ''),
+      failedCount ? 'error' : 'success'
+    );
+  } else if (failedCount) {
+    showToast('Could not update existing students for the rename — try Save again.', 'error');
+  }
+}
+
+// ═══════════════════════════════════════════════
 //  SAVE ALL  (PUT /api/settings)
 // ═══════════════════════════════════════════════
 async function saveAll() {
   // — Classes —
   const cards   = document.querySelectorAll('.class-card');
+  // Detect renames BEFORE anything else touches the DOM below, comparing
+  // against the data-original-* stamped at load time.
+  const pendingRenames = _collectClassSectionRenames();
   const classes = [];
   cards.forEach(card => {
     const name = card.querySelector('.class-name-input').value.trim();
@@ -981,6 +1125,19 @@ async function saveAll() {
 
     showBadge();
     showToast('All configurations saved successfully.', 'success');
+
+    // Rebuild the class cards from what was actually saved — this also
+    // re-stamps data-original-name/data-original-value against the NEW
+    // names, so a second rename later in the same visit is detected
+    // correctly instead of being compared against stale values.
+    loadClasses();
+
+    // Cascade any class/section rename to existing student records. Runs
+    // after the settings save succeeds (so we never rename students for a
+    // class rename that didn't actually persist) and after loadClasses()
+    // rebuilds the cards, so the DOM value used for `pendingRenames` above
+    // — which was captured before the rebuild — is still correct here.
+    cascadeClassSectionRenames(pendingRenames);
   } catch (err) {
     console.error('[Settings] Save All failed:', err);
     showToast('Could not save to the server. Check your connection and try again.', 'error');

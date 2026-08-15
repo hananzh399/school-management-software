@@ -1249,7 +1249,11 @@ if (certUploadInput) {
         'standardFee', 'admissionFee', 'tuitionDiscount',
         'transportDiscount', 'siblingDiscount', 'transportFee', 'netPayable'
     ];
-    const INTEGER_FIELDS = ['age'];
+    const INTEGER_FIELDS = ['age', 'graduatedYear'];
+    // Sent as "on" by FormData when checked, absent when unchecked — neither
+    // is valid JSON for a Java Boolean, so this needs its own coercion pass
+    // in toApiPayload() (see below).
+    const BOOLEAN_FIELDS = ['isLifetime'];
 
     /*
      * These are the properties represented by StudentController's Student
@@ -1266,8 +1270,41 @@ if (certUploadInput) {
         'permanentAddress', 'mailingAddress', 'standardFee', 'admissionFee',
         'tuitionDiscount', 'transportDiscount', 'siblingDiscount',
         'transportMode', 'transportType', 'transportFee', 'netPayable',
-        'otherFeesData', 'status', 'photo', 'certData'
+        'otherFeesData', 'status', 'photo', 'certData',
+        // Sibling link fields — now persisted server-side (Student.java).
+        // hasSiblings is an array in memory but a JSON LONGTEXT column on the
+        // backend, so it's serialized/parsed like otherFeesData already is
+        // (see toApiPayload() and normalizeSiblingFieldsFromServer() below).
+        'siblingGroupId', 'isSibling', 'siblingOf', 'hasSiblings',
+        // Archive Center "Date Removed" (see deleteRecord()).
+        'droppedDate',
+        // Discount validity (see editStudentInfo()'s reset issue).
+        'isLifetime', 'discountExpiry',
+        // Graduation snapshot — set by confirmPromotion() when a student is
+        // promoted out of the school's last configured class. Now persisted
+        // server-side (Student.java) so the Archive Center's "graduated"
+        // roster survives a reload/resync instead of only living as long as
+        // the tab stayed open.
+        'graduatedDate', 'graduatedYear', 'graduatedClass', 'graduatedSection'
     ];
+
+    /**
+     * hasSiblings travels over the wire as a JSON string (the backend column
+     * is LONGTEXT, same pattern as otherFeesData) but every place in this
+     * file that reads it expects a real array. Call this on any student
+     * object that just came back from the server (a save response, or a
+     * GET/poll) before it's merged into the in-memory database.
+     */
+    function normalizeSiblingFieldsFromServer(student) {
+        if (student && typeof student.hasSiblings === 'string') {
+            try {
+                student.hasSiblings = JSON.parse(student.hasSiblings || '[]');
+            } catch (e) {
+                student.hasSiblings = [];
+            }
+        }
+        return student;
+    }
 
     /**
      * Build a payload safe to POST to the Spring Boot API.
@@ -1300,6 +1337,22 @@ if (certUploadInput) {
                 payload[f] = isNaN(n) ? 0 : n;
             } else {
                 delete payload[f];
+            }
+        });
+
+        // hasSiblings is kept as an array in memory but the backend column is
+        // a JSON LONGTEXT string (same pattern as otherFeesData) — encode it
+        // on the way out.
+        if (Array.isArray(payload.hasSiblings)) {
+            payload.hasSiblings = JSON.stringify(payload.hasSiblings);
+        }
+
+        // Checkbox fields arrive as the string "on" (checked) or are simply
+        // absent from FormData (unchecked) — neither survives Jackson's
+        // Boolean deserialization, so coerce explicitly.
+        BOOLEAN_FIELDS.forEach(f => {
+            if (Object.prototype.hasOwnProperty.call(payload, f)) {
+                payload[f] = (payload[f] === 'on' || payload[f] === true || payload[f] === 'true');
             }
         });
 
@@ -1458,6 +1511,7 @@ if (certUploadInput) {
             const local        = getDatabase();
             const localByRegNo = new Map(local.map(s => [s.regNo, s]));
             const merged        = serverStudents.map(srv => {
+                normalizeSiblingFieldsFromServer(srv);
                 const localMatch = localByRegNo.get(srv.regNo);
                 const mergedStudent = Object.assign({}, localMatch || {}, srv);
                 // BUGFIX: `srv.id` is the Student entity's numeric database
@@ -1659,10 +1713,31 @@ if (certUploadInput) {
         studentData.netPayable = netTotalInput.value;
         studentData.rollNo     = rollNoInput.value;
         
-        // CRITICAL FIX: Ensure new students are marked as active
-        if (!studentData.status) {
-            studentData.status = 'active';
-        }
+        // NOTE: studentData.status is intentionally left untouched here.
+        // The admission form has no status field, so FormData never
+        // populates it — that's correct. A NEW admission gets 'active'
+        // stamped in the "NEW ADMISSION" branch below, right before it's
+        // created. For an UPDATE, leaving studentData.status alone means
+        // `Object.assign({}, db[index], studentData)` keeps whatever
+        // status the record already had (active/graduated/dropped).
+        //
+        // BUGFIX (fixed): this used to unconditionally set
+        // studentData.status = 'active' right here, for BOTH new and
+        // existing students. Because the form has no status field, that
+        // condition was always true — so saving ANY edit to an existing
+        // student (even one that had been promoted-out/graduated or
+        // dropped) silently flipped them back to 'active', which is what
+        // made graduated/archived students reappear on the live roster
+        // ("re-enrolled") after being edited.
+
+        // BUGFIX: FormData simply omits an unchecked checkbox rather than
+        // sending "false" — so unchecking "Lifetime Discount" (to switch a
+        // student over to a real expiry date) left studentData.isLifetime
+        // absent, and `candidate = Object.assign({}, db[index], studentData)`
+        // below would then keep the OLD `true` value from db[index] since
+        // nothing overrode it. Stamp the real state explicitly so unchecking
+        // it actually clears it.
+        studentData.isLifetime = !!(lifetimeCheck && lifetimeCheck.checked);
 
         const existingId = editIdHidden.value.trim();
 
@@ -1681,6 +1756,7 @@ if (certUploadInput) {
                  */
                 const candidate = Object.assign({}, db[index], studentData);
                 const saved = await apiSaveStudent(candidate);
+                if (saved) normalizeSiblingFieldsFromServer(saved);
                 db[index] = Object.assign({}, candidate, saved || {}, { id: db[index].id });
                 saveDatabase(db);
                 showToast("Updated", "Record updated successfully", "info");
@@ -1703,6 +1779,10 @@ if (certUploadInput) {
                 const regNo = resolveFreshRegNo(db, admissionForm.dataset.pendingRegNo);
                 studentData.regNo = regNo;
                 studentData.id    = regNo;
+                // A brand-new admission always starts on the active roster.
+                if (!studentData.status) {
+                    studentData.status = 'active';
+                }
 
                 try {
                     const saved = await apiSaveStudent(studentData);
@@ -1806,7 +1886,11 @@ if (certUploadInput) {
                     regNo: newRegNo,
                     id: groupId,   // shared 00X — NOT shown in main table
                     isSibling: true,
-                    siblingGroupId: groupId
+                    siblingGroupId: groupId,
+                    // This is always a brand-new admission (this whole dialog
+                    // only appears from the "NEW ADMISSION" branch), so it
+                    // always starts active — same as the non-sibling path.
+                    status: studentData.status || 'active'
                 };
 
                 // 4. If the ORIGINAL student is not yet in a group, update their id too
@@ -1846,6 +1930,7 @@ if (certUploadInput) {
                     const saved = await apiSaveStudent(member);
                     const index = workingDb.findIndex(s => s.regNo === member.regNo);
                     if (index !== -1 && saved) {
+                        normalizeSiblingFieldsFromServer(saved);
                         workingDb[index] = Object.assign({}, workingDb[index], saved, { id: workingDb[index].id });
                     }
                 }
@@ -1868,6 +1953,10 @@ if (certUploadInput) {
             const regNo       = resolveFreshRegNo(db, admissionForm.dataset.pendingRegNo);
             studentData.regNo = regNo;
             studentData.id    = regNo;
+            // Brand-new admission — always starts active.
+            if (!studentData.status) {
+                studentData.status = 'active';
+            }
 
             try {
                 const saved = await apiSaveStudent(studentData);
@@ -3245,8 +3334,16 @@ if (certUploadInput) {
             : '';
 
         // Checkbox for Promotion Mode
+        // BUGFIX: this used to default to checked only when `!s.promoted`.
+        // `promoted` is set to true the first time a student is promoted and
+        // is never reset afterwards, so in every LATER promotion cycle (e.g.
+        // the following year) every returning student's box started
+        // unchecked — silently excluding them unless the admin happened to
+        // notice and re-check each one by hand. Promote mode should default
+        // to "select everyone currently listed" every time it's opened; the
+        // "Promoted"/"Not Promoted" badge below still shows prior status.
         const checkboxCell = promoteMode
-            ? `<td><input type="checkbox" class="promote-checkbox" data-regno="${s.regNo}" ${s.promoted ? '' : 'checked'} style="width:18px;height:18px;"></td>`
+            ? `<td><input type="checkbox" class="promote-checkbox" data-regno="${s.regNo}" checked style="width:18px;height:18px;"></td>`
             : '';
 
         // Status Badge for Promotion Mode
@@ -3659,6 +3756,7 @@ if (certUploadInput) {
         const thisYear = new Date().getFullYear();
         let promotedCount = 0;
         let graduatedCount = 0;
+        const changedStudents = [];
 
         db.forEach(s => {
             if (selectedRegNos.includes(s.regNo)) {
@@ -3680,14 +3778,40 @@ if (certUploadInput) {
                     s.promoted         = true;
                     graduatedCount++;
                 }
+                changedStudents.push(s);
             }
         });
 
+        // BUGFIX: this used to only call saveDatabase(db), which updates the
+        // browser's in-memory mirror only. The page also polls the backend
+        // every few seconds (syncWithBackend, see startLiveSync()) and pulls
+        // the server's UNCHANGED row over that local change — so a promotion
+        // or graduation would look like it worked, then quietly revert a few
+        // seconds later (a promoted student's class snapped back, or a
+        // graduated student reappeared on the active roster). Every changed
+        // record now gets pushed to the backend the same way every other
+        // mutation in this file does (delete, reactivate, sibling link, etc.)
+        // so the change actually survives a resync/reload.
         saveDatabase(db);
+
+        let failedCount = 0;
+        for (const s of changedStudents) {
+            try {
+                const saved = await apiSaveStudent(s);
+                if (saved) normalizeSiblingFieldsFromServer(saved);
+            } catch (err) {
+                failedCount++;
+                console.error('Backend sync failed (promotion) for', s.regNo, err);
+            }
+        }
+
+        const failureNote = failedCount > 0
+            ? ` ${failedCount} record(s) could not be saved to the server — check your connection, they may revert.`
+            : '';
         showToast(
             "Promotion Complete",
-            `${promotedCount} student(s) promoted.` + (graduatedCount ? ` ${graduatedCount} graduated and moved to the Archive Center.` : ''),
-            "success"
+            `${promotedCount} student(s) promoted.` + (graduatedCount ? ` ${graduatedCount} graduated and moved to the Archive Center.` : '') + failureNote,
+            failedCount > 0 ? "danger" : "success"
         );
 
         togglePromoteMode();
@@ -3968,6 +4092,14 @@ if (certUploadInput) {
         }
     });
 
+    // The Lifetime Discount checkbox only dims/enables the expiry-date field
+    // via its 'change' listener — setting .checked programmatically above
+    // doesn't fire that event, so sync the visual state explicitly here too.
+    if (lifetimeCheck && expiryGroup) {
+        expiryGroup.style.opacity       = lifetimeCheck.checked ? "0.4" : "1";
+        expiryGroup.style.pointerEvents = lifetimeCheck.checked ? "none" : "all";
+    }
+
     // Orphan Status defaults to "Not Orphan" for legacy records saved before
     // this field existed (student.orphanStatus will be undefined for those).
     if (!student.orphanStatus) {
@@ -4077,15 +4209,19 @@ if (certUploadInput) {
         if (typeof renderViewOnlyTable === 'function') renderViewOnlyTable();
         if (typeof renderArchiveDroppedTable === 'function') renderArchiveDroppedTable();
 
-        // NOTE: StudentController's DELETE endpoint is a SOFT delete — it sets
-        // status = "dropped" rather than removing the MySQL row. That's fine for
-        // the Archive Center's "dropped" list, but it means this record will
-        // still be pulled back down by syncWithBackend() (as status "dropped"),
-        // not truly erased from the database. If you want this button to
-        // permanently delete the row, add a hard-delete repository method and
-        // call studentRepository.delete(s) instead of s.setStatus("dropped").
+        // BUGFIX: this used to call apiDeleteStudent(), which hits the
+        // DELETE endpoint — but that endpoint only ever sets status =
+        // "dropped" on the backend row; it has no way to receive or store a
+        // date. So droppedDate never reached the database at all, and the
+        // Archive Center's "Date Removed" column was showing whatever stale
+        // value happened to survive in the browser's memory (which is what
+        // made it look like the admission date after a refresh/resync).
+        // apiSaveStudent() (POST) sends the full record — status AND
+        // droppedDate together — so both are actually persisted. Mirrors
+        // the same pattern reactivateStudent() already uses below.
         try {
-            if (regNo) await apiDeleteStudent(regNo);
+            const saved = await apiSaveStudent(student);
+            if (saved) normalizeSiblingFieldsFromServer(saved);
         } catch (err) {
             console.error('Backend delete failed:', err);
             showToast("Offline", "Removed locally — couldn't reach the server.", "danger");
@@ -4210,6 +4346,25 @@ if (certUploadInput) {
             }
         });
 
+        // ── Discount validity ──
+        const totalDiscountAmt = parseFloat(s.tuitionDiscount||0) + parseFloat(s.transportDiscount||0) + parseFloat(s.siblingDiscount||0) + parseFloat(s.booksDiscount||0) + otherFeesArr.reduce((sum,f)=>sum+(parseFloat(f.discount||0)),0);
+        const isLifetimeDiscount = (s.isLifetime === true || s.isLifetime === 'on');
+        let discountValidityRow = '';
+        if (totalDiscountAmt > 0) {
+            let validityText;
+            if (isLifetimeDiscount) {
+                validityText = 'Life Time';
+            } else if (s.discountExpiry) {
+                const expDate = new Date(s.discountExpiry);
+                validityText = !isNaN(expDate)
+                    ? expDate.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+                    : s.discountExpiry;
+            } else {
+                validityText = 'Not Set';
+            }
+            discountValidityRow = `<div class="detail-item"><label>Discount Valid Until</label><span>${validityText}</span></div>`;
+        }
+
         const profileContent = `
             <div class="profile-card-header">
                 <div class="profile-header-decor"></div>
@@ -4277,6 +4432,7 @@ if (certUploadInput) {
                     <label>Total Discount</label>
                     <span class="total-discount-value">− Rs. ${(parseFloat(s.tuitionDiscount||0) + parseFloat(s.transportDiscount||0) + parseFloat(s.siblingDiscount||0) + parseFloat(s.booksDiscount||0) + otherFeesArr.reduce((sum,f)=>sum+(parseFloat(f.discount||0)),0)).toFixed(0)}</span>
                 </div>
+                ${discountValidityRow}
                 <div class="detail-item net-payable-item">
                     <label>Net Payable</label>
                     <span class="net-payable-value">Rs. ${s.netPayable}</span>
