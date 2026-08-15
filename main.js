@@ -428,7 +428,7 @@ function _dashboardStaffFineFor(staffFines, staff, staffId, monthKey, currentMon
         .filter(item => _dashboardBelongsToMonth(item.monthKey, monthKey, currentMonthKey))
         .reduce((total, item) => total + _dashboardNumber(item.amount), 0);
     const absence = monthKey === currentMonthKey
-        ? _dashboardNumber((staff.find(m => String(m.id) === String(staffId)) || {}).fines)
+        ? _dashboardNumber((staff.find(m => String(m.staffId) === String(staffId)) || {}).fines)
         : 0;
     return manual + absence;
 }
@@ -464,12 +464,26 @@ function _dashboardSalaryAmount(salaryRecords, staff, staffFines, monthKey, curr
     // authoritative, computed server-side. For staff not yet paid, estimate
     // it as roster salary minus whatever fine is on file for them, so
     // Pending already reflects the fine before payroll actually runs.
+    //
+    // BUGFIX — "salary paid but dashboard still shows it as Pending":
+    // Finance rows are keyed by the staff member's PUBLIC staffId (e.g.
+    // "PSC_S_1" — see FinanceController#paySalary, which calls
+    // record.setStaffId(staffId) using that same public id). But `staff`
+    // here is the RAW /api/staff response, where `.id` is the backend's
+    // internal auto-generated primary key (a Long) and `.staffId` is the
+    // public id — two completely different ID spaces. Matching on
+    // `member.id` below could never find that staff member's paid SALARY
+    // row, so it always fell through to the "not yet paid" estimate even
+    // for staff who'd actually been paid in full, leaving a false residual
+    // in Pending. Matching on `member.staffId` (mirrors manage-finance.js's
+    // normalizeStaffMember(), which does exactly this for the same reason)
+    // fixes it.
     const paidByStaffId = new Map(paidRows.map(row => [String(row.staffId), row]));
     const totalDue = staff.reduce((total, member) => {
-        const paidRow = paidByStaffId.get(String(member.id));
+        const paidRow = paidByStaffId.get(String(member.staffId));
         if (paidRow && paidRow.totalDue != null) return total + _dashboardNumber(paidRow.totalDue);
         const gross = _dashboardNumber(member.salary);
-        const fine = _dashboardStaffFineFor(staffFines, staff, member.id, monthKey, currentMonthKey);
+        const fine = _dashboardStaffFineFor(staffFines, staff, member.staffId, monthKey, currentMonthKey);
         return total + Math.max(0, gross - fine);
     }, 0);
 
