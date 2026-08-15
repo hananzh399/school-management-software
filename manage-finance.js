@@ -3370,6 +3370,32 @@ async function syncStudentFineFromBackend(student, monthKey) {
  * the underlying calculation logic changes.
  */
 async function getFeeRowFinance(student, monthKey) {
+    // BUGFIX — "arrears of past months not working properly": computeFeeBreakdown()
+    // always computes the CURRENT fee-billing month's total (it has no month
+    // parameter). Every branch below used to run for ANY requested monthKey,
+    // silently substituting today's cumulative total for whatever past month
+    // was actually being asked about. Only take the live/current-month path
+    // when the requested month really IS the current fee-billing month;
+    // otherwise use the historical voucher-snapshot lookup, which reflects
+    // what was actually billed and paid for that specific month.
+    const isCurrentFeeMonth = monthKey === getCurrentFeeMonthKey();
+    if (!isCurrentFeeMonth) {
+        const hist = _getHistoricalMonthFinance(student, monthKey);
+        if (hist) return hist;
+        // No voucher was ever generated for that month — nothing was billed,
+        // so there's nothing outstanding to report.
+        return {
+            regNo: student.regNo || student.id,
+            studentName: student.fullName,
+            guardianName: student.guardianName,
+            remainingBalance: 0,
+            paidAmount: 0,
+            paymentStatus: 'Paid',
+            fineAmount: 0,
+            fineReason: ''
+        };
+    }
+
     const finance = await syncStudentFineFromBackend(student, monthKey);
 
     // BUGFIX — "Pending Fees row reverts to the OLD fee right after
@@ -3394,7 +3420,10 @@ async function getFeeRowFinance(student, monthKey) {
     // ---- Local / live computation (now always used for the TOTAL) ----
     // Keep the backend's own paidAmount when it's available (advance
     // payments recorded server-side), otherwise fall back to local payment
-    // history.
+    // history. This branch only runs when monthKey IS the current
+    // fee-billing month (see isCurrentFeeMonth above), so payments stamped
+    // via saveSimpleStudentFeePayment() — which always uses
+    // getCurrentFeeMonthKey() — line up correctly here.
     const f = computeFeeBreakdown(student);
     const payments = (student.feePayments || []).filter(p => p.monthKey === monthKey);
     const paidAmount = (finance && typeof finance.paidAmount === 'number')
@@ -6580,6 +6609,79 @@ function _admissionMonthKey(student) {
 function _getStudents() { return _studentsCache; }
 function _getClasses() { return Array.isArray(_classConfigsCache) ? _classConfigsCache : []; }
 
+/**
+ * BUGFIX — "arrears of past months not working properly":
+ * getFeeRowFinance()/loadFeeDefaulters()/_computePendingMonths() used to
+ * call computeFeeBreakdown(student) for EVERY month being checked — but
+ * computeFeeBreakdown() has no month parameter and is hardwired to always
+ * return only the CURRENT fee-billing month's total (it uses
+ * getCurrentFeeMonthKey() internally for the voucher snapshot lookup, the
+ * live arrears rollup, and the custom-fee-month check). So whenever the Fee
+ * Defaulters page asked about a past month (via the month dropdown, or the
+ * 6-month pending scan), it was actually comparing TODAY's cumulative,
+ * arrears-inclusive total against that OTHER month's payments — never that
+ * month's real bill. This produced wrong/duplicated remaining balances and
+ * an inflated "pending months" list.
+ *
+ * Fix: for any month that isn't the current fee-billing month, look up the
+ * voucher that was actually generated for that specific month (the
+ * authoritative record of what was billed) and sum only the payments that
+ * fall inside that voucher's own time window — from the moment it was
+ * generated up to the moment the NEXT voucher was generated for this
+ * student. This mirrors the same proven approach computeOutstandingArrears()
+ * already uses to survive late payments recorded under a different
+ * monthKey label than the bill they're actually settling (see its comments
+ * for why matching by monthKey alone is unsafe near month boundaries).
+ *
+ * Returns null if no voucher was ever generated for that month — nothing
+ * was billed, so there is nothing to be a defaulter for.
+ */
+function _getHistoricalMonthFinance(student, monthKey) {
+    const studentId = student.regNo || student.id;
+    if (!studentId) return null;
+
+    const list = getGeneratedVouchers();
+    const key = voucherRecordKey(studentId, monthKey);
+    const record = list.find(r => r.key === key
+        && (!r.studentName || r.studentName === student.fullName));
+    if (!record) return null;
+
+    const billed = Number(record.snapshot && record.snapshot.voucherTotal) || 0;
+
+    // Bound the payment window using this student's OWN voucher history
+    // (sorted chronologically), so a payment made after the *next* voucher
+    // was generated is never miscounted against this earlier bill.
+    const ownRecords = list
+        .filter(r => String(r.studentId) === String(studentId)
+                   && (!r.studentName || r.studentName === student.fullName))
+        .sort((a, b) => a.monthKey.localeCompare(b.monthKey));
+    const ownIdx = ownRecords.findIndex(r => r.key === key);
+    const startAt = record.generatedAt ? new Date(record.generatedAt).getTime() : 0;
+    const nextRecord = ownIdx >= 0 ? ownRecords[ownIdx + 1] : null;
+    const endAt = (nextRecord && nextRecord.generatedAt) ? new Date(nextRecord.generatedAt).getTime() : Infinity;
+
+    const payments = student.feePayments || [];
+    const paidAmount = payments
+        .filter(p => {
+            if (!p.date) return p.monthKey === monthKey; // legacy records with no timestamp
+            const paidAt = new Date(p.date).getTime();
+            return !isNaN(paidAt) && paidAt >= startAt && paidAt < endAt;
+        })
+        .reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
+
+    const remainingBalance = Math.max(0, billed - paidAmount);
+    return {
+        regNo: studentId,
+        studentName: student.fullName,
+        guardianName: student.guardianName,
+        remainingBalance,
+        paidAmount,
+        paymentStatus: remainingBalance <= 0 ? 'Paid' : (paidAmount > 0 ? 'Partial' : 'Pending'),
+        fineAmount: remainingBalance <= 0.01 ? 0 : (Number(record.snapshot && record.snapshot.fineAmount) || 0),
+        fineReason: ''
+    };
+}
+
 /* ── Toast ───────────────────────────────────────────────── */
 function _toast(msg, type) {
     const container = document.getElementById('finance-toast-container');
@@ -7098,12 +7200,27 @@ async function loadFeeDefaulters() {
         let finance = null;
         try { if (typeof getFeeRowFinance === 'function') finance = await getFeeRowFinance(s, monthKey); } catch(e) {}
         if (!finance) {
-            let feeTotal = 0;
-            try { feeTotal = computeFeeBreakdown(s).voucherTotal; } catch(e) { feeTotal = Number(s.standardFee || 0); }
-            const payments = (s.feePayments || []).filter(p => p.monthKey === monthKey);
-            const paidAmount = payments.reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
-            const remaining = Math.max(0, feeTotal - paidAmount);
-            finance = { remainingBalance: remaining, paidAmount, paymentStatus: remaining <= 0 ? 'Paid' : (paidAmount > 0 ? 'Partial' : 'Pending'), studentName: s.fullName || s.name, guardianName: s.guardianName };
+            // BUGFIX — "arrears of past months not working properly": this
+            // fallback used to always call computeFeeBreakdown(s), which is
+            // hardwired to the CURRENT fee-billing month only, regardless of
+            // which `monthKey` was actually being checked. Route through the
+            // same month-aware helper getFeeRowFinance() uses, so a past
+            // month's real billed/paid amounts are used instead of today's
+            // cumulative total.
+            const isCurrentFeeMonth = monthKey === getCurrentFeeMonthKey();
+            if (!isCurrentFeeMonth) {
+                finance = _getHistoricalMonthFinance(s, monthKey) || {
+                    remainingBalance: 0, paidAmount: 0, paymentStatus: 'Paid',
+                    studentName: s.fullName || s.name, guardianName: s.guardianName
+                };
+            } else {
+                let feeTotal = 0;
+                try { feeTotal = computeFeeBreakdown(s).voucherTotal; } catch(e) { feeTotal = Number(s.standardFee || 0); }
+                const payments = (s.feePayments || []).filter(p => p.monthKey === monthKey);
+                const paidAmount = payments.reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
+                const remaining = Math.max(0, feeTotal - paidAmount);
+                finance = { remainingBalance: remaining, paidAmount, paymentStatus: remaining <= 0 ? 'Paid' : (paidAmount > 0 ? 'Partial' : 'Pending'), studentName: s.fullName || s.name, guardianName: s.guardianName };
+            }
         }
         if (finance.remainingBalance > 0 && finance.paymentStatus !== 'Paid') {
             const pendingMonths = _computePendingMonths(s);
@@ -7126,6 +7243,7 @@ async function loadFeeDefaulters() {
 function _computePendingMonths(student) {
     const now = new Date(), pending = [];
     const admissionKey = _admissionMonthKey(student);
+    const currentFeeMonthKey = getCurrentFeeMonthKey();
     for (let i = 0; i < 6; i++) {
         const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
         const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
@@ -7135,11 +7253,27 @@ function _computePendingMonths(student) {
         if (admissionKey && key < admissionKey) continue;
         if (!_isMonthDue(key)) continue;
         const lbl = d.toLocaleDateString('en-US', { month:'short', year:'numeric' });
-        const payments = (student.feePayments || []).filter(p => p.monthKey === key);
-        const paidAmount = payments.reduce((s, p) => s + (Number(p.amount) || 0), 0);
-        let feeTotal = 0;
-        try { feeTotal = computeFeeBreakdown(student).voucherTotal; } catch(e) { feeTotal = Number(student.standardFee || 0); }
-        if (Math.max(0, feeTotal - paidAmount) > 0) pending.push(lbl);
+
+        // BUGFIX — "arrears of past months not working properly": this used
+        // to call computeFeeBreakdown(student) inside the loop, which always
+        // returns the SAME current-month total on every iteration (it has no
+        // month parameter) — so every one of the last 6 months was being
+        // compared against today's cumulative, arrears-inclusive bill
+        // instead of what was actually billed for that specific month. Use
+        // the same historical voucher-snapshot lookup as getFeeRowFinance()
+        // for any month that isn't the live current fee-billing month.
+        let remaining;
+        if (key === currentFeeMonthKey) {
+            const payments = (student.feePayments || []).filter(p => p.monthKey === key);
+            const paidAmount = payments.reduce((s, p) => s + (Number(p.amount) || 0), 0);
+            let feeTotal = 0;
+            try { feeTotal = computeFeeBreakdown(student).voucherTotal; } catch(e) { feeTotal = Number(student.standardFee || 0); }
+            remaining = Math.max(0, feeTotal - paidAmount);
+        } else {
+            const hist = _getHistoricalMonthFinance(student, key);
+            remaining = hist ? hist.remainingBalance : 0; // no voucher generated that month = nothing billed
+        }
+        if (remaining > 0) pending.push(lbl);
     }
     return pending;
 }
