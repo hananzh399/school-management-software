@@ -345,7 +345,43 @@ let _staffCache = { Teaching: [], 'Non-Teaching': [] };
 
 async function refreshStudentsCache() {
     const data = await _backendGet(STUDENTS_API_BASE, '');
-    if (Array.isArray(data)) _studentsCache = data;
+    if (!Array.isArray(data)) return;
+
+    // BUGFIX — "arrears/defaulters flicker: sometimes showing, sometimes not,
+    // before-generation price differs from after-generation price":
+    // liveSyncTick() calls this every 10 seconds (see LIVE_SYNC_INTERVAL_MS
+    // below), and it used to blindly replace the ENTIRE _studentsCache with
+    // the fresh backend list. But per the note above, the backend Student
+    // API has no feePayments field to return — so every ~10 seconds, every
+    // student's local payment history was silently wiped back to empty.
+    // Anything reading student.feePayments directly — computeOutstandingArrears()
+    // (the arrears roll-forward calc), the Fee Defaulters page's historical
+    // per-month lookups, and the live fallback paidAmount calc in
+    // getFeeRowFinance() — would then see "0 paid" for a moment, flip a
+    // fully-paid student back to "defaulter"/"arrears owed", until the next
+    // local payment write repopulated it — only for the NEXT poll to wipe it
+    // again. This is also why the arrears amount shown right before clicking
+    // "Generate Voucher" could differ from what got locked into the voucher:
+    // if a poll landed in between and wiped feePayments, computeOutstandingArrears()
+    // recomputed against an empty payment history at the exact moment
+    // recordVoucherGeneration() ran, baking a wrong (inflated) figure
+    // permanently into that month's snapshot.
+    // Fix: carry each student's local feePayments forward across the
+    // refresh instead of discarding it. The backend snapshot still wins for
+    // every other field; only feePayments (which the backend doesn't own)
+    // survives from the previous cache when the incoming record doesn't
+    // have any.
+    const existingPayments = new Map(
+        _studentsCache.map(s => [String((s && (s.regNo || s.id)) || ''), s && s.feePayments])
+    );
+    _studentsCache = data.map(s => {
+        const key = String((s && (s.regNo || s.id)) || '');
+        if ((!Array.isArray(s.feePayments) || s.feePayments.length === 0) && existingPayments.has(key)) {
+            const preserved = existingPayments.get(key);
+            if (Array.isArray(preserved) && preserved.length > 0) s.feePayments = preserved;
+        }
+        return s;
+    });
 }
 async function refreshClassConfigsCache() {
     // Real backend route (SchoolSettingsController): GET /api/settings/{schoolId}
@@ -5928,28 +5964,40 @@ function recordVoucherGeneration(student, source = 'individual') {
     const existing = list.find(r => r.key === key);
     if (existing) return { created: false, record: existing };
 
+    // BUGFIX — "before-generation price differs from after-generation
+    // price": batchGenerateVouchers() processes students in chunks of 25,
+    // yielding to the event loop between chunks (setTimeout(...,0)) — long
+    // enough for the 10-second live-sync poll (or another tab/admin) to
+    // refresh _studentsCache in the middle of a bulk generate. The `student`
+    // object passed in here is whatever was captured when the preview
+    // modal opened, which can now be stale (missing a payment that was
+    // just recorded, for example). Re-resolve the freshest copy straight
+    // from the live cache right before computing arrears, so what gets
+    // locked into the voucher always matches what's actually on record.
+    const freshStudent = findStudentExact(getRealStudents(), studentId, student.fullName) || student;
+
     // Roll forward any unpaid balance from earlier months into this
     // month's "Previous Arrears" BEFORE snapshotting, and expire any
     // one-time discount/custom-fee edits that belonged to the month that
     // just ended, so the new voucher starts clean (see startFreshVoucherMonth).
-    const rolledArrears = computeOutstandingArrears(student);
-    student.arrears = rolledArrears;
-    student.voucherCustomFees = false;
-    student.otherFeesData = '[]';
-    student.voucherBulkDiscount = 0;
-    student.voucherCustomFeesMonth = null;
-    startFreshVoucherMonth(studentId, student.fullName, rolledArrears);
+    const rolledArrears = computeOutstandingArrears(freshStudent);
+    freshStudent.arrears = rolledArrears;
+    freshStudent.voucherCustomFees = false;
+    freshStudent.otherFeesData = '[]';
+    freshStudent.voucherBulkDiscount = 0;
+    freshStudent.voucherCustomFeesMonth = null;
+    startFreshVoucherMonth(studentId, freshStudent.fullName, rolledArrears);
 
     // Snapshot pulls straight from the existing, untouched calculation engine
     // so arrears / fines / discounts are captured exactly as the rest of the
     // app already computes them.
-    const f = computeFeeBreakdown(student);
+    const f = computeFeeBreakdown(freshStudent);
 
     const record = {
         key,
         studentId,
-        studentName: student.fullName,
-        studentClass: student.studentClass,
+        studentName: freshStudent.fullName,
+        studentClass: freshStudent.studentClass,
         monthKey,
         generatedAt: new Date().toISOString(),
         source,
