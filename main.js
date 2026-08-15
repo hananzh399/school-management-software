@@ -585,6 +585,23 @@ async function _dashboardSnapshot(
     expenses, salaryRecords, staffAdvances, currentMonthKey
 ) {
     const activeStudents = students.filter(_dashboardIsActiveStudent);
+    // BUGFIX — "delete a student and Collected Fees/Total Revenue drops on
+    // the Dashboard": Expected/Collected/paid-fine totals used to be summed
+    // only over activeStudents above, so the instant a student was deleted
+    // (StudentController#deleteStudent soft-deletes — status -> "dropped",
+    // their Finance ledger rows are never touched), any money they'd
+    // already paid in THIS billing month vanished from Collected Fees,
+    // Total Revenue and Net Profit. Money that has genuinely already been
+    // collected/billed is a historical fact and must not disappear just
+    // because the student's roster status changed afterwards — so these
+    // money figures below are now computed over every student on file
+    // (moneyStudents), while `realStudentCount` and forward-looking things
+    // collected/billed/paid rupee already happened, and unlike headcount it
+    // must not disappear when the student's roster status later changes —
+    // so these money figures below (including admission fees further down)
+    // are now computed over every student on file (moneyStudents), while
+    // `realStudentCount` still correctly uses activeStudents only.
+    const moneyStudents = students;
     const statusByStudent = new Map(_dashboardArray(statusRows)
         .filter(row => row && row.regNo)
         .map(row => [String(row.regNo), row]));
@@ -617,16 +634,16 @@ async function _dashboardSnapshot(
     // (expected − collected, see the `fees` object below) correctly settle
     // back down to the real remaining balance once the bill is actually
     // paid, fine included.
-    const expected = activeStudents.reduce((total, student) => {
+    const expected = moneyStudents.reduce((total, student) => {
         const row = statusByStudent.get(String(student.regNo || student.id || ''));
         return (row && row.netPayable != null) ? total + _dashboardNumber(row.netPayable) : total;
     }, 0);
-    const collected = activeStudents.reduce((total, student) => {
+    const collected = moneyStudents.reduce((total, student) => {
         const row = statusByStudent.get(String(student.regNo || student.id || ''));
         return total + _dashboardNumber(row && row.paidAmount);
     }, 0);
 
-    const fineRecords = await _dashboardFineRecords(activeStudents, monthKey);
+    const fineRecords = await _dashboardFineRecords(moneyStudents, monthKey);
     const paidFines = fineRecords.filter(_dashboardPaidFine);
     const studentLate = paidFines
         .filter(fine => /late|overdue|delay/i.test(String(fine.reason || '')))
@@ -644,7 +661,13 @@ async function _dashboardSnapshot(
     // That old behaviour meant "last month" always showed the exact same
     // admission-fee total as "this month", for a figure that never actually
     // happened last month.
-    const admissionFees = activeStudents.reduce((total, student) => {
+    //
+    // BUGFIX — uses moneyStudents (not activeStudents): an admission fee is
+    // a one-time payment already collected at the moment a student joined.
+    // If that same student is later deleted, the fee they genuinely paid
+    // shouldn't vanish from Total Revenue — same reasoning as collected/
+    // expected above.
+    const admissionFees = moneyStudents.reduce((total, student) => {
         const admissionMonth = _dashboardAdmissionMonthKey(student);
         const belongsHere = admissionMonth
             ? admissionMonth === monthKey

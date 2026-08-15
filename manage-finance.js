@@ -849,6 +849,37 @@ function showPage(pageId) {
 function getRealStudents() {
     return _studentsCache.filter(isStudentBillable);
 }
+
+/**
+ * Same roster as _studentsCache, but explicitly named for use in money
+ * totals (Collected / Generated / Pending on the Fee & Finance header and
+ * per-class stat cards, and anywhere else summing already-recorded
+ * finance data). Unlike getRealStudents() above — which intentionally
+ * excludes archived/dropped students for anything ACTIONABLE (fee tables,
+ * voucher generation, selectors) — money that has already been billed or
+ * collected this month is a historical fact and must not disappear just
+ * because a student was deleted partway through the month. See the
+ * matching backend fix on FinanceController's /status-all, /all-fines and
+ * /fine-details, which likewise stopped filtering finance rows by the
+ * linked student's current status.
+ */
+function getAllStudentsForFinanceTotals() {
+    return _studentsCache;
+}
+
+/**
+ * The fee-voucher billing month, spelled out for display (e.g. "September
+ * 2026"). Unlike `new Date().toLocaleDateString(...)`, this is derived
+ * from getCurrentFeeMonthKey() — so from the 27th onward, once the billing
+ * cycle has already rolled over to next month, the label shown next to the
+ * Collected/Pending/Generated figures (and on printed vouchers) matches
+ * the month those figures actually belong to instead of lagging behind by
+ * one month.
+ */
+function getCurrentFeeMonthLabel() {
+    const [year, month] = getCurrentFeeMonthKey().split('-').map(Number);
+    return new Date(year, (month || 1) - 1, 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+}
 // Students are owned by the Student Management page, but this file does
 // edit them in a few places (marking fees paid, applying discounts, etc.),
 // so any such edit updates the cache immediately and pushes it to the
@@ -1994,7 +2025,14 @@ function _computeRealtimePendingTotal(students) {
     const monthKey = getCurrentFeeMonthKey();
     let total = 0;
     students.forEach(s => {
-        if (!isStudentBillable(s)) return;
+        // BUGFIX — "delete a student and Pending/Total Revenue goes wrong":
+        // this used to skip any non-billable (dropped/graduated) student
+        // outright via isStudentBillable(), so a balance that was already
+        // billed to a student before they were deleted just disappeared
+        // from Pending instead of surfacing as money still owed. Money
+        // already billed this month stays counted here regardless of the
+        // student's current roster status — see getAllStudentsForFinanceTotals()
+        // and the matching backend fix on /status-all.
         const studentId = s.regNo || s.id;
         if (!_hasAnyGeneratedVoucher(studentId)) return;
         let feeTotal = 0;
@@ -2025,7 +2063,7 @@ function updateFeeStatsHeader() {
     if (!genEl || !colEl || !penEl) return;
 
     const monthKey = getCurrentFeeMonthKey();
-    const monthLabel = new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+    const monthLabel = getCurrentFeeMonthLabel();
 
     // FEATURE — "Generated" must show fee-only, never the fine: previously
     // this summed each voucher's snapshotted `voucherTotal`, which already
@@ -2035,16 +2073,22 @@ function updateFeeStatsHeader() {
     // `fineAmount` separately (same source), so subtract it back out here —
     // the fine still shows up fully in Pending and Total with Fine below,
     // just not double-counted into Generated too.
-    // BUGFIX — "delete a student, their fee lingers in Generated forever":
-    // Collected/Pending (below) both derive from getRealStudents(), which
-    // already drops archived/deleted students — but Generated summed
-    // getGeneratedVouchers() directly with no such check, so a voucher
-    // generated before a student was deleted stayed counted here
-    // indefinitely. Filter to vouchers whose student is still on the
-    // active/billable roster, same as everything else on this page.
+    // BUGFIX — "delete a student and their Generated/Collected fees vanish":
+    // this used to scope everything to getRealStudents() (active-roster
+    // only), so the moment a student was soft-deleted mid-month, the
+    // voucher that had genuinely already been generated/collected for them
+    // this billing period disappeared from these totals — Total Revenue and
+    // Net Profit went wrong along with it. Money already billed/collected
+    // is a historical fact of this month, so it stays counted here
+    // regardless of the student's current status — see
+    // getAllStudentsForFinanceTotals() and the matching backend fix on
+    // /status-all. (A NEW voucher can still never be generated for a
+    // dropped student — that's still gated on the active roster wherever
+    // "Generate" actually runs — so this can't resurrect billing for them,
+    // it only stops already-real money from being erased.)
     let totalGenerated = 0;
     try {
-        const billableIds = new Set(getRealStudents().map(s => String(s.regNo || s.id || '')));
+        const billableIds = new Set(getAllStudentsForFinanceTotals().map(s => String(s.regNo || s.id || '')));
         totalGenerated = getGeneratedVouchers()
             .filter(r => r.monthKey === monthKey && billableIds.has(String(r.studentId)))
             .reduce((sum, r) => {
@@ -2057,13 +2101,13 @@ function updateFeeStatsHeader() {
 
     let totalCollected = 0;
     try {
-        const students = getRealStudents();
+        const students = getAllStudentsForFinanceTotals();
         totalCollected = students.reduce((sum, s) => sum + getPaidThisMonthAuthoritative(s, monthKey), 0);
     } catch (e) { totalCollected = 0; }
 
     let totalPending = 0;
     try {
-        const allStudents = getRealStudents();
+        const allStudents = getAllStudentsForFinanceTotals();
         totalPending = _computeRealtimePendingTotal(allStudents);
     } catch (e) { totalPending = 0; }
 
@@ -2105,17 +2149,15 @@ function updateClassFeeStats(className) {
     if (!genEl || !colEl || !penEl) return;
 
     const monthKey = getCurrentFeeMonthKey();
-    const monthLabel = new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+    const monthLabel = getCurrentFeeMonthLabel();
 
-    // See updateFeeStatsHeader() above — Generated stays fee-only, the
-    // fine is subtracted back out of each snapshot's voucherTotal, and (as
-    // with the school-wide total) vouchers belonging to a student who has
-    // since been deleted/archived are excluded so a removed student's fee
-    // drops out of Generated here too, same as it already does for
-    // Collected/Pending below.
+    // See updateFeeStatsHeader() above — Generated/Collected/Pending all
+    // now include a class's dropped/archived students too (money already
+    // billed/collected this month is a historical fact that must survive a
+    // later deletion), matching the school-wide totals.
     let totalGenerated = 0;
     try {
-        const billableIds = new Set(getRealStudents()
+        const billableIds = new Set(getAllStudentsForFinanceTotals()
             .filter(s => s.studentClass === className)
             .map(s => String(s.regNo || s.id || '')));
         totalGenerated = getGeneratedVouchers()
@@ -2131,14 +2173,14 @@ function updateClassFeeStats(className) {
 
     let totalCollected = 0;
     try {
-        const students = getRealStudents()
+        const students = getAllStudentsForFinanceTotals()
             .filter(s => s.studentClass === className);
         totalCollected = students.reduce((sum, s) => sum + getPaidThisMonthAuthoritative(s, monthKey), 0);
     } catch (e) { totalCollected = 0; }
 
     let totalPending = 0;
     try {
-        const classStudents = getRealStudents()
+        const classStudents = getAllStudentsForFinanceTotals()
             .filter(s => s.studentClass === className);
         totalPending = _computeRealtimePendingTotal(classStudents);
     } catch (e) { totalPending = 0; }
@@ -2930,7 +2972,16 @@ function getCurrentStudentBackendFine(student) {
 
 function computeFeeBreakdown(s) {
     const today = new Date();
-    const monthLabel = today.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
+    // BUGFIX — "voucher shows the wrong month after the 27th": this used to
+    // label every row with the raw calendar month (`today`), but the fee
+    // ledger itself (arrears roll-over, fine lookup, netPayable, etc., all
+    // through getCurrentFeeMonthKey()) already rolls over to NEXT month
+    // from the 27th onward — letting admins generate next month's vouchers
+    // early. That mismatch showed e.g. "August 2026" printed on a voucher
+    // whose numbers were actually September's. Derive the label from the
+    // same fee-month key everything else here already uses.
+    const [feeYear, feeMonth] = getCurrentFeeMonthKey().split('-').map(Number);
+    const monthLabel = new Date(feeYear, (feeMonth || 1) - 1, 1).toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
     const regNo = s.regNo || s.id;
 
     /*
@@ -3748,7 +3799,11 @@ async function saveSimpleStudentFeePayment() {
     }
 
     const monthKey = getCurrentFeeMonthKey();
-    const monthLabel = new Date().toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
+    // BUGFIX — see computeFeeBreakdown() above: label the payment with the
+    // fee-billing month (monthKey), not the raw calendar month, so a
+    // payment recorded on/after the 27th (already logged against NEXT
+    // month's monthKey) shows the matching month name in payment history.
+    const monthLabel = getCurrentFeeMonthLabel();
 
     // BUGFIX — "Pay Bill doesn't work / stays View & Pay after paying":
     // This used to ONLY call apiRequest("/pay", ...) against a backend at

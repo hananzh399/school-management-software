@@ -1,4 +1,4 @@
-/**
+**
  * EDUFLOW PRO - REPORTS & ANALYTICS
  * Reads the same backend records used by Student Management and Finance
  * (fee ledgers, expenses, bonuses, fines, attendance marks, and staff
@@ -442,6 +442,18 @@ async function loadReportsDataFromBackend() {
     ]);
 
     const students = _reportsArray(studentsData).filter(_reportsIsActiveStudent);
+    // BUGFIX — "Reports' Total Revenue drops after deleting a student":
+    // _computeExactDashboardTotals() below intentionally mirrors main.js's
+    // dashboard math line-for-line, and main.js was fixed to stop scoping
+    // Collected/Expected/paid-fine totals to only active students (money
+    // already collected/billed this month is a historical fact that must
+    // survive a later deletion — see main.js's _dashboardSnapshot()). Feed
+    // this same unfiltered roster into the totals call below so Reports'
+    // "Total Revenue"/"Total Expense" cards can never drift from the
+    // Dashboard's. Every OTHER use of `students` on this page (headcount
+    // charts, Pending Fees list, "students added/dropped this month") still
+    // correctly uses the active-only roster above.
+    const allStudentsForMoneyTotals = _reportsArray(studentsData);
     const statusRows = statusResponses.flatMap((rows, index) =>
         _reportsArray(rows).map(row => ({ ...row, monthKey: row.monthKey || months[index] }))
     );
@@ -522,8 +534,8 @@ async function loadReportsDataFromBackend() {
         staffAdvancesRaw: staffAdvancesData
     };
     const [current, previous] = await Promise.all([
-        _computeExactDashboardTotals(feeMonthKey, students, staffForTotals, rawFinanceData),
-        _computeExactDashboardTotals(prevFeeMonthKey, students, staffForTotals, rawFinanceData)
+        _computeExactDashboardTotals(feeMonthKey, allStudentsForMoneyTotals, staffForTotals, rawFinanceData),
+        _computeExactDashboardTotals(prevFeeMonthKey, allStudentsForMoneyTotals, staffForTotals, rawFinanceData)
     ]);
     _reportsDataCache.exactTotals = { current, previous };
     // Authoritative per-student fee state for the CURRENT fee month — the
@@ -595,17 +607,21 @@ function _rdSalaryPaid(salaryRecords, staffAdvances, monthKey) {
     return paidFromPayroll + advance;
 }
 
-async function _computeExactDashboardTotals(monthKey, activeStudents, staff, raw) {
+async function _computeExactDashboardTotals(monthKey, moneyStudents, staff, raw) {
     const statusRows = await _reportsGet(`/api/finance/status-all/${encodeURIComponent(monthKey)}`, []);
     const statusByStudent = new Map(_reportsArray(statusRows)
         .filter(row => row && row.regNo)
         .map(row => [String(row.regNo), row]));
-    const collected = activeStudents.reduce((total, student) => {
+    // moneyStudents is the FULL roster (active + dropped/graduated) — see
+    // the BUGFIX note where this is called. Collected/fine/admission totals
+    // are historical facts of the month and must include students who were
+    // later removed from the active roster.
+    const collected = moneyStudents.reduce((total, student) => {
         const row = statusByStudent.get(String(student.regNo || student.id || ''));
         return total + _reportsNumber(row && row.paidAmount);
     }, 0);
 
-    const fineRecords = await _rdFineRecords(activeStudents, monthKey);
+    const fineRecords = await _rdFineRecords(moneyStudents, monthKey);
     const studentFinesTotal = fineRecords.filter(_rdPaidFine)
         .reduce((total, fine) => total + _reportsNumber(fine.amount), 0);
 
@@ -613,7 +629,7 @@ async function _computeExactDashboardTotals(monthKey, activeStudents, staff, raw
         .filter(item => !item.monthKey || item.monthKey === monthKey)
         .reduce((total, item) => total + _reportsNumber(item.amount), 0);
     const teacherAbsenceTotal = staff.reduce((total, member) => total + _reportsNumber(member.fines), 0);
-    const admissionFeesTotal = activeStudents.reduce((total, student) => total + _reportsNumber(student.admissionFee), 0);
+    const admissionFeesTotal = moneyStudents.reduce((total, student) => total + _reportsNumber(student.admissionFee), 0);
     const customFeesTotal = _rdCustomFeesCollected(raw.customFeesRaw, monthKey);
 
     const totalRevenue = collected + studentFinesTotal + staffFineTotal
