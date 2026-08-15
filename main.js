@@ -92,14 +92,19 @@ async function loadDashboardFromBackend() {
     
     // 1. CALCULATE TOTALS FIRST
     // Net Expenses = only money that has actually gone out the door:
-    // Paid Salaries (posted payroll + advances) + Bonuses given + Other
-    // Expenses logged + Dropout Staff Paid Salary (money already paid to
-    // staff who have since been deleted — see the dropout-staff fetch in
+    // Paid Salaries (posted payroll + advances) + Other Expenses logged +
+    // Dropout Staff Paid Salary (money already paid to staff who have
+    // since been deleted — see the dropout-staff fetch in
     // calculateFinancials). Pending Salaries is deliberately left out —
     // it's what's still owed, not a cost incurred yet, so Net Expenses
     // should stay at 0 (plus whatever's genuinely been paid) until a
-    // salary, bonus, expense, or dropout payout is actually recorded.
-    const netExp = data.salaries.paid + data.staffBonusTotal + data.otherExpensesTotal + data.dropoutStaffTotal;
+    // salary, expense, or dropout payout is actually recorded.
+    //
+    // FEATURE — Staff Bonus is deliberately NOT added into Net Expenses.
+    // It still has its own "Staff Bonus" card (animateCounter('staff-bonus', ...)
+    // below) so admins can see how much bonus has been given, but it no
+    // longer reduces Net Expenses / Net Profit on this dashboard.
+    const netExp = data.salaries.paid + data.otherExpensesTotal + data.dropoutStaffTotal;
     
     // Total Revenue = Collected Fees + Admission Fees + Custom Fees
     // Collected + student fines (late/other — real cash actually collected
@@ -717,8 +722,11 @@ async function calculateFinancials() {
         + snapshot.fines.studentOther
         + snapshot.admissionFees
         + snapshot.customFeesCollected;
+    // FEATURE — Staff Bonus is excluded from Net Expenses (see the same
+    // fix in loadDashboardFromBackend's netExp) so Past Month Profit uses
+    // the identical formula as This Month's Profit — otherwise the trend
+    // arrow would be comparing two differently-defined numbers.
     const expensesTotal = snapshot => snapshot.salaries.paid
-        + snapshot.staffBonusTotal
         + snapshot.otherExpensesTotal;
 
     // Dropout Staff Paid Salary total — see the fetch above for why this is
