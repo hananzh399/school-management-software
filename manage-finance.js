@@ -719,7 +719,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     initTheme();
     initSidebar();
     initDate();
-    initAtvVoucherModal();
     await refreshAllFinanceCaches();   // load real data from the backend first
     renderClassCardGrid();
     initLedgerScrollEffect();
@@ -3628,20 +3627,6 @@ function getCurrentFeeMonthKey() {
     return `${year}-${String(month + 1).padStart(2, '0')}`;
 }
 
-// Fee type presets — label + suggested amount source key
-const FEE_TYPE_PRESETS = [
-    { value: 'tuition',   label: '📚 Tuition Fee',      key: 'standardFee' },
-    { value: 'transport', label: '🚌 Transport Fee',     key: 'transportFee' },
-    { value: 'book',      label: '📘 Book Fee',          key: 'booksFee' },
-    { value: 'extra',     label: '➕ Extra Fee',          key: null },
-    { value: 'annual',    label: '🏫 Annual Fund',       key: null },
-    { value: 'admission', label: '📝 Admission Fee',     key: 'admissionFee' },
-    { value: 'exam',      label: '📋 Exam Fee',          key: null },
-    { value: 'other',     label: '🏷️ Other Charges',     key: 'otherFee' },
-    { value: 'arrears',   label: '⏳ Previous Arrears',  key: null },
-    { value: 'custom',    label: '✏️ Custom Category',   key: null },
-];
-
 // Current fee rows state
 let afmFeeRows = [];
 let afmNextRowId = 1;
@@ -4004,403 +3989,6 @@ function renderPaymentHistory(student) {
 
 // (saveStudentFeePayment, closeAddFeesModal, showFeeSuccessToast replaced above)
 
-// ============================================================================
-//  ADD FEES TO VOUCHER — MODAL LOGIC
-// ============================================================================
-
-// State for voucher fee rows
-let atvFeeRows = [];
-let atvNextRowId = 1;
-
-// Fee name presets for the voucher form
-const ATV_FEE_PRESETS = [
-    { value: 'tuition',    label: '📚 Tuition Fee' },
-    { value: 'transport',  label: '🚌 Transport Fee' },
-    { value: 'book',       label: '📘 Book Fee' },
-    { value: 'extra',      label: '➕ Extra Fee' },
-    { value: 'annual',     label: '🏫 Annual Fund' },
-    { value: 'admission',  label: '📝 Admission Fee' },
-    { value: 'exam',       label: '📋 Exam Fee' },
-    { value: 'stationary', label: '✏️ Stationery Fee' },
-    { value: 'sports',     label: '⚽ Sports Fee' },
-    { value: 'lab',        label: '🔬 Lab Fee' },
-    { value: 'other',      label: '🏷️ Other Charges' },
-    { value: 'custom',     label: '✏️ Custom Category' },
-];
-
-function initAtvVoucherModal() {
-    const addBtn = document.getElementById('atv-add-fee-btn');
-    if (addBtn && !addBtn.dataset.bound) {
-        addBtn.dataset.bound = '1';
-        addBtn.addEventListener('click', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            atvAddManualFeeRow();
-        });
-    }
-
-    const modalBox = document.querySelector('#add-to-voucher-modal .voucher-modal-box');
-    if (modalBox && !modalBox.dataset.bound) {
-        modalBox.dataset.bound = '1';
-        modalBox.addEventListener('click', (e) => e.stopPropagation());
-    }
-}
-
-function atvAddManualFeeRow() {
-    atvAddFeeRow('custom', 0, 0, '', { manual: true });
-}
-
-function atvScrollToFeeRow(rowId) {
-    requestAnimationFrame(() => {
-        const newRow = document.getElementById('atv-row-' + rowId);
-        if (!newRow) return;
-
-        const listScroller = document.getElementById('atv-fee-rows-container');
-        if (listScroller) {
-            const rowTop = newRow.offsetTop;
-            listScroller.scrollTo({ top: Math.max(0, rowTop - 12), behavior: 'smooth' });
-        }
-
-        const modalScroller = newRow.closest('.voucher-modal-scroll');
-        if (modalScroller) {
-            const rowRect = newRow.getBoundingClientRect();
-            const scrRect = modalScroller.getBoundingClientRect();
-            if (rowRect.bottom > scrRect.bottom || rowRect.top < scrRect.top) {
-                const offset = (rowRect.top - scrRect.top) + modalScroller.scrollTop - 24;
-                modalScroller.scrollTo({ top: Math.max(0, offset), behavior: 'smooth' });
-            }
-        } else {
-            newRow.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-        }
-
-        newRow.style.transition = 'background-color 0.6s ease';
-        newRow.style.backgroundColor = '#eff6ff';
-        setTimeout(() => { newRow.style.backgroundColor = ''; }, 900);
-
-        const sel = newRow.querySelector('select');
-        if (sel) sel.focus();
-    });
-}
-
-function atvUpdateFeeRowCount() {
-    const countEl = document.getElementById('atv-fee-row-count');
-    if (countEl) {
-        const n = atvFeeRows.length;
-        countEl.textContent = n ? `${n} item${n === 1 ? '' : 's'}` : '';
-    }
-}
-
-function openAddToVoucherModal(studentId, fullName, editMode) {
-    const students = getRealStudents();
-    const student = findStudentExact(students, studentId, fullName);
-    if (!student) { showFinanceToast('Student not found.', 'error'); return; }
-
-    document.getElementById('atv-student-id').value = student.id;
-    document.getElementById('atv-student-id').dataset.fullName = student.fullName || '';
-    document.getElementById('atv-header-subtitle').textContent = `${student.fullName} · ${student.studentClass || ''}`;
-
-    const titleEl = document.getElementById('atv-modal-title');
-    if (titleEl) titleEl.textContent = editMode ? 'Edit Voucher' : 'Add Fees to Voucher';
-
-    // Reset rows
-    atvFeeRows = [];
-    atvNextRowId = 1;
-    const f = computeFeeBreakdown(student);
-
-    // If this student already has a saved (edited) voucher, seed rows from THAT
-    // so the admin sees the same voucher they previously saved. Otherwise,
-    // seed from the standard fee profile.
-    let savedFees = [];
-    try { savedFees = JSON.parse(student.otherFeesData || '[]'); } catch(e) { savedFees = []; }
-    // Only re-seed from a saved custom voucher if it actually belongs to THIS
-    // month (see computeFeeBreakdown's voucherCustomFeesMonth check) — otherwise
-    // reopening this modal in a new month would pre-fill last month's one-time
-    // discount as if the admin were applying it again, defeating the "one
-    // month only" fix.
-    const savedIsCurrentMonth = !student.voucherCustomFeesMonth || student.voucherCustomFeesMonth === getCurrentFeeMonthKey();
-    const hasSaved = student.voucherCustomFees === true && savedIsCurrentMonth && Array.isArray(savedFees) && savedFees.length > 0;
-
-    if (hasSaved) {
-        savedFees.forEach(fee => {
-            // Try to map description back to a preset value
-            const preset = ATV_FEE_PRESETS.find(p =>
-                p.label.toLowerCase().includes(String(fee.description||'').toLowerCase()) ||
-                String(fee.description||'').toLowerCase().includes(p.value)
-            );
-            const type = preset ? preset.value : 'custom';
-            atvAddFeeRow(type, parseFloat(fee.amount)||0, parseFloat(fee.discount)||0,
-                         type === 'custom' ? (fee.description || '') : '');
-        });
-    } else {
-        // BUGFIX — this used to read f.tDisc / f.trDisc / f.booksFee /
-        // f.booksDiscount / f.showAnnualFund / f.annualFundAmt, none of which
-        // computeFeeBreakdown() actually returns (same class of bug already
-        // fixed once in openInlineVoucherEditor — see the note there). Every
-        // one of those was `undefined`, so a student's existing tuition/
-        // transport discount was silently seeded as a Rs.0 discount the
-        // moment this modal opened; saving then locked in a "custom" voucher
-        // with the discount permanently gone. Pull the real discount fields
-        // straight from the student record, the same way the printed
-        // voucher and the inline editor already do.
-        const tuitionRowDiscount = (Number(student.tuitionDiscount) || 0) + (Number(student.siblingDiscount) || 0);
-        if (f.tuitionFee > 0)   atvAddFeeRow('tuition',   f.tuitionFee,   tuitionRowDiscount);
-        if (f.transportFee > 0) atvAddFeeRow('transport', f.transportFee, Number(student.transportDiscount) || 0);
-        if (f.otherFee > 0)     atvAddFeeRow('other',     f.otherFee,     0);
-    }
-    if (atvFeeRows.length === 0) atvAddFeeRow('tuition', 0, 0);
-
-    // Reset bulk discount (preload from saved if present)
-    document.getElementById('atv-bulk-discount').value =
-        Number(student.voucherBulkDiscount) > 0 ? Number(student.voucherBulkDiscount) : '';
-
-    const noteEl = document.getElementById('atv-voucher-note');
-    if (noteEl) noteEl.value = student.voucherNote || '';
-
-    // Show due / expiry dates from live settings
-    const _vs = getVoucherSettings();
-    document.getElementById('atv-due-date-display').textContent = f.dueDateStr;
-    document.getElementById('atv-expiry-date-display').textContent = f.expiryDateStr;
-    const lateLabel = !_vs.lateFineEnabled
-        ? 'Disabled'
-        : (_vs.lateFineFixedAmount > 0
-            ? `Rs. ${_vs.lateFineFixedAmount.toLocaleString()} fixed`
-            : `${_vs.lateFinePercent}% of total`);
-    document.getElementById('atv-late-fine-display').textContent = lateLabel;
-
-    // Render student banner
-    const photoHtml = student.photo
-        ? `<img src="${student.photo}" class="af-student-photo">`
-        : `<div class="af-student-photo af-photo-placeholder"><i class="fas fa-user"></i></div>`;
-    document.getElementById('atv-student-summary').innerHTML = `
-        <div class="af-summary-inner">
-            ${photoHtml}
-            <div class="af-summary-details">
-                <div class="af-summary-name">${student.fullName}</div>
-                <div class="af-summary-meta">
-                    <span><i class="fas fa-id-card"></i> ${f.regNo}</span>
-                    <span><i class="fas fa-layer-group"></i> ${student.studentClass || '-'}</span>
-                    <span><i class="fas fa-user-friends"></i> ${student.guardianName || '-'}</span>
-                </div>
-            </div>
-        </div>`;
-
-    atvRenderRows();
-    atvRecalc();
-    initAtvVoucherModal();
-    document.getElementById('add-to-voucher-modal').style.display = 'flex';
-}
-
-function closeAddToVoucherModal() {
-    document.getElementById('add-to-voucher-modal').style.display = 'none';
-    const titleEl = document.getElementById('atv-modal-title');
-    if (titleEl) titleEl.textContent = 'Edit Voucher';
-}
-
-function atvAddFeeRow(typeVal, amount, discount, customLabel, options) {
-    options = options || {};
-    // Inline onclick may pass the click event as the first argument.
-    if (typeVal && typeof typeVal !== 'string') typeVal = undefined;
-    if (typeof amount !== 'number' && typeof amount !== 'string') amount = 0;
-    if (typeof discount !== 'number' && typeof discount !== 'string') discount = 0;
-    if (customLabel && typeof customLabel !== 'string') customLabel = '';
-
-    const id = atvNextRowId++;
-    const isManualAdd = options.manual === true || typeVal === undefined;
-    const row = {
-        id,
-        type: typeVal || 'custom',
-        amount: Number(amount) || 0,
-        discount: Number(discount) || 0,
-        customLabel: customLabel || ''
-    };
-    atvFeeRows.push(row);
-    atvRenderRows();
-    atvRecalc();
-
-    if (isManualAdd) {
-        atvScrollToFeeRow(id);
-    }
-}
-
-function atvRemoveRow(id) {
-    atvFeeRows = atvFeeRows.filter(r => r.id !== id);
-    atvRenderRows();
-    atvRecalc();
-}
-
-function atvUpdateRow(id, field, value) {
-    const row = atvFeeRows.find(r => r.id === id);
-    if (!row) return;
-    if (field === 'type') {
-        row.type = value;
-        atvRenderRows();
-    } else if (field === 'amount') {
-        row.amount = parseFloat(value) || 0;
-    } else if (field === 'discount') {
-        row.discount = parseFloat(value) || 0;
-    } else if (field === 'customLabel') {
-        row.customLabel = value;
-    }
-    atvRecalc();
-}
-
-function atvRenderRows() {
-    const container = document.getElementById('atv-fee-rows-container');
-    if (!container) return;
-
-    let html = '';
-    atvFeeRows.forEach(row => {
-        const net = Math.max(0, row.amount - row.discount);
-        const selectedOptions = ATV_FEE_PRESETS.map(p =>
-            `<option value="${p.value}" ${p.value === row.type ? 'selected' : ''}>${p.label}</option>`
-        ).join('');
-        const customNameInput = row.type === 'custom'
-            ? `<input type="text" class="afm-input" style="margin-top:6px;" placeholder="Name this category…"
-                       value="${(row.customLabel||'').replace(/"/g,'&quot;')}"
-                       oninput="atvUpdateRow(${row.id},'customLabel',this.value)">`
-            : '';
-        html += `
-        <div class="afm-fee-row" id="atv-row-${row.id}">
-            <div class="afm-fee-row-type">
-                <select class="afm-input afm-row-select" onchange="atvUpdateRow(${row.id},'type',this.value)">
-                    ${selectedOptions}
-                </select>
-                ${customNameInput}
-            </div>
-            <div class="afm-fee-row-amt">
-                <div class="afm-input-with-prefix">
-                    <span class="afm-prefix">Rs.</span>
-                    <input type="number" class="afm-input afm-no-left-radius" value="${row.amount || ''}" placeholder="0" min="0"
-                        oninput="atvUpdateRow(${row.id},'amount',this.value)">
-                </div>
-            </div>
-            <div class="afm-fee-row-disc">
-                <div class="afm-input-with-prefix afm-disc-input">
-                    <span class="afm-prefix afm-disc-prefix">- Rs.</span>
-                    <input type="number" class="afm-input afm-no-left-radius" value="${row.discount || ''}" placeholder="0" min="0"
-                        oninput="atvUpdateRow(${row.id},'discount',this.value)">
-                </div>
-            </div>
-            <div class="afm-fee-row-net">
-                <span class="afm-net-badge ${net > 0 ? '' : 'afm-net-zero'}" id="atv-net-${row.id}">Rs. ${net.toLocaleString()}</span>
-            </div>
-            <div class="afm-fee-row-del">
-                ${atvFeeRows.length > 1 ? `<button class="afm-del-btn" onclick="atvRemoveRow(${row.id})" title="Remove"><i class="fas fa-trash-alt"></i></button>` : ''}
-            </div>
-        </div>`;
-    });
-    container.innerHTML = html;
-    atvUpdateFeeRowCount();
-}
-
-function atvRecalc() {
-    // Update net badges
-    atvFeeRows.forEach(row => {
-        const net = Math.max(0, row.amount - row.discount);
-        const el = document.getElementById(`atv-net-${row.id}`);
-        if (el) {
-            el.textContent = `Rs. ${net.toLocaleString()}`;
-            el.classList.toggle('afm-net-zero', net === 0);
-        }
-    });
-
-    const bulkDisc = parseFloat(document.getElementById('atv-bulk-discount')?.value) || 0;
-    const gross = atvFeeRows.reduce((s, r) => s + (r.amount || 0), 0);
-    const itemDisc = atvFeeRows.reduce((s, r) => s + (r.discount || 0), 0);
-    const totalDisc = itemDisc + bulkDisc;
-    const voucherTotal = Math.max(0, gross - totalDisc);
-
-    const vs = getVoucherSettings();
-    const lateExtra = vs.lateFineEnabled
-        ? (vs.lateFineFixedAmount > 0
-            ? vs.lateFineFixedAmount
-            : Math.round(voucherTotal * (vs.lateFinePercent / 100)))
-        : 0;
-    const lateTotal = voucherTotal + lateExtra;
-
-    const set = (id, txt) => { const el = document.getElementById(id); if (el) el.textContent = txt; };
-    set('atv-t-gross', `Rs. ${gross.toLocaleString()}`);
-    set('atv-t-disc',  `- Rs. ${totalDisc.toLocaleString()}`);
-    set('atv-t-grand', `Rs. ${voucherTotal.toLocaleString()}`);
-    set('atv-t-late',  `Rs. ${lateTotal.toLocaleString()}`);
-}
-
-function saveFeesToVoucher() {
-    const idEl = document.getElementById('atv-student-id');
-    const studentId = idEl.value;
-    const fullName = idEl.dataset.fullName || '';
-    const bulkDisc = parseFloat(document.getElementById('atv-bulk-discount').value) || 0;
-
-    if (atvFeeRows.length === 0) { showFinanceToast('Please add at least one fee item.', 'error'); return; }
-    const gross = atvFeeRows.reduce((s, r) => s + (r.amount || 0), 0);
-    if (gross <= 0) { showFinanceToast('Please enter valid fee amounts.', 'error'); return; }
-
-    let students = getRealStudents();
-    let idx = -1;
-    if (fullName) {
-        idx = students.findIndex(s => String(s.id) === String(studentId) && s.fullName === fullName);
-    }
-    if (idx === -1) idx = students.findIndex(s => String(s.id) === String(studentId));
-    if (idx === -1) { showFinanceToast('Student not found.', 'error'); return; }
-
-    // Build additional fees list to be stored on the student record
-    // These will appear in the voucher via computeFeeBreakdown → additionalFees
-    const newFeeEntries = atvFeeRows.map(row => {
-        const preset = ATV_FEE_PRESETS.find(p => p.value === row.type);
-        const desc = (row.type === 'custom' && row.customLabel)
-            ? row.customLabel
-            : (preset ? preset.label.replace(/^[^\s]+\s/, '') : row.type);
-        return {
-            description: desc,
-            amount: row.amount,
-            discount: row.discount
-        };
-    });
-
-    // Replace previously-saved voucher items and mark this student as having
-    // a custom voucher so computeFeeBreakdown doesn't ALSO add the base
-    // tuition/transport charges (that's what caused the doubled total).
-    const noteEl = document.getElementById('atv-voucher-note');
-    students[idx].otherFeesData = JSON.stringify(newFeeEntries);
-    students[idx].voucherBulkDiscount = bulkDisc;
-    students[idx].voucherCustomFees = true;
-    // Stamp which month this custom edit/discount belongs to, so it only
-    // ever applies to THIS month's voucher (see computeFeeBreakdown) — a
-    // discount typed in for August must not silently still be applied when
-    // September's voucher is viewed/paid, even before "Generate" is clicked.
-    students[idx].voucherCustomFeesMonth = getCurrentFeeMonthKey();
-    students[idx].voucherNote = noteEl ? noteEl.value.trim() : '';
-
-    saveStudentsCache(students);
-
-    // BUGFIX — keep this month's already-generated voucher record in sync
-    // with the edit just made. Without this, next month's arrears rollover
-    // would keep comparing against the STALE pre-discount total, leaving a
-    // phantom "still owed" balance even if the (correct, discounted) bill
-    // was paid in full.
-    syncVoucherSnapshotForCurrentMonth(students[idx].regNo || students[idx].id, students[idx].fullName);
-
-    // Keep Pay Fee modal in sync if it is open for the same student
-    if (afmCurrentStudent &&
-        String(afmCurrentStudent.id) === String(students[idx].id) &&
-        afmCurrentStudent.fullName === students[idx].fullName) {
-        afmCurrentStudent = students[idx];
-        renderAddFeesModal(students[idx]);
-    }
-
-    showFeeSuccessToast(`Fees saved to voucher for ${students[idx].fullName}`);
-    closeAddToVoucherModal();
-
-    // Auto-open the voucher preview (pass name to keep siblings separate)
-    viewVoucher(students[idx].id, students[idx].fullName);
-
-    // Refresh the table
-    const classTitle = document.getElementById('selected-class-title');
-    if (classTitle) {
-        const className = classTitle.innerText.replace('Fee Records: ', '');
-        renderFees(className);
-    }
-}
 
 /* ============================================
    ADVANCE SALARY STORAGE HELPERS
@@ -5089,14 +4677,6 @@ function setAllStaffDeductionDefaults(opts) {
     }
 }
 
-window.atvAddFeeRow = atvAddFeeRow;
-window.atvAddManualFeeRow = atvAddManualFeeRow;
-window.atvRemoveRow = atvRemoveRow;
-window.atvUpdateRow = atvUpdateRow;
-window.saveFeesToVoucher = saveFeesToVoucher;
-window.openAddToVoucherModal = openAddToVoucherModal;
-window.closeAddToVoucherModal = closeAddToVoucherModal;
-
 // Expose globally so other pages / settings panels can drive these values.
 window.EduFlowFinance = Object.assign(window.EduFlowFinance || {}, {
     setStaffSecurity,
@@ -5309,8 +4889,13 @@ function ievSave() {
     if (cleanRows.length === 0) { showFinanceToast('Please add at least one fee row.', 'error'); return; }
 
     let students = getRealStudents();
-    let idx = students.findIndex(s => String(s.id) === String(studentId) && s.fullName === fullName);
-    if (idx === -1) idx = students.findIndex(s => String(s.id) === String(studentId));
+    // BUGFIX — this used to match only on s.id, but studentId here (see
+    // openInlineVoucherEditor/viewVoucher) is actually the student's regNo
+    // for most call sites (same regNo/id ambiguity findStudentExact() was
+    // built to handle elsewhere). Matching id-only caused "Student not
+    // found" on Save for any student whose regNo differs from their id.
+    const matchedStudent = findStudentExact(students, studentId, fullName);
+    let idx = matchedStudent ? students.indexOf(matchedStudent) : -1;
     if (idx === -1) { showFinanceToast('Student not found.', 'error'); return; }
 
     const noteEl = document.getElementById('iev-note-input');
@@ -7347,8 +6932,14 @@ function updateFdOverviewStats(defaulters) {
     const list = Array.isArray(defaulters) ? defaulters : [];
     const totalRemaining = list.reduce((sum, d) => sum + (Number(d.remainingBalance) || 0), 0);
     const totalCollected = list.reduce((sum, d) => sum + (Number(d.paidAmount) || 0), 0);
+    // BUGFIX — "Pending After 1 Month" was showing the exact same figure as
+    // "Total Remaining" because it summed every defaulter instead of only
+    // the ones actually pending for more than one month.
+    const totalAfterOneMonth = list
+        .filter(d => (Number(d.pendingMonthsCount) || 0) > 1)
+        .reduce((sum, d) => sum + (Number(d.remainingBalance) || 0), 0);
 
-    afterEl.textContent = `Rs. ${totalRemaining.toLocaleString()}`;
+    afterEl.textContent = `Rs. ${totalAfterOneMonth.toLocaleString()}`;
     colEl.textContent = `Rs. ${totalCollected.toLocaleString()}`;
     penEl.textContent = `Rs. ${totalRemaining.toLocaleString()}`;
 }
