@@ -2070,8 +2070,13 @@ function _computeRealtimePendingTotal(students) {
         // and the matching backend fix on /status-all.
         const studentId = s.regNo || s.id;
         if (!_hasAnyGeneratedVoucher(studentId)) return;
+        // BUGFIX — "late fee fine not working": payableNow, not voucherTotal
+        // — see computeFeeBreakdown's isPastDue/payableNow BUGFIX — so a
+        // student who's actually overdue with the grace period expired
+        // shows up as owing the fine here too, not just on their printed
+        // voucher.
         let feeTotal = 0;
-        try { feeTotal = computeFeeBreakdown(s).voucherTotal; } catch (e) { feeTotal = Number(s.standardFee) || 0; }
+        try { feeTotal = computeFeeBreakdown(s).payableNow; } catch (e) { feeTotal = Number(s.standardFee) || 0; }
         const paidThisMonth = getPaidThisMonthAuthoritative(s, monthKey);
         total += Math.max(0, feeTotal - paidThisMonth);
     });
@@ -3145,6 +3150,39 @@ function computeFeeBreakdown(s) {
     const vs = getVoucherSettings();
     const lateFeeSurcharge = vs.lateFineEnabled ? (vs.lateFineFixedAmount > 0 ? vs.lateFineFixedAmount : Math.round(voucherTotal * (vs.lateFinePercent / 100))) : 0;
 
+    // BUGFIX — "due date wrong after the 27th rollover": these used to be
+    // built from `today.getMonth() + 1` — i.e. always "the month after
+    // whatever month it happens to be right now". That's only correct
+    // before the 27th (when feeMonth === today's month). From the 27th
+    // onward, getCurrentFeeMonthKey() has already rolled the BILLING month
+    // itself one month forward, so the due date needs to roll forward with
+    // it too — otherwise a voucher generated on/after the 27th for NEXT
+    // month printed a due date that was one month too early, which also
+    // fed straight into the late-fee/overdue check below firing too soon.
+    // `feeMonth` (1-indexed, from getCurrentFeeMonthKey()) used directly as
+    // a 0-indexed JS Date month is exactly "the calendar month right after
+    // the fee month" — e.g. a September (feeMonth=9) voucher's due date
+    // correctly lands in October (JS month index 9).
+    const dueDate = new Date(feeYear, feeMonth, vs.dueDayOfMonth);
+    const graceExpiryDate = new Date(feeYear, feeMonth, vs.expiryDayOfMonth);
+
+    // BUGFIX — "late fee fine not working / fees after due date don't
+    // work": lateFeeSurcharge was always fully computed, but only ever
+    // displayed as an informational note on the printed voucher
+    // (totalAfterDueDate). Every calculation of what a student ACTUALLY
+    // owes right now (Pay Bill's remaining balance, the Pending/Total-
+    // with-Fine header stats, Fee Defaulters) read `voucherTotal`, which
+    // never included it — so a student could sail past the due date and
+    // the grace period forever and never actually be charged the fine.
+    // `payableNow` is the real, collectible-today amount: the base voucher
+    // total until the grace period actually expires, then voucherTotal +
+    // the late fee from that point on. Every caller that needs "what is
+    // this student billed for right now" should read payableNow, not
+    // voucherTotal (which stays the pre-fine base, still shown on its own
+    // line on the printed voucher).
+    const isPastDue = vs.lateFineEnabled && today.getTime() > graceExpiryDate.getTime();
+    const payableNow = isPastDue ? (voucherTotal + lateFeeSurcharge) : voucherTotal;
+
     return {
         regNo, monthLabel, 
         tuitionFee, transportFee, otherFee, arrears,
@@ -3157,10 +3195,12 @@ function computeFeeBreakdown(s) {
         customRows, // null unless a saved "Edit Voucher" breakdown exists
         voucherTotal: voucherTotal,
         totalAfterDueDate: voucherTotal + lateFeeSurcharge,
+        isPastDue,
+        payableNow,
         lateFineEnabled: vs.lateFineEnabled,
         lateFeeSurcharge: lateFeeSurcharge,
-        dueDateStr: new Date(today.getFullYear(), today.getMonth() + 1, vs.dueDayOfMonth).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
-        expiryDateStr: new Date(today.getFullYear(), today.getMonth() + 1, vs.expiryDayOfMonth).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+        dueDateStr: dueDate.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
+        expiryDateStr: graceExpiryDate.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
     };
 }
 
@@ -3331,6 +3371,12 @@ computeFeeBreakdown = function(s) {
     f.fineDetails = fineDetails.replace(/, $/, "");
     f.voucherTotal += monthlyFineTotal;
     f.totalAfterDueDate += monthlyFineTotal;
+    // Keep payableNow (the actual collectible-today amount — see the
+    // isPastDue/payableNow BUGFIX in the base computeFeeBreakdown) in sync
+    // with the same installment-fine addition, or a student with an active
+    // fine installment would show the fine in voucherTotal/totalAfterDueDate
+    // but not in what Pay Bill/Pending actually charge.
+    f.payableNow += monthlyFineTotal;
 
     return f;
 };
@@ -3464,7 +3510,12 @@ async function getFeeRowFinance(student, monthKey) {
     const paidAmount = (finance && typeof finance.paidAmount === 'number')
         ? finance.paidAmount
         : payments.reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
-    const remainingBalance = Math.max(0, f.voucherTotal - paidAmount);
+    // BUGFIX — "late fee fine not working": use payableNow (voucherTotal,
+    // plus the late-fee surcharge once the grace period has actually
+    // expired — see computeFeeBreakdown) instead of the pre-fine
+    // voucherTotal, or a student who blows past the due date is never
+    // actually charged the fine anywhere real money is tracked.
+    const remainingBalance = Math.max(0, f.payableNow - paidAmount);
     const paymentStatus = remainingBalance <= 0 ? 'Paid' : (paidAmount > 0 ? 'Partial' : 'Pending');
 
     return {
@@ -3731,6 +3782,13 @@ function renderAddFeesModal(student) {
         if (copies.length > 1) copies[0].style.display = 'none';
     }
 
+    // BUGFIX — "late fee fine not working": Pay Bill must actually collect
+    // the late-fee surcharge once the grace period has expired, not just
+    // print it as a note on the voucher — use payableNow (voucherTotal +
+    // the fine when isPastDue) instead of the pre-fine voucherTotal. See
+    // computeFeeBreakdown's isPastDue/payableNow BUGFIX.
+    const amountDueNow = f.payableNow;
+
     // Header strip: name, monthly total, paid so far
     const headerEl = document.getElementById('afm-pay-header');
     if (headerEl) {
@@ -3738,8 +3796,9 @@ function renderAddFeesModal(student) {
             <div class="afm-pay-header-name">${student.fullName || 'Student'}</div>
             <div class="afm-pay-header-stats">
                 <div><span>Monthly Total</span><strong>Rs. ${f.voucherTotal.toLocaleString()}</strong></div>
+                ${f.isPastDue ? `<div><span>Late Fee (overdue)</span><strong style="color:#dc2626;">Rs. ${f.lateFeeSurcharge.toLocaleString()}</strong></div>` : ''}
                 <div><span>Paid This Month</span><strong style="color:#16a34a;">Rs. ${thisMonthPaid.toLocaleString()}</strong></div>
-                <div><span>Remaining</span><strong style="color:#c2410c;">Rs. ${Math.max(0, f.voucherTotal - thisMonthPaid).toLocaleString()}</strong></div>
+                <div><span>Remaining</span><strong style="color:#c2410c;">Rs. ${Math.max(0, amountDueNow - thisMonthPaid).toLocaleString()}</strong></div>
             </div>`;
     }
 
@@ -3750,7 +3809,7 @@ function renderAddFeesModal(student) {
     if (history) history.style.display = 'none';
 
     // Right panel summary
-    const pendingAmount = Math.max(0, f.voucherTotal - thisMonthPaid);
+    const pendingAmount = Math.max(0, amountDueNow - thisMonthPaid);
     afmCurrentPendingAmount = pendingAmount;
 
     const payableEl = document.getElementById('afm-t-payable');
@@ -3814,7 +3873,13 @@ async function autoSettleFinesIfFullyPaid(student, monthKey) {
     if (!f || !(f.fineAmount > 0)) return; // no fine currently on file — nothing to do
 
     const paidSoFar = getPaidThisMonthAuthoritative(student, monthKey);
-    const isFullyPaid = (f.voucherTotal - paidSoFar) <= 0.01;
+    // BUGFIX — "late fee fine not working": measure "fully paid" against
+    // payableNow (includes the late-fee surcharge once overdue — see
+    // computeFeeBreakdown's isPastDue/payableNow BUGFIX), not the pre-fine
+    // voucherTotal, or a student who's only covered the base fee (but not
+    // yet the late fee they now actually owe) would have their fine
+    // auto-cleared as if the bill were fully settled.
+    const isFullyPaid = (f.payableNow - paidSoFar) <= 0.01;
     if (!isFullyPaid) return;
 
     try {
@@ -6847,8 +6912,12 @@ async function loadFeeDefaulters() {
                     studentName: s.fullName || s.name, guardianName: s.guardianName
                 };
             } else {
+                // BUGFIX — "late fee fine not working": payableNow (see
+                // computeFeeBreakdown's isPastDue/payableNow BUGFIX), so a
+                // student overdue past the grace period shows up here with
+                // the fine actually included in what they owe.
                 let feeTotal = 0;
-                try { feeTotal = computeFeeBreakdown(s).voucherTotal; } catch(e) { feeTotal = Number(s.standardFee || 0); }
+                try { feeTotal = computeFeeBreakdown(s).payableNow; } catch(e) { feeTotal = Number(s.standardFee || 0); }
                 const payments = (s.feePayments || []).filter(p => p.monthKey === monthKey);
                 const paidAmount = payments.reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
                 const remaining = Math.max(0, feeTotal - paidAmount);
@@ -6899,8 +6968,11 @@ function _computePendingMonths(student) {
         if (key === currentFeeMonthKey) {
             const payments = (student.feePayments || []).filter(p => p.monthKey === key);
             const paidAmount = payments.reduce((s, p) => s + (Number(p.amount) || 0), 0);
+            // BUGFIX — "late fee fine not working": payableNow, not
+            // voucherTotal — see computeFeeBreakdown's isPastDue/payableNow
+            // BUGFIX.
             let feeTotal = 0;
-            try { feeTotal = computeFeeBreakdown(student).voucherTotal; } catch(e) { feeTotal = Number(student.standardFee || 0); }
+            try { feeTotal = computeFeeBreakdown(student).payableNow; } catch(e) { feeTotal = Number(student.standardFee || 0); }
             remaining = Math.max(0, feeTotal - paidAmount);
         } else {
             const hist = _getHistoricalMonthFinance(student, key);
