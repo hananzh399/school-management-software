@@ -442,7 +442,28 @@ function _dashboardStaffFineFor(staffFines, staff, staffId, monthKey, currentMon
     return manual + absence;
 }
 
-function _dashboardSalaryAmount(salaryRecords, staff, staffFines, monthKey, currentMonthKey) {
+/**
+ * FEATURE — "bonus should sit in Pending Salaries until it's actually
+ * paid": mirrors _dashboardStaffFineFor above, but for the staff-bonus
+ * bulk list. Same source manage-finance.js's showSalaryBreakdown() /
+ * getEffectiveSalaryDuePreview() read (getStaffBonusData(), field
+ * `amount`, matched by staffId + monthKey) and the same field
+ * FinanceController#paySalary folds into a posted SALARY record's
+ * totalDue (`baseSalary + bonus - fine - security`). Used below so an
+ * un-paid staff member's Total Due already carries any bonus given this
+ * month — previously this estimate only ever subtracted fines, so a
+ * bonus never raised Pending Salaries at all; it only ever showed up in
+ * the separate Staff Bonus card, even though the money is genuinely owed
+ * until payroll actually pays it out.
+ */
+function _dashboardStaffBonusFor(staffBonus, staffId, monthKey, currentMonthKey) {
+    return _dashboardArray(staffBonus)
+        .filter(item => String(item.staffId ?? item.id) === String(staffId))
+        .filter(item => _dashboardBelongsToMonth(item.monthKey, monthKey, currentMonthKey))
+        .reduce((total, item) => total + _dashboardNumber(item.amount), 0);
+}
+
+function _dashboardSalaryAmount(salaryRecords, staff, staffFines, staffBonus, monthKey, currentMonthKey) {
     // Payable = the roster's full monthly salary obligation, regardless of
     // what's actually been posted/paid yet, fines included. Mirrors
     // Staff.getSalary(), the same field FinanceController#paySalary reads
@@ -493,7 +514,14 @@ function _dashboardSalaryAmount(salaryRecords, staff, staffFines, monthKey, curr
         if (paidRow && paidRow.totalDue != null) return total + _dashboardNumber(paidRow.totalDue);
         const gross = _dashboardNumber(member.salary);
         const fine = _dashboardStaffFineFor(staffFines, staff, member.staffId, monthKey, currentMonthKey);
-        return total + Math.max(0, gross - fine);
+        // FEATURE — bonus given but not yet paid out still counts toward
+        // what's owed, matching FinanceController#paySalary's own
+        // `baseSalary + bonus - fine - security` formula (see
+        // _dashboardStaffBonusFor above). Without this, a bonus never
+        // moved Pending Salaries at all — it only lived in the separate
+        // Staff Bonus card, even though it's real money still owed.
+        const bonus = _dashboardStaffBonusFor(staffBonus, member.staffId, monthKey, currentMonthKey);
+        return total + Math.max(0, gross + bonus - fine);
     }, 0);
 
     return { payable, paidFromPayroll, totalDue };
@@ -684,11 +712,19 @@ async function _dashboardSnapshot(
     // so a fine that lowered what a staff member actually owed never
     // showed up here; Pending stayed inflated by the fine amount even
     // though the fine had already been deducted the moment payroll ran.
-    // Pending is now Total Due (Gross − Fines, see _dashboardSalaryAmount)
-    // minus Paid, matching the same formula used everywhere else on this
-    // page.
+    // Pending is now Total Due (Gross + Bonus − Fines, see
+    // _dashboardSalaryAmount) minus Paid, matching the same formula used
+    // everywhere else on this page.
+    //
+    // FEATURE — a bonus now stays part of Pending Salaries (Total Due)
+    // until it's actually paid out, instead of only ever appearing in the
+    // separate Staff Bonus card. The moment payroll pays that staff
+    // member, the posted SALARY record's own totalDue (already
+    // bonus-inclusive server-side — see FinanceController#paySalary) takes
+    // over, so the bonus correctly moves from Pending into Paid with the
+    // real combined value.
     const { payable, paidFromPayroll, totalDue } = _dashboardSalaryAmount(
-        salaryRecords, staff, staffFines, monthKey, currentMonthKey
+        salaryRecords, staff, staffFines, staffBonus, monthKey, currentMonthKey
     );
     const advance = _dashboardAdvanceTotal(staffAdvances, monthKey, currentMonthKey);
     const paid = paidFromPayroll + advance;
