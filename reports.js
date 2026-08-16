@@ -432,7 +432,13 @@ async function loadReportsDataFromBackend() {
         _reportsGet('/api/finance/expenses', []),
         _reportsGet('/api/finance/salary/records', []),
         _reportsGet('/api/finance/staff-advances', []),
-        _reportsGet('/api/attendance', []),
+        // BUGFIX — plain GET /api/attendance requires a `date` (it's the
+        // single-day dashboard summary endpoint); called without one it
+        // always 400'd and this page silently showed an empty Attendance
+        // Trend chart / 0% Avg Attendance forever. /api/attendance/all
+        // returns every raw attendance row for the school so it can be
+        // bucketed into a real 12-month trend below.
+        _reportsGet('/api/attendance/all', []),
         Promise.all(months.map(month =>
             _reportsGet(`/api/finance/status-all/${encodeURIComponent(month)}`, [])
         )),
@@ -460,8 +466,16 @@ async function loadReportsDataFromBackend() {
     const feePayments = statusRows
         .filter(row => _reportsNumber(row.paidAmount) > 0)
         .map(row => ({
+            // BUGFIX — Revenue vs Expenses / Net Cash Flow Trend showed the
+            // wrong month for real money collected: the backend now stamps
+            // lastTransactionDate on every payment (see FinanceController
+            // #processPayment), so prefer that real payment timestamp.
+            // paymentDate/paidAt/updatedAt never existed on this row type
+            // (always fell straight through to createdAt — the date the
+            // BILL was generated, not when it was paid), kept here only as
+            // harmless fallbacks for older rows saved before this fix.
             date: _reportsDate(
-                row.paymentDate || row.paidAt || row.updatedAt || row.createdAt,
+                row.lastTransactionDate || row.paymentDate || row.paidAt || row.updatedAt || row.createdAt,
                 row.monthKey
             ),
             amount: _reportsNumber(row.paidAmount),
