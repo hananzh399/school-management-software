@@ -27,6 +27,10 @@
             word-break:break-all;
         }
         .biometric-path-preview.is-note{color:var(--amber);}
+        /* Mode card loading state — while Staff/Student attendance is opening,
+           so a slow load reads as "working" instead of "unresponsive" and
+           the user isn't tempted to click again. */
+        #stage-mode .choice-card.is-loading{opacity:.6;cursor:wait;}
     </style>
     <script src="access-control.js"></script>
 </head>
