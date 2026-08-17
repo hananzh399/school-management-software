@@ -1502,7 +1502,9 @@ appendTeacherCard = function (t, isNew) {
 };
 // ═══════════════════════════════════════════════
 //  Attendance Timing Control
-//  Two daily auto-save times for staff attendance
+//  Two daily auto-save times: the first slot auto-saves
+//  Staff attendance, the second slot auto-saves Student
+//  attendance (see attendance.js's triggerSave()).
 // ═══════════════════════════════════════════════
 const ATT_TIMING_KEY = 'edu_attendance_timing';
 
@@ -1613,6 +1615,12 @@ function _msUntil(hour24, minute) {
   return target - now;
 }
 
+// NOTE: this scheduler is not started anywhere on this page (nothing calls
+// scheduleAttendanceAutoSaves()) and is kept only as a reference/fallback.
+// The auto-save that actually runs lives in attendance.js's
+// initAutoSaveScheduler(), which is the one running while the Attendance
+// page is open. Slot "first" = Staff Attendance, slot "second" = Student
+// Attendance — see the matching split in attendance.js's triggerSave().
 let _attAutoSaveTimers = [];
 function scheduleAttendanceAutoSaves() {
   _attAutoSaveTimers.forEach(clearTimeout);
@@ -1624,7 +1632,7 @@ function scheduleAttendanceAutoSaves() {
     const h24 = _to24Hour(slot.hour, slot.meridiem);
     const delay = _msUntil(h24, slot.minute);
     const id = setTimeout(async function fire() {
-      await runStaffAttendanceAutoSave(label, slot);
+      await runAttendanceAutoSave(label, slot);
       // reschedule for next day
       _attAutoSaveTimers.push(setTimeout(fire, 24 * 60 * 60 * 1000));
     }, delay);
@@ -1632,11 +1640,13 @@ function scheduleAttendanceAutoSaves() {
   });
 }
 
-async function runStaffAttendanceAutoSave(label, slot) {
+async function runAttendanceAutoSave(label, slot) {
   const today = new Date().toISOString().slice(0, 10);
+  const attendanceType = label === 'first' ? 'staff' : 'student';
   const snapshot = {
     date: today,
     slot: label,
+    type: attendanceType,
     time: `${slot.hour}:${String(slot.minute).padStart(2, '0')} ${slot.meridiem}`,
     savedAt: new Date().toISOString(),
   };
@@ -1653,7 +1663,7 @@ async function runStaffAttendanceAutoSave(label, slot) {
       console.warn('[Attendance] Auto-save network error:', err);
     }
   }
-  console.log(`[Attendance] Auto-saved (${label}) at`, snapshot.time);
+  console.log(`[Attendance] Auto-saved ${attendanceType} (${label}) at`, snapshot.time);
 }
 
 // Hook into DOM ready — render inputs and start schedulers
@@ -1661,9 +1671,11 @@ async function runStaffAttendanceAutoSave(label, slot) {
 // handler above, after loadSettingsFromServer() resolves, so the Timing
 // tab reflects the backend rather than a possibly-stale local cache.
 //
-// Actually *executing* the auto-save (clicking the real Save buttons and
-// writing attendance to the database) still happens over in attendance.js,
-// which reads this same 'edu_attendance_timing' localStorage key. That
+// Actually *executing* the auto-save (clicking the real Staff/Student Save
+// buttons and writing attendance to the database) happens over in
+// attendance.js, which fetches these same autosave1/autosave2 values from
+// the backend (GET /api/settings/{schoolId}) whenever the Attendance page
+// loads or this page dispatches 'eduflow-attendance-timing-changed'. That
 // keeps a single source of truth: whatever time is saved here in Settings
-// (to the backend, and mirrored to that key) is exactly what the
-// Attendance page acts on.
+// is exactly what the Attendance page acts on — slot 1 for staff, slot 2
+// for student.

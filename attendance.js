@@ -461,20 +461,42 @@ function initSidebar() {
     overlay.addEventListener("click", () => { sidebar.classList.remove("active"); overlay.classList.remove("active"); });
 }
  
+// BUGFIX — "clicking Staff/Student attendance only opens after many clicks":
+// this handler is async (refreshLiveData() makes several sequential API
+// calls), but nothing stopped a second click from starting a second,
+// overlapping run while the first was still in flight. Each run ends with
+// its own hideAllStages()+show() pair, and whichever run happened to
+// finish LAST decided what was actually visible — so a click could easily
+// get "undone" by a slower, earlier click resolving after it, and the page
+// only seemed to open once the user had clicked enough times for the
+// timing to line up. Guarding with a single busy flag (and giving the
+// clicked card a visible "loading" state) means one click fully finishes
+// before another is accepted.
+let _modeCardBusy = false;
 function initModeCards() {
     $$("#stage-mode .choice-card").forEach(card => {
         card.addEventListener("click", async () => {
-            state.mode = card.getAttribute("data-mode");
-            state.action = "add";
-            await refreshLiveData(); // always pull fresh DB data
-            hideAllStages();
-            if (state.mode === "student") {
-                renderClasses();
-                show("#stage-classes");
-            } else {
-                initStaffAttendance();
-                renderStaff();
-                show("#stage-staff");
+            if (_modeCardBusy) return; // a click is already being processed — ignore extra clicks
+            _modeCardBusy = true;
+            card.classList.add("is-loading");
+            card.style.pointerEvents = "none";
+            try {
+                state.mode = card.getAttribute("data-mode");
+                state.action = "add";
+                await refreshLiveData(); // always pull fresh DB data
+                hideAllStages();
+                if (state.mode === "student") {
+                    renderClasses();
+                    show("#stage-classes");
+                } else {
+                    initStaffAttendance();
+                    renderStaff();
+                    show("#stage-staff");
+                }
+            } finally {
+                card.classList.remove("is-loading");
+                card.style.pointerEvents = "";
+                _modeCardBusy = false;
             }
         });
     });
@@ -3521,10 +3543,14 @@ function normalizeBiometricPath(raw) {
    AUTO-SAVE SCHEDULER
    Timing is held in-memory (_timingState) and can be updated
    via the window.EduFlowAutoSave.set() helper (called by Settings).
-   At each enabled slot's time, if the staff/student attendance
-   stage is currently open, this clicks the real Save button
-   (#staff-save-btn / #save-btn), which syncs to the real database
-   via syncCurrentSheetWithDatabase().
+
+   Slot 1 ("First Auto Save" in Settings) = Staff attendance only.
+   Slot 2 ("Second Auto Save" in Settings) = Student attendance only.
+
+   At its enabled time, each slot clicks the real Save button for its
+   own attendance type only (#staff-save-btn for slot 1, #save-btn for
+   slot 2) — but only if that attendance page is currently open — which
+   syncs to the real database via syncCurrentSheetWithDatabase().
    ============================================================ */
 (function initAutoSaveScheduler() {
     // In-memory timing and fired state (no localStorage)
@@ -3544,6 +3570,34 @@ function normalizeBiometricPath(raw) {
                 second: Object.assign({}, DEFAULT_TIMING.second, saved.second || {}),
             };
         } catch (e) { return DEFAULT_TIMING; }
+    }
+
+    // Pull the real saved timing from the backend (SchoolSettings row) so a
+    // fresh load of THIS page reflects whatever was last saved on the
+    // Settings page — settings.html and attendance.html are separate page
+    // loads, so the in-memory _timingState from EduFlowAutoSave.set() /
+    // the 'eduflow-attendance-timing-changed' event never survives
+    // navigation. Without this fetch, _timingState stays null forever and
+    // getTiming() silently falls back to the 10 AM / 2 PM defaults.
+    async function loadTimingFromServer() {
+        const schoolId = getCurrentSchoolId();
+        if (!schoolId) return;
+        const settings = await _apiGet(`${SETTINGS_API_BASE}/${encodeURIComponent(schoolId)}`, null);
+        if (!settings) return;
+        _timingState = {
+            first: {
+                hour:     settings.autosave1Hour     ?? DEFAULT_TIMING.first.hour,
+                minute:   settings.autosave1Minute   ?? DEFAULT_TIMING.first.minute,
+                meridiem: settings.autosave1Meridiem ?? DEFAULT_TIMING.first.meridiem,
+                enabled:  settings.autosave1Enabled  ?? DEFAULT_TIMING.first.enabled,
+            },
+            second: {
+                hour:     settings.autosave2Hour     ?? DEFAULT_TIMING.second.hour,
+                minute:   settings.autosave2Minute   ?? DEFAULT_TIMING.second.minute,
+                meridiem: settings.autosave2Meridiem ?? DEFAULT_TIMING.second.meridiem,
+                enabled:  settings.autosave2Enabled  ?? DEFAULT_TIMING.second.enabled,
+            },
+        };
     }
 
     // { hour: 1-12, minute, meridiem: 'AM'|'PM' } -> "HH:MM" (24hr, for comparison)
@@ -3585,31 +3639,38 @@ function normalizeBiometricPath(raw) {
         return el && !el.classList.contains('hidden');
     }
 
-    function triggerSave(label) {
+    // Slot 1 ("first") is the Staff Attendance auto-save; slot 2 ("second")
+    // is the Student Attendance auto-save (set on the Attendance Timing tab
+    // in Settings). Each slot only ever clicks its own Save button — it no
+    // longer fires both at once regardless of which slot's time arrived.
+    function triggerSave(key, label) {
         // Whatever status is currently showing for each row (biometric-marked,
         // manually tapped, or the default Absent) gets committed/"Done" now,
-        // through the exact same click handlers a manual save would use.
-        let firedAny = false;
+        // through the exact same click handler a manual save would use.
+        let fired = false;
 
-        if (isStaffAddStageActive()) {
-            const staffBtn = document.getElementById('staff-save-btn');
-            if (staffBtn) { staffBtn.click(); firedAny = true; }
-        } else {
-            console.log('[auto-save] Skipped staff (' + label + ') — staff attendance page not open.');
+        if (key === 'first') {
+            if (isStaffAddStageActive()) {
+                const staffBtn = document.getElementById('staff-save-btn');
+                if (staffBtn) { staffBtn.click(); fired = true; }
+            } else {
+                console.log('[auto-save] Skipped staff (' + label + ') — staff attendance page not open.');
+            }
+        } else if (key === 'second') {
+            if (isStudentAddStageActive()) {
+                const studentBtn = document.getElementById('save-btn');
+                if (studentBtn) { studentBtn.click(); fired = true; }
+            } else {
+                console.log('[auto-save] Skipped student (' + label + ') — student attendance page not open.');
+            }
         }
 
-        if (isStudentAddStageActive()) {
-            const studentBtn = document.getElementById('save-btn');
-            if (studentBtn) { studentBtn.click(); firedAny = true; }
-        } else {
-            console.log('[auto-save] Skipped student (' + label + ') — student attendance page not open.');
+        if (fired) {
+            const who = key === 'first' ? 'staff' : 'student';
+            if (typeof toast === 'function') toast('Auto-saved ' + who + ' attendance (' + label + ')');
+            console.log('[auto-save] Triggered ' + who + ' (' + label + ') at ' + new Date().toLocaleTimeString());
         }
-
-        if (firedAny) {
-            if (typeof toast === 'function') toast('Auto-saved (' + label + ')');
-            console.log('[auto-save] Triggered ' + label + ' at ' + new Date().toLocaleTimeString());
-        }
-        return firedAny;
+        return fired;
     }
 
     function nowHHMM() {
@@ -3630,22 +3691,37 @@ function normalizeBiometricPath(raw) {
             const targetHHMM = slotToHHMM(slot);
             if (now < targetHHMM) return; // not time yet
 
-            // Time has arrived (or passed). Try to save; if the attendance
-            // page isn't open yet, keep retrying every tick (every 30s)
-            // until it succeeds or the day resets — so opening the page a
-            // little late still triggers the save.
-            if (triggerSave(slotToLabel(slot))) {
+            // Time has arrived (or passed). Try to save; if the relevant
+            // attendance page isn't open yet, keep retrying every tick
+            // (every 30s) until it succeeds or the day resets — so opening
+            // the page a little late still triggers the save.
+            if (triggerSave(key, slotToLabel(slot))) {
                 fired[key] = true;
                 saveFired(fired);
             }
         });
     }
 
-    document.addEventListener('DOMContentLoaded', () => {
+    document.addEventListener('DOMContentLoaded', async () => {
+        // Hydrate _timingState with whatever is actually saved in the DB
+        // for this school BEFORE the first tick, so labels and the
+        // scheduler reflect the real Settings values instead of defaults.
+        await loadTimingFromServer();
         updateLabels();
         // React immediately when Settings saves a new time — same tab
         // (custom event) or another open tab (native storage event).
-        window.addEventListener('eduflow-attendance-timing-changed', () => { updateLabels(); tick(); });
+        window.addEventListener('eduflow-attendance-timing-changed', async (e) => {
+            // If the event carries the new timing directly (same-tab dispatch
+            // from settings.js), use it immediately; otherwise re-fetch so we
+            // never trust stale in-memory state.
+            if (e && e.detail && e.detail.first && e.detail.second) {
+                _timingState = e.detail;
+            } else {
+                await loadTimingFromServer();
+            }
+            updateLabels();
+            tick();
+        });
         // Check every 30 seconds
         setInterval(tick, 30 * 1000);
         // First tick after 5s so page is ready

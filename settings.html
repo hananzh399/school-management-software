@@ -8,6 +8,9 @@
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
 <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
 <link rel="stylesheet" href="settings.css">
+<style>
+  .timing-subtitle{font-weight:500;font-size:0.8em;color:var(--text-muted,#8a8f98);}
+</style>
 <script src="input-validation.js"></script>
 <script src="access-control.js"></script>
 </head>
@@ -306,7 +309,7 @@
         <div class="section-header">
           <div class="section-header-info">
             <h2><i class="fas fa-clock"></i> Attendance Timing Control</h2>
-            <p>Configure two automatic staff attendance save times. At each scheduled time the current staff attendance snapshot is saved to the database.</p>
+            <p>Configure the automatic save times. The first time auto-saves staff attendance, and the second time auto-saves student attendance — each fires only if that attendance page is open on the Attendance screen at the time.</p>
           </div>
         </div>
 
@@ -315,7 +318,7 @@
           <div class="timing-card">
             <div class="timing-card-head">
               <span class="timing-badge">1</span>
-              <h3>First Auto Save</h3>
+              <h3>First Auto Save <span class="timing-subtitle">— Staff Attendance</span></h3>
             </div>
             <label>Time</label>
             <div class="time-row">
@@ -331,14 +334,14 @@
               <input type="checkbox" id="autosave1-enabled" checked>
               <span>Enabled</span>
             </label>
-            <div class="var-hint">Attendance will auto-save daily at this time.</div>
+            <div class="var-hint">Staff attendance will auto-save daily at this time (only if the Staff Attendance page is open).</div>
           </div>
 
           <!-- SECOND AUTO SAVE -->
           <div class="timing-card">
             <div class="timing-card-head">
               <span class="timing-badge">2</span>
-              <h3>Second Auto Save</h3>
+              <h3>Second Auto Save <span class="timing-subtitle">— Student Attendance</span></h3>
             </div>
             <label>Time</label>
             <div class="time-row">
@@ -354,7 +357,7 @@
               <input type="checkbox" id="autosave2-enabled" checked>
               <span>Enabled</span>
             </label>
-            <div class="var-hint">A second daily auto-save at this time.</div>
+            <div class="var-hint">Student attendance will auto-save daily at this time (only if a class attendance sheet is open).</div>
           </div>
         </div>
 
