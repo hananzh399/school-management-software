@@ -463,6 +463,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // UI References: Finance
     const feeStandard      = document.getElementById('fee-standard');
     const feeAdmission     = document.getElementById('fee-admission');
+    const feeArrears       = document.getElementById('fee-arrears');
     const feeTuitionDisc   = document.getElementById('fee-discount-tuition');
     const feeTransDisc     = document.getElementById('fee-discount-transport');
     const feeSiblingDisc   = document.getElementById('fee-discount-sibling');
@@ -741,17 +742,21 @@ document.addEventListener('DOMContentLoaded', () => {
         const v = el => (el && el.value !== undefined) ? (parseFloat(el.value) || 0) : 0;
         const standard     = v(feeStandard);
         const admission    = v(feeAdmission);
+        const arrears      = v(feeArrears);
         const tDisc        = v(feeTuitionDisc);
         const trDisc       = v(feeTransDisc);
         const sibDisc      = v(feeSiblingDisc);
         const monthlyTrans = v(transportFeeInput);
         // NOTE: Books fee and Other fees are intentionally excluded from the
         // database net total — they appear only on the voucher at print time.
-        const netTotal = (standard + admission + monthlyTrans) - (tDisc + trDisc + sibDisc);
+        // Arrears (previous outstanding dues) are added the same way the
+        // admission fee is — they inflate what's payable, they're never
+        // discounted against.
+        const netTotal = (standard + admission + arrears + monthlyTrans) - (tDisc + trDisc + sibDisc);
         if (netTotalInput) netTotalInput.value = Math.max(0, netTotal).toFixed(0);
     }
 
-    [feeStandard, feeAdmission, feeTuitionDisc, feeTransDisc, feeSiblingDisc, transportFeeInput, feeBooks, feeBooksDisc].forEach(el => {
+    [feeStandard, feeAdmission, feeArrears, feeTuitionDisc, feeTransDisc, feeSiblingDisc, transportFeeInput, feeBooks, feeBooksDisc].forEach(el => {
         if (el) el.addEventListener('input', performFinancialAudit);
     });
 
@@ -1259,7 +1264,7 @@ if (certUploadInput) {
     // hand everything back as strings, so these need coercing before they're
     // sent to Spring, or Jackson throws a 400 (can't map "4500" (String) -> Double).
     const NUMERIC_FIELDS = [
-        'standardFee', 'admissionFee', 'tuitionDiscount',
+        'standardFee', 'admissionFee', 'arrears', 'tuitionDiscount',
         'transportDiscount', 'siblingDiscount', 'transportFee', 'netPayable'
     ];
     const INTEGER_FIELDS = ['age', 'graduatedYear'];
@@ -1281,7 +1286,7 @@ if (certUploadInput) {
         'medicalIssues', 'orphanStatus', 'previousSchool', 'previousClass',
         'guardianName', 'guardianRole', 'guardianCnic', 'phone1', 'phone2',
         'permanentAddress', 'mailingAddress', 'standardFee', 'admissionFee',
-        'tuitionDiscount', 'transportDiscount', 'siblingDiscount',
+        'arrears', 'tuitionDiscount', 'transportDiscount', 'siblingDiscount',
         'transportMode', 'transportType', 'transportFee', 'netPayable',
         'otherFeesData', 'status', 'photo', 'certData',
         // Sibling link fields — now persisted server-side (Student.java).
@@ -1691,6 +1696,7 @@ if (certUploadInput) {
         mailingAddress:    SSValidate.rules.address({ required: true, maxLength: 300, label: "Mailing address" }),
         transportFee:      SSValidate.rules.money({ required: false, max: 10000000, label: "Transport fee" }),
         admissionFee:      SSValidate.rules.money({ required: false, max: 10000000, label: "Admission fee" }),
+        arrears:           SSValidate.rules.money({ required: false, max: 10000000, label: "Arrears" }),
         tuitionDiscount:   SSValidate.rules.money({ required: false, max: 10000000, label: "Tuition discount" }),
         transportDiscount: SSValidate.rules.money({ required: false, max: 10000000, label: "Transport discount" }),
         siblingDiscount:   SSValidate.rules.money({ required: false, max: 10000000, label: "Sibling discount" }),
@@ -2364,6 +2370,7 @@ if (certUploadInput) {
                 <div class="field"><span class="f-label">Transport Fee:</span><span class="f-value">${fmtRs(studentData.transportFee)}</span></div>
                 <div class="field"><span class="f-label">Standard Tuition Fee:</span><span class="f-value">${fmtRs(studentData.standardFee)}</span></div>
                 <div class="field"><span class="f-label">Admission Fee:</span><span class="f-value">${fmtRs(studentData.admissionFee)}</span></div>
+                ${parseFloat(studentData.arrears||0) > 0 ? `<div class="field"><span class="f-label">Arrears:</span><span class="f-value">${fmtRs(studentData.arrears)}</span></div>` : ''}
             </div>
             <div class="fee-summary-row">
                 <span class="net-label">Total Discounts Applied: <span style="font-family:'Roboto Mono',monospace; color:var(--ink-900); font-weight:700;">${fmtRs(totalDiscount)}</span>${studentData.isLifetime ? ' &nbsp;·&nbsp; Lifetime' : (studentData.discountExpiry ? ` &nbsp;·&nbsp; Valid Until ${esc(studentData.discountExpiry)}` : '')}</span>
@@ -2715,6 +2722,7 @@ if (certUploadInput) {
             <div class="rec-field-grid">
                 <div class="rec-field"><span class="rec-flabel">Tuition Fee:</span><span class="rec-fvalue">${fmtRs(s.standardFee)}</span></div>
                 <div class="rec-field"><span class="rec-flabel">Admission Fee:</span><span class="rec-fvalue">${fmtRs(s.admissionFee || 0)}</span></div>
+                ${parseFloat(s.arrears||0) > 0 ? `<div class="rec-field"><span class="rec-flabel">Arrears:</span><span class="rec-fvalue">${fmtRs(s.arrears)}</span></div>` : ''}
                 <div class="rec-field"><span class="rec-flabel">Transport Fee:</span><span class="rec-fvalue">${fmtRs(s.transportFee)}</span></div>
                 ${booksFee > 0 ? `<div class="rec-field"><span class="rec-flabel">Books Fee:</span><span class="rec-fvalue">${fmtRs(booksFee)}</span></div>` : ''}
                 ${otherFeeRowsHtml}
@@ -4457,6 +4465,7 @@ if (certUploadInput) {
             <div class="profile-details-grid">
                 <div class="detail-item"><label>Tuition Fee</label><span>Rs. ${safeVal(s.standardFee)}</span></div>
                 <div class="detail-item"><label>Admission Fee</label><span>Rs. ${safeVal(s.admissionFee) || '0'}</span></div>
+                <div class="detail-item"><label>Arrears (Previous Dues)</label><span>Rs. ${safeVal(s.arrears) || '0'}</span></div>
                 <div class="detail-item"><label>Transport Fee</label><span>Rs. ${safeVal(s.transportFee)}</span></div>
                 ${booksRow}
                 ${otherFeesRows}
@@ -4669,6 +4678,7 @@ if (certUploadInput) {
             `────────────────────────────────────────\n` +
             line('Tuition Fee',  s.standardFee     ? 'Rs. ' + s.standardFee     : '') +
             line('Transport',    s.transportFee    ? 'Rs. ' + s.transportFee    : '') +
+            line('Arrears',      parseFloat(s.arrears||0) > 0 ? 'Rs. ' + s.arrears : '') +
             line('Net Payable',  s.netPayable      ? 'Rs. ' + s.netPayable      : '');
 
         const title = `Student Profile — ${s.fullName}`;
