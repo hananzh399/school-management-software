@@ -5489,7 +5489,19 @@ function computeOutstandingArrears(student) {
                    && (!r.studentName || r.studentName === student.fullName))
         .sort((a, b) => a.monthKey.localeCompare(b.monthKey));
 
-    if (priorRecords.length === 0) return 0;
+    // BUGFIX — "admission-time arrears never reach the first voucher":
+    // a brand-new student has no prior generated vouchers yet, so this used
+    // to unconditionally return 0 here — silently discarding whatever
+    // opening balance the admissions form ("Arrears" field, set at New
+    // Admission / Edit Student) had recorded on student.arrears. That
+    // value is exactly what should seed this student's very first
+    // Previous Arrears line: once the first voucher IS generated,
+    // recordVoucherGeneration() below calls this same function again and
+    // permanently locks whatever it returns into student.arrears / the
+    // voucher snapshot — from that point on, priorRecords.length > 0 and
+    // the real payment-history roll-forward below takes over, exactly as
+    // before. So this only ever matters for the pre-first-voucher window.
+    if (priorRecords.length === 0) return Number(student.arrears) || 0;
 
     // BUGFIX — arrears were compounding every month instead of carrying the
     // real outstanding balance. Each voucher's snapshotted `voucherTotal`
