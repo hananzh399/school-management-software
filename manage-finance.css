@@ -5092,6 +5092,26 @@ input[type="date"]::-webkit-calendar-picker-indicator {
    Back button, instead of leaving a large empty gap. */
 .fee-stats-header.header-compact { margin-bottom: 20px; min-height: 46px; }
 
+/* ============================================================================
+   BUGFIX — Back button overlapping the "Generated/Collected/Pending" stat
+   row on the main Manage Student Fees page. The Custom Fee and Fee
+   Defaulter pages (.stats-header-section, further below) already give
+   their stats row 48px of top padding so it clears the absolutely-
+   positioned .back-btn sitting at top:0/left:0 above it — this page's own
+   header (.fee-stats-header) never got that same clearance, so its Back
+   button pill sat directly on top of the first stat card, covering part of
+   its "Generated · <Month>" label text. Matches the same fix already
+   applied to every other stats header in this file.
+   ============================================================================ */
+.fee-stats-header .fee-stats-row { padding-top: 48px; }
+@media (max-width: 720px) {
+    .fee-stats-header .back-btn {
+        position: static;
+        margin: 0 auto 14px;
+    }
+    .fee-stats-header .fee-stats-row { padding-top: 0; }
+}
+
 .fee-stats-row {
     display: flex;
     justify-content: center;
@@ -5134,6 +5154,7 @@ input[type="date"]::-webkit-calendar-picker-indicator {
     font-size: 1.15rem;
     font-weight: 800;
     color: var(--text-primary);
+    white-space: nowrap;
 }
 .fee-stat-generated .fee-stat-icon { background: rgba(99,102,241,0.12); color: #6366f1; }
 .fee-stat-collected .fee-stat-icon { background: rgba(22,163,74,0.12); color: #16a34a; }

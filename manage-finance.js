@@ -2066,32 +2066,28 @@ function _classCardIcon(name, index) {
 }
 
 /**
- * FEATURE — "cards small enough that even a value shown in K fits on one
- * line": every summary stat card across Manage Finance (Manage Student
+ * FEATURE — every summary stat card across Manage Finance (Manage Student
  * Fees header, class-wise header, Custom Fee overview, Fee Defaulter
- * overview, Expense summary) used to print the full comma-separated
- * rupee amount (e.g. "Rs. 1,246,000"), which is what forced those cards
- * wide enough to wrap onto a second line on narrower screens — and made
- * the stat row's height unpredictable under its sticky header, which is
- * what caused a stray dark/empty-looking gap where a wrapped card's own
- * background didn't line up with the sticky bar behind it.
- * Shortens any amount at or above Rs. 1,000 to a "K"/"M" form (e.g.
- * "Rs. 46K", "Rs. 1.2M") so the card stays compact. The exact figure is
- * still available via the `title` tooltip on hover — nothing is lost,
- * just displayed more compactly. Values under Rs. 1,000 print unchanged.
+ * overview, Expense summary) reads through this one helper.
+ *
+ * HISTORY — this used to shorten amounts at/above Rs. 1,000 to a "K"/"M"
+ * form (e.g. "Rs. 46K") because the full comma-formatted amount (e.g.
+ * "Rs. 1,246,000") was wide enough to wrap these cards onto a second line
+ * on narrower screens, and the stat row's sticky header didn't account for
+ * that extra line's height — leaving a stray dark/empty-looking gap where
+ * the wrapped card's background didn't line up with the sticky bar behind
+ * it. That abbreviation has been removed per request: every card now
+ * always shows the exact full amount. The wrap-avoidance fix itself never
+ * depended on abbreviating the number — it comes from the CSS on
+ * .fee-stats-row / .fee-stats-row-compact keeping the row to a single line
+ * (flex-wrap: nowrap, with horizontal scroll as the safety net on very
+ * narrow screens) and giving .fee-stat-value `white-space: nowrap` — all of
+ * which stays in place, so the original "black gap" bug stays fixed even
+ * though the number shown is no longer shortened.
  */
 function _fmtStatMoney(n) {
     const num = Number(n) || 0;
-    const abs = Math.abs(num);
-    let short;
-    if (abs >= 1000000) {
-        short = (num / 1000000).toFixed(abs % 1000000 === 0 ? 0 : 1) + 'M';
-    } else if (abs >= 1000) {
-        short = (num / 1000).toFixed(abs % 1000 === 0 ? 0 : 1) + 'K';
-    } else {
-        short = num.toLocaleString();
-    }
-    return `Rs. ${short}`;
+    return `Rs. ${num.toLocaleString()}`;
 }
 
 /**
