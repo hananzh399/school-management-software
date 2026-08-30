@@ -7210,23 +7210,16 @@ function updateFdOverviewStats(defaulters) {
     const afterEl = document.getElementById('fd-overview-after1month');
     const colEl = document.getElementById('fd-overview-collected');
     const penEl = document.getElementById('fd-overview-pending');
-    const arrEl = document.getElementById('fd-overview-arrears');
     if (!afterEl || !colEl || !penEl) return;
 
     const list = Array.isArray(defaulters) ? defaulters : [];
     const totalPending = list.reduce((sum, d) => sum + (Number(d.pendingTotal) || 0), 0);
     const totalRemaining = list.reduce((sum, d) => sum + (Number(d.remainingBalance) || 0), 0);
     const totalCollected = list.reduce((sum, d) => sum + (Number(d.paidAmount) || 0), 0);
-    // FEATURE — how much of "Total Remaining" is old, carried-over arrears
-    // specifically (as opposed to this period's own unpaid charges) — the
-    // portion that keeps rolling forward onto next month's voucher, on
-    // its own, until it's fully collected down to 0.
-    const totalArrearsRemaining = list.reduce((sum, d) => sum + (Number(d.arrearsRemaining) || 0), 0);
 
     afterEl.textContent = _fmtStatMoney(totalPending); afterEl.title = `Rs. ${totalPending.toLocaleString()}`;
     colEl.textContent = _fmtStatMoney(totalCollected); colEl.title = `Rs. ${totalCollected.toLocaleString()}`;
     penEl.textContent = _fmtStatMoney(totalRemaining); penEl.title = `Rs. ${totalRemaining.toLocaleString()}`;
-    if (arrEl) { arrEl.textContent = _fmtStatMoney(totalArrearsRemaining); arrEl.title = `Rs. ${totalArrearsRemaining.toLocaleString()}`; }
 }
 
 function _renderDefaultersTable(defaulters) {
