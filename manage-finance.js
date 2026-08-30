@@ -383,6 +383,19 @@ async function refreshStudentsCache() {
         return s;
     });
 }
+// PERFORMANCE FIX — refreshClassConfigsCache() and refreshLatefeeConfigCache()
+// both read from the exact same backend endpoint (GET /api/settings/{schoolId})
+// but each used to call _fetchSchoolSettings() independently. Since
+// refreshAllFinanceCaches() below runs every cache refresher together via
+// Promise.all — on every page load AND every 10-second live-sync tick — this
+// silently fired two identical GET requests to the same URL every single
+// time. _fetchSchoolSettingsOnce() below fetches it a single time per
+// refreshAllFinanceCaches() call and both cache builders share that result.
+let _settingsFetchPromise = null;
+function _fetchSchoolSettingsOnce() {
+    if (!_settingsFetchPromise) _settingsFetchPromise = _fetchSchoolSettings();
+    return _settingsFetchPromise;
+}
 async function refreshClassConfigsCache() {
     // Real backend route (SchoolSettingsController): GET /api/settings/{schoolId}
     // — schoolId is a PATH param there, not a query param like the rest of
@@ -392,7 +405,7 @@ async function refreshClassConfigsCache() {
     // SchoolSettings.ClassFee) — mapped to {name, fee, fund, sections} here
     // since the rest of this file (renderClassCardGrid, getAllClassNames)
     // reads cls.name.
-    const settings = await _fetchSchoolSettings();
+    const settings = await _fetchSchoolSettingsOnce();
     if (!settings) return;
     const classes = Array.isArray(settings.classes) ? settings.classes : [];
     _classConfigsCache = classes.map(c => ({
@@ -406,7 +419,7 @@ async function refreshLatefeeConfigCache() {
     // Same endpoint as refreshClassConfigsCache() above — GET /api/settings/{schoolId}
     // returns lateFeeEnabled/lateFeeDeadlineDay/lateFeeType/lateFeeAmount/lateFeeGrace,
     // mapped here to the enabled/deadlineDay/type/amount/grace shape getVoucherSettings() reads.
-    const settings = await _fetchSchoolSettings();
+    const settings = await _fetchSchoolSettingsOnce();
     if (!settings) return;
     _latefeeConfigCache = {
         enabled: settings.lateFeeEnabled,
@@ -654,6 +667,10 @@ async function _saveStaffDeductionToBackend(staffId, field, value) {
 }
 
 async function refreshAllFinanceCaches() {
+    // Reset the shared settings fetch so this poll gets a fresh copy (not a
+    // stale one held over from the previous poll 10s ago), but every cache
+    // builder *within this single poll* still only triggers one network call.
+    _settingsFetchPromise = null;
     await Promise.all([
         refreshStudentsCache(),
         refreshClassConfigsCache(),
@@ -1238,47 +1255,92 @@ function _parseFineRecordDate(str) {
  * Finance.fineAmount is defined to mean — the running total of UNPAID
  * fines), so a settled fine was never something that endpoint could show at
  * all. To display both Paid and Pending with an actual status, this pulls
- * every individual fine record (which does carry a status field) straight
- * from /fine-details/{regNo}/{monthKey} — the same per-student source the
- * fine ledger (showFineDetails) already trusts — for every student, and
- * rolls each student's records for the month into one summary row.
+ * every individual fine record (which does carry a status field) — the
+ * same per-student source the fine ledger (showFineDetails) already
+ * trusts — and rolls each student's records for the month into one
+ * summary row.
  *
  * A student's overall status is Pending if ANY of their fines that month is
  * still unpaid, and Paid only once every one of them is settled.
+ *
+ * PERFORMANCE FIX: this used to call GET /fine-details/{regNo}/{monthKey}
+ * once per billable student (N requests, all in flight at once — browsers
+ * queue most of them since they cap concurrent connections per host, and
+ * this whole page re-runs on every 10s live-sync tick). It now calls the
+ * new bulk GET /fine-details-all/{monthKey} once and groups the results by
+ * regNo itself — same data, same per-student summary shape returned below,
+ * just one network round-trip instead of N. Falls back to the old
+ * per-student calls automatically if the bulk endpoint isn't available yet
+ * (e.g. backend not redeployed), so this never breaks if the two are ever
+ * out of sync.
  */
-async function fetchAllFineRecordsForMonth(monthKey) {
-    const students = getRealStudents().filter(isStudentBillable);
+function _summarizeFineRecordsForStudent(s, regNo, records) {
+    if (!Array.isArray(records) || records.length === 0) return null;
+
+    const fineAmount = records.reduce((sum, r) => sum + (Number(r.amount) || 0), 0);
+    // Keep duplicates here (not deduped) — getSmartFineReason() below
+    // relies on repeat reasons to flag a "(Frequent)" fine.
+    const reasons = records.map(r => r.reason).filter(Boolean);
+    const isPaid = records.every(isFinePaid);
+    const paidDates = records
+        .filter(isFinePaid)
+        .map(r => _parseFineRecordDate(r.payDate))
+        .filter(d => d instanceof Date && !isNaN(d));
+    const latestPaidDate = paidDates.length ? new Date(Math.max(...paidDates.map(d => d.getTime()))) : null;
+
+    return {
+        regNo,
+        studentName: s.fullName || s.name,
+        studentClass: s.studentClass,
+        section: s.section,
+        guardianName: s.guardianName,
+        fineAmount,
+        fineReason: reasons.join(', '),
+        status: isPaid ? 'Paid' : 'Pending',
+        latestPaidDate
+    };
+}
+
+async function _fetchAllFineRecordsForMonth_perStudentFallback(students, monthKey) {
     const settled = await Promise.all(students.map(async s => {
         const regNo = s.regNo || s.id;
         let records;
         try { records = await apiCall(`/fine-details/${regNo}/${monthKey}`); }
         catch (e) { return null; }
-        if (!Array.isArray(records) || records.length === 0) return null;
-
-        const fineAmount = records.reduce((sum, r) => sum + (Number(r.amount) || 0), 0);
-        // Keep duplicates here (not deduped) — getSmartFineReason() below
-        // relies on repeat reasons to flag a "(Frequent)" fine.
-        const reasons = records.map(r => r.reason).filter(Boolean);
-        const isPaid = records.every(isFinePaid);
-        const paidDates = records
-            .filter(isFinePaid)
-            .map(r => _parseFineRecordDate(r.payDate))
-            .filter(d => d instanceof Date && !isNaN(d));
-        const latestPaidDate = paidDates.length ? new Date(Math.max(...paidDates.map(d => d.getTime()))) : null;
-
-        return {
-            regNo,
-            studentName: s.fullName || s.name,
-            studentClass: s.studentClass,
-            section: s.section,
-            guardianName: s.guardianName,
-            fineAmount,
-            fineReason: reasons.join(', '),
-            status: isPaid ? 'Paid' : 'Pending',
-            latestPaidDate
-        };
+        return _summarizeFineRecordsForStudent(s, regNo, records);
     }));
     return settled.filter(Boolean);
+}
+
+async function fetchAllFineRecordsForMonth(monthKey) {
+    const students = getRealStudents().filter(isStudentBillable);
+
+    let allRecords;
+    try {
+        allRecords = await apiCall(`/fine-details-all/${monthKey}`);
+    } catch (e) {
+        // Bulk endpoint missing/unreachable (e.g. older backend deploy) —
+        // fall back to the original one-request-per-student behavior so
+        // this page keeps working exactly as before.
+        return _fetchAllFineRecordsForMonth_perStudentFallback(students, monthKey);
+    }
+    if (!Array.isArray(allRecords)) {
+        return _fetchAllFineRecordsForMonth_perStudentFallback(students, monthKey);
+    }
+
+    const byRegNo = {};
+    allRecords.forEach(r => {
+        const key = r.regNo;
+        if (!key) return;
+        if (!byRegNo[key]) byRegNo[key] = [];
+        byRegNo[key].push(r);
+    });
+
+    const results = students.map(s => {
+        const regNo = s.regNo || s.id;
+        return _summarizeFineRecordsForStudent(s, regNo, byRegNo[regNo]);
+    });
+    return results.filter(Boolean);
 }
 
 async function renderStudentFinesTable() {

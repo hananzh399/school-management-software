@@ -129,7 +129,11 @@ async function loadRealStaff() {
  */
 let CLASS_CONFIGS = [];
 
-async function loadRealClasses() {
+// NOTE: takes `students` as a parameter (instead of reading the global
+// STUDENTS variable) purely so it has no dependency on load order — that's
+// what lets refreshLiveData() below fire this alongside loadRealStudents()
+// instead of waiting for it to finish first.
+async function loadRealClasses(students) {
     const schoolId = getCurrentSchoolId();
     let apiClasses = [];
     if (schoolId) {
@@ -150,9 +154,10 @@ async function loadRealClasses() {
             sections: c.sections.length ? c.sections : ['A'],
         }));
     }
-    // Derive from real students already loaded into STUDENTS this refresh
+    // Derive from the real student roster passed in (fallback when no
+    // classes are configured yet in Settings).
     const map = {};
-    STUDENTS.forEach(s => {
+    (students || []).forEach(s => {
         if (!map[s.class]) map[s.class] = new Set();
         map[s.class].add(s.section);
     });
@@ -165,15 +170,34 @@ let STAFF    = [];
 let CLASSES  = [];
 
 /**
- * Pulls students, staff and class configs from the backend database.
- * All attendance data now lives server-side — nothing is read from or
- * written to localStorage.
+ * Pulls students, staff, class configs and today's saved attendance from the
+ * backend database. All attendance data now lives server-side — nothing is
+ * read from or written to localStorage.
+ *
+ * PERFORMANCE FIX: this used to `await` each of the 5 backend calls one
+ * after another (students, then staff, then classes, then the 2 fetches
+ * inside hydrateTodayAttendanceCaches) — 5 sequential network round-trips
+ * to the Railway backend before a class/staff card would even open. None of
+ * these calls actually depend on each other's *results* (loadRealClasses'
+ * only dependency on the student list — its no-classes-configured fallback —
+ * is now passed in directly instead of read off a global), so they're fired
+ * together with Promise.all and now cost roughly one round-trip instead of
+ * five. This mirrors how manage-finance.js / reports.js already batch their
+ * backend reads.
  */
 async function refreshLiveData() {
-    STUDENTS = _uniquifyKey(await loadRealStudents(), "regNo");
-    STAFF    = _uniquifyKey(await loadRealStaff(), "id");
-    CLASSES  = await loadRealClasses();
-    await hydrateTodayAttendanceCaches();
+    const [students, staff] = await Promise.all([
+        loadRealStudents(),
+        loadRealStaff(),
+    ]);
+    STUDENTS = _uniquifyKey(students, "regNo");
+    STAFF    = _uniquifyKey(staff, "id");
+
+    const [classes] = await Promise.all([
+        loadRealClasses(STUDENTS),
+        hydrateTodayAttendanceCaches(),
+    ]);
+    CLASSES = classes;
 }
 
 // Build history from saved attendance keys (real data)
@@ -285,11 +309,15 @@ async function hydrateTodayAttendanceCaches() {
 
     if (!schoolId) return;
 
+    // ---- Students + Staff: these two reads don't depend on each other,
+    // so fire them together instead of waiting for students before asking
+    // for staff. ----
+    const [studentLogs, staffLogs] = await Promise.all([
+        _apiGet(`${ATTENDANCE_API_BASE}/students?date=${encodeURIComponent(date)}&schoolId=${encodeURIComponent(schoolId)}`, []),
+        _apiGet(`${ATTENDANCE_API_BASE}/staff?date=${encodeURIComponent(date)}&schoolId=${encodeURIComponent(schoolId)}`, []),
+    ]);
+
     // ---- Students: group every record already saved today by class ----
-    const studentLogs = await _apiGet(
-        `${ATTENDANCE_API_BASE}/students?date=${encodeURIComponent(date)}&schoolId=${encodeURIComponent(schoolId)}`,
-        []
-    );
     (Array.isArray(studentLogs) ? studentLogs : []).forEach(log => {
         const cls = log.className;
         if (!cls || !log.memberId) return;
@@ -301,10 +329,6 @@ async function hydrateTodayAttendanceCaches() {
     });
 
     // ---- Staff: one flat map, keyed by staff id ----
-    const staffLogs = await _apiGet(
-        `${ATTENDANCE_API_BASE}/staff?date=${encodeURIComponent(date)}&schoolId=${encodeURIComponent(schoolId)}`,
-        []
-    );
     if (Array.isArray(staffLogs) && staffLogs.length > 0) {
         const staffMap = {};
         staffLogs.forEach(log => {
