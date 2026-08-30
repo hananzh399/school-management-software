@@ -5198,6 +5198,87 @@ input[type="date"]::-webkit-calendar-picker-indicator {
     .fee-stats-row-compact .fee-stat-card { min-width: 0; }
 }
 
+/* ============================================================================
+   BUGFIX — "black box" gap in the pricing/stats row on every Manage Finance
+   page (Manage Student Fees header, class-wise header, Custom Fee overview,
+   Fee Defaulter overview, Expense summary): these rows sit inside a sticky
+   header (.fee-stats-header / .stats-header-section / #class-fee-stats-row —
+   see "DYNAMIC USER-REQUESTED FIXES" further below in this file), which
+   paints its own solid background at a fixed height. The cards above used a
+   wide min-width (220px) with full comma-formatted rupee values (e.g.
+   "Rs. 1,246,000"), so on anything narrower than ~950px the 4th card (and
+   sometimes the 3rd) wrapped onto a second line. That second line's height
+   was never accounted for by the sticky container above it, so the wrapped
+   card ended up rendering underneath the next section's own (differently
+   coloured) background — visible as a solid dark/blank block sitting where
+   a card's text should have been, with only part of the next card peeking
+   out from beside it.
+   Fix: keep the row to a single line always (flex-wrap: nowrap, with a
+   horizontal scroll as a safety net on extremely narrow screens instead of
+   wrapping), and shrink the cards themselves — smaller padding/icon/font —
+   so four of them comfortably fit one line even at phone widths. Amounts
+   are also now displayed compact ("Rs. 46K" instead of "Rs. 46,000" — see
+   _fmtStatMoney in manage-finance.js), which is what makes the smaller
+   cards possible in the first place. The full precise amount is still one
+   tap/hover away via each value's title tooltip. These overrides come after
+   the rules above on purpose, so they win the cascade without needing
+   !important, and they apply to every section since all of them share these
+   same .fee-stats-row / .fee-stats-row-compact classes — Manage Student
+   Fees, class-wise, Custom Fee, Fee Defaulter, and the Expense summary row
+   all get this fix together.
+   ============================================================================ */
+.fee-stats-row {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    padding-bottom: 2px;
+}
+.fee-stats-row::-webkit-scrollbar { display: none; }
+.fee-stat-card {
+    min-width: 132px;
+    padding: 10px 14px;
+    gap: 9px;
+    border-radius: 12px;
+    flex: 1 1 0;
+}
+.fee-stat-icon {
+    width: 32px;
+    height: 32px;
+    font-size: 13px;
+    border-radius: 8px;
+}
+.fee-stat-label { font-size: 0.62rem; }
+.fee-stat-value { font-size: 0.94rem; white-space: nowrap; }
+
+@media (max-width: 720px) {
+    .fee-stats-row { flex-direction: row; }
+    .fee-stat-card { min-width: 108px; padding: 8px 10px; gap: 7px; }
+    .fee-stat-icon { width: 28px; height: 28px; font-size: 12px; }
+    .fee-stat-value { font-size: 0.84rem; }
+}
+
+.fee-stats-row-compact {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+}
+.fee-stats-row-compact::-webkit-scrollbar { display: none; }
+.fee-stats-row-compact .fee-stat-card {
+    min-width: 118px;
+    padding: 8px 12px;
+    gap: 8px;
+    flex: 1 1 0;
+}
+.fee-stats-row-compact .fee-stat-icon { width: 28px; height: 28px; font-size: 12px; }
+.fee-stats-row-compact .fee-stat-value { font-size: 0.86rem; white-space: nowrap; }
+@media (max-width: 720px) {
+    .fee-stats-row-compact { flex-direction: row; }
+    .fee-stats-row-compact .fee-stat-card { min-width: 100px; padding: 7px 9px; }
+}
+/* ============================================================================ */
+
 /* ---- Class card generation-status badge ---- */
 .class-selector-card { position: relative; }
 .class-status-badge {
@@ -6007,8 +6088,8 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 .cf-stat-card {
     display: flex;
     flex-direction: column;
-    gap: 6px;
-    padding: 14px 16px;
+    gap: 4px;
+    padding: 10px 12px;
     border-radius: 12px;
     border: 1px solid var(--border-subtle);
     background: var(--bg-card);
@@ -6016,8 +6097,9 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 }
 
 .cf-stat-card strong {
-    font-size: 1.15rem;
+    font-size: 0.95rem;
     font-weight: 800;
+    white-space: nowrap;
 }
 
 .cf-stat-label {

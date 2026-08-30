@@ -1835,7 +1835,7 @@ function renderExpensesTable() {
     if (countEl) countEl.textContent = list.length ? `(${list.length})` : '';
 
     const total = list.reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
-    if (totalValueEl) totalValueEl.textContent = `Rs. ${total.toLocaleString()}`;
+    if (totalValueEl) totalValueEl.textContent = _fmtStatMoney(total);
 
     if (list.length === 0) {
         const msg = expenseDailyViewActive ? 'No expenses recorded on this date.' : 'No expenses recorded this month.';
@@ -2004,6 +2004,35 @@ function _classCardIcon(name, index) {
 }
 
 /**
+ * FEATURE — "cards small enough that even a value shown in K fits on one
+ * line": every summary stat card across Manage Finance (Manage Student
+ * Fees header, class-wise header, Custom Fee overview, Fee Defaulter
+ * overview, Expense summary) used to print the full comma-separated
+ * rupee amount (e.g. "Rs. 1,246,000"), which is what forced those cards
+ * wide enough to wrap onto a second line on narrower screens — and made
+ * the stat row's height unpredictable under its sticky header, which is
+ * what caused a stray dark/empty-looking gap where a wrapped card's own
+ * background didn't line up with the sticky bar behind it.
+ * Shortens any amount at or above Rs. 1,000 to a "K"/"M" form (e.g.
+ * "Rs. 46K", "Rs. 1.2M") so the card stays compact. The exact figure is
+ * still available via the `title` tooltip on hover — nothing is lost,
+ * just displayed more compactly. Values under Rs. 1,000 print unchanged.
+ */
+function _fmtStatMoney(n) {
+    const num = Number(n) || 0;
+    const abs = Math.abs(num);
+    let short;
+    if (abs >= 1000000) {
+        short = (num / 1000000).toFixed(abs % 1000000 === 0 ? 0 : 1) + 'M';
+    } else if (abs >= 1000) {
+        short = (num / 1000).toFixed(abs % 1000 === 0 ? 0 : 1) + 'K';
+    } else {
+        short = num.toLocaleString();
+    }
+    return `Rs. ${short}`;
+}
+
+/**
  * Builds a human-friendly display label.
  * "Grade 1" → "1st Grade", "Grade 2" → "2nd Grade", etc.
  * Custom names (e.g. "Montessori") are returned as-is.
@@ -2160,10 +2189,10 @@ function updateFeeStatsHeader() {
     // fine-inclusive total payable, with no separate fine math needed here.
     const totalWithFine = totalCollected + totalPending;
 
-    genEl.textContent = `Rs. ${totalGenerated.toLocaleString()}`;
-    colEl.textContent = `Rs. ${totalCollected.toLocaleString()}`;
-    penEl.textContent = `Rs. ${totalPending.toLocaleString()}`;
-    if (totFineEl) totFineEl.textContent = `Rs. ${totalWithFine.toLocaleString()}`;
+    genEl.textContent = _fmtStatMoney(totalGenerated); genEl.title = `Rs. ${totalGenerated.toLocaleString()}`;
+    colEl.textContent = _fmtStatMoney(totalCollected); colEl.title = `Rs. ${totalCollected.toLocaleString()}`;
+    penEl.textContent = _fmtStatMoney(totalPending); penEl.title = `Rs. ${totalPending.toLocaleString()}`;
+    if (totFineEl) { totFineEl.textContent = _fmtStatMoney(totalWithFine); totFineEl.title = `Rs. ${totalWithFine.toLocaleString()}`; }
 
     const genLabel = document.getElementById('fee-stat-generated-label');
     const colLabel = document.getElementById('fee-stat-collected-label');
@@ -2228,10 +2257,10 @@ function updateClassFeeStats(className) {
     // See updateFeeStatsHeader() above — same reasoning, scoped to this class.
     const totalWithFine = totalCollected + totalPending;
 
-    genEl.textContent = `Rs. ${totalGenerated.toLocaleString()}`;
-    colEl.textContent = `Rs. ${totalCollected.toLocaleString()}`;
-    penEl.textContent = `Rs. ${totalPending.toLocaleString()}`;
-    if (totFineEl) totFineEl.textContent = `Rs. ${totalWithFine.toLocaleString()}`;
+    genEl.textContent = _fmtStatMoney(totalGenerated); genEl.title = `Rs. ${totalGenerated.toLocaleString()}`;
+    colEl.textContent = _fmtStatMoney(totalCollected); colEl.title = `Rs. ${totalCollected.toLocaleString()}`;
+    penEl.textContent = _fmtStatMoney(totalPending); penEl.title = `Rs. ${totalPending.toLocaleString()}`;
+    if (totFineEl) { totFineEl.textContent = _fmtStatMoney(totalWithFine); totFineEl.title = `Rs. ${totalWithFine.toLocaleString()}`; }
 
     const genLabel = document.getElementById('class-fee-stat-generated-label');
     const colLabel = document.getElementById('class-fee-stat-collected-label');
@@ -7051,9 +7080,9 @@ function updateFdOverviewStats(defaulters) {
     const totalRemaining = list.reduce((sum, d) => sum + (Number(d.remainingBalance) || 0), 0);
     const totalCollected = list.reduce((sum, d) => sum + (Number(d.paidAmount) || 0), 0);
 
-    afterEl.textContent = `Rs. ${totalPending.toLocaleString()}`;
-    colEl.textContent = `Rs. ${totalCollected.toLocaleString()}`;
-    penEl.textContent = `Rs. ${totalRemaining.toLocaleString()}`;
+    afterEl.textContent = _fmtStatMoney(totalPending); afterEl.title = `Rs. ${totalPending.toLocaleString()}`;
+    colEl.textContent = _fmtStatMoney(totalCollected); colEl.title = `Rs. ${totalCollected.toLocaleString()}`;
+    penEl.textContent = _fmtStatMoney(totalRemaining); penEl.title = `Rs. ${totalRemaining.toLocaleString()}`;
 }
 
 function _renderDefaultersTable(defaulters) {
@@ -7084,9 +7113,9 @@ function _renderDefaultersTable(defaulters) {
             <td><strong>${_escHtml(d.studentName)}</strong></td>
             <td><span class="class-chip" style="background:rgba(139,92,246,0.1);color:#8b5cf6;">${_escHtml(cls)}</span></td>
             <td>${_escHtml(d.guardianName)}</td>
-            <td><strong>Rs. ${d.pendingTotal.toLocaleString()}</strong></td>
-            <td><strong style="color:#16a34a;">Rs. ${d.paidAmount.toLocaleString()}</strong></td>
-            <td><strong style="color:#dc2626;font-size:1.05rem;">Rs. ${d.remainingBalance.toLocaleString()}</strong></td>
+            <td><strong title="Rs. ${d.pendingTotal.toLocaleString()}">${_fmtStatMoney(d.pendingTotal)}</strong></td>
+            <td><strong style="color:#16a34a;" title="Rs. ${d.paidAmount.toLocaleString()}">${_fmtStatMoney(d.paidAmount)}</strong></td>
+            <td><strong style="color:#dc2626;font-size:1.05rem;" title="Rs. ${d.remainingBalance.toLocaleString()}">${_fmtStatMoney(d.remainingBalance)}</strong></td>
             <td>${monthsHtml}</td>
             <td><span class="fee-status-badge ${d.paymentStatus === 'Partial' ? 'fee-pending' : 'fee-overdue'}">${_escHtml(d.paymentStatus)}</span></td>
         </tr>`;
@@ -7160,9 +7189,9 @@ function updateCfOverviewStats() {
     });
     const totalPending = Math.max(0, totalGenerated - totalCollected);
 
-    genEl.textContent = `Rs. ${totalGenerated.toLocaleString()}`;
-    colEl.textContent = `Rs. ${totalCollected.toLocaleString()}`;
-    penEl.textContent = `Rs. ${totalPending.toLocaleString()}`;
+    genEl.textContent = _fmtStatMoney(totalGenerated); genEl.title = `Rs. ${totalGenerated.toLocaleString()}`;
+    colEl.textContent = _fmtStatMoney(totalCollected); colEl.title = `Rs. ${totalCollected.toLocaleString()}`;
+    penEl.textContent = _fmtStatMoney(totalPending); penEl.title = `Rs. ${totalPending.toLocaleString()}`;
 }
 
 function renderCfRecordsList() {
@@ -7281,9 +7310,9 @@ function _renderCfDetailFull(fee) {
     const totalEl = document.getElementById('cf-stat-total');
     const collectedEl = document.getElementById('cf-stat-collected');
     const remainingEl = document.getElementById('cf-stat-remaining');
-    if (totalEl) totalEl.textContent = `Rs. ${totalCollect.toLocaleString()}`;
-    if (collectedEl) collectedEl.textContent = `Rs. ${collected.toLocaleString()}`;
-    if (remainingEl) remainingEl.textContent = `Rs. ${remaining.toLocaleString()}`;
+    if (totalEl) { totalEl.textContent = _fmtStatMoney(totalCollect); totalEl.title = `Rs. ${totalCollect.toLocaleString()}`; }
+    if (collectedEl) { collectedEl.textContent = _fmtStatMoney(collected); collectedEl.title = `Rs. ${collected.toLocaleString()}`; }
+    if (remainingEl) { remainingEl.textContent = _fmtStatMoney(remaining); remainingEl.title = `Rs. ${remaining.toLocaleString()}`; }
 
     // Apply filters to table records
     let filtered = records;
