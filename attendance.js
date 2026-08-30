@@ -45,16 +45,28 @@ async function _apiGet(url, fallback) {
 }
 
 /**
- * Load real students from the backend student roster API
- * (GET /api/students?schoolId=... — StudentController, managed by
- * manage-students.html). Falls back to empty array if there's no school
- * session yet or the server is unreachable.
+ * Load real students from the backend student roster API.
+ *
+ * PERFORMANCE FIX — this used to call plain GET /api/students, which pulls
+ * every student's base64 photo/certData/otherFeesData LONGTEXT blob along
+ * with it (Hibernate fetches @Lob string columns eagerly here), even
+ * though this page only ever reads regNo/fullName/studentClass/section/
+ * guardianName/status to render the roster cards. For a school with a few
+ * hundred students with photos on file, that's megabytes of JSON parsed
+ * and thrown away on every single attendance-page load — the actual cause
+ * of the slow cards.
+ *
+ * Now calls GET /api/students/summary?schoolId=... instead (StudentController
+ * + StudentSummaryDTO / the JPQL projection in StudentRepository), which
+ * selects only those columns at the SQL level — the LOB columns are never
+ * read off disk or sent over the wire for this call. Falls back to empty
+ * array if there's no school session yet or the server is unreachable.
  * Normalises to the shape attendance needs: { regNo, name, class, section, guardian }
  */
 async function loadRealStudents() {
     const schoolId = getCurrentSchoolId();
     if (!schoolId) return [];
-    const raw = await _apiGet(`${STUDENTS_API_BASE}?schoolId=${encodeURIComponent(schoolId)}`, []);
+    const raw = await _apiGet(`${STUDENTS_API_BASE}/summary?schoolId=${encodeURIComponent(schoolId)}`, []);
     return (Array.isArray(raw) ? raw : [])
         .filter(s => !s.status || s.status === 'active') // hide graduated/dropped students
         .map(s => ({
@@ -84,10 +96,20 @@ function _uniquifyKey(arr, keyName) {
 }
 
 /**
- * Load real staff from the backend staff API
- * (GET /api/staff?schoolId=... — StaffController, managed by manage-staff.html).
- * Rows come back flat with a `type` field ("Teaching" / "Non-Teaching") and
- * `staffId` for the display ID (mirrors manage-staff.js's fromApiStaffRecord).
+ * Load real staff from the backend staff API.
+ *
+ * PERFORMANCE FIX — this used to call plain GET /api/staff, which pulls
+ * every staff member's base64 photo/agreementData/classAssignments/
+ * inchargeAssignments LONGTEXT blob along with it, even though this page
+ * only ever reads staffId/type/name/role/subjects/job to render the
+ * Teaching / Non-Teaching roster cards — the actual cause of the slow
+ * cards, same root cause as loadRealStudents() above.
+ *
+ * Now calls GET /api/staff/summary?schoolId=... instead (StaffController
+ * + StaffSummaryDTO / the JPQL projection in StaffRepository), which
+ * selects only those columns at the SQL level. Rows come back flat with a
+ * `type` field ("Teaching" / "Non-Teaching") and `staffId` for the
+ * display ID (mirrors manage-staff.js's fromApiStaffRecord).
  * Normalises to: { id, name, role, department }.
  * Also caches the raw split-by-type roster in STAFF_DB so other (synchronous)
  * helpers like _getClassTeacher() can read it without hitting the network again.
@@ -97,7 +119,7 @@ let STAFF_DB = { 'Teaching': [], 'Non-Teaching': [] };
 async function loadRealStaff() {
     const schoolId = getCurrentSchoolId();
     if (!schoolId) { STAFF_DB = { 'Teaching': [], 'Non-Teaching': [] }; return []; }
-    const rows = await _apiGet(`${STAFF_API_BASE}?schoolId=${encodeURIComponent(schoolId)}`, []);
+    const rows = await _apiGet(`${STAFF_API_BASE}/summary?schoolId=${encodeURIComponent(schoolId)}`, []);
     const list = Array.isArray(rows) ? rows : [];
 
     const teaching    = list.filter(s => s.type !== 'Non-Teaching');

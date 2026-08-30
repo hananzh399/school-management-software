@@ -759,8 +759,19 @@ async function calculateFinancials() {
         dropoutStaff,
         attendance
     ] = await Promise.all([
-        _dashboardGet('/api/students', []),
-        _dashboardGet('/api/staff', []),
+        // PERFORMANCE FIX — these used to hit plain GET /api/students and
+        // GET /api/staff, which pull every student's/staff member's base64
+        // photo (+ certData/otherFeesData/agreementData/etc.) LONGTEXT
+        // blobs along with them (Hibernate fetches @Lob string columns
+        // eagerly here), even though this dashboard only ever reads
+        // regNo/status/admissionDate/admissionFee and staffId/salary/fines
+        // below (see _dashboardSnapshot / _dashboardSalaryAmount). That's
+        // what made these cards slow. /summary (StudentController /
+        // StaffController + StudentSummaryDTO / StaffSummaryDTO) selects
+        // only those columns at the SQL level, so the LOB columns are
+        // never read off disk or sent over the wire for this call.
+        _dashboardGet('/api/students/summary', []),
+        _dashboardGet('/api/staff/summary', []),
         _dashboardGet(`/api/finance/status-all/${encodeURIComponent(currentMonth)}`, []),
         _dashboardGet(`/api/finance/status-all/${encodeURIComponent(previousMonth)}`, []),
         _dashboardGet('/api/finance/custom-fees', []),
