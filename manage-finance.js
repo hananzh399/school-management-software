@@ -6868,14 +6868,14 @@ async function loadFeeDefaulters() {
     const tbody = document.getElementById('fd-tbody');
     const countEl = document.getElementById('fd-count');
     if (!tbody) return;
-    tbody.innerHTML = `<tr><td colspan="7" class="empty-row"><i class="fas fa-spinner fa-spin"></i> Loading fee defaulters…</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="9" class="empty-row"><i class="fas fa-spinner fa-spin"></i> Loading fee defaulters…</td></tr>`;
     if (countEl) countEl.textContent = '';
 
     const students = _getStudents();
     const monthKey = _fdMonth || _monthKey();
 
     if (!students.length) {
-        tbody.innerHTML = `<tr><td colspan="7" class="empty-row">No students found. Add students from Admissions first.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="9" class="empty-row">No students found. Add students from Admissions first.</td></tr>`;
         return;
     }
 
@@ -6885,7 +6885,7 @@ async function loadFeeDefaulters() {
     // a clear message instead of the generic empty-state one.
     const monthIsDue = _isMonthDue(monthKey);
     if (!monthIsDue) {
-        tbody.innerHTML = `<tr><td colspan="7" class="empty-row"><i class="fas fa-check-circle" style="color:#16a34a;"></i>&nbsp; This month's fee becomes overdue on the 27th. No defaulters yet for this period.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="9" class="empty-row"><i class="fas fa-check-circle" style="color:#16a34a;"></i>&nbsp; This month's fee becomes overdue on the 27th. No defaulters yet for this period.</td></tr>`;
         if (countEl) countEl.textContent = '0 defaulters found';
         _fdAllData = [];
         updateFdOverviewStats([]);
@@ -6938,13 +6938,34 @@ async function loadFeeDefaulters() {
         }
         if (finance.remainingBalance > 0 && finance.paymentStatus !== 'Paid') {
             const pendingMonths = _computePendingMonths(s);
+            // FEATURE — "Pending / Collected / Remaining" breakdown per
+            // defaulter. `remainingBalance` and `paidAmount` above already
+            // come from the SAME billed-vs-paid figures used everywhere else
+            // on this page (current month: computeFeeBreakdown().payableNow
+            // minus this month's payments; past months: the actual voucher
+            // that was generated for that month minus payments made inside
+            // its billing window — see getFeeRowFinance/_getHistoricalMonthFinance
+            // above). So the true TOTAL billed for the selected month is
+            // simply what's left to pay plus what's already been paid —
+            // no separate lookup needed, and nothing here changes what was
+            // already being computed, only what gets surfaced in the UI.
+            //   pendingTotal (this month's full bill)
+            // − collectedThisMonth (paid so far against that bill)
+            // = remainingBalance (what's left — becomes next month's
+            //   rolled-over arrears automatically, since the backend/voucher
+            //   generation already bakes last month's remainingBalance into
+            //   the next bill — see FinanceController#getOrCreateStudentFeeMaster
+            //   "roll-over arrears" and computeOutstandingArrears()).
+            const collectedThisMonth = Number(finance.paidAmount) || 0;
+            const pendingTotal = finance.remainingBalance + collectedThisMonth;
             defaulters.push({
                 studentId: s.regNo || s.id || '',
                 studentName: finance.studentName || s.fullName || 'Unnamed',
                 studentClass: s.studentClass || '-', section: s.section || '',
                 guardianName: finance.guardianName || s.guardianName || '-',
                 remainingBalance: finance.remainingBalance, paymentStatus: finance.paymentStatus,
-                paidAmount: Number(finance.paidAmount) || 0,
+                paidAmount: collectedThisMonth,
+                pendingTotal,
                 pendingMonthsList: pendingMonths, pendingMonthsCount: pendingMonths.length
             });
         }
@@ -7000,12 +7021,24 @@ function _computePendingMonths(student) {
  * Runs on whatever list is currently being shown (all defaulters, or a
  * filtered/searched subset), so the totals always match what's on screen.
  *
- * Shows three totals:
- *   - Pending After 1 Month: sum owed by defaulters who have been pending
- *     for more than one month (aging beyond the current month).
- *   - Total Collected: how much has already been paid in by these
- *     defaulters (partial payments) for the selected month.
- *   - Total Remaining: the full outstanding balance still owed.
+ * BUGFIX — "Pending Fees" card was actually showing "sum owed by defaulters
+ * pending more than 1 month", a completely different figure than its own
+ * label. That mismatch (plus the Fee Defaulters page having no visible
+ * "Collected" figure per row at all) is what made Pending/Remaining look
+ * like they weren't working: the number under "Pending Fees" never lined
+ * up with "Total Remaining" the way the label implied it should.
+ *
+ * Fix — the three cards now form one consistent equation, matching the
+ * same Pending → Collected → Remaining loop used per student/per month:
+ *   - Pending Fees:    the FULL amount billed this period for every
+ *                       defaulter (before any payment) — d.pendingTotal.
+ *   - Total Collected: how much of that has actually been paid in
+ *                       THIS month — d.paidAmount.
+ *   - Total Remaining: Pending − Collected, still owed — d.remainingBalance.
+ * Next month, whatever is left in "Total Remaining" today is exactly what
+ * rolls forward into next month's "Pending Fees" automatically (see the
+ * BUGFIX note on the pendingTotal calc in loadFeeDefaulters above) — no
+ * extra step needed for the loop to continue on its own.
  */
 function updateFdOverviewStats(defaulters) {
     const afterEl = document.getElementById('fd-overview-after1month');
@@ -7014,16 +7047,11 @@ function updateFdOverviewStats(defaulters) {
     if (!afterEl || !colEl || !penEl) return;
 
     const list = Array.isArray(defaulters) ? defaulters : [];
+    const totalPending = list.reduce((sum, d) => sum + (Number(d.pendingTotal) || 0), 0);
     const totalRemaining = list.reduce((sum, d) => sum + (Number(d.remainingBalance) || 0), 0);
     const totalCollected = list.reduce((sum, d) => sum + (Number(d.paidAmount) || 0), 0);
-    // BUGFIX — "Pending After 1 Month" was showing the exact same figure as
-    // "Total Remaining" because it summed every defaulter instead of only
-    // the ones actually pending for more than one month.
-    const totalAfterOneMonth = list
-        .filter(d => (Number(d.pendingMonthsCount) || 0) > 1)
-        .reduce((sum, d) => sum + (Number(d.remainingBalance) || 0), 0);
 
-    afterEl.textContent = `Rs. ${totalAfterOneMonth.toLocaleString()}`;
+    afterEl.textContent = `Rs. ${totalPending.toLocaleString()}`;
     colEl.textContent = `Rs. ${totalCollected.toLocaleString()}`;
     penEl.textContent = `Rs. ${totalRemaining.toLocaleString()}`;
 }
@@ -7036,9 +7064,15 @@ function _renderDefaultersTable(defaulters) {
     if (!tbody) return;
     if (countEl) countEl.textContent = `${defaulters.length} defaulter${defaulters.length !== 1 ? 's' : ''} found`;
     if (!defaulters.length) {
-        tbody.innerHTML = `<tr><td colspan="7" class="empty-row"><i class="fas fa-check-circle" style="color:#16a34a;"></i>&nbsp; No fee defaulters found for this period. All caught up!</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="9" class="empty-row"><i class="fas fa-check-circle" style="color:#16a34a;"></i>&nbsp; No fee defaulters found for this period. All caught up!</td></tr>`;
         return;
     }
+    // FEATURE — "Pending / Collected / Remaining" now render as three
+    // distinct columns instead of one "Amount Pending" figure, so it's
+    // explicit that Remaining = Pending − Collected for the period, and
+    // that whatever's left in Remaining is what carries forward as next
+    // month's Pending automatically (arrears roll-over — see the BUGFIX
+    // note above loadFeeDefaulters' pendingTotal calc).
     tbody.innerHTML = defaulters.map(d => {
         const cls = d.studentClass + (d.section ? ' – ' + d.section : '');
         const monthsTitle = d.pendingMonthsList.join(', ') || 'Current month';
@@ -7050,6 +7084,8 @@ function _renderDefaultersTable(defaulters) {
             <td><strong>${_escHtml(d.studentName)}</strong></td>
             <td><span class="class-chip" style="background:rgba(139,92,246,0.1);color:#8b5cf6;">${_escHtml(cls)}</span></td>
             <td>${_escHtml(d.guardianName)}</td>
+            <td><strong>Rs. ${d.pendingTotal.toLocaleString()}</strong></td>
+            <td><strong style="color:#16a34a;">Rs. ${d.paidAmount.toLocaleString()}</strong></td>
             <td><strong style="color:#dc2626;font-size:1.05rem;">Rs. ${d.remainingBalance.toLocaleString()}</strong></td>
             <td>${monthsHtml}</td>
             <td><span class="fee-status-badge ${d.paymentStatus === 'Partial' ? 'fee-pending' : 'fee-overdue'}">${_escHtml(d.paymentStatus)}</span></td>
