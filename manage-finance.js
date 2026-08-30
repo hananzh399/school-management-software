@@ -3558,6 +3558,8 @@ async function getFeeRowFinance(student, monthKey) {
             guardianName: student.guardianName,
             remainingBalance: 0,
             paidAmount: 0,
+            billed: 0,
+            arrearsDue: 0,
             paymentStatus: 'Paid',
             fineAmount: 0,
             fineReason: ''
@@ -3611,6 +3613,10 @@ async function getFeeRowFinance(student, monthKey) {
         guardianName: student.guardianName,
         remainingBalance,
         paidAmount,
+        billed: f.payableNow,
+        // FEATURE — carried-over arrears portion of `billed`, straight from
+        // the same breakdown engine (see _splitFeeAndArrears usage below).
+        arrearsDue: Number(f.arrears) || 0,
         paymentStatus,
         fineAmount: remainingBalance <= 0.01
             ? 0
@@ -6467,16 +6473,62 @@ function _getHistoricalMonthFinance(student, monthKey) {
         .reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
 
     const remainingBalance = Math.max(0, billed - paidAmount);
+
+    // FEATURE — arrears/current-fee split for the Fee Defaulters breakdown
+    // (see _splitFeeAndArrears below). The voucher snapshot already records
+    // exactly how much of `billed` was carried-over "Previous Arrears" vs
+    // this month's own charges (see recordVoucherGeneration/computeFeeBreakdown),
+    // so read it straight from there rather than recomputing it — it's the
+    // authoritative, locked-in figure for that specific month.
+    const arrearsDue = Math.max(0, Math.min(billed, Number(record.snapshot && record.snapshot.arrears) || 0));
+
     return {
         regNo: studentId,
         studentName: student.fullName,
         guardianName: student.guardianName,
         remainingBalance,
         paidAmount,
+        billed,
+        arrearsDue,
         paymentStatus: remainingBalance <= 0 ? 'Paid' : (paidAmount > 0 ? 'Partial' : 'Pending'),
         fineAmount: remainingBalance <= 0.01 ? 0 : (Number(record.snapshot && record.snapshot.fineAmount) || 0),
         fineReason: ''
     };
+}
+
+/**
+ * FEATURE — splits a defaulter's bill into "current period charges" vs
+ * "arrears" (unpaid balance carried over from earlier months), and splits
+ * whatever's been paid the same way, so the Fee Defaulters page can show
+ * real arrears-collected / arrears-remaining figures instead of one lumped
+ * "remaining" number.
+ *
+ * Allocation rule: a payment always settles the CURRENT period's own
+ * charges first; only the amount paid beyond that is treated as paying
+ * down arrears. This matches how a payment is actually described to a
+ * parent/admin — "this covers this month's fee" — with anything extra
+ * automatically going toward the old balance. Arrears keeps shrinking this
+ * way, month after month, until it reaches exactly 0 (fully paid); whatever
+ * is left un-collected rolls forward into next month's voucher automatically
+ * via computeOutstandingArrears()/recordVoucherGeneration(), which already
+ * bakes the still-unpaid balance into the next bill.
+ *
+ * `billed` = full amount due for the period (current charges + arrears).
+ * `arrearsDue` = how much of `billed` is carried-over arrears (0 if none).
+ * `paidAmount` = total actually paid against this period's bill.
+ */
+function _splitFeeAndArrears(billed, arrearsDue, paidAmount) {
+    const b = Math.max(0, Number(billed) || 0);
+    const ar = Math.max(0, Math.min(b, Number(arrearsDue) || 0));
+    const paid = Math.max(0, Number(paidAmount) || 0);
+    const currentDue = Math.max(0, b - ar);
+
+    const currentCollected = Math.min(currentDue, paid);
+    const arrearsCollected = Math.min(ar, Math.max(0, paid - currentDue));
+    const currentRemaining = Math.max(0, currentDue - currentCollected);
+    const arrearsRemaining = Math.max(0, ar - arrearsCollected);
+
+    return { currentDue, currentCollected, currentRemaining, arrearsDue: ar, arrearsCollected, arrearsRemaining };
 }
 
 /* ── Toast ───────────────────────────────────────────────── */
@@ -6955,14 +7007,14 @@ async function loadFeeDefaulters() {
     const tbody = document.getElementById('fd-tbody');
     const countEl = document.getElementById('fd-count');
     if (!tbody) return;
-    tbody.innerHTML = `<tr><td colspan="9" class="empty-row"><i class="fas fa-spinner fa-spin"></i> Loading fee defaulters…</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="10" class="empty-row"><i class="fas fa-spinner fa-spin"></i> Loading fee defaulters…</td></tr>`;
     if (countEl) countEl.textContent = '';
 
     const students = _getStudents();
     const monthKey = _fdMonth || _monthKey();
 
     if (!students.length) {
-        tbody.innerHTML = `<tr><td colspan="9" class="empty-row">No students found. Add students from Admissions first.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="10" class="empty-row">No students found. Add students from Admissions first.</td></tr>`;
         return;
     }
 
@@ -6972,7 +7024,7 @@ async function loadFeeDefaulters() {
     // a clear message instead of the generic empty-state one.
     const monthIsDue = _isMonthDue(monthKey);
     if (!monthIsDue) {
-        tbody.innerHTML = `<tr><td colspan="9" class="empty-row"><i class="fas fa-check-circle" style="color:#16a34a;"></i>&nbsp; This month's fee becomes overdue on the 27th. No defaulters yet for this period.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="10" class="empty-row"><i class="fas fa-check-circle" style="color:#16a34a;"></i>&nbsp; This month's fee becomes overdue on the 27th. No defaulters yet for this period.</td></tr>`;
         if (countEl) countEl.textContent = '0 defaulters found';
         _fdAllData = [];
         updateFdOverviewStats([]);
@@ -7015,12 +7067,20 @@ async function loadFeeDefaulters() {
                 // computeFeeBreakdown's isPastDue/payableNow BUGFIX), so a
                 // student overdue past the grace period shows up here with
                 // the fine actually included in what they owe.
-                let feeTotal = 0;
-                try { feeTotal = computeFeeBreakdown(s).payableNow; } catch(e) { feeTotal = Number(s.standardFee || 0); }
+                let feeTotal = 0, arrearsPortion = 0;
+                try {
+                    const fb = computeFeeBreakdown(s);
+                    feeTotal = fb.payableNow;
+                    // FEATURE — how much of `feeTotal` is carried-over arrears
+                    // vs this month's own charges, straight from the same
+                    // breakdown engine that built the total — see
+                    // _splitFeeAndArrears below for how this gets used.
+                    arrearsPortion = Number(fb.arrears) || 0;
+                } catch(e) { feeTotal = Number(s.standardFee || 0); }
                 const payments = (s.feePayments || []).filter(p => p.monthKey === monthKey);
                 const paidAmount = payments.reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
                 const remaining = Math.max(0, feeTotal - paidAmount);
-                finance = { remainingBalance: remaining, paidAmount, paymentStatus: remaining <= 0 ? 'Paid' : (paidAmount > 0 ? 'Partial' : 'Pending'), studentName: s.fullName || s.name, guardianName: s.guardianName };
+                finance = { remainingBalance: remaining, paidAmount, billed: feeTotal, arrearsDue: arrearsPortion, paymentStatus: remaining <= 0 ? 'Paid' : (paidAmount > 0 ? 'Partial' : 'Pending'), studentName: s.fullName || s.name, guardianName: s.guardianName };
             }
         }
         if (finance.remainingBalance > 0 && finance.paymentStatus !== 'Paid') {
@@ -7045,6 +7105,18 @@ async function loadFeeDefaulters() {
             //   "roll-over arrears" and computeOutstandingArrears()).
             const collectedThisMonth = Number(finance.paidAmount) || 0;
             const pendingTotal = finance.remainingBalance + collectedThisMonth;
+
+            // FEATURE — arrears vs current-fee breakdown (see
+            // _splitFeeAndArrears above). `billed` and `arrearsDue` come
+            // straight from the same billed-total the rest of this row
+            // already relies on; when a caller/branch didn't have them
+            // available, `billed` safely defaults to pendingTotal and
+            // `arrearsDue` to 0 (nothing to split — the whole amount is
+            // treated as current-period charges, never invented).
+            const billedTotal = Number(finance.billed) || pendingTotal;
+            const arrearsDue = Math.max(0, Math.min(billedTotal, Number(finance.arrearsDue) || 0));
+            const split = _splitFeeAndArrears(billedTotal, arrearsDue, collectedThisMonth);
+
             defaulters.push({
                 studentId: s.regNo || s.id || '',
                 studentName: finance.studentName || s.fullName || 'Unnamed',
@@ -7053,6 +7125,13 @@ async function loadFeeDefaulters() {
                 remainingBalance: finance.remainingBalance, paymentStatus: finance.paymentStatus,
                 paidAmount: collectedThisMonth,
                 pendingTotal,
+                // Real, computed arrears breakdown — no fixed/example amounts.
+                arrearsDue: split.arrearsDue,
+                arrearsCollected: split.arrearsCollected,
+                arrearsRemaining: split.arrearsRemaining,
+                currentFeeDue: split.currentDue,
+                currentFeeCollected: split.currentCollected,
+                currentFeeRemaining: split.currentRemaining,
                 pendingMonthsList: pendingMonths, pendingMonthsCount: pendingMonths.length
             });
         }
@@ -7131,16 +7210,23 @@ function updateFdOverviewStats(defaulters) {
     const afterEl = document.getElementById('fd-overview-after1month');
     const colEl = document.getElementById('fd-overview-collected');
     const penEl = document.getElementById('fd-overview-pending');
+    const arrEl = document.getElementById('fd-overview-arrears');
     if (!afterEl || !colEl || !penEl) return;
 
     const list = Array.isArray(defaulters) ? defaulters : [];
     const totalPending = list.reduce((sum, d) => sum + (Number(d.pendingTotal) || 0), 0);
     const totalRemaining = list.reduce((sum, d) => sum + (Number(d.remainingBalance) || 0), 0);
     const totalCollected = list.reduce((sum, d) => sum + (Number(d.paidAmount) || 0), 0);
+    // FEATURE — how much of "Total Remaining" is old, carried-over arrears
+    // specifically (as opposed to this period's own unpaid charges) — the
+    // portion that keeps rolling forward onto next month's voucher, on
+    // its own, until it's fully collected down to 0.
+    const totalArrearsRemaining = list.reduce((sum, d) => sum + (Number(d.arrearsRemaining) || 0), 0);
 
     afterEl.textContent = _fmtStatMoney(totalPending); afterEl.title = `Rs. ${totalPending.toLocaleString()}`;
     colEl.textContent = _fmtStatMoney(totalCollected); colEl.title = `Rs. ${totalCollected.toLocaleString()}`;
     penEl.textContent = _fmtStatMoney(totalRemaining); penEl.title = `Rs. ${totalRemaining.toLocaleString()}`;
+    if (arrEl) { arrEl.textContent = _fmtStatMoney(totalArrearsRemaining); arrEl.title = `Rs. ${totalArrearsRemaining.toLocaleString()}`; }
 }
 
 function _renderDefaultersTable(defaulters) {
@@ -7151,7 +7237,7 @@ function _renderDefaultersTable(defaulters) {
     if (!tbody) return;
     if (countEl) countEl.textContent = `${defaulters.length} defaulter${defaulters.length !== 1 ? 's' : ''} found`;
     if (!defaulters.length) {
-        tbody.innerHTML = `<tr><td colspan="9" class="empty-row"><i class="fas fa-check-circle" style="color:#16a34a;"></i>&nbsp; No fee defaulters found for this period. All caught up!</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="10" class="empty-row"><i class="fas fa-check-circle" style="color:#16a34a;"></i>&nbsp; No fee defaulters found for this period. All caught up!</td></tr>`;
         return;
     }
     // FEATURE — "Pending / Collected / Remaining" now render as three
@@ -7166,6 +7252,19 @@ function _renderDefaultersTable(defaulters) {
         const monthsHtml = d.pendingMonthsCount > 0
             ? `<div class="fd-months-badge" title="${_escHtml(monthsTitle)}"><i class="fas fa-calendar-times" style="color:#dc2626;"></i> <strong>${d.pendingMonthsCount}</strong> month${d.pendingMonthsCount !== 1 ? 's' : ''}<span class="fd-months-list">${d.pendingMonthsList.slice(0,3).map(_escHtml).join(', ')}${d.pendingMonthsCount > 3 ? '…' : ''}</span></div>`
             : `<span style="color:var(--text-secondary);">—</span>`;
+
+        // FEATURE — Arrears column: shows the real, computed carried-over
+        // balance for this student (never a fixed/example amount) as
+        // "collected / owed", plus what's still remaining — so it's clear
+        // at a glance how much of an old debt has actually been chipped
+        // away at versus what's left to roll into next month's voucher.
+        const arrearsHtml = d.arrearsDue > 0
+            ? `<div class="fd-arrears-cell" title="Rs. ${d.arrearsCollected.toLocaleString()} collected of Rs. ${d.arrearsDue.toLocaleString()} owed">
+                   <strong style="color:#f59e0b;">${_fmtStatMoney(d.arrearsRemaining)}</strong>
+                   <span class="fd-arrears-sub">of ${_fmtStatMoney(d.arrearsDue)} owed &bull; ${_fmtStatMoney(d.arrearsCollected)} collected</span>
+               </div>`
+            : `<span style="color:var(--text-secondary);">—</span>`;
+
         return `<tr>
             <td><span class="hrk-id-badge">${_escHtml(d.studentId)}</span></td>
             <td><strong>${_escHtml(d.studentName)}</strong></td>
@@ -7174,6 +7273,7 @@ function _renderDefaultersTable(defaulters) {
             <td><strong title="Rs. ${d.pendingTotal.toLocaleString()}">${_fmtStatMoney(d.pendingTotal)}</strong></td>
             <td><strong style="color:#16a34a;" title="Rs. ${d.paidAmount.toLocaleString()}">${_fmtStatMoney(d.paidAmount)}</strong></td>
             <td><strong style="color:#dc2626;font-size:1.05rem;" title="Rs. ${d.remainingBalance.toLocaleString()}">${_fmtStatMoney(d.remainingBalance)}</strong></td>
+            <td>${arrearsHtml}</td>
             <td>${monthsHtml}</td>
             <td><span class="fee-status-badge ${d.paymentStatus === 'Partial' ? 'fee-pending' : 'fee-overdue'}">${_escHtml(d.paymentStatus)}</span></td>
         </tr>`;

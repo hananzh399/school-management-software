@@ -7096,7 +7096,7 @@ input[type="date"]::-webkit-calendar-picker-indicator {
     position: sticky;
     top: 0;
     z-index: 12;
-    background: var(--bg-main, #F7F8FC);
+    background: var(--bg-primary, #f8fafc);
     padding-bottom: 12px;
     padding-top: 6px;
     margin-bottom: 20px;
@@ -7104,7 +7104,7 @@ input[type="date"]::-webkit-calendar-picker-indicator {
     transition: margin-bottom 0.15s ease;
 }
 [data-theme="dark"] .fee-stats-header {
-    background: var(--bg-main, #1A1A1D);
+    background: var(--bg-primary, #0b1120);
 }
 
 /* ---- 2) CLASS-WISE — pricing row sticky when viewing a class ---- */
@@ -7112,14 +7112,14 @@ input[type="date"]::-webkit-calendar-picker-indicator {
     position: sticky;
     top: 0;
     z-index: 11;
-    background: var(--bg-main, #F7F8FC);
+    background: var(--bg-primary, #f8fafc);
     padding: 14px 0 12px;
     margin-top: 0;
     margin-bottom: 16px;
     border-bottom: 1px solid var(--border-subtle);
 }
 [data-theme="dark"] #class-fee-stats-row {
-    background: var(--bg-main, #1A1A1D);
+    background: var(--bg-primary, #0b1120);
 }
 /* Lift the class title + table closer to the sticky pricing */
 #class-student-list-view .section-title.class-level-title-row {
@@ -7135,14 +7135,14 @@ input[type="date"]::-webkit-calendar-picker-indicator {
     position: sticky;
     top: 0;
     z-index: 12;
-    background: var(--bg-main, #F7F8FC);
+    background: var(--bg-primary, #f8fafc);
     padding: 10px 0 14px;
     margin-top: 0;
     margin-bottom: 10px;
     border-bottom: 1px solid var(--border-subtle);
 }
 [data-theme="dark"] .stats-header-section {
-    background: var(--bg-main, #1A1A1D);
+    background: var(--bg-primary, #0b1120);
 }
 /* Give the stats row inside it proper breathing room (not crammed) */
 .stats-header-section .fee-stats-row-compact {
@@ -7420,14 +7420,14 @@ input[type="date"]::-webkit-calendar-picker-indicator {
     flex-wrap: nowrap !important;
     gap: 12px !important;
     align-items: center !important;
-    background: var(--bg-main, #F7F8FC);
+    background: var(--bg-primary, #f8fafc);
     padding: 10px 0;
     margin-bottom: 8px;
     width: 100% !important;
 }
 
 [data-theme="dark"] .cfr-table-toolbar {
-    background: var(--bg-main, #1A1A1D);
+    background: var(--bg-primary, #0b1120);
 }
 
 .cfr-table-toolbar .fee-search-wrap {
@@ -7508,7 +7508,7 @@ input[type="date"]::-webkit-calendar-picker-indicator {
     position: sticky !important;
     top: 0 !important;
     z-index: 12 !important;
-    background: var(--bg-main, #F7F8FC) !important;
+    background: var(--bg-primary, #f8fafc) !important;
     padding: 10px 0 !important;
     margin-top: 0 !important;
     margin-bottom: 12px !important;
@@ -7516,7 +7516,7 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 }
 
 [data-theme="dark"] #class-fee-stats-row {
-    background: var(--bg-main, #1A1A1D) !important;
+    background: var(--bg-primary, #0b1120) !important;
 }
 
 /* Clean Custom Fee Roster Footer Summary Bar at END of table */
@@ -7578,4 +7578,53 @@ input[type="date"]::-webkit-calendar-picker-indicator {
     .stats-header-section {
         flex-direction: column !important;
     }
+}
+
+/* ============================================================================
+   BUGFIX — "pricing cards look broken/invisible in dark theme": the stat
+   cards (Pending Fees / Collected / Remaining — Fee Defaulters, Custom Fee,
+   class-wise and main Manage Student Fees headers all share this same
+   .fee-stat-card markup) used the site-wide --bg-card token, which in dark
+   mode is only rgba(255,255,255,0.04) — a near-transparent film. That was
+   fine on the plain page background, but the sticky bar these cards sit
+   inside (.fee-stats-header / #class-fee-stats-row / .stats-header-section,
+   fixed above) paints its OWN background right behind them. Once that strip
+   background was corrected to match the real page color (see the
+   var(--bg-main, ...) → var(--bg-primary, ...) fix above), the cards'
+   near-invisible fill and near-invisible border (rgba(255,255,255,0.06))
+   left them with no visible edge at all against it — they read as plain
+   floating icons/text with no card boundary, i.e. "broken".
+   Fix: in dark mode specifically, give these cards a genuinely visible
+   card surface — lighter fill, a clearer border, and a soft shadow — so
+   they read as distinct, tappable cards again, matching how they already
+   look correctly in light mode. Placed last so it wins the cascade without
+   needing to touch every earlier .fee-stat-card rule individually.
+   ============================================================================ */
+[data-theme="dark"] .fee-stat-card {
+    background: rgba(255, 255, 255, 0.055);
+    border: 1px solid rgba(255, 255, 255, 0.10);
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.28);
+}
+[data-theme="dark"] .fee-stat-card:hover {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.16);
+}
+
+/* ============================================================================
+   FEATURE — Arrears breakdown cell in the Fee Defaulters table. Shows the
+   real remaining arrears prominently, with a small sub-line giving the
+   "collected of owed" context, computed live per student (see
+   _splitFeeAndArrears in manage-finance.js) — never a fixed example figure.
+   ============================================================================ */
+.fd-arrears-cell {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    line-height: 1.3;
+}
+.fd-arrears-sub {
+    font-size: 0.7rem;
+    font-weight: 500;
+    color: var(--text-secondary);
+    white-space: nowrap;
 }
