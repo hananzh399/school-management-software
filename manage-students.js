@@ -2087,12 +2087,19 @@ if (certUploadInput) {
     const dateOfBirth = studentData.dob ? new Date(studentData.dob).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
     const admissionDate = studentData.admissionDate ? new Date(studentData.admissionDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
 
-    // ── Fee & Transport figures (formatted, blank-safe) ──
-    const fmtRs = (v) => (v === undefined || v === null || v === '') ? '—' : ('Rs. ' + Number(v).toLocaleString('en-PK'));
+    // ── Transport figures (blank-safe) ──
+    // Fee/financial figures are intentionally NOT shown on this form — the
+    // Admission Form is a records document, not a fee voucher/receipt.
     const transportMode = studentData.transportMode || 'Private (Self)';
     const transportType = studentData.transportType && studentData.transportType !== 'None' ? studentData.transportType : 'N/A';
-    const totalDiscount = [studentData.tuitionDiscount, studentData.transportDiscount, studentData.siblingDiscount]
-        .map(v => Number(v) || 0).reduce((a, b) => a + b, 0);
+
+    // ── Documents-on-file summary (replaces the old fee summary on this form) ──
+    const bformOnFile = !!studentData.certData;
+    const photoOnFile = !!photoSrc;
+    const docsOnFileCount = (bformOnFile ? 1 : 0) + (photoOnFile ? 1 : 0);
+    const docStatus = (ok) => ok
+        ? '<i class="fas fa-check-circle" style="color:#16a34a;"></i> Submitted'
+        : '<i class="fas fa-circle-exclamation" style="color:#b45309;"></i> Pending';
 
     // ── Siblings section (only rendered when the student has a sibling link) ──
     // Two independent signals, same as the on-screen Profile view:
@@ -2364,17 +2371,15 @@ if (certUploadInput) {
         </section>
 
         <section class="section">
-            <div class="section-label"><span class="num">4</span><span class="txt">Transport &amp; Fee Summary</span></div>
-            <div class="row-4">
-                <div class="field"><span class="f-label">Transport:</span><span class="f-value">${esc(transportMode)} (${esc(transportType)})</span></div>
-                <div class="field"><span class="f-label">Transport Fee:</span><span class="f-value">${fmtRs(studentData.transportFee)}</span></div>
-                <div class="field"><span class="f-label">Standard Tuition Fee:</span><span class="f-value">${fmtRs(studentData.standardFee)}</span></div>
-                <div class="field"><span class="f-label">Admission Fee:</span><span class="f-value">${fmtRs(studentData.admissionFee)}</span></div>
-                ${parseFloat(studentData.arrears||0) > 0 ? `<div class="field"><span class="f-label">Arrears:</span><span class="f-value">${fmtRs(studentData.arrears)}</span></div>` : ''}
+            <div class="section-label"><span class="num">4</span><span class="txt">Transport &amp; Documents</span></div>
+            <div class="row-3">
+                <div class="field"><span class="f-label">Transport Mode:</span><span class="f-value">${esc(transportMode)}</span></div>
+                <div class="field"><span class="f-label">Vehicle Type:</span><span class="f-value">${esc(transportType)}</span></div>
+                <div class="field"><span class="f-label">Documents on File:</span><span class="f-value">${docsOnFileCount} of 2</span></div>
             </div>
             <div class="fee-summary-row">
-                <span class="net-label">Total Discounts Applied: <span style="font-family:'Roboto Mono',monospace; color:var(--ink-900); font-weight:700;">${fmtRs(totalDiscount)}</span>${studentData.isLifetime ? ' &nbsp;·&nbsp; Lifetime' : (studentData.discountExpiry ? ` &nbsp;·&nbsp; Valid Until ${esc(studentData.discountExpiry)}` : '')}</span>
-                <span class="net-label">Net Payable (First Month): <span class="net-value">${fmtRs(studentData.netPayable)}</span></span>
+                <span class="net-label">B-Form / Certificate: <span style="font-family:'Roboto Mono',monospace; font-weight:700;">${docStatus(bformOnFile)}</span></span>
+                <span class="net-label">Photograph: <span style="font-family:'Roboto Mono',monospace; font-weight:700;">${docStatus(photoOnFile)}</span></span>
             </div>
         </section>
         ${siblingsSectionHtml}
