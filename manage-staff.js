@@ -1001,7 +1001,7 @@ function handleFormSubmit(e) {
             .concat(staffData['Teaching'] || [])
             .concat(staffData['Non-Teaching'] || [])
             .map(s => s.id);
-        newData.id = displayedId && !allIds.includes(displayedId) ? displayedId : generateStaffId();
+        newData.id = resolveFreshStaffId(displayedId, allIds, newData.joined);
         newData.fines = 0;
         newData.type = currentCategory; // tag for bucket integrity
         staffData[currentCategory].push(newData);
@@ -1649,7 +1649,7 @@ function handleFormSubmit(e) {
             .concat(staffData['Teaching'] || [])
             .concat(staffData['Non-Teaching'] || [])
             .map(s => s.id);
-        newData.id = displayedId && !allIds.includes(displayedId) ? displayedId : generateStaffId();
+        newData.id = resolveFreshStaffId(displayedId, allIds, newData.joined);
         newData.fines = 0;
         newData.type = currentCategory;
         staffData[currentCategory].push(newData);
@@ -2571,7 +2571,7 @@ function handleFormSubmit(e) {
             .concat(staffData['Teaching'] || [])
             .concat(staffData['Non-Teaching'] || [])
             .map(s => s.id);
-        newData.id = displayedId && !allIds.includes(displayedId) ? displayedId : generateStaffId();
+        newData.id = resolveFreshStaffId(displayedId, allIds, newData.joined);
         newData.fines = 0;
         newData.type = currentCategory;
         staffData[currentCategory].push(newData);
@@ -3457,23 +3457,54 @@ showProfileView = function(staffId, category) {
    STAFF ID GENERATION (linked to access-control.js)
    Uses the school prefix the Super Admin set, e.g. PSC_S_1, PSC_S_2
    ============================================ */
-function generateStaffId() {
+/**
+ * @param {string} [joinedDateStr] The staff member's "Date Joined" (Teaching
+ *   form only — Non-Teaching has no such field). Determines the 2-digit
+ *   appointment-year segment in the generated ID; falls back to today's
+ *   year when omitted/invalid (see getStaffIdYearSuffix in access-control.js).
+ */
+function generateStaffId(joinedDateStr) {
     const all = []
         .concat(staffData['Teaching'] || [])
         .concat(staffData['Non-Teaching'] || []);
     const ids = all.map(s => s && s.id).filter(Boolean);
 
     if (window.SoftSchoolAdmin && typeof window.SoftSchoolAdmin.nextStaffId === 'function') {
-        return window.SoftSchoolAdmin.nextStaffId(ids);
+        return window.SoftSchoolAdmin.nextStaffId(ids, joinedDateStr);
     }
 
     // Fallback when no school is registered yet in Super Admin
     const prefix = 'SCH';
-    const re = new RegExp('^' + prefix + '_S_(\\d+)$', 'i');
+    let yearDate = joinedDateStr ? new Date(joinedDateStr) : new Date();
+    if (isNaN(yearDate.getTime())) yearDate = new Date();
+    const yearSuffix = String(yearDate.getFullYear()).slice(-2);
+    const re = new RegExp('^' + prefix + '_' + yearSuffix + '_S_(\\d+)$', 'i');
     let max = 0;
     ids.forEach(id => {
         const m = re.exec(String(id).trim());
         if (m) max = Math.max(max, parseInt(m[1], 10) || 0);
     });
-    return prefix + '_S_' + (max + 1);
+    return prefix + '_' + yearSuffix + '_S_' + (max + 1);
+}
+
+/**
+ * Like manage-students.js's resolveFreshRegNo(): the staff ID badge shown
+ * when the Add form opens is generated BEFORE "Date Joined" is filled in
+ * (Teaching only — Non-Teaching has no such field), using today's year as
+ * a placeholder. If the user then picks a joining date in a different
+ * year, that badge's year segment would silently be wrong. This
+ * re-validates the badge against the final joined date right before it's
+ * actually used, and regenerates a fresh ID (for the correct year) if the
+ * displayed one is stale or already taken.
+ */
+function resolveFreshStaffId(displayedId, allIds, joinedDateStr) {
+    const prefix = (window.SoftSchoolAdmin && typeof window.SoftSchoolAdmin.getSchoolPrefix === 'function')
+        ? window.SoftSchoolAdmin.getSchoolPrefix() : 'SCH';
+    let yearDate = joinedDateStr ? new Date(joinedDateStr) : new Date();
+    if (isNaN(yearDate.getTime())) yearDate = new Date();
+    const yearSuffix = String(yearDate.getFullYear()).slice(-2);
+    const expectedYearSegment = prefix + '_' + yearSuffix + '_S_';
+    const yearMatches = !!displayedId && displayedId.toUpperCase().indexOf(expectedYearSegment) === 0;
+    const taken = !!displayedId && allIds.includes(displayedId);
+    return (displayedId && yearMatches && !taken) ? displayedId : generateStaffId(joinedDateStr);
 }

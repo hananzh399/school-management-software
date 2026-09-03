@@ -463,7 +463,6 @@ document.addEventListener('DOMContentLoaded', () => {
     // UI References: Finance
     const feeStandard      = document.getElementById('fee-standard');
     const feeAdmission     = document.getElementById('fee-admission');
-    const feeArrears       = document.getElementById('fee-arrears');
     const feeTuitionDisc   = document.getElementById('fee-discount-tuition');
     const feeTransDisc     = document.getElementById('fee-discount-transport');
     const feeSiblingDisc   = document.getElementById('fee-discount-sibling');
@@ -620,7 +619,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     '<i class="fas fa-user-plus"></i> Student Admission Entry';
                 document.getElementById('form-submit-btn').innerText = 'Finalize Admission';
 
-                const nextRegNo = generateNextRegistrationNumber();
+                const nextRegNo = generateNextRegistrationNumber(admissionDateInput ? admissionDateInput.value : '');
                 rollNoInput.value = '—';
                 displayRegBadge.innerText = nextRegNo;
                 admissionForm.dataset.pendingRegNo = nextRegNo;
@@ -742,21 +741,17 @@ document.addEventListener('DOMContentLoaded', () => {
         const v = el => (el && el.value !== undefined) ? (parseFloat(el.value) || 0) : 0;
         const standard     = v(feeStandard);
         const admission    = v(feeAdmission);
-        const arrears      = v(feeArrears);
         const tDisc        = v(feeTuitionDisc);
         const trDisc       = v(feeTransDisc);
         const sibDisc      = v(feeSiblingDisc);
         const monthlyTrans = v(transportFeeInput);
         // NOTE: Books fee and Other fees are intentionally excluded from the
         // database net total — they appear only on the voucher at print time.
-        // Arrears (previous outstanding dues) are added the same way the
-        // admission fee is — they inflate what's payable, they're never
-        // discounted against.
-        const netTotal = (standard + admission + arrears + monthlyTrans) - (tDisc + trDisc + sibDisc);
+        const netTotal = (standard + admission + monthlyTrans) - (tDisc + trDisc + sibDisc);
         if (netTotalInput) netTotalInput.value = Math.max(0, netTotal).toFixed(0);
     }
 
-    [feeStandard, feeAdmission, feeArrears, feeTuitionDisc, feeTransDisc, feeSiblingDisc, transportFeeInput, feeBooks, feeBooksDisc].forEach(el => {
+    [feeStandard, feeAdmission, feeTuitionDisc, feeTransDisc, feeSiblingDisc, transportFeeInput, feeBooks, feeBooksDisc].forEach(el => {
         if (el) el.addEventListener('input', performFinancialAudit);
     });
 
@@ -1024,19 +1019,37 @@ if (certUploadInput) {
     // ── 6. DATA PERSISTENCE (CRUD) ───────────────────────────────────────────
 
     /**
+     * Two-digit admission/appointment year used inside registration numbers
+     * (e.g. "26" for 2026). Reads the year out of a yyyy-mm-dd date string
+     * (as produced by a <input type="date">); falls back to today's year
+     * when the date is missing/unparseable, so a badge can still be shown
+     * before the user has picked a date.
+     */
+    function getRegNoYearSuffix(dateStr) {
+        let d = dateStr ? new Date(dateStr) : new Date();
+        if (isNaN(d.getTime())) d = new Date();
+        return String(d.getFullYear()).slice(-2);
+    }
+
+    /**
      * Generate the next registration number using THIS school's own prefix
      * (set in Super Admin → school → "Registration prefix"; falls back to
-     * name initials, then to "HRK" only if no school is logged in at all).
+     * name initials, then to "HRK" only if no school is logged in at all)
+     * PLUS the 2-digit admission year.
      * Scans ALL records (including siblings) for the highest number already
-     * used WITH THE CURRENT PREFIX, so switching a school's prefix in Super
-     * Admin cleanly starts a fresh sequence under the new prefix instead of
-     * silently reusing/colliding with old numbers.
-     * Format: PREFIX_1, PREFIX_2, PREFIX_3 … (no leading zeros, starts at 1)
+     * used WITH THE CURRENT PREFIX AND YEAR, so switching a school's prefix
+     * in Super Admin — or simply admitting into a new year — cleanly starts
+     * a fresh sequence instead of silently reusing/colliding with old
+     * numbers.
+     * Format: PREFIX_YY_1, PREFIX_YY_2, PREFIX_YY_3 … (e.g. PSC_26_1,
+     * PSC_26_2 …) — no leading zeros on the sequence number, starts at 1
+     * for each prefix+year combination.
      */
-    function generateNextRegistrationNumber() {
+    function generateNextRegistrationNumber(admissionDateStr) {
         const db = getDatabase();
+        const yearSuffix = getRegNoYearSuffix(admissionDateStr);
         let maxSeq = 0;
-        const prefixRegex = new RegExp('^' + escapeRegExp(SYSTEM_PREFIX) + '(\\d+)$');
+        const prefixRegex = new RegExp('^' + escapeRegExp(SYSTEM_PREFIX) + yearSuffix + '_(\\d+)$');
         db.forEach(s => {
     // Check both regNo and id fields so we never collide
     [s.regNo, s.id].forEach(val => {
@@ -1051,8 +1064,8 @@ if (certUploadInput) {
         }
     });
 });
-        // next number — no leading zeros, starts at 1
-        return `${SYSTEM_PREFIX}${maxSeq + 1}`;
+        // next number — no leading zeros, starts at 1 for this prefix+year
+        return `${SYSTEM_PREFIX}${yearSuffix}_${maxSeq + 1}`;
     }
 
     /**
@@ -1065,10 +1078,22 @@ if (certUploadInput) {
      * if the cached value is no longer free. This was the root cause of two different
      * students ending up with the same Reg No (which then made Delete/Edit sometimes act
      * on the wrong — already archived — record).
+     *
+     * Also re-validates the YEAR baked into the cached number: the badge is
+     * first generated when the modal opens (using whatever admission date is
+     * in the form at that moment, usually today), but the user is free to
+     * change the admission date before submitting. If the final admission
+     * date falls in a different year than the cached badge assumed, the
+     * cached number is discarded and a fresh one is generated for the
+     * correct year instead — so the registration number always matches the
+     * student's actual admission year.
      */
-    function resolveFreshRegNo(db, cachedRegNo) {
+    function resolveFreshRegNo(db, cachedRegNo, admissionDateStr) {
+        const yearSuffix = getRegNoYearSuffix(admissionDateStr);
+        const expectedYearPrefix = `${SYSTEM_PREFIX}${yearSuffix}_`;
+        const cachedYearMatches = !!cachedRegNo && cachedRegNo.indexOf(expectedYearPrefix) === 0;
         const taken = cachedRegNo && db.some(s => s.regNo === cachedRegNo || s.id === cachedRegNo);
-        return (cachedRegNo && !taken) ? cachedRegNo : generateNextRegistrationNumber();
+        return (cachedRegNo && cachedYearMatches && !taken) ? cachedRegNo : generateNextRegistrationNumber(admissionDateStr);
     }
 
     /**
@@ -1264,7 +1289,7 @@ if (certUploadInput) {
     // hand everything back as strings, so these need coercing before they're
     // sent to Spring, or Jackson throws a 400 (can't map "4500" (String) -> Double).
     const NUMERIC_FIELDS = [
-        'standardFee', 'admissionFee', 'arrears', 'tuitionDiscount',
+        'standardFee', 'admissionFee', 'tuitionDiscount',
         'transportDiscount', 'siblingDiscount', 'transportFee', 'netPayable'
     ];
     const INTEGER_FIELDS = ['age', 'graduatedYear'];
@@ -1286,7 +1311,7 @@ if (certUploadInput) {
         'medicalIssues', 'orphanStatus', 'previousSchool', 'previousClass',
         'guardianName', 'guardianRole', 'guardianCnic', 'phone1', 'phone2',
         'permanentAddress', 'mailingAddress', 'standardFee', 'admissionFee',
-        'arrears', 'tuitionDiscount', 'transportDiscount', 'siblingDiscount',
+        'tuitionDiscount', 'transportDiscount', 'siblingDiscount',
         'transportMode', 'transportType', 'transportFee', 'netPayable',
         'otherFeesData', 'status', 'photo', 'certData',
         // Sibling link fields — now persisted server-side (Student.java).
@@ -1696,7 +1721,6 @@ if (certUploadInput) {
         mailingAddress:    SSValidate.rules.address({ required: true, maxLength: 300, label: "Mailing address" }),
         transportFee:      SSValidate.rules.money({ required: false, max: 10000000, label: "Transport fee" }),
         admissionFee:      SSValidate.rules.money({ required: false, max: 10000000, label: "Admission fee" }),
-        arrears:           SSValidate.rules.money({ required: false, max: 10000000, label: "Arrears" }),
         tuitionDiscount:   SSValidate.rules.money({ required: false, max: 10000000, label: "Tuition discount" }),
         transportDiscount: SSValidate.rules.money({ required: false, max: 10000000, label: "Transport discount" }),
         siblingDiscount:   SSValidate.rules.money({ required: false, max: 10000000, label: "Sibling discount" }),
@@ -1795,7 +1819,7 @@ if (certUploadInput) {
             if (matchedStudent) {
                 showSiblingDialog(matchedStudent.fullName, studentData, db, matchedStudent);
             } else {
-                const regNo = resolveFreshRegNo(db, admissionForm.dataset.pendingRegNo);
+                const regNo = resolveFreshRegNo(db, admissionForm.dataset.pendingRegNo, studentData.admissionDate);
                 studentData.regNo = regNo;
                 studentData.id    = regNo;
                 // A brand-new admission always starts on the active roster.
@@ -1897,7 +1921,7 @@ if (certUploadInput) {
                 const groupId = getOrCreateSiblingGroupId(matchedStudent);
 
                 // 2. Generate a real registration number (school prefix) for the new student
-                const newRegNo = resolveFreshRegNo(workingDb, admissionForm.dataset.pendingRegNo);
+                const newRegNo = resolveFreshRegNo(workingDb, admissionForm.dataset.pendingRegNo, studentData.admissionDate);
 
                 // 3. Configure the NEW student
                 const newSibling = {
@@ -1972,7 +1996,7 @@ if (certUploadInput) {
 
         // ── NO: register independently ───────────────────────────────────────
         document.getElementById('sibling-no-btn').addEventListener('click', async () => {
-            const regNo       = resolveFreshRegNo(db, admissionForm.dataset.pendingRegNo);
+            const regNo       = resolveFreshRegNo(db, admissionForm.dataset.pendingRegNo, studentData.admissionDate);
             studentData.regNo = regNo;
             studentData.id    = regNo;
             // Brand-new admission — always starts active.
@@ -2087,19 +2111,12 @@ if (certUploadInput) {
     const dateOfBirth = studentData.dob ? new Date(studentData.dob).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
     const admissionDate = studentData.admissionDate ? new Date(studentData.admissionDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
 
-    // ── Transport figures (blank-safe) ──
-    // Fee/financial figures are intentionally NOT shown on this form — the
-    // Admission Form is a records document, not a fee voucher/receipt.
+    // ── Fee & Transport figures (formatted, blank-safe) ──
+    const fmtRs = (v) => (v === undefined || v === null || v === '') ? '—' : ('Rs. ' + Number(v).toLocaleString('en-PK'));
     const transportMode = studentData.transportMode || 'Private (Self)';
     const transportType = studentData.transportType && studentData.transportType !== 'None' ? studentData.transportType : 'N/A';
-
-    // ── Documents-on-file summary (replaces the old fee summary on this form) ──
-    const bformOnFile = !!studentData.certData;
-    const photoOnFile = !!photoSrc;
-    const docsOnFileCount = (bformOnFile ? 1 : 0) + (photoOnFile ? 1 : 0);
-    const docStatus = (ok) => ok
-        ? '<i class="fas fa-check-circle" style="color:#16a34a;"></i> Submitted'
-        : '<i class="fas fa-circle-exclamation" style="color:#b45309;"></i> Pending';
+    const totalDiscount = [studentData.tuitionDiscount, studentData.transportDiscount, studentData.siblingDiscount]
+        .map(v => Number(v) || 0).reduce((a, b) => a + b, 0);
 
     // ── Siblings section (only rendered when the student has a sibling link) ──
     // Two independent signals, same as the on-screen Profile view:
@@ -2371,15 +2388,16 @@ if (certUploadInput) {
         </section>
 
         <section class="section">
-            <div class="section-label"><span class="num">4</span><span class="txt">Transport &amp; Documents</span></div>
-            <div class="row-3">
-                <div class="field"><span class="f-label">Transport Mode:</span><span class="f-value">${esc(transportMode)}</span></div>
-                <div class="field"><span class="f-label">Vehicle Type:</span><span class="f-value">${esc(transportType)}</span></div>
-                <div class="field"><span class="f-label">Documents on File:</span><span class="f-value">${docsOnFileCount} of 2</span></div>
+            <div class="section-label"><span class="num">4</span><span class="txt">Transport &amp; Fee Summary</span></div>
+            <div class="row-4">
+                <div class="field"><span class="f-label">Transport:</span><span class="f-value">${esc(transportMode)} (${esc(transportType)})</span></div>
+                <div class="field"><span class="f-label">Transport Fee:</span><span class="f-value">${fmtRs(studentData.transportFee)}</span></div>
+                <div class="field"><span class="f-label">Standard Tuition Fee:</span><span class="f-value">${fmtRs(studentData.standardFee)}</span></div>
+                <div class="field"><span class="f-label">Admission Fee:</span><span class="f-value">${fmtRs(studentData.admissionFee)}</span></div>
             </div>
             <div class="fee-summary-row">
-                <span class="net-label">B-Form / Certificate: <span style="font-family:'Roboto Mono',monospace; font-weight:700;">${docStatus(bformOnFile)}</span></span>
-                <span class="net-label">Photograph: <span style="font-family:'Roboto Mono',monospace; font-weight:700;">${docStatus(photoOnFile)}</span></span>
+                <span class="net-label">Total Discounts Applied: <span style="font-family:'Roboto Mono',monospace; color:var(--ink-900); font-weight:700;">${fmtRs(totalDiscount)}</span>${studentData.isLifetime ? ' &nbsp;·&nbsp; Lifetime' : (studentData.discountExpiry ? ` &nbsp;·&nbsp; Valid Until ${esc(studentData.discountExpiry)}` : '')}</span>
+                <span class="net-label">Net Payable (First Month): <span class="net-value">${fmtRs(studentData.netPayable)}</span></span>
             </div>
         </section>
         ${siblingsSectionHtml}
@@ -2727,7 +2745,6 @@ if (certUploadInput) {
             <div class="rec-field-grid">
                 <div class="rec-field"><span class="rec-flabel">Tuition Fee:</span><span class="rec-fvalue">${fmtRs(s.standardFee)}</span></div>
                 <div class="rec-field"><span class="rec-flabel">Admission Fee:</span><span class="rec-fvalue">${fmtRs(s.admissionFee || 0)}</span></div>
-                ${parseFloat(s.arrears||0) > 0 ? `<div class="rec-field"><span class="rec-flabel">Arrears:</span><span class="rec-fvalue">${fmtRs(s.arrears)}</span></div>` : ''}
                 <div class="rec-field"><span class="rec-flabel">Transport Fee:</span><span class="rec-fvalue">${fmtRs(s.transportFee)}</span></div>
                 ${booksFee > 0 ? `<div class="rec-field"><span class="rec-flabel">Books Fee:</span><span class="rec-fvalue">${fmtRs(booksFee)}</span></div>` : ''}
                 ${otherFeeRowsHtml}
@@ -4470,7 +4487,6 @@ if (certUploadInput) {
             <div class="profile-details-grid">
                 <div class="detail-item"><label>Tuition Fee</label><span>Rs. ${safeVal(s.standardFee)}</span></div>
                 <div class="detail-item"><label>Admission Fee</label><span>Rs. ${safeVal(s.admissionFee) || '0'}</span></div>
-                <div class="detail-item"><label>Arrears (Previous Dues)</label><span>Rs. ${safeVal(s.arrears) || '0'}</span></div>
                 <div class="detail-item"><label>Transport Fee</label><span>Rs. ${safeVal(s.transportFee)}</span></div>
                 ${booksRow}
                 ${otherFeesRows}
@@ -4683,7 +4699,6 @@ if (certUploadInput) {
             `────────────────────────────────────────\n` +
             line('Tuition Fee',  s.standardFee     ? 'Rs. ' + s.standardFee     : '') +
             line('Transport',    s.transportFee    ? 'Rs. ' + s.transportFee    : '') +
-            line('Arrears',      parseFloat(s.arrears||0) > 0 ? 'Rs. ' + s.arrears : '') +
             line('Net Payable',  s.netPayable      ? 'Rs. ' + s.netPayable      : '');
 
         const title = `Student Profile — ${s.fullName}`;

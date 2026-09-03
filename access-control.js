@@ -218,23 +218,34 @@
 
 
   /* ── STAFF ID PREFIX (from the school's Super Admin prefix) ──
-     Staff IDs look like PREFIX_S_1, PREFIX_S_2 ... where PREFIX is
-     exactly what the super admin typed when adding the school. */
+     Staff IDs look like PREFIX_YY_S_1, PREFIX_YY_S_2 ... where PREFIX is
+     exactly what the super admin typed when adding the school and YY is
+     the 2-digit year the staff member was appointed/joined. */
   function getSchoolPrefix() {
     const s = getCurrentSchool();
     const p = (s && s.prefix ? String(s.prefix) : "").trim().toUpperCase();
     return p || "SCH";
   }
 
-  function nextStaffId(existingIds) {
+  // 2-digit appointment year used inside staff IDs (e.g. "26" for 2026).
+  // Falls back to today's year when no joining date is available/valid —
+  // e.g. Non-Teaching staff, whose form has no "Date Joined" field at all.
+  function getStaffIdYearSuffix(joinedDateStr) {
+    var d = joinedDateStr ? new Date(joinedDateStr) : new Date();
+    if (isNaN(d.getTime())) d = new Date();
+    return String(d.getFullYear()).slice(-2);
+  }
+
+  function nextStaffId(existingIds, joinedDateStr) {
     const prefix = getSchoolPrefix();
-    const re = new RegExp("^" + prefix + "_S_(\\d+)$", "i");
+    const yearSuffix = getStaffIdYearSuffix(joinedDateStr);
+    const re = new RegExp("^" + prefix + "_" + yearSuffix + "_S_(\\d+)$", "i");
     let max = 0;
     (existingIds || []).forEach(function (id) {
       const m = re.exec(String(id || "").trim());
       if (m) max = Math.max(max, parseInt(m[1], 10) || 0);
     });
-    return prefix + "_S_" + (max + 1);
+    return prefix + "_" + yearSuffix + "_S_" + (max + 1);
   }
 
   /* Expose the API for superadmin.js, index.js and this file's own guard */
