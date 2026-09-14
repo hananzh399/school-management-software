@@ -41,7 +41,9 @@
      kept as a harmless fallback — schools created through the super admin
      portal live in the database, not in localStorage, so this file talks to
      the same "/api/school" endpoints index.js uses instead of SCHOOLS_KEY. */
-  const SCHOOL_API_BASE_URL = "https://softschool-production.up.railway.app/api/school";
+  // Example configuration using Axios or raw Fetch
+const API_BASE_URL = "http://167.86.120.247"; 
+
 
   /* ── PLAN DEFINITIONS ─────────────────────────────────────── */
   const PLANS = {
