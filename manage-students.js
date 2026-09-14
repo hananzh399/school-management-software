@@ -87,7 +87,7 @@ const BACKEND_ORIGIN =
     configuredApiOrigin ||
     (typeof window !== 'undefined' && window.location.port === '8080'
         ? ''
-        : 'http://167.86.120.247');
+        : 'https://167-86-120-247.sslip.io');
 
 const SETTINGS_API_BASE = `${BACKEND_ORIGIN}/api/settings`;
 const STAFF_API_BASE    = `${BACKEND_ORIGIN}/api/staff`;

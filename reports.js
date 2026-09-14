@@ -233,7 +233,7 @@ function _getSchoolId() {
     return '';
 }
 
-const REPORTS_BACKEND_ORIGIN = 'http://167.86.120.247';
+const REPORTS_BACKEND_ORIGIN = 'https://167-86-120-247.sslip.io';
 
 function _reportsArray(data, keys = []) {
     if (Array.isArray(data)) return data;

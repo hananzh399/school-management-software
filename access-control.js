@@ -42,7 +42,7 @@
      portal live in the database, not in localStorage, so this file talks to
      the same "/api/school" endpoints index.js uses instead of SCHOOLS_KEY. */
   // Example configuration using Axios or raw Fetch
-const SCHOOL_API_BASE_URL = "http://167.86.120.247/api/school";
+const SCHOOL_API_BASE_URL = "https://167-86-120-247.sslip.io/api/school";
 
 
   /* ── PLAN DEFINITIONS ─────────────────────────────────────── */

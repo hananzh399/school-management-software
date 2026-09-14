@@ -294,7 +294,7 @@ function _getSchoolId() {
     return '';
 }
 
-const DASHBOARD_BACKEND_ORIGIN = 'http://167.86.120.247';
+const DASHBOARD_BACKEND_ORIGIN = 'https://167-86-120-247.sslip.io';
 
 function _dashboardMonthKey(date = new Date()) {
     return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;

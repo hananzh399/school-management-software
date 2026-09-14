@@ -442,7 +442,7 @@ function closeVideoOutside(e) {
 const SoftSchoolAuth = (function () {
   // Point this at your deployed backend in production, e.g.
   // "https://api.yourdomain.com/api/school"
-  const API_BASE_URL = "http://167.86.120.247/api/school";
+  const API_BASE_URL = "https://167-86-120-247.sslip.io/api/school";
   const SESSION_KEY = "softschool_session";
   const REMEMBER_KEY = "softschool_remember";
   const API_TOKEN_KEY = "softschool_api_token";
