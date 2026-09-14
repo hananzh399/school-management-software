@@ -6,10 +6,11 @@
 // ---------- REAL DATA FROM DATABASE (via backend API — no localStorage) ----------
 
 // Matches StudentController / StaffController / SchoolSettingsController / AttendanceController.
-const STUDENTS_API_BASE = 'https://softschool-production.up.railway.app/api/students';
-const STAFF_API_BASE    = 'https://softschool-production.up.railway.app/api/staff';
-const SETTINGS_API_BASE = 'https://softschool-production.up.railway.app/api/settings';
-const ATTENDANCE_API_BASE = 'https://softschool-production.up.railway.app/api/attendance';
+// Matches StudentController / StaffController / SchoolSettingsController / AttendanceController.
+const STUDENTS_API_BASE   = 'http://167.86.120';
+const STAFF_API_BASE      = 'http://167.86.120';
+const SETTINGS_API_BASE   = 'http://167.86.120';
+const ATTENDANCE_API_BASE = 'http://167.86.120';
 
 const LEAVE_REASONS = ["Sick Leave","Personal","Family Event","Medical Appointment","Travel","Other"];
 
