@@ -120,7 +120,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (headerNameEl) headerNameEl.textContent = getSchoolIdentity().name;
 });
 
-const API_BASE = "https://softschool-production.up.railway.app/api/finance";
+const API_BASE = "http://167.86.120.247/api/finance";
 
 // ---------------------------------------------------------------------------
 // SCHOOL SCOPING — every finance record (student fee ledgers, fines, salary
@@ -262,9 +262,9 @@ function isMonthlyFeePaid(finance) {
    _staffCache, fetched from the backend exactly like every other entity
    on this page.
    ============================================================================ */
-const STUDENTS_API_BASE = "https://softschool-production.up.railway.app/api/students";  // ⚠️ ASSUMED
-const SETTINGS_API_BASE = "https://softschool-production.up.railway.app/api/settings";  // ⚠️ ASSUMED
-const STAFF_API_BASE    = "https://softschool-production.up.railway.app/api/staff";     // ⚠️ ASSUMED — see manage-students.js
+const STUDENTS_API_BASE = "http://167.86.120.247/api/students";
+const SETTINGS_API_BASE = "http://167.86.120.247/api/settings";
+const STAFF_API_BASE    = "http://167.86.120.247/api/staff";
 
 const ENDPOINTS = {
     customFees:    '/custom-fees',

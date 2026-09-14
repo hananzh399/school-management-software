@@ -217,7 +217,7 @@ function showToast(message, type = 'error', title) {
 // by schoolId exactly like StudentController does for students (see
 // manage-students.js's identical apiRequest/toApiPayload/syncWithBackend).
 // ============================================================================
-const STAFF_API_BASE = 'https://softschool-production.up.railway.app/api/staff';
+const STAFF_API_BASE = 'http://167.86.120.247/api/staff';
 
 /**
  * The logged-in school's real School ID (School.schoolId, e.g. "SS_77_1") —
@@ -1165,7 +1165,7 @@ function deductSecurityMonth(staffId) {
 // Fetched once on page load (and refreshed whenever syncStaffWithBackend()
 // runs) into this in-memory cache; getSettingsClasses() below just reads it.
 // ============================================================================
-const SETTINGS_API_BASE = 'https://softschool-production.up.railway.app/api/settings';
+const SETTINGS_API_BASE = 'http://167.86.120.247/api/settings';
 let CLASS_CONFIGS_CACHE = [];
 
 /** Convert backend SchoolSettings.ClassFee shape into {name, sections:[]}. */

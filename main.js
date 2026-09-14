@@ -294,7 +294,7 @@ function _getSchoolId() {
     return '';
 }
 
-const DASHBOARD_BACKEND_ORIGIN = 'https://softschool-production.up.railway.app';
+const DASHBOARD_BACKEND_ORIGIN = 'http://167.86.120.247';
 
 function _dashboardMonthKey(date = new Date()) {
     return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;

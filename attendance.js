@@ -7,10 +7,10 @@
 
 // Matches StudentController / StaffController / SchoolSettingsController / AttendanceController.
 // Matches StudentController / StaffController / SchoolSettingsController / AttendanceController.
-const STUDENTS_API_BASE   = 'http://167.86.120';
-const STAFF_API_BASE      = 'http://167.86.120';
-const SETTINGS_API_BASE   = 'http://167.86.120';
-const ATTENDANCE_API_BASE = 'http://167.86.120';
+const STUDENTS_API_BASE   = 'http://167.86.120.247/api/students';
+const STAFF_API_BASE      = 'http://167.86.120.247/api/staff';
+const SETTINGS_API_BASE   = 'http://167.86.120.247/api/settings';
+const ATTENDANCE_API_BASE = 'http://167.86.120.247/api/attendance';
 
 const LEAVE_REASONS = ["Sick Leave","Personal","Family Event","Medical Appointment","Travel","Other"];
 
@@ -3417,7 +3417,7 @@ function normalizeBiometricPath(raw) {
         const previewEl  = document.getElementById('biometric-path-preview');
         const statusEl   = document.getElementById('biometric-status');
 
-        const BACKEND_URL = 'https://softschool-production.up.railway.app/api/biometric/link';
+        const BACKEND_URL = 'http://167.86.120.247/api/biometric/link';
 
         // Configurable demo video URL (also settable from settings page)
         const DEMO_URL = 'https://www.youtube.com/watch?v=YQm7g7lWQ4E';

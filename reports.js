@@ -233,7 +233,7 @@ function _getSchoolId() {
     return '';
 }
 
-const REPORTS_BACKEND_ORIGIN = 'https://softschool-production.up.railway.app';
+const REPORTS_BACKEND_ORIGIN = 'http://167.86.120.247';
 
 function _reportsArray(data, keys = []) {
     if (Array.isArray(data)) return data;
