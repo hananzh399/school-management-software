@@ -341,21 +341,59 @@ function _dashboardStaffArray(data) {
     return result;
 }
 
-async function _dashboardGet(path, fallback) {
+async function _dashboardGetOnce(url, timeoutMs) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+        const response = await fetch(url, {
+            headers: { 'Content-Type': 'application/json' },
+            signal: controller.signal
+        });
+        return response;
+    } finally {
+        clearTimeout(timer);
+    }
+}
+
+// FIX: this used to swallow every failure (timeout, 429 rate limit, 500,
+// a dead pooled DB connection on the backend) and just return the
+// fallback with no visibility and no second chance — that's what turned
+// a slow/overloaded backend into "dashboard just shows 0, reload doesn't
+// help." Now: one retry after a short pause (covers a connection pool
+// that was still catching up, or a rate limit window that clears a
+// moment later), a 20s timeout per attempt so a stuck request doesn't
+// hang forever, and the real status/error is logged so a genuine backend
+// problem is visible in the console instead of looking identical to
+// "there's just no data."
+async function _dashboardGet(path, fallback, { timeoutMs = 20000, retries = 1 } = {}) {
     const schoolId = _getSchoolId();
     const separator = path.includes('?') ? '&' : '?';
-    try {
-        const response = await fetch(
-            `${DASHBOARD_BACKEND_ORIGIN}${path}${separator}schoolId=${encodeURIComponent(schoolId)}`,
-            { headers: { 'Content-Type': 'application/json' } }
-        );
-        if (!response.ok) return fallback;
-        const text = await response.text();
-        return text ? JSON.parse(text) : fallback;
-    } catch (error) {
-        console.warn(`[Dashboard] Could not read ${path}:`, error);
-        return fallback;
+    const url = `${DASHBOARD_BACKEND_ORIGIN}${path}${separator}schoolId=${encodeURIComponent(schoolId)}`;
+
+    for (let attempt = 0; attempt <= retries; attempt++) {
+        try {
+            const response = await _dashboardGetOnce(url, timeoutMs);
+            if (!response.ok) {
+                console.warn(`[Dashboard] ${path} -> HTTP ${response.status} (attempt ${attempt + 1}/${retries + 1})`);
+                if (attempt < retries) {
+                    await new Promise(r => setTimeout(r, 800));
+                    continue;
+                }
+                return fallback;
+            }
+            const text = await response.text();
+            return text ? JSON.parse(text) : fallback;
+        } catch (error) {
+            const reason = error && error.name === 'AbortError' ? 'timed out' : error;
+            console.warn(`[Dashboard] Could not read ${path} (attempt ${attempt + 1}/${retries + 1}):`, reason);
+            if (attempt < retries) {
+                await new Promise(r => setTimeout(r, 800));
+                continue;
+            }
+            return fallback;
+        }
     }
+    return fallback;
 }
 
 function _dashboardDate(value, fallbackMonthKey) {
