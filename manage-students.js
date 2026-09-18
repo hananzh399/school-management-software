@@ -239,6 +239,10 @@ const SIBLING_PREFIX = '00';       // prefix for sibling-group IDs
 // ── BACKEND API CONFIG ──────────────────────────────────────────────────
 // Spring Boot backend — StudentController.java exposes CRUD under this base.
 const API_BASE = `${BACKEND_ORIGIN}/api/students`;
+// PERFORMANCE FIX — see the comment on syncWithBackend() below: the 6s
+// live-sync poll uses this lean endpoint (no photo/certData/hasSiblings)
+// instead of API_BASE after the first load.
+const SYNC_API_BASE = `${BACKEND_ORIGIN}/api/students/sync`;
 
 /**
  * Derive a short registration prefix from the logged-in school's name.
@@ -1524,6 +1528,28 @@ if (certUploadInput) {
      *
      * @param {boolean} isBackgroundPoll  true when called by the live-sync
      *        timer (suppresses noisy console warnings on transient failures).
+     *
+     * PERFORMANCE FIX — this used to call GET API_BASE (plain /api/students)
+     * on every single poll, including every 6-second background tick for as
+     * long as this page stayed open. Student.photo/certData/hasSiblings are
+     * @Lob LONGTEXT columns (base64 images/files) that Hibernate fetches
+     * eagerly, so every poll re-pulled every student's full blob set even
+     * though those fields essentially never change between one 6-second
+     * tick and the next — this, not the first page load, was the dominant
+     * ongoing cost on this page (see StudentSyncDTO on the backend for the
+     * full rationale).
+     *
+     * Fix: call the full endpoint (photo/certData/hasSiblings included)
+     * only on the very first load. Every poll after that calls the lean
+     * /api/students/sync endpoint instead. No extra merge logic is needed
+     * to protect photo/certData/hasSiblings from being wiped — the merge
+     * below already does `Object.assign({}, localMatch || {}, srv)`, and
+     * since the /sync payload simply never has those keys at all, the
+     * existing local values are left untouched automatically. (A student
+     * created in another tab/device and never seen locally will show
+     * without a photo until this tab's next full reload — the same
+     * trade-off already accepted for every other field a background poll
+     * can't originate on its own.)
      */
     async function syncWithBackend(isBackgroundPoll = false) {
         if (isSyncing) return;   // don't let overlapping polls stack up
@@ -1537,7 +1563,9 @@ if (certUploadInput) {
                 if (!isBackgroundPoll) console.warn('syncWithBackend: no logged-in school, staying on local cache.');
                 return;
             }
-            const serverStudents = await apiRequest('GET', `${API_BASE}?schoolId=${encodeURIComponent(schoolId)}`);
+            const isFirstLoad = lastServerSnapshot === null;
+            const fetchBase = isFirstLoad ? API_BASE : SYNC_API_BASE;
+            const serverStudents = await apiRequest('GET', `${fetchBase}?schoolId=${encodeURIComponent(schoolId)}`);
             if (!Array.isArray(serverStudents)) return;
 
             liveSyncFailStreak = 0;
@@ -1547,7 +1575,6 @@ if (certUploadInput) {
             // skip the merge/render entirely so background polling never
             // causes flicker, lost scroll position, or reset filters.
             const snapshot = JSON.stringify(serverStudents);
-            const isFirstLoad = lastServerSnapshot === null;
             if (snapshot === lastServerSnapshot) return;
             lastServerSnapshot = snapshot;
 

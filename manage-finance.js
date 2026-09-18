@@ -263,6 +263,7 @@ function isMonthlyFeePaid(finance) {
    on this page.
    ============================================================================ */
 const STUDENTS_API_BASE = "https://167-86-120-247.sslip.io/api/students";
+const STUDENTS_SYNC_API_BASE = "https://167-86-120-247.sslip.io/api/students/sync";
 const SETTINGS_API_BASE = "https://167-86-120-247.sslip.io/api/settings";
 const STAFF_API_BASE    = "https://167-86-120-247.sslip.io/api/staff";
 
@@ -343,8 +344,28 @@ let _studentFeeStatusMonthKey = null;
 // Never persisted to localStorage.
 let _staffCache = { Teaching: [], 'Non-Teaching': [] };
 
+// PERFORMANCE FIX — liveSyncTick() calls refreshStudentsCache() every 10
+// seconds (LIVE_SYNC_INTERVAL_MS below) for as long as this page stays
+// open, and it used to call plain GET /api/students every single time —
+// re-pulling every student's photo/certData/hasSiblings LONGTEXT blobs on
+// every poll even though those fields essentially never change between
+// one 10-second tick and the next (see StudentSyncDTO on the backend for
+// the full rationale). That ongoing re-fetch, not just the first page
+// load, was the dominant cost on this page.
+//
+// Fix: fetch the full record (photo/certData/hasSiblings included) only
+// ONCE — the first time this cache is populated. Every poll after that
+// calls the lean GET /api/students/sync endpoint instead, and the result
+// is merged into the existing cache rather than replacing it outright —
+// preserving photo/certData/hasSiblings from the previous entry the same
+// way feePayments is already preserved below, so a routine poll can never
+// silently wipe them (the exact class of bug the feePayments fix below
+// was written to prevent).
 async function refreshStudentsCache() {
-    const data = await _backendGet(STUDENTS_API_BASE, '');
+    const isFirstLoad = _studentsCache.length === 0;
+    const data = isFirstLoad
+        ? await _backendGet(STUDENTS_API_BASE, '')
+        : await _backendGet(STUDENTS_SYNC_API_BASE, '');
     if (!Array.isArray(data)) return;
 
     // BUGFIX — "arrears/defaulters flicker: sometimes showing, sometimes not,
@@ -374,8 +395,23 @@ async function refreshStudentsCache() {
     const existingPayments = new Map(
         _studentsCache.map(s => [String((s && (s.regNo || s.id)) || ''), s && s.feePayments])
     );
+    // Heavy fields the /sync endpoint doesn't carry (see StudentSyncDTO) —
+    // preserved from the previous cache entry on every poll after the first.
+    const existingHeavyFields = new Map(
+        _studentsCache.map(s => [String((s && (s.regNo || s.id)) || ''), {
+            photo: s && s.photo,
+            certData: s && s.certData,
+            hasSiblings: s && s.hasSiblings,
+        }])
+    );
     _studentsCache = data.map(s => {
         const key = String((s && (s.regNo || s.id)) || '');
+        if (!isFirstLoad && existingHeavyFields.has(key)) {
+            const heavy = existingHeavyFields.get(key);
+            if (heavy.photo !== undefined) s.photo = heavy.photo;
+            if (heavy.certData !== undefined) s.certData = heavy.certData;
+            if (heavy.hasSiblings !== undefined) s.hasSiblings = heavy.hasSiblings;
+        }
         if ((!Array.isArray(s.feePayments) || s.feePayments.length === 0) && existingPayments.has(key)) {
             const preserved = existingPayments.get(key);
             if (Array.isArray(preserved) && preserved.length > 0) s.feePayments = preserved;
