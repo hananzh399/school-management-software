@@ -402,22 +402,42 @@ async function refreshStudentsCache() {
     const existingPayments = new Map(
         _studentsCache.map(s => [String((s && (s.regNo || s.id)) || ''), s && s.feePayments])
     );
-    // Heavy fields the /sync endpoint doesn't carry (see StudentSyncDTO) —
+    // BUGFIX — "student details turn into blank/'Not Provided' a few
+    // seconds after the page loads" — GET /api/students/sync (StudentSyncDTO)
+    // only carries the fields this sync loop actually needs to refresh
+    // (fees, discounts, arrears, voucher state, class/section). Every OTHER
+    // field on Student — rollNo, gender, dob, studentBform, medicalIssues,
+    // orphanStatus, previousSchool, previousClass, guardianRole,
+    // guardianCnic, phone1, phone2, permanent/mailingAddress, graduation/
+    // dropped info — still comes back as an explicit "field": null in the
+    // JSON (Spring's default Jackson config serializes nulls rather than
+    // omitting the key), so `s.photo`/`s.certData`/`s.hasSiblings` were not
+    // the only casualties of a /sync poll — this was previously only
+    // guarded for those three. Extending existingHeavyFields to the FULL
+    // set of fields StudentSyncDTO omits (rather than growing this list by
+    // hand every time a field gets added to Student) prevents this from
+    // recurring: anything not explicitly in SYNC_OWNED_FIELDS below is
     // preserved from the previous cache entry on every poll after the first.
+    const SYNC_OWNED_FIELDS = new Set([
+        'regNo', 'status', 'fullName', 'studentClass', 'section', 'guardianName',
+        'admissionDate', 'standardFee', 'admissionFee', 'tuitionDiscount',
+        'transportDiscount', 'siblingDiscount', 'transportMode', 'transportType',
+        'transportFee', 'netPayable', 'otherFeesData', 'isLifetime', 'discountExpiry',
+        'arrears', 'voucherCustomFees', 'voucherCustomFeesMonth', 'voucherBulkDiscount',
+        'voucherNote', 'siblingGroupId', 'isSibling', 'siblingOf'
+    ]);
     const existingHeavyFields = new Map(
-        _studentsCache.map(s => [String((s && (s.regNo || s.id)) || ''), {
-            photo: s && s.photo,
-            certData: s && s.certData,
-            hasSiblings: s && s.hasSiblings,
-        }])
+        _studentsCache.map(s => [String((s && (s.regNo || s.id)) || ''), s])
     );
     _studentsCache = data.map(s => {
         const key = String((s && (s.regNo || s.id)) || '');
         if (!isFirstLoad && existingHeavyFields.has(key)) {
-            const heavy = existingHeavyFields.get(key);
-            if (heavy.photo !== undefined) s.photo = heavy.photo;
-            if (heavy.certData !== undefined) s.certData = heavy.certData;
-            if (heavy.hasSiblings !== undefined) s.hasSiblings = heavy.hasSiblings;
+            const previous = existingHeavyFields.get(key);
+            Object.keys(previous || {}).forEach(field => {
+                if (!SYNC_OWNED_FIELDS.has(field) && (s[field] === undefined || s[field] === null)) {
+                    s[field] = previous[field];
+                }
+            });
         }
         if ((!Array.isArray(s.feePayments) || s.feePayments.length === 0) && existingPayments.has(key)) {
             const preserved = existingPayments.get(key);

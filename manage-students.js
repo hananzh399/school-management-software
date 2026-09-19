@@ -1676,10 +1676,69 @@ if (certUploadInput) {
 
             const local        = getDatabase();
             const localByRegNo = new Map(local.map(s => [s.regNo, s]));
+
+            // BUGFIX — "student details (gender, DOB, guardian CNIC, medical
+            // notes, previous school, phone numbers, roll no, graduation/
+            // drop info…) turn into 'Not Provided' a few seconds after the
+            // page loads."
+            //
+            // GET /api/students/sync (StudentSyncDTO) deliberately carries
+            // only the handful of fields that actually change between polls
+            // — fees, discounts, arrears, voucher state, class/section — so
+            // the 6-second background refresh stays fast. Every field it
+            // does NOT carry still comes back as an explicit
+            // "fieldName": null in the JSON (Spring's default Jackson
+            // config serializes nulls rather than omitting the key), so
+            // `Object.assign({}, localMatch, srv)` — spreading the smaller
+            // sync payload last — was overwriting every one of those
+            // omitted fields with null on EVERY poll, a few seconds after
+            // every page load. This bug always existed in this merge, but
+            // could never actually run before: /api/students/sync 404'd on
+            // every call until it was added, so this code path was dead.
+            // Fixing that 404 is what switched this on.
+            //
+            // Fix: only ever copy the fields SYNC_MERGE_FIELDS lists below
+            // onto the existing local record. Every other field — rollNo,
+            // gender, dob, studentBform, medicalIssues, orphanStatus,
+            // previousSchool, previousClass, guardianRole, guardianCnic,
+            // phone1, phone2, permanent/mailingAddress, graduation/dropped
+            // info, photo, certData, hasSiblings — is left completely
+            // untouched by a background poll, exactly as the comment on
+            // StudentSyncDTO always intended. The FIRST load still uses the
+            // full LIST endpoint and adopts everything it returns, since
+            // there is no local copy yet to protect.
+            const SYNC_MERGE_FIELDS = [
+                'status', 'fullName', 'studentClass', 'section', 'guardianName',
+                'admissionDate', 'standardFee', 'admissionFee', 'tuitionDiscount',
+                'transportDiscount', 'siblingDiscount', 'transportMode', 'transportType',
+                'transportFee', 'netPayable', 'otherFeesData', 'isLifetime', 'discountExpiry',
+                'arrears', 'voucherCustomFees', 'voucherCustomFeesMonth', 'voucherBulkDiscount',
+                'voucherNote', 'siblingGroupId', 'isSibling', 'siblingOf'
+            ];
+
             const merged        = serverStudents.map(srv => {
                 normalizeSiblingFieldsFromServer(srv);
                 const localMatch = localByRegNo.get(srv.regNo);
-                const mergedStudent = Object.assign({}, localMatch || {}, srv);
+
+                // First load (isFirstLoad, srv from /list) — or a student
+                // this tab has never seen before (e.g. admitted by another
+                // tab/admin after this page's first load) — has no local
+                // copy to protect, so adopt the server record as-is, same
+                // as before.
+                let mergedStudent;
+                if (isFirstLoad || !localMatch) {
+                    mergedStudent = Object.assign({}, localMatch || {}, srv);
+                } else {
+                    // A background /sync poll with an existing local copy —
+                    // start from everything already known locally, and copy
+                    // over ONLY the fields sync is meant to refresh.
+                    mergedStudent = Object.assign({}, localMatch);
+                    SYNC_MERGE_FIELDS.forEach(field => {
+                        if (Object.prototype.hasOwnProperty.call(srv, field)) {
+                            mergedStudent[field] = srv[field];
+                        }
+                    });
+                }
                 // BUGFIX: `srv.id` is the Student entity's numeric database
                 // primary key. The frontend has ALWAYS used `id` for its own
                 // purposes instead — a student's regNo, or a shared "00X"
