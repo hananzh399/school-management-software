@@ -5917,6 +5917,18 @@ function recordVoucherGeneration(student, source = 'individual') {
 
     list.push(record);
     saveGeneratedVouchers(list);
+
+    // Not awaited so Generate Voucher stays instant even on a slow
+    // connection; refreshStudentFeeStatusCache's normal 10s poll (or the
+    // next manual refresh) picks up the new row shortly after.
+    // Safe even if called twice for the same student+month — the endpoint
+    // is idempotent server-side (see its own comment) — but this line only
+    // runs once per voucher anyway, since `if (existing) return` above
+    // already short-circuits a repeat generation before reaching here.
+    // _backendSave adds schoolId itself, matching every other call in this
+    // file (see its definition above).
+    _backendSave(API_BASE, '/generate-voucher', 'POST', { regNo: studentId, monthKey });
+
     return { created: true, record };
 }
 
