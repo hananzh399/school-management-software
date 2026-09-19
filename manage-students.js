@@ -244,6 +244,73 @@ const API_BASE = `${BACKEND_ORIGIN}/api/students`;
 // instead of API_BASE after the first load.
 const SYNC_API_BASE = `${BACKEND_ORIGIN}/api/students/sync`;
 
+// PERFORMANCE FIX — "Manage Students takes 1-2 minutes to load."
+//
+// The FIRST load used to call plain API_BASE, which returns complete
+// Student entities including the photo and certData LONGTEXT columns.
+// Those hold base64 images, and base64 is ~133% the size of the original
+// file, so a 300-student school with photos was tens of megabytes that
+// MySQL had to read off disk, Jackson had to serialise, the VPS had to
+// ship from Europe to Asia, and the browser had to parse — all before the
+// very first table row could appear.
+//
+// LIST_API_BASE returns every column this page renders EXCEPT photo and
+// certData, plus a `hasPhoto` boolean. Photos are then loaded lazily and
+// individually, one <img> at a time, from PHOTO_URL below — which the
+// browser fetches in parallel AFTER the table is already on screen, and
+// caches on disk so a second visit costs no network at all.
+const LIST_API_BASE = `${BACKEND_ORIGIN}/api/students/list`;
+
+/**
+ * URL of one student's photo, served as real image bytes by
+ * StudentController#getStudentPhoto (not base64 text in a JSON payload).
+ * Returns '' when the student has no photo on file, so every existing
+ * `if (s.photo)` check on this page keeps behaving exactly as before.
+ */
+function studentPhotoUrl(student, schoolId) {
+    if (!student || !student.hasPhoto) return '';
+    const regNo = student.regNo || student.id;
+    if (!regNo) return '';
+    return `${API_BASE}/${encodeURIComponent(regNo)}/photo?schoolId=${encodeURIComponent(schoolId || '')}`;
+}
+
+/**
+ * True when a value is an inline base64 payload rather than one of our
+ * lazy photo URLs. Used on the save path so that re-saving a student whose
+ * photo was never re-uploaded sends NO photo field at all — which
+ * StudentController#copyUpdatableFields deliberately treats as "leave the
+ * stored photo alone" — instead of overwriting the stored base64 with the
+ * text of a URL.
+ */
+function isInlineDataUri(value) {
+    return typeof value === 'string' && value.startsWith('data:');
+}
+
+/**
+ * Fetch COMPLETE student records (photo + certData inline) on demand.
+ *
+ * The roster fetch above deliberately leaves the blobs behind, but the
+ * Excel/photo-gallery export genuinely needs them embedded — and export is
+ * a rare, deliberate action where a few seconds of waiting is fine, unlike
+ * opening the page. So the export path calls this instead of getDatabase().
+ */
+async function fetchFullStudents() {
+    const schoolId = (window.SoftSchoolAdmin
+        && typeof window.SoftSchoolAdmin.getCurrentSchool === 'function'
+        && (window.SoftSchoolAdmin.getCurrentSchool() || {}).schoolId) || '';
+    if (!schoolId) return window.getDatabase ? window.getDatabase() : [];
+    try {
+        const res = await fetch(`${API_BASE}?schoolId=${encodeURIComponent(schoolId)}`);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const rows = await res.json();
+        return Array.isArray(rows) ? rows : [];
+    } catch (err) {
+        console.warn('fetchFullStudents: falling back to the in-memory roster —', err.message);
+        return window.getDatabase ? window.getDatabase() : [];
+    }
+}
+window.fetchFullStudents = fetchFullStudents;
+
 /**
  * Derive a short registration prefix from the logged-in school's name.
  * e.g. school prefix "PSC" set in Super Admin → "PSC_"  (so IDs read PSC_1, PSC_2, PSC_3 …)
@@ -1564,9 +1631,24 @@ if (certUploadInput) {
                 return;
             }
             const isFirstLoad = lastServerSnapshot === null;
-            const fetchBase = isFirstLoad ? API_BASE : SYNC_API_BASE;
+            // PERFORMANCE FIX — first load now uses the lean LIST endpoint
+            // (no photo/certData blobs; see LIST_API_BASE above) instead of
+            // the full one. Every poll after that still uses SYNC.
+            const fetchBase = isFirstLoad ? LIST_API_BASE : SYNC_API_BASE;
             const serverStudents = await apiRequest('GET', `${fetchBase}?schoolId=${encodeURIComponent(schoolId)}`);
             if (!Array.isArray(serverStudents)) return;
+
+            // Turn the `hasPhoto` flag the LIST endpoint returns into a real
+            // <img src> URL, so every existing `s.photo` read on this page
+            // keeps working untouched — it is just a URL now instead of a
+            // multi-hundred-kilobyte base64 string. Students with no photo
+            // get '' exactly as before, so `if (s.photo)` checks are
+            // unaffected.
+            if (isFirstLoad) {
+                serverStudents.forEach(s => {
+                    if (s && s.hasPhoto) s.photo = studentPhotoUrl(s, schoolId);
+                });
+            }
 
             liveSyncFailStreak = 0;
             setLiveSyncIndicator('online');
@@ -1574,7 +1656,21 @@ if (certUploadInput) {
             // Cheap fingerprint of the server response — if nothing changed,
             // skip the merge/render entirely so background polling never
             // causes flicker, lost scroll position, or reset filters.
-            const snapshot = JSON.stringify(serverStudents);
+            // PERFORMANCE FIX — this used to be
+            //     const snapshot = JSON.stringify(serverStudents);
+            // which, on the first load of a roster that still carried base64
+            // photos, built a single string tens of megabytes long. That runs
+            // synchronously on the main thread, so the tab visibly froze for
+            // seconds every time. Now that the roster no longer carries the
+            // blobs it would be cheaper anyway, but there is still no reason
+            // to serialise the entire roster just to answer "did anything
+            // change?" — a compact fingerprint over the fields that actually
+            // move between polls does the same job in a fraction of the time
+            // and a fraction of the memory.
+            const snapshot = serverStudents.length + '|' + serverStudents.map(s => [
+                s.regNo, s.status, s.fullName, s.studentClass, s.section,
+                s.rollNo, s.netPayable, s.arrears, s.siblingGroupId, s.droppedDate
+            ].join('\u0001')).join('\u0002');
             if (snapshot === lastServerSnapshot) return;
             lastServerSnapshot = snapshot;
 
@@ -1778,7 +1874,24 @@ if (certUploadInput) {
 
         // Standardize properties
         delete studentData['_editRegNo'];
-        studentData.photo      = previewImg.src;
+        // CRITICAL — photos are now loaded lazily by URL (see LIST_API_BASE
+        // and studentPhotoUrl above), so previewImg.src is a URL, not base64,
+        // for any student whose photo was NOT re-uploaded in this session.
+        // Assigning it unconditionally (as this line used to) would write the
+        // text of that URL into the photo column and permanently destroy the
+        // stored image.
+        //
+        // Only send a photo when the user actually picked a new one, which is
+        // the only case where previewImg.src is an inline data: URI. Omitting
+        // the field entirely is already the documented "keep what's on file"
+        // signal — StudentController#copyUpdatableFields explicitly refuses
+        // to overwrite photo/certData with a blank value for exactly this
+        // reason.
+        if (isInlineDataUri(previewImg.src)) {
+            studentData.photo = previewImg.src;
+        } else {
+            delete studentData.photo;
+        }
         studentData.age        = ageInput.value;
         studentData.netPayable = netTotalInput.value;
         studentData.rollNo     = rollNoInput.value;
@@ -3365,6 +3478,31 @@ if (certUploadInput) {
     updShowStage('classes');
 };
 
+    // PERFORMANCE FIX — "the student list makes the page hang."
+    //
+    // This renderer built a <tr> for EVERY matching student and handed the
+    // browser one enormous innerHTML string. With several hundred students
+    // that is thousands of DOM nodes plus (previously) a base64 <img> inlined
+    // into each one, on the main thread, blocking everything. It also ran on
+    // every 6-second live-sync tick and on every keystroke in the search box.
+    //
+    // Now only a window of rows is rendered, with a "Show more" row at the
+    // bottom. The window resets whenever the filters change, so a search
+    // always shows its best matches immediately.
+    //
+    // IMPORTANT EXCEPTION: promote mode is deliberately exempt below. The
+    // promotion flow reads every .promote-checkbox out of the DOM, so
+    // rendering only part of the list there would silently promote only the
+    // visible students — a data bug, not a rendering one.
+    const STUDENT_TABLE_PAGE_SIZE = 100;
+    let _studentTableVisibleCount = STUDENT_TABLE_PAGE_SIZE;
+    let _studentTableFilterKey = '';
+
+    window.showMoreStudents = function() {
+        _studentTableVisibleCount += STUDENT_TABLE_PAGE_SIZE;
+        window.renderStudentTable();
+    };
+
     window.renderStudentTable = function() {
     const db = getActiveDatabase(); 
     const tbody = document.getElementById('student-list-tbody');
@@ -3408,6 +3546,15 @@ if (certUploadInput) {
 
     const promoteMode = document.body.classList.contains('promote-mode-active');
 
+    // Reset the visible window whenever the filter context changes, so a new
+    // search or class tab always starts from its first page of results
+    // instead of inheriting however far the previous list had been expanded.
+    const filterKey = [updActiveClass, updActiveSection, updOrphanFilterActive, qUnified, promoteMode].join('|');
+    if (filterKey !== _studentTableFilterKey) {
+        _studentTableFilterKey = filterKey;
+        _studentTableVisibleCount = STUDENT_TABLE_PAGE_SIZE;
+    }
+
     // Handle Empty State
     if (filtered.length === 0) {
         const colCount = promoteMode ? 11 : 10;
@@ -3419,7 +3566,11 @@ if (certUploadInput) {
     }
 
     // Render Rows
-    filtered.forEach((s, idx) => {
+    // Promote mode renders the FULL list on purpose — see the note on
+    // STUDENT_TABLE_PAGE_SIZE above.
+    const totalMatches = filtered.length;
+    const visible = promoteMode ? filtered : filtered.slice(0, _studentTableVisibleCount);
+    visible.forEach((s, idx) => {
         const displayId = s.regNo || s.id;
         // SECURITY: escape at render time (see note above render loop).
         const siblingTag = (s.isSibling && s.siblingOf)
@@ -3492,6 +3643,28 @@ if (certUploadInput) {
         `;
         tbody.innerHTML += row;
     });
+
+    // PERFORMANCE FIX — the loop above appends with `tbody.innerHTML += row`,
+    // which makes the browser re-parse and re-build the ENTIRE table body
+    // once per student. That is quadratic work: 100 rows means 100 reparses
+    // of a growing string. Windowing the row count (above) caps how bad that
+    // can get; the remaining append cost is now bounded by the page size.
+
+    // "Show more" footer — only when results were actually truncated.
+    if (!promoteMode && totalMatches > visible.length) {
+        const remaining = totalMatches - visible.length;
+        const colCount = 10;
+        tbody.innerHTML += `
+            <tr>
+                <td colspan="${colCount}" style="text-align:center;padding:18px;">
+                    <button type="button" class="btn btn-secondary" onclick="showMoreStudents()"
+                            style="padding:8px 20px;font-size:13px;">
+                        Show ${Math.min(remaining, STUDENT_TABLE_PAGE_SIZE)} more
+                        <span style="opacity:.65;">(${remaining} remaining)</span>
+                    </button>
+                </td>
+            </tr>`;
+    }
 };
 
 
@@ -5936,7 +6109,15 @@ async function exportStudentsToExcel() {
         return;
     }
 
-    const students = getDatabase();
+    // PERFORMANCE FIX follow-up — the roster this page holds in memory no
+    // longer carries photo/certData inline (they are lazy-loaded by URL; see
+    // LIST_API_BASE). The Excel export and its companion photo-gallery HTML
+    // genuinely need those blobs EMBEDDED, and every check below tests for a
+    // "data:" prefix, so this one path fetches the complete records on
+    // demand. Export is a rare, deliberate action where a few seconds of
+    // waiting is acceptable — unlike simply opening the page, which is what
+    // the lazy loading was introduced to fix.
+    let students = getDatabase();
     if (!students.length) {
         showDataIOStatus('No student records found to export.', 'error');
         return;
@@ -5956,6 +6137,21 @@ async function exportStudentsToExcel() {
     }
 
     showDataIOStatus('Preparing Excel file… please wait.', 'info');
+
+    // Swap the lean in-memory roster for complete records, so photo and
+    // certData are present as inline data: URIs for every `startsWith('data:')`
+    // check and every embedded <img> further down. See the note at the top of
+    // this function.
+    const fullStudents = await fetchFullStudents();
+    if (Array.isArray(fullStudents) && fullStudents.length) {
+        const fullByRegNo = new Map(fullStudents.map(s => [String(s.regNo || s.id || ''), s]));
+        students = students.map(s => {
+            const full = fullByRegNo.get(String(s.regNo || s.id || ''));
+            // Local object wins for frontend-only fields; the server copy
+            // supplies the two blobs it is the only source of.
+            return full ? Object.assign({}, s, { photo: full.photo, certData: full.certData }) : s;
+        });
+    }
 
     try {
         const wb = XLSX.utils.book_new();

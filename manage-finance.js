@@ -263,6 +263,13 @@ function isMonthlyFeePaid(finance) {
    on this page.
    ============================================================================ */
 const STUDENTS_API_BASE = "https://167-86-120-247.sslip.io/api/students";
+// PERFORMANCE FIX — the first load used to call STUDENTS_API_BASE, which
+// returns full Student entities including the base64 photo/certData
+// LONGTEXT columns. This page never renders a student photo in any of its
+// lists, so those blobs were pure download cost sitting on the critical
+// path of the page's first paint. The LIST endpoint returns every field
+// this page reads, minus those two columns.
+const STUDENTS_LIST_API_BASE = "https://167-86-120-247.sslip.io/api/students/list";
 const STUDENTS_SYNC_API_BASE = "https://167-86-120-247.sslip.io/api/students/sync";
 const SETTINGS_API_BASE = "https://167-86-120-247.sslip.io/api/settings";
 const STAFF_API_BASE    = "https://167-86-120-247.sslip.io/api/staff";
@@ -364,7 +371,7 @@ let _staffCache = { Teaching: [], 'Non-Teaching': [] };
 async function refreshStudentsCache() {
     const isFirstLoad = _studentsCache.length === 0;
     const data = isFirstLoad
-        ? await _backendGet(STUDENTS_API_BASE, '')
+        ? await _backendGet(STUDENTS_LIST_API_BASE, '')
         : await _backendGet(STUDENTS_SYNC_API_BASE, '');
     if (!Array.isArray(data)) return;
 
@@ -723,6 +730,50 @@ async function refreshAllFinanceCaches() {
     ]);
 }
 
+/**
+ * PERFORMANCE FIX — "Manage Finance takes 20 seconds, and the classes are
+ * slow to appear, and then the students are slow to appear."
+ *
+ * The page used to `await refreshAllFinanceCaches()` — a Promise.all of 12
+ * requests — before calling renderClassCardGrid(). Promise.all only settles
+ * once the SLOWEST of the 12 finishes, and one of those 12 is the full
+ * student roster fetch. So the class cards were never actually slow: they
+ * had all their data within a few hundred milliseconds and then sat there
+ * invisible, waiting for a multi-megabyte student download to land.
+ *
+ * This splits the load into two phases:
+ *   Phase 1 (awaited) — only what renderClassCardGrid() needs to draw the
+ *     class cards at all: the class configs and the late-fee config. Two
+ *     small requests, so the page has visible content almost immediately.
+ *   Phase 2 (NOT awaited) — everything else, including the student roster.
+ *     When it lands, the view re-renders itself with the real numbers.
+ *
+ * Nothing is fetched that wasn't fetched before and nothing is skipped —
+ * the only change is that the first paint no longer waits on the last byte.
+ */
+async function refreshFinanceCachesPhase1() {
+    _settingsFetchPromise = null;
+    await Promise.all([
+        refreshClassConfigsCache(),
+        refreshLatefeeConfigCache(),
+    ]);
+}
+
+async function refreshFinanceCachesPhase2() {
+    await Promise.all([
+        refreshStudentsCache(),
+        refreshCustomFeesCache(),
+        refreshStaffBonusCache(),
+        refreshStaffFinesCache(),
+        refreshExpensesCache(),
+        refreshStaffAdvancesCache(),
+        refreshSalaryRecordsCache(),
+        refreshGeneratedVouchersCache(),
+        refreshStudentFeeStatusCache(),
+        refreshStaffCache(),
+    ]);
+}
+
 /* ============================================================================
    LIVE SYNC — polls the backend and re-renders whatever's on screen, so
    records added/edited from another device, another tab, or by another
@@ -772,10 +823,23 @@ document.addEventListener('DOMContentLoaded', async () => {
     initTheme();
     initSidebar();
     initDate();
-    await refreshAllFinanceCaches();   // load real data from the backend first
+
+    // PHASE 1 — just enough to paint the class cards (see
+    // refreshFinanceCachesPhase1 for why this is split). Two small
+    // requests instead of twelve, one of which used to be the whole
+    // student roster.
+    await refreshFinanceCachesPhase1();
     renderClassCardGrid();
     initLedgerScrollEffect();
-    startLiveSync();
+
+    // PHASE 2 — everything else loads in the background. Deliberately NOT
+    // awaited: the page is already usable, and re-rendering when the data
+    // lands fills in the real figures without ever showing a blank screen.
+    refreshFinanceCachesPhase2().then(() => {
+        renderClassCardGrid();
+        refreshCurrentFinanceView();
+        startLiveSync();
+    });
 });
 
 /* ============================================
@@ -973,12 +1037,39 @@ function getCurrentFeeMonthLabel() {
 // so any such edit updates the cache immediately and pushes it to the
 // backend in the background. ⚠️ Uses STUDENTS_API_BASE — see the ownership
 // note in the REALTIME BACKEND DATA LAYER section above.
+/**
+ * PERFORMANCE FIX + BUGFIX — this used to end with:
+ *     _backendSave(STUDENTS_API_BASE, '', 'PUT', { items: _studentsCache });
+ * i.e. every time anyone marked a fee paid, applied a discount or edited a
+ * voucher note, the browser re-uploaded EVERY student in the school —
+ * base64 photos and all — from Asia to a server in Europe. Home
+ * connections upload far slower than they download, so this was often the
+ * single slowest action on the page.
+ *
+ * On the server side it was worse: StudentController#bulkSaveStudents runs
+ * findByRegNoAndSchoolId + a plan/feature check (which itself loads the
+ * School and its Plan) + a save for EACH item, so a 300-student roster
+ * meant roughly 1,200 queries and 300 updates for what was usually a
+ * one-student change — and it then returned the entire roster, photos
+ * included, back down the wire.
+ *
+ * It was also silently broken past a certain size: SchoolAuthFilter
+ * rejects any request body over MAX_INSPECTED_BODY_BYTES (16MB) with a
+ * 413, and _backendSave only console.warn()s on failure — so for a school
+ * with enough photos on file, finance edits simply stopped saving with no
+ * error shown to anyone.
+ *
+ * Fix: send only the students this call actually changed. Everything about
+ * the local cache merge below is unchanged; only the payload shrinks, from
+ * the whole roster to (typically) one row.
+ */
 function saveStudentsCache(students) {
     // Most finance edits start from getRealStudents(), which intentionally
     // excludes archived rows. Merge those edits back into the complete cache
     // instead of replacing the cache with only active students.
     const keyOf = s => String(s && (s.regNo || s.id) || '');
-    const updates = new Map((Array.isArray(students) ? students : [])
+    const incoming = Array.isArray(students) ? students : [];
+    const updates = new Map(incoming
         .map(s => [keyOf(s), s])
         .filter(([key]) => key));
 
@@ -987,7 +1078,7 @@ function saveStudentsCache(students) {
     );
 
     const cachedKeys = new Set(_studentsCache.map(keyOf));
-    (Array.isArray(students) ? students : []).forEach(student => {
+    incoming.forEach(student => {
         const key = keyOf(student);
         if (key && !cachedKeys.has(key)) {
             _studentsCache.push(student);
@@ -995,7 +1086,25 @@ function saveStudentsCache(students) {
         }
     });
 
-    _backendSave(STUDENTS_API_BASE, '', 'PUT', { items: _studentsCache });
+    // Only the rows that were actually passed in get pushed to the backend.
+    // Strip photo/certData before sending: this page never edits them, and
+    // StudentController#copyUpdatableFields deliberately ignores a blank
+    // photo/certData precisely so an update that omits them cannot erase
+    // the copy already on file. Sending them back would only add megabytes
+    // to the upload for no effect.
+    const changed = incoming
+        .filter(s => keyOf(s))
+        .map(s => {
+            const copy = Object.assign({}, s);
+            delete copy.photo;
+            delete copy.certData;
+            delete copy.feePayments;   // frontend-only field, backend has no column for it
+            return copy;
+        });
+
+    if (changed.length === 0) return;
+
+    _backendSave(STUDENTS_API_BASE, '', 'PUT', { items: changed });
 }
 
 /* ============================================

@@ -410,22 +410,53 @@ function _dashboardPaidFine(fine) {
     return status === 'paid' || status === 'settled';
 }
 
+/**
+ * PERFORMANCE FIX (dashboard 10-15s load) — this used to fire ONE HTTP
+ * request PER STUDENT to /api/finance/fine-details/{regNo}/{monthKey}, and
+ * _dashboardSnapshot() calls it twice (current month + previous month). For
+ * a 300-student school that is 600 separate round trips to the server. The
+ * browser only runs ~6 requests per host at a time, so at a ~200ms round
+ * trip that alone is ~25 seconds — and it also blew straight through the
+ * backend's 300-requests-per-minute rate limit (RATELIMIT_GENERAL_CAPACITY),
+ * so the tail end of those requests started coming back as 429s, which
+ * _dashboardGet then retried, making it slower still AND silently dropping
+ * some fines from the totals.
+ *
+ * FinanceController already exposes GET /api/finance/fine-details-all/{monthKey},
+ * which returns every FINE row for the whole school+month in a single query
+ * (manage-finance.js was already switched over to it — the dashboard never
+ * was). One request replaces N.
+ *
+ * Behaviour is unchanged: the bulk endpoint is scoped by school+month
+ * instead of by regNo, so the result is filtered back down to the exact
+ * same set of students the old per-student loop would have asked about.
+ * That keeps a stray fine row belonging to a student who is no longer on
+ * file from newly appearing in the totals.
+ */
 async function _dashboardFineRecords(students, monthKey) {
+    const wantedRegNos = new Set();
+    students.forEach(student => {
+        const id = student && (student.regNo || student.id);
+        if (id) wantedRegNos.add(String(id));
+    });
+    if (wantedRegNos.size === 0) return [];
+
+    const data = await _dashboardGet(
+        `/api/finance/fine-details-all/${encodeURIComponent(monthKey)}`,
+        []
+    );
+    if (!Array.isArray(data)) return [];
+
     const records = [];
-    await Promise.all(students.map(async student => {
-        const id = student.regNo || student.id;
-        if (!id) return;
-        const data = await _dashboardGet(
-            `/api/finance/fine-details/${encodeURIComponent(id)}/${encodeURIComponent(monthKey)}`,
-            []
-        );
-        if (Array.isArray(data)) {
-            data.forEach(fine => records.push({
-                ...fine,
-                date: _dashboardDate(fine.payDate || fine.paymentDate || fine.createdAt, monthKey)
-            }));
-        }
-    }));
+    data.forEach(fine => {
+        if (!fine) return;
+        const id = fine.regNo != null ? String(fine.regNo) : '';
+        if (!wantedRegNos.has(id)) return;
+        records.push({
+            ...fine,
+            date: _dashboardDate(fine.payDate || fine.paymentDate || fine.createdAt, monthKey)
+        });
+    });
     return records;
 }
 
@@ -832,14 +863,23 @@ async function calculateFinancials() {
 
     const students = _dashboardArray(studentsData);
     const staff = _dashboardStaffArray(staffData);
-    const current = await _dashboardSnapshot(
-        currentMonth, students, staff, currentStatus, customFees,
-        staffBonus, staffFines, expenses, salaryRecords, staffAdvances, currentMonth
-    );
-    const previous = await _dashboardSnapshot(
-        previousMonth, students, staff, previousStatus, customFees,
-        staffBonus, staffFines, expenses, salaryRecords, staffAdvances, currentMonth
-    );
+    // PERFORMANCE FIX — these two were awaited one after the other, so the
+    // previous-month snapshot didn't even start its network work until the
+    // current-month one had completely finished, doubling the wall-clock
+    // time for no reason. They share all their inputs and neither reads the
+    // other's output, so they can run at the same time. Combined with the
+    // bulk fine-details fix above, the dashboard now makes 2 fine requests
+    // in parallel where it used to make 2 x (number of students) in series.
+    const [current, previous] = await Promise.all([
+        _dashboardSnapshot(
+            currentMonth, students, staff, currentStatus, customFees,
+            staffBonus, staffFines, expenses, salaryRecords, staffAdvances, currentMonth
+        ),
+        _dashboardSnapshot(
+            previousMonth, students, staff, previousStatus, customFees,
+            staffBonus, staffFines, expenses, salaryRecords, staffAdvances, currentMonth
+        )
+    ]);
 
     // Same fix as Total Revenue above: snapshot.fees.collected already
     // includes every student fine that's been paid off (it's summed
