@@ -1187,28 +1187,42 @@ if (certUploadInput) {
      * Get (or create) the sibling-group ID for a family.
      *
      * Logic:
-     *   - If the matched (original) student already has a sibling-group id
-     *     (i.e. their `id` starts with "00"), reuse it — everyone in that
-     *     family already shares it.
-     *   - Otherwise generate a brand-new 00X code (next available number).
+     *   - If the matched (original) student already has a persisted
+     *     `siblingGroupId`, reuse it — everyone in that family already
+     *     shares it.
+     *   - Otherwise generate a brand-new 00X code (next available number,
+     *     computed from every student's persisted `siblingGroupId`).
      *
      * Format: 001, 002, 003 … (always 3 digits after "00")
      */
     function getOrCreateSiblingGroupId(matchedStudent) {
-        // Defensive String(...) coercion: `id` is meant to be a string here
-        // (a regNo or a "00X" group code), but guard against it ever coming
-        // through as something else (e.g. a number) so this can't throw and
-        // silently kill the whole "Mark as Sibling" action again.
-        // Already has a group id?
-        if (matchedStudent.id && String(matchedStudent.id).startsWith(SIBLING_PREFIX)) {
-            return String(matchedStudent.id);
+        // BUGFIX (two unrelated families both getting group "001"):
+        // This used to check `matchedStudent.id` for a "00" prefix instead
+        // of the persisted `siblingGroupId` field. `id` is frontend-only
+        // plumbing — on every fresh page load / first sync, it gets rebuilt
+        // purely from regNo (see syncWithBackend()'s merge logic), which
+        // silently resets EVERY student's `id` back to their own regNo,
+        // even students already locked into a sibling group. So after any
+        // reload, the old scan below always found zero ids starting with
+        // "00", concluded no group existed yet, and handed out "001" again
+        // — merging a brand-new, unrelated family into the first family's
+        // group. `siblingGroupId` is an actual persisted column
+        // (Student.java / StudentController), sent to and reloaded from
+        // the backend every time, so it's the only value guaranteed to
+        // survive a reload — use that instead.
+        // Already has a persisted group id?
+        if (matchedStudent.siblingGroupId) {
+            return String(matchedStudent.siblingGroupId);
         }
-        // Generate next group number
+        // Generate next group number — scan the persisted siblingGroupId
+        // field (not the disposable `id` field) so this reflects every
+        // group that has ever been created, survives reloads, and never
+        // reuses a number that's already taken.
         const db = getDatabase();
         let maxGroup = 0;
         db.forEach(s => {
-            if (s.id) {
-                const match = String(s.id).match(/^00(\d+)$/);
+            if (s.siblingGroupId) {
+                const match = String(s.siblingGroupId).match(/^00(\d+)$/);
                 if (match) maxGroup = Math.max(maxGroup, parseInt(match[1], 10));
             }
         });
