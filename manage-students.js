@@ -286,6 +286,91 @@ function isInlineDataUri(value) {
     return typeof value === 'string' && value.startsWith('data:');
 }
 
+// ── FILE-STORAGE MIGRATION — photos & B-Forms are now uploaded as real
+// files (StudentController#uploadPhoto/#uploadBform) instead of embedded
+// as base64 text in the student JSON. These two endpoints accept a
+// multipart file + schoolId and return { path: "photos/<uuid>.jpg" } /
+// { path: "bforms/<uuid>.pdf" } — a short relative path that gets sent
+// back as Student.photo / Student.certData on the normal save.
+const PHOTO_UPLOAD_URL = `${API_BASE}/files/photo`;
+const BFORM_UPLOAD_URL = `${API_BASE}/files/bform`;
+
+/**
+ * URL of one student's B-Form/certificate file, served as real bytes by
+ * StudentController#getStudentBform — the certData equivalent of
+ * studentPhotoUrl() above. Returns '' when there's nothing to show yet
+ * (no regNo, e.g. a brand new admission that hasn't been saved).
+ */
+function studentBformUrl(student, schoolId) {
+    if (!student) return '';
+    const regNo = student.regNo || student.id;
+    if (!regNo) return '';
+    return `${API_BASE}/${encodeURIComponent(regNo)}/bform?schoolId=${encodeURIComponent(schoolId || '')}`;
+}
+
+/**
+ * Resolves whatever is currently sitting in a "photo-like" field into
+ * something safe to drop straight into an <img src="...">:
+ *   - already a real URL (http/https) or a legacy base64 data: URI → used as-is
+ *   - a bare server-relative path from a fresh upload this session
+ *     (e.g. "photos/uuid.jpg", returned by PHOTO_UPLOAD_URL/BFORM_UPLOAD_URL)
+ *     → turned into the proper GET /{regNo}/photo|/bform URL
+ *   - empty/undefined → ''
+ * Centralizing this means print views/exports never accidentally render a
+ * bare relative path as an <img> src, which silently shows a broken image.
+ */
+function resolveStoredFileSrc(rawValue, regNo, schoolId, kind /* 'photo' | 'bform' */) {
+    if (!rawValue) return '';
+    if (rawValue.startsWith('data:') || rawValue.startsWith('http://') || rawValue.startsWith('https://')) {
+        return rawValue;
+    }
+    if (!regNo) return '';
+    const endpoint = kind === 'bform' ? 'bform' : 'photo';
+    return `${API_BASE}/${encodeURIComponent(regNo)}/${endpoint}?schoolId=${encodeURIComponent(schoolId || '')}`;
+}
+
+/**
+ * Converts a "data:<mime>;base64,...." string (as produced by compressImage
+ * / FileReader.readAsDataURL) into a real File object, so it can be sent as
+ * multipart/form-data to PHOTO_UPLOAD_URL / BFORM_UPLOAD_URL instead of
+ * embedded as JSON text.
+ */
+function dataUriToFile(dataUri, filename) {
+    const commaIdx = dataUri.indexOf(',');
+    const header = dataUri.slice(0, commaIdx);
+    const base64 = dataUri.slice(commaIdx + 1);
+    const mimeMatch = header.match(/data:(.*?);base64/);
+    const mime = mimeMatch ? mimeMatch[1] : 'application/octet-stream';
+    const binary = atob(base64);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    return new File([bytes], filename, { type: mime });
+}
+
+/**
+ * Uploads a single File to one of the /files/photo|/files/bform endpoints
+ * and returns the relative path the backend stored it under. Throws on any
+ * non-OK response so callers can show a toast and leave the previously
+ * stored file untouched rather than silently losing the upload.
+ */
+async function uploadFileToServer(file, uploadUrl) {
+    const schoolId = getCurrentSchoolId();
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('schoolId', schoolId);
+    const response = await fetch(uploadUrl, { method: 'POST', body: formData });
+    if (!response.ok) {
+        let message = 'Upload failed.';
+        try {
+            const body = await response.json();
+            if (body && body.error) message = body.error;
+        } catch (e) { /* ignore — use default message */ }
+        throw new Error(message);
+    }
+    const data = await response.json();
+    return data.path;
+}
+
 /**
  * Fetch COMPLETE student records (photo + certData inline) on demand.
  *
@@ -1054,7 +1139,22 @@ document.addEventListener('DOMContentLoaded', () => {
             showToast("Processing", "Optimizing photo...", "info");
             // Face photo: 500px width is plenty
             const compressedBase64 = await compressImage(file, 500, 0.8);
-            previewImg.src = compressedBase64;
+            previewImg.src = compressedBase64; // local preview only — never sent to the server
+
+            // FILE-STORAGE MIGRATION — upload the compressed photo to disk
+            // right away and remember the returned relative path
+            // (previewImg.dataset.uploadedPath). The save handler below
+            // sends THIS, not the base64 preview, as Student.photo.
+            delete previewImg.dataset.uploadedPath;
+            try {
+                const compressedFile = dataUriToFile(compressedBase64, 'photo.jpg');
+                const path = await uploadFileToServer(compressedFile, PHOTO_UPLOAD_URL);
+                previewImg.dataset.uploadedPath = path;
+                showToast("Photo Ready", "Photo uploaded and attached.", "success");
+            } catch (err) {
+                console.error('Photo upload failed:', err);
+                showToast("Upload Failed", "Could not upload the photo. Please try again.", "danger");
+            }
         }
     });
 }
@@ -1068,21 +1168,32 @@ if (certUploadInput) {
                 return;
             }
             showToast("Processing", "Optimizing document...", "info");
-            
-            // If it's a PDF, we can't compress via Canvas, just read as is
-            if (file.type === 'application/pdf') {
-                const reader = new FileReader();
-                reader.onload = (e) => { certDataHidden.value = e.target.result; };
-                reader.readAsDataURL(file);
-            } else {
+
+            // FILE-STORAGE MIGRATION — certData now stores a relative
+            // server path ("bforms/uuid.pdf"), not the file's base64
+            // content. Build a File to upload (compressing images the same
+            // way as before; PDFs are uploaded as-is since they can't be
+            // run through the canvas), then upload it immediately. Only
+            // on a successful upload does certDataHidden.value change, so
+            // a failed upload leaves whatever was already on file intact.
+            let fileToUpload = file;
+            if (file.type !== 'application/pdf') {
                 // For B-Form images: 1600px width ensures text remains sharp
                 const compressedBase64 = await compressImage(file, 1600, 0.7);
-                certDataHidden.value = compressedBase64;
+                fileToUpload = dataUriToFile(compressedBase64, file.name || 'bform.jpg');
             }
-            // A new file was just attached — the "already on file" note now
-            // refers to a stale/replaced document, so hide it.
-            if (certUploadStatus) certUploadStatus.style.display = 'none';
-            showToast("File Ready", "Document optimized and attached.", "success");
+
+            try {
+                const path = await uploadFileToServer(fileToUpload, BFORM_UPLOAD_URL);
+                certDataHidden.value = path;
+                // A new file was just attached — the "already on file" note now
+                // refers to a stale/replaced document, so hide it.
+                if (certUploadStatus) certUploadStatus.style.display = 'none';
+                showToast("File Ready", "Document uploaded and attached.", "success");
+            } catch (err) {
+                console.error('B-Form upload failed:', err);
+                showToast("Upload Failed", "Could not upload the document. Please try again.", "danger");
+            }
         }
     });
 }
@@ -1954,14 +2065,19 @@ if (certUploadInput) {
         // text of that URL into the photo column and permanently destroy the
         // stored image.
         //
-        // Only send a photo when the user actually picked a new one, which is
-        // the only case where previewImg.src is an inline data: URI. Omitting
-        // the field entirely is already the documented "keep what's on file"
-        // signal — StudentController#copyUpdatableFields explicitly refuses
-        // to overwrite photo/certData with a blank value for exactly this
+        // FILE-STORAGE MIGRATION — a freshly picked photo is uploaded to disk
+        // the moment it's selected (see the studentPhotoInput 'change'
+        // handler above), which stashes the server's relative path on
+        // previewImg.dataset.uploadedPath. Only send a photo when that path
+        // exists, i.e. the user actually picked (and successfully uploaded)
+        // a new one this session — never the raw base64 preview and never
+        // the display URL. Omitting the field entirely is already the
+        // documented "keep what's on file" signal —
+        // StudentController#copyUpdatableFields explicitly refuses to
+        // overwrite photo/certData with a blank value for exactly this
         // reason.
-        if (isInlineDataUri(previewImg.src)) {
-            studentData.photo = previewImg.src;
+        if (previewImg.dataset.uploadedPath) {
+            studentData.photo = previewImg.dataset.uploadedPath;
         } else {
             delete studentData.photo;
         }
@@ -2318,7 +2434,15 @@ if (certUploadInput) {
     });
 
     // Student Data Mapping
-    const photoSrc = (studentData.photo && !/placeholder\.com/i.test(studentData.photo)) ? studentData.photo : '';
+    // FILE-STORAGE MIGRATION — right after a fresh admission, studentData.photo
+    // (if set at all) is the short relative path a just-completed upload
+    // returned (e.g. "photos/uuid.jpg"), not something an <img> can load
+    // directly. resolveStoredFileSrc() turns that into the real
+    // GET /{regNo}/photo URL; it passes through legacy base64/http(s) values
+    // unchanged, so nothing else about this print view needs to change.
+    const photoSrc = (studentData.photo && !/placeholder\.com/i.test(studentData.photo))
+        ? resolveStoredFileSrc(studentData.photo, studentData.regNo || studentData.id, getCurrentSchoolId(), 'photo')
+        : '';
     const registrationNo = studentData.regNo || studentData.id || '—';
     const dobISO = studentData.dob || '';
     const dateOfBirth = studentData.dob ? new Date(studentData.dob).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
@@ -2712,7 +2836,9 @@ if (certUploadInput) {
 
         const safeVal = v => (v !== undefined && v !== null && v !== '') ? esc(v) : '—';
         const fmtRs = (v) => (v === undefined || v === null || v === '' || isNaN(Number(v))) ? '—' : ('Rs. ' + Number(v).toLocaleString('en-PK'));
-        const photoSrc = (s.photo && !/placeholder\.com/i.test(s.photo)) ? s.photo : '';
+        const photoSrc = (s.photo && !/placeholder\.com/i.test(s.photo))
+            ? resolveStoredFileSrc(s.photo, s.regNo || s.id, getCurrentSchoolId(), 'photo')
+            : '';
         const registrationNo = s.regNo || s.id || '—';
 
         // ── Sibling info (mirrors the Profile modal's two independent signals) ──
@@ -4622,7 +4748,20 @@ if (certUploadInput) {
         let bformActionBtn = '';
         if (s.certData) {
             const certRegNo = s.regNo || s.id;
-            const isPdf = s.certData.startsWith('data:application/pdf');
+            // FILE-STORAGE MIGRATION — s.certData is now usually a relative
+            // server path ("bforms/uuid.pdf"/".jpg"), not an inline base64
+            // data URI. Support both shapes: legacy rows still carry the
+            // full data: URI and can be inspected/rendered directly; new
+            // rows need their type inferred from the file extension and
+            // their preview built from studentBformUrl() instead.
+            const certIsDataUri = s.certData.startsWith('data:');
+            const isPdf = certIsDataUri
+                ? s.certData.startsWith('data:application/pdf')
+                : /\.pdf$/i.test(s.certData);
+            const isImage = certIsDataUri ? s.certData.startsWith('data:image') : !isPdf;
+            const bformPreviewSrc = certIsDataUri
+                ? s.certData
+                : studentBformUrl(s, getCurrentSchoolId());
 
             bformActionBtn = `
                 <div class="profile-section-title"><i class="fas fa-id-card"></i> B-Form / School Certificate (from Admission Form)</div>
@@ -4637,11 +4776,11 @@ if (certUploadInput) {
                     </button>
                 </div>`;
 
-            if (s.certData.startsWith('data:image')) {
+            if (isImage) {
                 certViewer = `
                     <div class="profile-section-title"><i class="fas fa-certificate"></i> School Certificate / B-Form</div>
                     <div style="padding:20px 25px;">
-                        <img src="${s.certData}" alt="Certificate" class="cert-preview-img"
+                        <img src="${bformPreviewSrc}" alt="Certificate" class="cert-preview-img"
                              onclick="viewCertificate('${certRegNo}')" title="Click to view full page">
                         <p style="font-size:0.75rem;color:var(--text-muted);margin-top:8px;">
                             <i class="fas fa-search-plus"></i> Click to open full size
@@ -4708,7 +4847,7 @@ if (certUploadInput) {
             <div class="profile-card-header">
                 <div class="profile-header-decor"></div>
                 <div class="profile-avatar-ring">
-                    <img src="${s.photo}" class="profile-main-img"
+                    <img src="${resolveStoredFileSrc(s.photo, s.regNo || s.id, getCurrentSchoolId(), 'photo')}" class="profile-main-img"
                          onerror="this.src='https://ui-avatars.com/api/?name=${encodeURIComponent(s.fullName)}&background=3b82f6&color=fff&bold=true'">
                 </div>
                 <h2 class="profile-name-title">${s.fullName}</h2>
@@ -4819,21 +4958,47 @@ if (certUploadInput) {
         return new Blob([bytes], { type: mime });
     }
 
-    /** Look up a student by regNo (falls back to id) and build a {blob, isPdf, filename} bundle for their certData. */
-    function resolveCertForStudent(regNo) {
+    /**
+     * Look up a student by regNo (falls back to id) and build a
+     * {blob, isPdf, filename} bundle for their certData.
+     *
+     * FILE-STORAGE MIGRATION — certData now usually holds a relative server
+     * path ("bforms/uuid.pdf") rather than the file's base64 content, so the
+     * real bytes have to be fetched from StudentController#getStudentBform
+     * instead of decoded locally. Legacy rows that still carry a full
+     * "data:" URI (saved before this migration) are still decoded locally
+     * exactly as before — no backfill/migration script required.
+     */
+    async function resolveCertForStudent(regNo) {
         const db = getDatabase();
         const s = db.find(x => x.regNo === regNo) || db.find(x => x.id === regNo);
         if (!s || !s.certData) return null;
 
-        const isPdf    = s.certData.startsWith('data:application/pdf');
-        const blob     = certDataUrlToBlob(s.certData);
+        if (s.certData.startsWith('data:')) {
+            const isPdf    = s.certData.startsWith('data:application/pdf');
+            const blob     = certDataUrlToBlob(s.certData);
+            const filename = `bform_${s.regNo || s.id}${isPdf ? '.pdf' : '.png'}`;
+            return { blob, isPdf, filename };
+        }
+
+        const url = studentBformUrl(s, getCurrentSchoolId());
+        if (!url) return null;
+        let response;
+        try {
+            response = await fetch(url);
+        } catch (e) {
+            return null;
+        }
+        if (!response.ok) return null;
+        const blob  = await response.blob();
+        const isPdf = /\.pdf$/i.test(s.certData) || blob.type === 'application/pdf';
         const filename = `bform_${s.regNo || s.id}${isPdf ? '.pdf' : '.png'}`;
         return { blob, isPdf, filename };
     }
 
     /** Open the student's certificate / B-Form in the in-page, full-screen viewer. Works for both images and PDFs. */
-    window.viewCertificate = function(regNo) {
-        const cert = resolveCertForStudent(regNo);
+    window.viewCertificate = async function(regNo) {
+        const cert = await resolveCertForStudent(regNo);
         if (!cert) { showToast("No File", "No certificate / B-Form is attached for this student.", "danger"); return; }
 
         // Free the previous blob before creating a new one, so repeated opens don't leak memory
@@ -4905,13 +5070,13 @@ if (certUploadInput) {
      * and clicks a temporary, invisible <a download> against it — the only download method that
      * behaves consistently across Chrome, Edge, Firefox and Safari for locally-generated files.
      */
-    window.downloadCertificate = function(regNo) {
+    window.downloadCertificate = async function(regNo) {
         let blobUrl  = _certViewerBlobUrl;
         let filename = _certViewerFilename;
         let isReusedUrl = !!blobUrl;
 
         if (!blobUrl) {
-            const cert = resolveCertForStudent(regNo);
+            const cert = await resolveCertForStudent(regNo);
             if (!cert) { showToast("No File", "No certificate / B-Form is attached for this student.", "danger"); return; }
             blobUrl  = URL.createObjectURL(cert.blob);
             filename = cert.filename;
