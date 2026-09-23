@@ -771,6 +771,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 admissionForm.reset();
                 editIdHidden.value = "";
                 previewImg.src = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAJQAAACUCAYAAAB1Va3RAAAACXBIWXMAAAsTAAALEwEAmpwYAAADu0lEQVR4nO3dy0pUYRSG4f9mZpYjSclS0DSIIAsZonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXonmZInoXInoXf6S/8AvW7ZicAAAAASUVORK5CYII=";
+                // BUGFIX -- a stale uploadedPath from a previously-open student
+                // (their newly-picked photo's server path) was never cleared
+                // when opening this form again for a brand-new admission. On
+                // Save, that leftover path got attached to the NEW student
+                // (see the admission-submit handler's 'if
+                // (previewImg.dataset.uploadedPath)' check below) -- i.e. a
+                // different student's photo silently ended up saved onto this
+                // one, or a since-deleted path that 404s so no photo shows.
+                delete previewImg.dataset.uploadedPath;
                 document.getElementById('form-modal-title').innerHTML =
                     '<i class="fas fa-user-plus"></i> Student Admission Entry';
                 document.getElementById('form-submit-btn').innerText = 'Finalize Admission';
@@ -864,6 +873,12 @@ document.addEventListener('DOMContentLoaded', () => {
             document.body.style.overflow = 'auto';
             if (modalId === 'student-modal') {
                 editIdHidden.value = "";
+                // BUGFIX -- third and last place this flag needs clearing:
+                // if the form is closed (Cancel, backdrop click, X button)
+                // without saving -- whether or not a new photo was picked --
+                // nothing should carry over into whichever student this
+                // modal is opened for next.
+                delete previewImg.dataset.uploadedPath;
             }
         }
     };
@@ -4617,6 +4632,13 @@ if (certUploadInput) {
     previewImg.src = student.photo
         ? resolveStoredFileSrc(student.photo, student.regNo || student.id, getCurrentSchoolId(), 'photo')
         : "https://via.placeholder.com/150?text=No+Photo";
+    // BUGFIX -- this is the OTHER place a stale uploadedPath survived:
+    // editing Student A (uploading a new photo sets this dataset flag),
+    // then editing Student B without a full page reload used to carry
+    // A's just-uploaded path over onto B's save. Every time this form is
+    // populated for editing, the flag must be cleared -- a real new photo
+    // pick for THIS student sets it again on its own.
+    delete previewImg.dataset.uploadedPath;
     displayRegBadge.innerText = student.regNo;
     rollNoInput.value = student.rollNo || '';
 
