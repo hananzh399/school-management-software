@@ -268,9 +268,15 @@ const LIST_API_BASE = `${BACKEND_ORIGIN}/api/students/list`;
  * `if (s.photo)` check on this page keeps behaving exactly as before.
  */
 function studentPhotoUrl(student, schoolId) {
-    if (!student || !student.hasPhoto) return '';
+    if (!student) return '';
     const regNo = student.regNo || student.id;
     if (!regNo) return '';
+    // New list responses expose the short managed path without exposing
+    // legacy base64 content. Prefer that exact path when it is available.
+    if (student.photoPath) {
+        return resolveStoredFileSrc(student.photoPath, regNo, schoolId, 'photo');
+    }
+    if (!student.hasPhoto) return '';
     return `${API_BASE}/${encodeURIComponent(regNo)}/photo?schoolId=${encodeURIComponent(schoolId || '')}`;
 }
 
@@ -327,6 +333,22 @@ function resolveStoredFileSrc(rawValue, regNo, schoolId, kind /* 'photo' | 'bfor
     if (!regNo) return '';
     const endpoint = kind === 'bform' ? 'bform' : 'photo';
     return `${API_BASE}/${encodeURIComponent(regNo)}/${endpoint}?schoolId=${encodeURIComponent(schoolId || '')}`;
+}
+
+/**
+ * Returns a usable browser URL for a stored file in a complete student row.
+ * Complete rows normally contain a short managed path, while older rows can
+ * still contain a data URI.
+ */
+function storedStudentFileSrc(student, kind) {
+    if (!student) return '';
+    const rawValue = kind === 'bform' ? student.certData : (student.photo || student.photoPath);
+    return resolveStoredFileSrc(
+        rawValue,
+        student.regNo || student.id,
+        getCurrentSchoolId(),
+        kind
+    );
 }
 
 /**
@@ -1786,7 +1808,9 @@ if (certUploadInput) {
             // unaffected.
             if (isFirstLoad) {
                 serverStudents.forEach(s => {
-                    if (s && s.hasPhoto) s.photo = studentPhotoUrl(s, schoolId);
+                    if (s && (s.hasPhoto || s.photoPath)) {
+                        s.photo = studentPhotoUrl(s, schoolId);
+                    }
                 });
             }
 
@@ -6359,15 +6383,15 @@ function _buildPhotoGalleryHTML(students) {
         const name  = s.fullName || s.name || 'Unknown';
         const regNo = s.regNo || s.id || '—';
         const cls   = s.studentClass || s.class || '—';
-        const photoSrc  = (s.photo && s.photo.startsWith('data:image')) ? s.photo : '';
-        const bformSrc  = (s.certData && s.certData.startsWith('data:')) ? s.certData : '';
+        const photoSrc  = storedStudentFileSrc(s, 'photo');
+        const bformSrc  = storedStudentFileSrc(s, 'bform');
 
         const photoBlock = photoSrc
             ? `<img src="${photoSrc}" alt="Photo of ${name}" style="width:110px;height:120px;object-fit:cover;border-radius:6px;border:2px solid #3b82f6;">`
             : `<div style="width:110px;height:120px;background:#e2e8f0;border-radius:6px;display:flex;align-items:center;justify-content:center;color:#94a3b8;font-size:12px;border:2px dashed #cbd5e1;">No Photo</div>`;
 
         const bformBlock = bformSrc
-            ? (bformSrc.startsWith('data:image')
+            ? (bformSrc.startsWith('data:image') || !/\.pdf(?:$|[?#])/i.test(s.certData || '')
                 ? `<img src="${bformSrc}" alt="B-Form" style="max-width:180px;max-height:130px;object-fit:contain;border-radius:4px;border:1px solid #e2e8f0;">`
                 : `<a href="${bformSrc}" style="display:inline-block;padding:6px 12px;background:#3b82f6;color:#fff;border-radius:4px;text-decoration:none;font-size:11px;" download="${regNo}_bform.pdf">📄 Download B-Form PDF</a>`)
             : `<span style="color:#94a3b8;font-size:11px;font-style:italic;">Not uploaded</span>`;
@@ -6497,8 +6521,8 @@ async function exportStudentsToExcel() {
                 : (s.discountExpiry ? 'Temporary' : 'None');
 
             // Student photo — embed note if it exists
-            const hasPhoto = s.photo && s.photo.startsWith('data:image');
-            const hasBform = s.certData && s.certData.startsWith('data:');
+            const hasPhoto = !!storedStudentFileSrc(s, 'photo');
+            const hasBform = !!storedStudentFileSrc(s, 'bform');
 
             return [
                 s.regNo                         || '',
@@ -6694,10 +6718,10 @@ async function exportStudentsToExcel() {
             'Has Student Photo', 'Has B-Form / Certificate', 'Document Type'
         ];
         const photoRows = students.map((s, i) => {
-            const hasPhoto = !!(s.photo    && s.photo.startsWith('data:image'));
-            const hasBform = !!(s.certData && s.certData.startsWith('data:'));
+            const hasPhoto = !!storedStudentFileSrc(s, 'photo');
+            const hasBform = !!storedStudentFileSrc(s, 'bform');
             const docType  = hasBform
-                ? (s.certData.startsWith('data:image') ? 'Image' : 'PDF')
+                ? (/\.pdf(?:$|[?#])/i.test(s.certData || '') ? 'PDF' : 'Image')
                 : '—';
             return [
                 i + 1,
@@ -6723,8 +6747,8 @@ async function exportStudentsToExcel() {
         const exportedOn = now.toLocaleDateString('en-PK', { day: '2-digit', month: 'long', year: 'numeric' })
                          + '  ' + now.toLocaleTimeString('en-PK', { hour: '2-digit', minute: '2-digit' });
 
-        const studentsWithPhotos = students.filter(s => s.photo && s.photo.startsWith('data:image')).length;
-        const studentsWithBforms = students.filter(s => s.certData && s.certData.startsWith('data:')).length;
+        const studentsWithPhotos = students.filter(s => storedStudentFileSrc(s, 'photo')).length;
+        const studentsWithBforms = students.filter(s => storedStudentFileSrc(s, 'bform')).length;
         const studentsWithDiscount = students.filter(s =>
             (Number(s.tuitionDiscount) || 0) + (Number(s.transportDiscount) || 0) + (Number(s.siblingDiscount) || 0) > 0
         ).length;
@@ -6755,8 +6779,8 @@ async function exportStudentsToExcel() {
 
         /* ── Generate & download the Photo Gallery HTML ── */
         const studentsWithAnyMedia = students.filter(s =>
-            (s.photo && s.photo.startsWith('data:image')) ||
-            (s.certData && s.certData.startsWith('data:'))
+            storedStudentFileSrc(s, 'photo') ||
+            storedStudentFileSrc(s, 'bform')
         );
 
         if (studentsWithAnyMedia.length > 0) {
