@@ -2127,6 +2127,42 @@ if (certUploadInput) {
                  * successful until the next refresh replaced it.
                  */
                 const candidate = Object.assign({}, db[index], studentData);
+                // BUGFIX — photo silently breaking after any edit to an
+                // existing student that already had one on file.
+                //
+                // db[index].photo can hold a RESOLVED DISPLAY URL (e.g.
+                // "https://.../api/students/PSC_3/photo?schoolId=...") —
+                // see studentPhotoUrl()/syncWithBackend() above, which turns
+                // the `hasPhoto` flag into a browsable URL for <img src>.
+                // studentData.photo only exists here when a NEW file was
+                // just uploaded this session (raw relative path, e.g.
+                // "photos/uuid.jpg"); otherwise it's deleted (see the
+                // admission-submit handler), so candidate.photo falls back
+                // to whatever db[index].photo is — which, for any student
+                // whose photo wasn't just re-uploaded, is that display URL.
+                //
+                // StudentController#copyUpdatableFields only refuses to
+                // overwrite photo/certData when the incoming value is
+                // BLANK — a URL isn't blank, so it was accepted as if it
+                // were a real storage path: the actual file on disk got
+                // deleted (path mismatch vs. what's really stored) and the
+                // DB column got overwritten with the URL text itself. Every
+                // later photo request then 404'd, since a URL doesn't match
+                // FileStorageService#isManagedPath() and isn't valid
+                // base64 either.
+                //
+                // Fix: never let anything that isn't a genuine storage path
+                // (i.e. anything starting with http(s): or data:) leave
+                // this tab as `photo`/`certData`. Stripping it here makes
+                // the request identical to "no photo field sent", which is
+                // exactly the signal the backend already treats correctly
+                // as "leave the stored photo alone".
+                if (candidate.photo && /^(https?:|data:)/i.test(candidate.photo)) {
+                    delete candidate.photo;
+                }
+                if (candidate.certData && /^(https?:|data:)/i.test(candidate.certData)) {
+                    delete candidate.certData;
+                }
                 const saved = await apiSaveStudent(candidate);
                 if (saved) normalizeSiblingFieldsFromServer(saved);
                 db[index] = Object.assign({}, candidate, saved || {}, { id: db[index].id });
