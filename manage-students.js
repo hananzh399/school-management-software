@@ -4572,7 +4572,15 @@ if (certUploadInput) {
         if (defaultOrphanRadio) defaultOrphanRadio.checked = true;
     }
 
-    previewImg.src = student.photo || "https://via.placeholder.com/150?text=No+Photo";
+    // FIX: student.photo may be a bare relative path returned by the last
+    // save response (e.g. "photos/uuid.jpg") rather than a browsable URL —
+    // resolveStoredFileSrc() turns that into GET /{regNo}/photo, same as
+    // every other photo-rendering spot on this page. Assigning student.photo
+    // directly (as this used to) silently broke the preview for any photo
+    // uploaded/saved earlier in the same session, before a full page reload.
+    previewImg.src = student.photo
+        ? resolveStoredFileSrc(student.photo, student.regNo || student.id, getCurrentSchoolId(), 'photo')
+        : "https://via.placeholder.com/150?text=No+Photo";
     displayRegBadge.innerText = student.regNo;
     rollNoInput.value = student.rollNo || '';
 
