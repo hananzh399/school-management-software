@@ -2295,12 +2295,34 @@ if (certUploadInput) {
                 if (candidate.certData && candidate.certData === previousMedia.certData) {
                     delete candidate.certData;
                 }
-                const saved = await apiSaveStudent(candidate);
-                if (saved) normalizeSiblingFieldsFromServer(saved);
-                db[index] = Object.assign({}, previousMedia, candidate, saved || {}, { id: db[index].id });
+                // OPTIMISTIC SAVE: update the local record and close the
+                // modal immediately instead of waiting for the backend
+                // round-trip. This was the delay you were seeing — a
+                // photo/B-Form makes the POST body bigger, so the old code
+                // (which awaited apiSaveStudent before closing the modal)
+                // sat there until the upload finished. The sync now happens
+                // in the background; the table already reflects the save,
+                // and a toast tells you if it actually failed so nothing
+                // is silently lost.
+                db[index] = Object.assign({}, previousMedia, candidate, { id: db[index].id });
                 saveDatabase(db);
                 showToast("Updated", "Record updated successfully", "info");
                 closeModal('student-modal');
+
+                apiSaveStudent(candidate).then(saved => {
+                    if (!saved) return;
+                    normalizeSiblingFieldsFromServer(saved);
+                    const dbNow = getDatabase();
+                    const idxNow = dbNow.findIndex(s => s.regNo === candidate.regNo || s.id === candidate.id);
+                    if (idxNow === -1) return;
+                    dbNow[idxNow] = Object.assign({}, dbNow[idxNow], saved, { id: dbNow[idxNow].id });
+                    saveDatabase(dbNow);
+                    if (typeof renderStudentTable === 'function') renderStudentTable();
+                    if (typeof renderViewOnlyTable === 'function') renderViewOnlyTable();
+                }).catch(err => {
+                    console.error('Backend sync failed (update):', err);
+                    showToast("Sync failed", getApiErrorMessage(err) + " — changes are saved locally, please check your connection and try again.", "danger");
+                });
             } catch (err) {
                 console.error('Backend sync failed (update):', err);
                 showToast("Save failed", getApiErrorMessage(err), "danger");
@@ -2325,13 +2347,29 @@ if (certUploadInput) {
                 }
 
                 try {
-                    const saved = await apiSaveStudent(studentData);
-                    const persistedStudent = Object.assign({}, studentData, saved || {}, { id: regNo });
+                    // OPTIMISTIC SAVE — same reasoning as the update branch
+                    // above: don't block the modal closing on the backend
+                    // upload finishing.
+                    const persistedStudent = Object.assign({}, studentData, { id: regNo });
                     db.push(persistedStudent);
                     saveDatabase(db);
                     showToast("Admission Complete", `${studentData.fullName} registered.`, "success");
                     closeModal('student-modal');
                     showAdmissionPrintPrompt(persistedStudent);
+
+                    apiSaveStudent(studentData).then(saved => {
+                        if (!saved) return;
+                        const dbNow = getDatabase();
+                        const idxNow = dbNow.findIndex(s => s.regNo === regNo || s.id === regNo);
+                        if (idxNow === -1) return;
+                        dbNow[idxNow] = Object.assign({}, dbNow[idxNow], saved, { id: regNo });
+                        saveDatabase(dbNow);
+                        if (typeof renderStudentTable === 'function') renderStudentTable();
+                        if (typeof renderViewOnlyTable === 'function') renderViewOnlyTable();
+                    }).catch(err => {
+                        console.error('Backend sync failed (new admission):', err);
+                        showToast("Sync failed", getApiErrorMessage(err) + " — record is saved locally, please check your connection and try again.", "danger");
+                    });
                 } catch (err) {
                     console.error('Backend sync failed (new admission):', err);
                     showToast("Save failed", getApiErrorMessage(err), "danger");
