@@ -684,6 +684,9 @@ document.addEventListener('DOMContentLoaded', () => {
     let   liveSyncTimer         = null;
     let   lastServerSnapshot    = null;   // JSON fingerprint of last-seen server data
     let   isSyncing             = false;  // prevents overlapping fetches
+    // BASE64 PHOTO/B-FORM FIX — see loadStudentMediaInBackground() below.
+    let   studentMediaLoaded    = false;  // true once photo/certData base64 has been pulled for this session
+    let   studentMediaLoading   = false;  // true while that background fetch is in flight
     let   liveSyncFailStreak    = 0;      // backs off polling if server is unreachable
     let   suppressNextLiveToast = false;  // true right after THIS tab made its own save/delete
 
@@ -1735,6 +1738,64 @@ if (certUploadInput) {
     }
 
     /**
+     * BASE64 PHOTO / B-FORM FIX — "pics show everywhere, then vanish after a
+     * page refresh".
+     *
+     * Photos and B-Forms ARE saved correctly (as base64 in students.photo /
+     * students.certData). The problem was on the way back in: the first load
+     * of this page uses the fast GET /api/students/list endpoint, which by
+     * design leaves photo and certData out. Nothing ever filled them back in,
+     * so after a refresh every student looked like they had no B-Form (and
+     * the photo depended entirely on the list endpoint's hasPhoto flag).
+     *
+     * This runs once per page load, right after the fast roster is on
+     * screen: it pulls the full records (photo + certData included, exactly
+     * as stored in the database), copies ONLY those two fields onto the
+     * in-memory students, and re-renders. The table still appears quickly;
+     * the images and documents fill in behind it. If the request fails, the
+     * flags are reset so the next background poll simply tries again.
+     */
+    async function loadStudentMediaInBackground(schoolId) {
+        if (studentMediaLoaded || studentMediaLoading || !schoolId) return;
+        studentMediaLoading = true;
+        try {
+            const full = await apiRequest('GET', `${API_BASE}?schoolId=${encodeURIComponent(schoolId)}`);
+            if (!Array.isArray(full)) return;
+
+            const byRegNo = new Map(full.map(s => [s.regNo, s]));
+            let changed = false;
+            getDatabase().forEach(s => {
+                const f = byRegNo.get(s.regNo);
+                if (!f) return;
+                // Never overwrite something the user picked while this was
+                // loading: only fill in a blank, or replace a display URL.
+                if (f.photo && (!s.photo || /^https?:/i.test(s.photo))) {
+                    s.photo = f.photo;
+                    changed = true;
+                }
+                if (f.certData && !s.certData) {
+                    s.certData = f.certData;
+                    changed = true;
+                }
+            });
+            studentMediaLoaded = true;
+
+            if (changed) {
+                withScrollPreserved('student-list-tbody', () => {
+                    if (typeof renderStudentTable === 'function') renderStudentTable();
+                });
+                withScrollPreserved('vo-student-tbody', () => {
+                    if (typeof renderViewOnlyTable === 'function') renderViewOnlyTable();
+                });
+            }
+        } catch (err) {
+            console.warn('loadStudentMediaInBackground: will retry on the next poll.', err.message);
+        } finally {
+            studentMediaLoading = false;
+        }
+    }
+
+    /**
      * Pull the current roster from MySQL and — ONLY if something actually
      * changed since the last check — merge it in and re-render. This is what
      * powers real-time updates: any admission/edit/delete made elsewhere
@@ -1802,6 +1863,11 @@ if (certUploadInput) {
 
             liveSyncFailStreak = 0;
             setLiveSyncIndicator('online');
+
+            // Fetch photo/B-Form base64 in the background (once per page
+            // load). The roster merge below is fully synchronous, so by the
+            // time this request returns the students are already in memory.
+            loadStudentMediaInBackground(schoolId);
 
             // Cheap fingerprint of the server response — if nothing changed,
             // skip the merge/render entirely so background polling never
@@ -1878,6 +1944,19 @@ if (certUploadInput) {
                 let mergedStudent;
                 if (isFirstLoad || !localMatch) {
                     mergedStudent = Object.assign({}, localMatch || {}, srv);
+                    // BASE64 FIX: apiSaveStudent() resets lastServerSnapshot,
+                    // so the poll right after every save re-enters this
+                    // branch with the lean /list row (no certData, and a
+                    // display-URL photo). Keep whatever real photo/B-Form
+                    // this tab already holds instead of downgrading it.
+                    if (localMatch) {
+                        if (localMatch.photo && !/^https?:/i.test(localMatch.photo)) {
+                            mergedStudent.photo = localMatch.photo;
+                        }
+                        if (localMatch.certData) {
+                            mergedStudent.certData = localMatch.certData;
+                        }
+                    }
                 } else {
                     // A background /sync poll with an existing local copy —
                     // start from everything already known locally, and copy
@@ -2207,9 +2286,18 @@ if (certUploadInput) {
                 if (candidate.certData && /^https?:/i.test(candidate.certData)) {
                     delete candidate.certData;
                 }
+                // BASE64 FIX: now that every student holds its full photo /
+                // B-Form base64 in memory, don't re-upload it on every edit
+                // when nothing changed. Leaving the field out is the
+                // backend's existing "keep what's on file" signal.
+                const previousMedia = { photo: db[index].photo, certData: db[index].certData };
+                if (!previewImg.dataset.uploadedPath) delete candidate.photo;
+                if (candidate.certData && candidate.certData === previousMedia.certData) {
+                    delete candidate.certData;
+                }
                 const saved = await apiSaveStudent(candidate);
                 if (saved) normalizeSiblingFieldsFromServer(saved);
-                db[index] = Object.assign({}, candidate, saved || {}, { id: db[index].id });
+                db[index] = Object.assign({}, previousMedia, candidate, saved || {}, { id: db[index].id });
                 saveDatabase(db);
                 showToast("Updated", "Record updated successfully", "info");
                 closeModal('student-modal');
