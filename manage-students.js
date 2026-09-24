@@ -292,14 +292,15 @@ function isInlineDataUri(value) {
     return typeof value === 'string' && value.startsWith('data:');
 }
 
-// ── FILE-STORAGE MIGRATION — photos & B-Forms are now uploaded as real
-// files (StudentController#uploadPhoto/#uploadBform) instead of embedded
-// as base64 text in the student JSON. These two endpoints accept a
-// multipart file + schoolId and return { path: "photos/<uuid>.jpg" } /
-// { path: "bforms/<uuid>.pdf" } — a short relative path that gets sent
-// back as Student.photo / Student.certData on the normal save.
-const PHOTO_UPLOAD_URL = `${API_BASE}/files/photo`;
-const BFORM_UPLOAD_URL = `${API_BASE}/files/bform`;
+// ── REVERTED — BASE64 STORAGE — photos & B-Forms are saved as inline
+// base64 text in the student JSON again (Student.photo / Student.certData),
+// instead of being uploaded to disk via StudentController#uploadPhoto/
+// #uploadBform. Those two endpoints and FileStorageService still exist on
+// the backend and still work (nothing there needed to change — it already
+// natively supports base64 values for backward compatibility), they are
+// simply no longer called from this page. This intentionally brings back
+// the original 1-2 minute Manage Students first-load cost on schools with
+// many photographed students; that trade-off was accepted deliberately.
 
 /**
  * URL of one student's B-Form/certificate file, served as real bytes by
@@ -352,45 +353,18 @@ function storedStudentFileSrc(student, kind) {
 }
 
 /**
- * Converts a "data:<mime>;base64,...." string (as produced by compressImage
- * / FileReader.readAsDataURL) into a real File object, so it can be sent as
- * multipart/form-data to PHOTO_UPLOAD_URL / BFORM_UPLOAD_URL instead of
- * embedded as JSON text.
+ * Reads a File as a "data:<mime>;base64,...." string. compressImage()
+ * already produces this shape for images (via <canvas>.toDataURL); this is
+ * the equivalent for files that can't go through a canvas — i.e. PDF
+ * B-Forms — so they can be embedded as base64 exactly like images are.
  */
-function dataUriToFile(dataUri, filename) {
-    const commaIdx = dataUri.indexOf(',');
-    const header = dataUri.slice(0, commaIdx);
-    const base64 = dataUri.slice(commaIdx + 1);
-    const mimeMatch = header.match(/data:(.*?);base64/);
-    const mime = mimeMatch ? mimeMatch[1] : 'application/octet-stream';
-    const binary = atob(base64);
-    const bytes = new Uint8Array(binary.length);
-    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-    return new File([bytes], filename, { type: mime });
-}
-
-/**
- * Uploads a single File to one of the /files/photo|/files/bform endpoints
- * and returns the relative path the backend stored it under. Throws on any
- * non-OK response so callers can show a toast and leave the previously
- * stored file untouched rather than silently losing the upload.
- */
-async function uploadFileToServer(file, uploadUrl) {
-    const schoolId = getCurrentSchoolId();
-    const formData = new FormData();
-    formData.append('file', file);
-    formData.append('schoolId', schoolId);
-    const response = await fetch(uploadUrl, { method: 'POST', body: formData });
-    if (!response.ok) {
-        let message = 'Upload failed.';
-        try {
-            const body = await response.json();
-            if (body && body.error) message = body.error;
-        } catch (e) { /* ignore — use default message */ }
-        throw new Error(message);
-    }
-    const data = await response.json();
-    return data.path;
+function fileToDataUri(file) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = () => reject(reader.error || new Error('Could not read file.'));
+        reader.readAsDataURL(file);
+    });
 }
 
 /**
@@ -1195,22 +1169,15 @@ document.addEventListener('DOMContentLoaded', () => {
             showToast("Processing", "Optimizing photo...", "info");
             // Face photo: 500px width is plenty
             const compressedBase64 = await compressImage(file, 500, 0.8);
-            previewImg.src = compressedBase64; // local preview only — never sent to the server
+            previewImg.src = compressedBase64; // local preview
 
-            // FILE-STORAGE MIGRATION — upload the compressed photo to disk
-            // right away and remember the returned relative path
-            // (previewImg.dataset.uploadedPath). The save handler below
-            // sends THIS, not the base64 preview, as Student.photo.
-            delete previewImg.dataset.uploadedPath;
-            try {
-                const compressedFile = dataUriToFile(compressedBase64, 'photo.jpg');
-                const path = await uploadFileToServer(compressedFile, PHOTO_UPLOAD_URL);
-                previewImg.dataset.uploadedPath = path;
-                showToast("Photo Ready", "Photo uploaded and attached.", "success");
-            } catch (err) {
-                console.error('Photo upload failed:', err);
-                showToast("Upload Failed", "Could not upload the photo. Please try again.", "danger");
-            }
+            // REVERTED — BASE64 STORAGE: the compressed image IS what gets
+            // sent as Student.photo now, no disk upload involved. Kept the
+            // same "uploadedPath" dataset flag/name so the rest of the save
+            // flow below (which only checks whether it's present) needs no
+            // further changes.
+            previewImg.dataset.uploadedPath = compressedBase64;
+            showToast("Photo Ready", "Photo attached.", "success");
         })();
     });
 }
@@ -1229,30 +1196,26 @@ if (certUploadInput) {
             }
             showToast("Processing", "Optimizing document...", "info");
 
-            // FILE-STORAGE MIGRATION — certData now stores a relative
-            // server path ("bforms/uuid.pdf"), not the file's base64
-            // content. Build a File to upload (compressing images the same
-            // way as before; PDFs are uploaded as-is since they can't be
-            // run through the canvas), then upload it immediately. Only
-            // on a successful upload does certDataHidden.value change, so
-            // a failed upload leaves whatever was already on file intact.
-            let fileToUpload = file;
-            if (file.type !== 'application/pdf') {
-                // For B-Form images: 1600px width ensures text remains sharp
-                const compressedBase64 = await compressImage(file, 1600, 0.7);
-                fileToUpload = dataUriToFile(compressedBase64, file.name || 'bform.jpg');
-            }
-
+            // REVERTED — BASE64 STORAGE: certData is the file's own base64
+            // content again, not a relative server path. Images are
+            // compressed the same way as before (1600px keeps B-Form text
+            // sharp); PDFs can't go through a canvas so they're read as
+            // base64 as-is via fileToDataUri.
             try {
-                const path = await uploadFileToServer(fileToUpload, BFORM_UPLOAD_URL);
-                certDataHidden.value = path;
+                let dataUri;
+                if (file.type !== 'application/pdf') {
+                    dataUri = await compressImage(file, 1600, 0.7);
+                } else {
+                    dataUri = await fileToDataUri(file);
+                }
+                certDataHidden.value = dataUri;
                 // A new file was just attached — the "already on file" note now
                 // refers to a stale/replaced document, so hide it.
                 if (certUploadStatus) certUploadStatus.style.display = 'none';
-                showToast("File Ready", "Document uploaded and attached.", "success");
+                showToast("File Ready", "Document attached.", "success");
             } catch (err) {
-                console.error('B-Form upload failed:', err);
-                showToast("Upload Failed", "Could not upload the document. Please try again.", "danger");
+                console.error('B-Form processing failed:', err);
+                showToast("Upload Failed", "Could not attach the document. Please try again.", "danger");
             }
         })();
     });
@@ -2225,16 +2188,23 @@ if (certUploadInput) {
                 // FileStorageService#isManagedPath() and isn't valid
                 // base64 either.
                 //
-                // Fix: never let anything that isn't a genuine storage path
-                // (i.e. anything starting with http(s): or data:) leave
-                // this tab as `photo`/`certData`. Stripping it here makes
-                // the request identical to "no photo field sent", which is
-                // exactly the signal the backend already treats correctly
-                // as "leave the stored photo alone".
-                if (candidate.photo && /^(https?:|data:)/i.test(candidate.photo)) {
+                // Fix: never let a RESOLVED DISPLAY URL (http(s):) leave this
+                // tab as `photo`/`certData` — that's display-only text from
+                // db[index], never something to persist. Stripping it here
+                // makes the request identical to "no photo field sent",
+                // which is exactly the signal the backend already treats
+                // correctly as "leave the stored photo alone".
+                //
+                // REVERTED — BASE64 STORAGE: a `data:` value is no longer
+                // stripped here, because it's now the genuine, intended
+                // value for a freshly-picked photo/B-Form (see
+                // previewImg.dataset.uploadedPath / certDataHidden.value
+                // above) — it must be sent through to the backend, not
+                // discarded.
+                if (candidate.photo && /^https?:/i.test(candidate.photo)) {
                     delete candidate.photo;
                 }
-                if (candidate.certData && /^(https?:|data:)/i.test(candidate.certData)) {
+                if (candidate.certData && /^https?:/i.test(candidate.certData)) {
                     delete candidate.certData;
                 }
                 const saved = await apiSaveStudent(candidate);
