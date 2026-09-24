@@ -631,6 +631,20 @@ document.addEventListener('DOMContentLoaded', () => {
     const studentPhotoError= document.getElementById('student-photo-error');
     const certUploadError  = document.getElementById('cert-upload-error');
 
+    // RACE-FIX — "photo/B-Form shows in the form but is missing after Save":
+    // the photo/B-Form upload to /files/photo|/files/bform runs async in the
+    // background (see the 'change' handlers below), while the on-screen
+    // preview updates instantly from the local base64 the moment a file is
+    // picked. If the user hits Save before that background upload finishes,
+    // previewImg.dataset.uploadedPath / certDataHidden.value are still
+    // empty, so the submit handler below deletes studentData.photo entirely
+    // (its documented "no new photo" signal) — which for a brand-new
+    // student means no photo is saved at all, even though it looked
+    // attached on screen. These hold the in-flight upload promise so the
+    // submit handler can await it before reading the uploaded path.
+    let pendingPhotoUpload = null;
+    let pendingBformUpload = null;
+
     // UI References: Form Inputs for Calculation
     const dobInput         = document.getElementById('student-dob');
     const ageInput         = document.getElementById('student-age');
@@ -1167,9 +1181,14 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     if (studentPhotoInput) {
-    studentPhotoInput.addEventListener('change', async function() {
+    studentPhotoInput.addEventListener('change', function() {
         const file = this.files[0];
-        if (file) {
+        if (!file) return;
+
+        // RACE-FIX: wrap the whole async upload in a promise stashed on
+        // pendingPhotoUpload, so admissionForm.onsubmit can await it if the
+        // user hits Save before this finishes (see the note above).
+        pendingPhotoUpload = (async () => {
             if (!validateUploadSize(this, file, studentPhotoError)) {
                 return;
             }
@@ -1192,15 +1211,19 @@ document.addEventListener('DOMContentLoaded', () => {
                 console.error('Photo upload failed:', err);
                 showToast("Upload Failed", "Could not upload the photo. Please try again.", "danger");
             }
-        }
+        })();
     });
 }
 
 // --- UPDATED B-FORM HANDLER ---
 if (certUploadInput) {
-    certUploadInput.addEventListener('change', async function() {
+    certUploadInput.addEventListener('change', function() {
         const file = this.files[0];
-        if (file) {
+        if (!file) return;
+
+        // RACE-FIX: same pattern as pendingPhotoUpload above — stash the
+        // in-flight upload so admissionForm.onsubmit can wait for it.
+        pendingBformUpload = (async () => {
             if (!validateUploadSize(this, file, certUploadError)) {
                 return;
             }
@@ -1231,7 +1254,7 @@ if (certUploadInput) {
                 console.error('B-Form upload failed:', err);
                 showToast("Upload Failed", "Could not upload the document. Please try again.", "danger");
             }
-        }
+        })();
     });
 }
 
@@ -2077,6 +2100,18 @@ if (certUploadInput) {
     if (admissionForm) {
     admissionForm.onsubmit = async function(e) {
         e.preventDefault();
+
+        // RACE-FIX — see pendingPhotoUpload/pendingBformUpload declaration
+        // above: if the user picked a photo/B-Form and hit Save before the
+        // background upload to /files/photo|/files/bform finished, wait for
+        // it here so previewImg.dataset.uploadedPath / certDataHidden.value
+        // are populated before the payload below is built. Without this,
+        // a fast Save silently sent the record with no photo/B-Form at all,
+        // even though the preview showed one attached.
+        if (pendingPhotoUpload || pendingBformUpload) {
+            showToast("Please wait", "Finishing file upload before saving...", "info");
+            await Promise.all([pendingPhotoUpload, pendingBformUpload]);
+        }
 
         const db         = getDatabase();
         const formData   = new FormData(admissionForm);
