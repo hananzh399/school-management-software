@@ -315,6 +315,29 @@ async function _backendSave(base, path, method, body) {
     }
 }
 
+/**
+ * Mirrors manage-students.js's studentPhotoUrl()/resolveStoredFileSrc().
+ * Turns the `hasPhoto`/`photoPath` flags the lean LIST endpoint returns
+ * into a real, fetchable photo URL (see the BUGFIX note in
+ * refreshStudentsCache() below for why this exists).
+ */
+function financeStudentPhotoUrl(student, schoolId) {
+    if (!student) return '';
+    const regNo = student.regNo || student.id;
+    if (!regNo) return '';
+    if (student.photoPath) {
+        // A photoPath value is always our own managed relative path
+        // ("photos/uuid.jpg") today, but guard for a future full URL /
+        // legacy data URI the same way manage-students.js does.
+        if (student.photoPath.startsWith('data:') || /^https?:\/\//.test(student.photoPath)) {
+            return student.photoPath;
+        }
+    } else if (!student.hasPhoto) {
+        return '';
+    }
+    return `${STUDENTS_API_BASE}/${encodeURIComponent(regNo)}/photo?schoolId=${encodeURIComponent(schoolId || '')}`;
+}
+
 let _studentsCache = [];
 let _classConfigsCache = [];
 let _latefeeConfigCache = {};
@@ -374,6 +397,33 @@ async function refreshStudentsCache() {
         ? await _backendGet(STUDENTS_LIST_API_BASE, '')
         : await _backendGet(STUDENTS_SYNC_API_BASE, '');
     if (!Array.isArray(data)) return;
+
+    // BUGFIX — "student photos not showing on the printed voucher" since the
+    // FILE-STORAGE MIGRATION (see StudentController#getStudentPhoto /
+    // StudentListDTO on the backend). This page's first load switched to
+    // STUDENTS_LIST_API_BASE for performance (see the PERFORMANCE FIX note
+    // above), which — same as the old base64 LIST endpoint — never includes
+    // a `photo` field at all, only a `hasPhoto` boolean and, for new
+    // file-storage uploads, a `photoPath`. buildVoucherHTML() below still
+    // reads `s.photo` directly (`const photoSrc = s.photo || ''`), so every
+    // voucher fell back to the placeholder icon the moment this page (like
+    // manage-students.js already does via its own studentPhotoUrl()) stopped
+    // shipping the photo bytes inline.
+    // Fix: turn hasPhoto/photoPath into the real GET /{regNo}/photo URL on
+    // first load, exactly like manage-students.js's studentPhotoUrl() does,
+    // so `s.photo` keeps being a value buildVoucherHTML() can drop straight
+    // into an <img src>. Sync polls never re-run this (StudentSyncDTO has
+    // neither field), but the existingHeavyFields carry-forward below
+    // already protects any field not in SYNC_OWNED_FIELDS, so the computed
+    // URL survives every poll after the first untouched.
+    if (isFirstLoad) {
+        const schoolIdForPhotos = getCurrentSchoolId();
+        data.forEach(s => {
+            if (s && (s.hasPhoto || s.photoPath)) {
+                s.photo = financeStudentPhotoUrl(s, schoolIdForPhotos);
+            }
+        });
+    }
 
     // BUGFIX — "arrears/defaulters flicker: sometimes showing, sometimes not,
     // before-generation price differs from after-generation price":
