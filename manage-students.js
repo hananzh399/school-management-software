@@ -3156,7 +3156,7 @@ if (certUploadInput) {
         /* ── Title block: centered avatar + name, unlike the Admission Form's boxed title-bar ── */
         .rec-title-wrap { display:flex; align-items:center; gap:14px; margin-top:14px; padding:10px 4px 12px; }
         .rec-avatar { width:64px; height:64px; border-radius:50%; flex-shrink:0; overflow:hidden; border:3px solid var(--sg-light); box-shadow:0 0 0 2px var(--sg); background:var(--sg-light); display:flex; align-items:center; justify-content:center; color:var(--sg-dark); font-size:10px; text-align:center; }
-        .rec-avatar img { width:100%; height:100%; object-fit:cover; }
+        .rec-avatar img { width:100%; height:100%; object-fit:cover; object-position:center top; }
         .rec-title-name { font-size:19px; font-weight:800; color:var(--ink-900); letter-spacing:0.2px; }
         .rec-title-tags { margin-top:5px; display:flex; gap:6px; flex-wrap:wrap; }
         .rec-tag { display:inline-flex; align-items:center; gap:5px; font-size:8.5px; font-weight:700; text-transform:uppercase; letter-spacing:0.4px; color:var(--sg-deep); background:var(--sg-light); border:1px solid var(--sg-line); padding:3px 9px; border-radius:999px; }

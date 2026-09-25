@@ -1340,6 +1340,10 @@ body {
     width: 100%; height: 100%;
     border-radius: 50%;
     object-fit: cover;
+    /* Anchor the crop to the top of the photo, not dead-center, so a
+       portrait-style ID photo keeps the face visible in this small circle
+       instead of showing the neck/shoulders. */
+    object-position: center top;
 }
 
 .upload-trigger {
@@ -1847,6 +1851,9 @@ select option {
     height: 100%;
     border-radius: 50%;
     object-fit: cover;
+    /* Same top-anchored crop as .image-preview-circle img — keeps the
+       student's face in frame instead of centering on the chest. */
+    object-position: center top;
     border: 3px solid rgba(255,255,255,0.25);
     display: block;
     background: var(--bg-secondary);
