@@ -159,6 +159,9 @@
                         <button type="button" class="btn-global-action btn-generate-global" id="btn-generate-monthly-global" onclick="handleGenerateMonthlyGlobalClick()">
                             <i class="fas fa-file-invoice"></i> Generate Monthly Fees
                         </button>
+                        <button type="button" class="btn-global-action btn-nextmonth-global" id="btn-reset-next-month" onclick="resetFeesForNextMonth()" title="Move the fee cycle forward so next month's vouchers can be generated">
+                            <i class="fas fa-forward"></i> Move to Next Month
+                        </button>
                         <button type="button" class="btn-global-action btn-print-global" id="btn-print-vouchers-global" onclick="openPrintVouchersModal()">
                             <i class="fas fa-print"></i> Print Vouchers
                         </button>
@@ -1339,6 +1342,16 @@
                             <span>Expected Revenue</span>
                             <strong id="vp-revenue">Rs. 0</strong>
                         </div>
+                    </div>
+                    <div id="vp-prev-pending-row" class="vp-prev-pending-row" style="display:none;">
+                        <i class="fas fa-clock-rotate-left"></i>
+                        <span><strong id="vp-prev-pending-count">0</strong> have an unpaid balance from an earlier month, totaling <strong id="vp-prev-pending-amount">Rs. 0</strong>.</span>
+                    </div>
+                    <div id="vp-import-row" class="vp-import-row" style="display:none;">
+                        <label class="vp-import-label">
+                            <input type="checkbox" id="vp-import-previous" checked>
+                            <span>Carry forward previous pending balance into this new voucher <em>(recommended — the old voucher stays on record either way)</em></span>
+                        </label>
                     </div>
                     <div id="vp-empty-note" class="vp-empty-note" style="display:none;">
                         <i class="fas fa-circle-check"></i> Every billable student already has a voucher for this month.

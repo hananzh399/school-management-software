@@ -3999,22 +3999,121 @@ function getCurrentMonthKey() {
 
 /**
  * Fee-voucher billing cycle key. Unlike getCurrentMonthKey() (plain calendar
- * month, used by fines/salaries/expenses), the fee voucher module resets on
- * the 27th of every month instead of the 1st — so from the 27th onward,
- * "current month" for voucher generation/stats/arrears already means NEXT
- * calendar month, letting admins generate next month's vouchers early.
- * Before the 27th, it's just the current calendar month as usual.
+ * month, used by fines/salaries/expenses), the fee voucher module's "current
+ * month" can be manually pushed ahead of the real calendar month — see
+ * "MOVE TO NEXT MONTH" below. There is no automatic date-based rollover
+ * (e.g. a fixed day such as the 27th) any more: the billing month only ever
+ * advances when an admin explicitly clicks "Move to Next Month", and it
+ * otherwise just tracks the real calendar month like everything else.
  */
-function getCurrentFeeMonthKey() {
+function getCurrentCalendarMonthKey() {
     const now = new Date();
-    let year = now.getFullYear();
-    let month = now.getMonth(); // 0-indexed
-    if (now.getDate() >= 27) {
-        month += 1;
-        if (month > 11) { month = 0; year += 1; }
-    }
-    return `${year}-${String(month + 1).padStart(2, '0')}`;
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 }
+
+function getCurrentFeeMonthKey() {
+    const calendarKey = getCurrentCalendarMonthKey();
+    const override = getFeeMonthOverride();
+    // The manual override can only ever push the billing month AHEAD of the
+    // real calendar month (an admin generating next month's vouchers early).
+    // It's never used to pull the billing month backward — once the real
+    // calendar catches up to (or passes) the override, the calendar wins
+    // again automatically, so this can't be used to accidentally re-open a
+    // month that's already passed.
+    return (override && override > calendarKey) ? override : calendarKey;
+}
+
+/* ============================================================================
+   MOVE TO NEXT MONTH — manual fee-cycle rollover
+   ----------------------------------------------------------------------------
+   Replaces the old fixed "resets automatically on the 27th" behaviour. The
+   billing month for vouchers now only ever changes when an admin explicitly
+   clicks "Move to Next Month" in the Student Fees toolbar. That override is
+   persisted as a single marker record inside the SAME backend-synced
+   `/vouchers` list every other voucher record already lives in (see
+   getGeneratedVouchers()/saveGeneratedVouchers() above) — there is no
+   separate backend endpoint for it, and per this file's own rule
+   (see the REALTIME BACKEND DATA LAYER note near the top), it is
+   intentionally NOT kept in localStorage, so every admin/device sees the
+   same active billing month. The marker's key (FEE_MONTH_STATE_KEY) can
+   never collide with a real voucher record — those are always
+   `${studentId}::${monthKey}` — so every existing filter/lookup over
+   getGeneratedVouchers() (which all match on studentId and/or monthKey)
+   simply ignores it.
+   ============================================================================ */
+const FEE_MONTH_STATE_KEY = '__FEE_MONTH_STATE__';
+
+function getFeeMonthOverride() {
+    const marker = getGeneratedVouchers().find(r => r.key === FEE_MONTH_STATE_KEY);
+    return marker ? marker.activeMonthKey : null;
+}
+
+function setFeeMonthOverride(monthKey) {
+    const list = getGeneratedVouchers().filter(r => r.key !== FEE_MONTH_STATE_KEY);
+    list.push({ key: FEE_MONTH_STATE_KEY, activeMonthKey: monthKey, updatedAt: new Date().toISOString() });
+    saveGeneratedVouchers(list);
+}
+
+function _nextMonthKeyAfter(monthKey) {
+    const [y, m] = monthKey.split('-').map(Number);
+    let year = y, month = m; // month is 1-indexed here
+    month += 1;
+    if (month > 12) { month = 1; year += 1; }
+    return `${year}-${String(month).padStart(2, '0')}`;
+}
+
+function _monthKeyLabel(monthKey) {
+    const [y, m] = monthKey.split('-').map(Number);
+    return new Date(y, (m || 1) - 1, 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+}
+
+/**
+ * "Move to Next Month" — the button that replaces the old 27th auto-reset.
+ * Doesn't delete or touch a single existing voucher: every paid and pending
+ * voucher generated so far stays exactly where it is, filed under its own
+ * month, forever viewable/printable from voucher history. All this does is
+ * advance which month counts as "current" for the fee module, so:
+ *   - "Generate Monthly Fees" starts producing NEXT month's vouchers
+ *   - the Collected/Pending/Generated header switches to next month's figures
+ *   - any student who was still unpaid keeps that balance and carries it
+ *     forward as "Previous Arrears" the next time a voucher is generated for
+ *     them (same computeOutstandingArrears() roll-forward that already runs
+ *     today — see recordVoucherGeneration()), unless the admin turns off
+ *     "Carry forward previous pending balance" in the Generate dialog.
+ */
+async function resetFeesForNextMonth() {
+    const currentKey = getCurrentFeeMonthKey();
+    const currentLabel = getCurrentFeeMonthLabel();
+    const nextKey = _nextMonthKeyAfter(currentKey);
+    const nextLabel = _monthKeyLabel(nextKey);
+
+    const students = getRealStudents();
+    const thisMonthRecords = getGeneratedVouchers().filter(r => r.monthKey === currentKey);
+    let paidCount = 0, pendingCount = 0;
+    thisMonthRecords.forEach(r => {
+        const student = findStudentExact(students, r.studentId, r.studentName);
+        const billed = Number(r.snapshot && r.snapshot.voucherTotal) || 0;
+        const paid = student ? getPaidThisMonthAuthoritative(student, currentKey) : 0;
+        if (billed - paid <= 0) paidCount++; else pendingCount++;
+    });
+
+    const summary = thisMonthRecords.length > 0
+        ? `${thisMonthRecords.length} voucher${thisMonthRecords.length === 1 ? '' : 's'} generated for ${currentLabel} (${paidCount} paid, ${pendingCount} pending)`
+        : `No vouchers have been generated for ${currentLabel} yet`;
+
+    const ok = await ssConfirm(
+        `${summary}.\n\nMoving forward will open ${nextLabel} for new voucher generation. Nothing is deleted — every paid and pending voucher stays on record under ${currentLabel}. Students still unpaid will carry that balance forward the next time their voucher is generated.\n\nContinue?`,
+        { title: 'Move to Next Month', confirmLabel: `Move to ${nextLabel}`, cancelLabel: 'Cancel', danger: false }
+    );
+    if (!ok) return;
+
+    setFeeMonthOverride(nextKey);
+    showFinanceToast(`Fee cycle moved to ${nextLabel}. You can now generate next month's vouchers.`, 'success');
+    renderClassCardGrid();
+    updateFeeStatsHeader();
+    if (currentFeeClassName) renderFees(currentFeeClassName);
+}
+window.resetFeesForNextMonth = resetFeesForNextMonth;
 
 // Current fee rows state
 let afmFeeRows = [];
@@ -5956,7 +6055,7 @@ function syncVoucherSnapshotForCurrentMonth(studentId, fullName) {
     saveGeneratedVouchers(list);
 }
 
-function recordVoucherGeneration(student, source = 'individual') {
+function recordVoucherGeneration(student, source = 'individual', importPrevious = true) {
     const monthKey = getCurrentFeeMonthKey();
     const studentId = student.regNo || student.id;
     const key = voucherRecordKey(studentId, monthKey);
@@ -5981,7 +6080,13 @@ function recordVoucherGeneration(student, source = 'individual') {
     // month's "Previous Arrears" BEFORE snapshotting, and expire any
     // one-time discount/custom-fee edits that belonged to the month that
     // just ended, so the new voucher starts clean (see startFreshVoucherMonth).
-    const rolledArrears = computeOutstandingArrears(freshStudent);
+    // FEATURE — "import previous or not": the admin can opt out of this
+    // roll-forward from the Generate confirmation dialog (see
+    // showVoucherGenerationPreview()'s "Carry forward previous pending
+    // balance" checkbox). Declining it starts this voucher at 0 arrears —
+    // the earlier unpaid voucher(s) stay exactly as they are on record,
+    // they just aren't added onto this new bill.
+    const rolledArrears = importPrevious ? computeOutstandingArrears(freshStudent) : 0;
     freshStudent.arrears = rolledArrears;
     freshStudent.voucherCustomFees = false;
     freshStudent.otherFeesData = '[]';
@@ -6133,7 +6238,7 @@ function closeProgressModal() {
  * the browser between chunks so the UI (and the progress bar) never freezes
  * even with hundreds/thousands of students.
  */
-function batchGenerateVouchers(students, source, onDone) {
+function batchGenerateVouchers(students, source, onDone, importPrevious = true) {
     const total = students.length;
     if (total === 0) { onDone({ created: 0, skipped: 0 }); return; }
 
@@ -6147,7 +6252,7 @@ function batchGenerateVouchers(students, source, onDone) {
         const end = Math.min(index + CHUNK_SIZE, total);
         for (; index < end; index++) {
             const s = students[index];
-            const result = recordVoucherGeneration(s, source);
+            const result = recordVoucherGeneration(s, source, importPrevious);
             if (result.created) created++; else skipped++;
         }
         updateProgressModal(index, total);
@@ -6177,6 +6282,17 @@ function showVoucherGenerationPreview(students, source, label) {
     // recordVoucherGeneration() will lock in on confirm.
     const totalRevenue = students.reduce((sum, s) => sum + computeFeeBreakdown(s).voucherTotal, 0);
 
+    // FEATURE — "import previous or not": tell the admin up front how many
+    // of the students about to be billed are carrying an unpaid balance
+    // forward from an earlier voucher, and how much, before they decide
+    // whether to carry it into this new batch (see the checkbox below).
+    let prevPendingStudents = 0;
+    let prevPendingAmount = 0;
+    students.forEach(s => {
+        const owed = computeOutstandingArrears(s);
+        if (owed > 0) { prevPendingStudents++; prevPendingAmount += owed; }
+    });
+
     document.getElementById('vp-title').textContent = `Generate Monthly Fees — ${label}`;
     document.getElementById('vp-subtitle').textContent = students.length > 0
         ? 'Please review before this is committed.'
@@ -6184,6 +6300,22 @@ function showVoucherGenerationPreview(students, source, label) {
     document.getElementById('vp-count').textContent = students.length;
     document.getElementById('vp-skip-count').textContent = alreadyGenerated;
     document.getElementById('vp-revenue').textContent = `Rs. ${totalRevenue.toLocaleString()}`;
+
+    const prevRow = document.getElementById('vp-prev-pending-row');
+    const importRow = document.getElementById('vp-import-row');
+    const importCheckbox = document.getElementById('vp-import-previous');
+    if (prevPendingStudents > 0) {
+        const countEl = document.getElementById('vp-prev-pending-count');
+        const amtEl = document.getElementById('vp-prev-pending-amount');
+        if (countEl) countEl.textContent = `${prevPendingStudents} student${prevPendingStudents === 1 ? '' : 's'}`;
+        if (amtEl) amtEl.textContent = `Rs. ${prevPendingAmount.toLocaleString()}`;
+        if (prevRow) prevRow.style.display = '';
+        if (importRow) importRow.style.display = '';
+        if (importCheckbox) importCheckbox.checked = true; // default: carry it forward, same as today's behaviour
+    } else {
+        if (prevRow) prevRow.style.display = 'none';
+        if (importRow) importRow.style.display = 'none';
+    }
 
     const confirmBtn = document.getElementById('vp-confirm-btn');
     const emptyNote = document.getElementById('vp-empty-note');
@@ -6216,13 +6348,18 @@ function closeVoucherPreviewModal() {
 function confirmVoucherPreview() {
     if (!_pendingPreviewAction) { closeVoucherPreviewModal(); return; }
     const { students, source, label } = _pendingPreviewAction;
+    const importCheckbox = document.getElementById('vp-import-previous');
+    // If the checkbox row is hidden (no student in this batch has a previous
+    // pending balance) there's nothing to import either way, so default true.
+    const importPrevious = importCheckbox ? importCheckbox.checked : true;
     closeVoucherPreviewModal();
 
     batchGenerateVouchers(students, source, ({ created, skipped }) => {
-        showFinanceToast(`${label}: ${created} voucher${created === 1 ? '' : 's'} generated${skipped > 0 ? `, ${skipped} already existed` : ''}.`, 'success');
+        const importedNote = importPrevious ? '' : ' (previous pending balances were not carried forward)';
+        showFinanceToast(`${label}: ${created} voucher${created === 1 ? '' : 's'} generated${skipped > 0 ? `, ${skipped} already existed` : ''}${importedNote}.`, 'success');
         renderClassCardGrid();
         if (currentFeeClassName) renderFees(currentFeeClassName);
-    });
+    }, importPrevious);
 }
 
 // ---------------------------------------------------------------------------
