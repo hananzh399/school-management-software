@@ -315,29 +315,6 @@ async function _backendSave(base, path, method, body) {
     }
 }
 
-/**
- * Mirrors manage-students.js's studentPhotoUrl()/resolveStoredFileSrc().
- * Turns the `hasPhoto`/`photoPath` flags the lean LIST endpoint returns
- * into a real, fetchable photo URL (see the BUGFIX note in
- * refreshStudentsCache() below for why this exists).
- */
-function financeStudentPhotoUrl(student, schoolId) {
-    if (!student) return '';
-    const regNo = student.regNo || student.id;
-    if (!regNo) return '';
-    if (student.photoPath) {
-        // A photoPath value is always our own managed relative path
-        // ("photos/uuid.jpg") today, but guard for a future full URL /
-        // legacy data URI the same way manage-students.js does.
-        if (student.photoPath.startsWith('data:') || /^https?:\/\//.test(student.photoPath)) {
-            return student.photoPath;
-        }
-    } else if (!student.hasPhoto) {
-        return '';
-    }
-    return `${STUDENTS_API_BASE}/${encodeURIComponent(regNo)}/photo?schoolId=${encodeURIComponent(schoolId || '')}`;
-}
-
 let _studentsCache = [];
 let _classConfigsCache = [];
 let _latefeeConfigCache = {};
@@ -397,33 +374,6 @@ async function refreshStudentsCache() {
         ? await _backendGet(STUDENTS_LIST_API_BASE, '')
         : await _backendGet(STUDENTS_SYNC_API_BASE, '');
     if (!Array.isArray(data)) return;
-
-    // BUGFIX — "student photos not showing on the printed voucher" since the
-    // FILE-STORAGE MIGRATION (see StudentController#getStudentPhoto /
-    // StudentListDTO on the backend). This page's first load switched to
-    // STUDENTS_LIST_API_BASE for performance (see the PERFORMANCE FIX note
-    // above), which — same as the old base64 LIST endpoint — never includes
-    // a `photo` field at all, only a `hasPhoto` boolean and, for new
-    // file-storage uploads, a `photoPath`. buildVoucherHTML() below still
-    // reads `s.photo` directly (`const photoSrc = s.photo || ''`), so every
-    // voucher fell back to the placeholder icon the moment this page (like
-    // manage-students.js already does via its own studentPhotoUrl()) stopped
-    // shipping the photo bytes inline.
-    // Fix: turn hasPhoto/photoPath into the real GET /{regNo}/photo URL on
-    // first load, exactly like manage-students.js's studentPhotoUrl() does,
-    // so `s.photo` keeps being a value buildVoucherHTML() can drop straight
-    // into an <img src>. Sync polls never re-run this (StudentSyncDTO has
-    // neither field), but the existingHeavyFields carry-forward below
-    // already protects any field not in SYNC_OWNED_FIELDS, so the computed
-    // URL survives every poll after the first untouched.
-    if (isFirstLoad) {
-        const schoolIdForPhotos = getCurrentSchoolId();
-        data.forEach(s => {
-            if (s && (s.hasPhoto || s.photoPath)) {
-                s.photo = financeStudentPhotoUrl(s, schoolIdForPhotos);
-            }
-        });
-    }
 
     // BUGFIX — "arrears/defaulters flicker: sometimes showing, sometimes not,
     // before-generation price differs from after-generation price":
@@ -3506,11 +3456,23 @@ function computeFeeBreakdown(s) {
     };
 }
 
+// The finance student list (GET /api/students/list) omits the photo blob and
+// only carries hasPhoto/photoPath, so s.photo is never set on this page.
+// Build the same lazy GET /api/students/{regNo}/photo URL manage-students uses.
+function financePhotoUrl(s) {
+    if (!s) return '';
+    if (s.photo) return s.photo; // inline base64 or http(s) URL still works
+    const regNo = s.regNo || s.id;
+    if (!regNo || !(s.hasPhoto || s.photoPath)) return '';
+    return `${STUDENTS_API_BASE}/${encodeURIComponent(regNo)}/photo` +
+           `?schoolId=${encodeURIComponent(getCurrentSchoolId() || '')}`;
+}
+
 function buildVoucherHTML(s) {
     const today = new Date();
     const dateStr = today.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
     const challanNo = `CH-${s.id}-${today.getFullYear()}${String(today.getMonth() + 1).padStart(2, '0')}`;
-    const photoSrc = s.photo || '';
+    const photoSrc = financePhotoUrl(s);
     const f = computeFeeBreakdown(s);
 
     // 1. Build Base Fee Rows
@@ -3582,7 +3544,9 @@ function buildVoucherHTML(s) {
                         <p>Financial Control Center &middot; Fee Voucher</p>
                     </div>
                 </div>
-                ${photoSrc ? `<img src="${photoSrc}" class="v-photo">` : `<div class="v-photo v-photo-placeholder"><i class="fas fa-user"></i></div>`}
+                ${photoSrc
+                    ? `<img src="${escapeHtml(photoSrc)}" class="v-photo" crossorigin="anonymous" onerror="this.style.visibility='hidden'">`
+                    : `<div class="v-photo v-photo-placeholder"><i class="fas fa-user"></i></div>`}
             </div>
 
             <div class="voucher-meta-row">
