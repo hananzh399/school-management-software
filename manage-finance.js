@@ -3459,6 +3459,18 @@ function computeFeeBreakdown(s) {
 // The finance student list (GET /api/students/list) omits the photo blob and
 // only carries hasPhoto/photoPath, so s.photo is never set on this page.
 // Build the same lazy GET /api/students/{regNo}/photo URL manage-students uses.
+// If the photo URL 404s/401s (deleted photo, expired session, etc.),
+// swap the broken <img> for the same placeholder used when there's no
+// photo at all, instead of leaving a blank hole where the icon should be.
+window.financeVoucherPhotoFallback = function(imgEl) {
+    if (!imgEl || imgEl.dataset.fallbackApplied) return;
+    imgEl.dataset.fallbackApplied = '1';
+    const placeholder = document.createElement('div');
+    placeholder.className = 'v-photo v-photo-placeholder';
+    placeholder.innerHTML = '<i class="fas fa-user"></i>';
+    imgEl.replaceWith(placeholder);
+};
+
 function financePhotoUrl(s) {
     if (!s) return '';
     if (s.photo) return s.photo; // inline base64 or http(s) URL still works
@@ -3545,7 +3557,7 @@ function buildVoucherHTML(s) {
                     </div>
                 </div>
                 ${photoSrc
-                    ? `<img src="${escapeHtml(photoSrc)}" class="v-photo" crossorigin="anonymous" onerror="this.style.visibility='hidden'">`
+                    ? `<img src="${escapeHtml(photoSrc)}" class="v-photo" onerror="window.financeVoucherPhotoFallback(this)">`
                     : `<div class="v-photo v-photo-placeholder"><i class="fas fa-user"></i></div>`}
             </div>
 
