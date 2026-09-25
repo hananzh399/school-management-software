@@ -445,6 +445,11 @@ async function refreshStudentsCache() {
         }
         return s;
     });
+
+    // Fire-and-forget: pulls everyone's real base64 photo in the background,
+    // once, without delaying the fast /list-based render above. See the
+    // BUGFIX comment on financePhotoUrl()/loadFinancePhotosInBackground().
+    loadFinancePhotosInBackground();
 }
 // PERFORMANCE FIX — refreshClassConfigsCache() and refreshLatefeeConfigCache()
 // both read from the exact same backend endpoint (GET /api/settings/{schoolId})
@@ -2741,6 +2746,11 @@ async function viewVoucher(studentId, fullName, isPaidBill = false) {
         // student record itself) instead of blocking the voucher from opening.
         await syncStudentFineFromBackend(student, monthKey);
 
+        // Make sure this student's real (base64) photo has landed before
+        // the voucher is built — don't wait on the page-wide background
+        // prefetch if this voucher was opened before that finished.
+        await ensureStudentPhotoLoaded(student);
+
         // Set global variables for the Edit/Share functionality
         currentVoucherStudentId = studentId;
         currentVoucherStudentName = fullName;
@@ -3456,28 +3466,72 @@ function computeFeeBreakdown(s) {
     };
 }
 
-// The finance student list (GET /api/students/list) omits the photo blob and
-// only carries hasPhoto/photoPath, so s.photo is never set on this page.
-// Build the same lazy GET /api/students/{regNo}/photo URL manage-students uses.
-// If the photo URL 404s/401s (deleted photo, expired session, etc.),
-// swap the broken <img> for the same placeholder used when there's no
-// photo at all, instead of leaving a blank hole where the icon should be.
-window.financeVoucherPhotoFallback = function(imgEl) {
-    if (!imgEl || imgEl.dataset.fallbackApplied) return;
-    imgEl.dataset.fallbackApplied = '1';
-    const placeholder = document.createElement('div');
-    placeholder.className = 'v-photo v-photo-placeholder';
-    placeholder.innerHTML = '<i class="fas fa-user"></i>';
-    imgEl.replaceWith(placeholder);
-};
-
+// BUGFIX — "voucher shows the no-photo icon / broken image, console shows
+// GET .../photo 401" — this used to build a URL pointing at the per-student
+// binary photo endpoint (GET /api/students/{regNo}/photo), the same one
+// manage-students.js's <img> tags use. That request 401s when made from
+// this page. manage-students.js already solved the exact same class of
+// problem for ITS OWN first load with a "BASE64 PHOTO FIX": every photo is
+// already stored as inline base64 on the Student record itself, and the
+// plain GET /api/students(?regNo)?schoolId=... JSON endpoints serve that
+// base64 directly — no separate binary endpoint, no 401. So instead of
+// building a URL, this page now pulls the real base64 the same way:
+//   - loadFinancePhotosInBackground() below fetches the full roster once,
+//     in the background, and merges each student's real s.photo onto the
+//     lean /list-based cache (mirrors loadStudentMediaInBackground()).
+//   - ensureStudentPhotoLoaded() below fetches ONE student's full record
+//     on demand, for the "open one voucher right now" path, so a voucher
+//     opened before the background prefetch finishes still gets a photo.
+// financePhotoUrl() itself just returns whatever real value has landed on
+// s.photo (base64 or a legacy http(s) URL) — never a /photo URL.
 function financePhotoUrl(s) {
-    if (!s) return '';
-    if (s.photo) return s.photo; // inline base64 or http(s) URL still works
-    const regNo = s.regNo || s.id;
-    if (!regNo || !(s.hasPhoto || s.photoPath)) return '';
-    return `${STUDENTS_API_BASE}/${encodeURIComponent(regNo)}/photo` +
-           `?schoolId=${encodeURIComponent(getCurrentSchoolId() || '')}`;
+    return (s && s.photo) ? s.photo : '';
+}
+
+let _financePhotosLoaded = false;
+let _financePhotosLoading = false;
+async function loadFinancePhotosInBackground() {
+    if (_financePhotosLoaded || _financePhotosLoading) return;
+    const schoolId = getCurrentSchoolId();
+    if (!schoolId) return;
+    _financePhotosLoading = true;
+    try {
+        // Plain GET /api/students?schoolId=... — full Student entities,
+        // base64 photo field included, exactly like manage-students.js's
+        // own API_BASE call.
+        const full = await _backendGet(STUDENTS_API_BASE, '');
+        if (!Array.isArray(full)) return;
+        const photoByRegNo = new Map(
+            full.map(s => [String((s && (s.regNo || s.id)) || ''), s && s.photo])
+        );
+        _studentsCache.forEach(s => {
+            const key = String((s && (s.regNo || s.id)) || '');
+            const realPhoto = photoByRegNo.get(key);
+            if (realPhoto) s.photo = realPhoto;
+        });
+        _financePhotosLoaded = true;
+    } catch (e) {
+        console.warn('loadFinancePhotosInBackground: will retry on next poll.', e.message);
+    } finally {
+        _financePhotosLoading = false;
+    }
+}
+
+// Fetches ONE student's real base64 photo on demand, for a voucher that's
+// being opened right now — so it doesn't have to wait for the page-wide
+// background prefetch above to finish. Cheap: one single-record fetch via
+// the same GET /{regNo}?schoolId=... endpoint Manage Students' "View"
+// already uses, not the whole roster.
+async function ensureStudentPhotoLoaded(student) {
+    if (!student || student.photo) return; // already have something usable
+    const regNo = student.regNo || student.id;
+    if (!regNo) return;
+    try {
+        const full = await _backendGet(STUDENTS_API_BASE, `/${encodeURIComponent(regNo)}`);
+        if (full && full.photo) student.photo = full.photo;
+    } catch (e) {
+        // Best-effort — the voucher still opens, just with the placeholder icon.
+    }
 }
 
 function buildVoucherHTML(s) {
@@ -4024,6 +4078,7 @@ async function openAddFeesModal(studentId, fullName) {
     const monthKey = getCurrentFeeMonthKey();
     try {
         await syncStudentFineFromBackend(student, monthKey);
+        await ensureStudentPhotoLoaded(student);
     } catch (e) {
         // Backend unreachable — keep showing the locally-known figures.
     }
