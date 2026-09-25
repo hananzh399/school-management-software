@@ -423,7 +423,7 @@
                 <!-- SECTION: STUDENT PHOTO -->
                 <div class="image-upload-wrapper">
                     <div class="image-preview-circle">
-                        <img id="student-img-preview" src="https://via.placeholder.com/150?text=Select+Photo" alt="Preview">
+                        <img id="student-img-preview" src="https://via.placeholder.com/150?text=Select+Photo" alt="Preview" onclick="openPhotoViewer(this)" title="Click to view full-size photo">
                         <label for="student-photo" class="upload-trigger"><i class="fas fa-camera"></i></label>
                         <input type="file" id="student-photo" accept="image/*" hidden>
                     </div>
@@ -1280,6 +1280,22 @@
         <div class="cert-viewer-body">
             <img id="cert-viewer-image" class="cert-viewer-image" alt="Certificate / B-Form" style="display:none;">
             <iframe id="cert-viewer-pdf" class="cert-viewer-pdf" style="display:none;" title="Certificate / B-Form PDF"></iframe>
+        </div>
+    </div>
+
+    <!-- STUDENT PHOTO FULL-SIZE VIEWER — opened by clicking a student's photo
+         in the "View Database" profile card or the Update Record edit form. -->
+    <div id="photo-viewer-overlay" class="photo-viewer-overlay" onclick="if(event.target===this) closePhotoViewer()">
+        <div class="cert-viewer-toolbar">
+            <span class="cert-viewer-filename" id="photo-viewer-filename"><i class="fas fa-image"></i> Student Photo</span>
+            <div class="cert-viewer-actions">
+                <button type="button" class="cert-viewer-btn cert-viewer-close" onclick="closePhotoViewer()" aria-label="Close viewer">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+        </div>
+        <div class="photo-viewer-body">
+            <img id="photo-viewer-image" class="photo-viewer-image" alt="Student Photo">
         </div>
     </div>
 

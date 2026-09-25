@@ -5069,6 +5069,7 @@ if (certUploadInput) {
                 <div class="profile-header-decor"></div>
                 <div class="profile-avatar-ring">
                     <img src="${resolveStoredFileSrc(s.photo, s.regNo || s.id, getCurrentSchoolId(), 'photo')}" class="profile-main-img"
+                         onclick="openPhotoViewer(this)" title="Click to view full-size photo"
                          onerror="this.src='https://ui-avatars.com/api/?name=${encodeURIComponent(s.fullName)}&background=3b82f6&color=fff&bold=true'">
                 </div>
                 <h2 class="profile-name-title">${s.fullName}</h2>
@@ -5282,6 +5283,83 @@ if (certUploadInput) {
         if (e.key === 'Escape') {
             const overlay = document.getElementById('cert-viewer-overlay');
             if (overlay && overlay.classList.contains('active')) window.closeCertViewer();
+        }
+    });
+
+    // ── STUDENT PHOTO FULL-SIZE VIEWER ───────────────────────────────────────
+    //
+    // Lets the user click a student's photo — in the "View Database" profile
+    // card (profile-avatar-ring) or the Update Record / admission edit form
+    // (student-img-preview) — and see it enlarged in a full-screen overlay.
+    // Kept as its own overlay/id pair (photo-viewer-*) rather than reusing
+    // cert-viewer-* so opening a photo never fights with an already-open
+    // certificate/B-Form viewer.
+
+    /**
+     * Open the full-size photo viewer.
+     * @param {HTMLImageElement|string} imgOrSrc  Either the clicked <img> element
+     *        (preferred — lets us read its current .src and find a nearby name)
+     *        or a raw image URL string.
+     * @param {string} [label]  Optional display name; auto-detected from the
+     *        surrounding profile card when omitted.
+     */
+    window.openPhotoViewer = function(imgOrSrc, label) {
+        const src = typeof imgOrSrc === 'string' ? imgOrSrc : (imgOrSrc && imgOrSrc.src);
+
+        // Nothing real to enlarge yet — placeholder/no-photo/avatar-initials image.
+        const isPlaceholder = !src || /placeholder\.com/i.test(src) || /ui-avatars\.com/i.test(src);
+        if (isPlaceholder) {
+            try { showToast('No Photo', 'No photo has been uploaded for this student yet.', 'info'); } catch (e) {}
+            return;
+        }
+
+        let name = label;
+        if (!name && imgOrSrc && typeof imgOrSrc.closest === 'function') {
+            const card = imgOrSrc.closest('.profile-card-header');
+            const nameEl = card && card.querySelector('.profile-name-title');
+            if (nameEl) name = nameEl.textContent.trim();
+        }
+        if (!name) name = 'Student Photo';
+
+        const overlay = document.getElementById('photo-viewer-overlay');
+        const imgEl   = document.getElementById('photo-viewer-image');
+        const nameEl  = document.getElementById('photo-viewer-filename');
+        if (!overlay || !imgEl) return;
+
+        imgEl.src = src;
+        if (nameEl) {
+            const safeName = (typeof SSValidate !== 'undefined' && SSValidate.escapeHtml) ? SSValidate.escapeHtml(name) : name;
+            nameEl.innerHTML = `<i class="fas fa-image"></i> ${safeName}`;
+        }
+
+        overlay.classList.add('active');
+        overlay.style.display = 'flex';
+        document.body.style.overflow = 'hidden';
+    };
+
+    /** Close the full-size photo viewer. */
+    window.closePhotoViewer = function() {
+        const overlay = document.getElementById('photo-viewer-overlay');
+        if (overlay) {
+            overlay.classList.remove('active');
+            overlay.style.display = 'none';
+        }
+
+        // Only unlock body scroll if no other modal is still open behind it —
+        // same reasoning as closeCertViewer() above.
+        const anyModalStillOpen = Array.from(document.querySelectorAll('.modal-overlay'))
+            .some(m => m.style.display === 'block' || m.style.display === 'flex');
+        document.body.style.overflow = anyModalStillOpen ? 'hidden' : 'auto';
+
+        const imgEl = document.getElementById('photo-viewer-image');
+        if (imgEl) imgEl.removeAttribute('src');
+    };
+
+    // Close the photo viewer with the Escape key too.
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') {
+            const overlay = document.getElementById('photo-viewer-overlay');
+            if (overlay && overlay.classList.contains('active')) window.closePhotoViewer();
         }
     });
 
