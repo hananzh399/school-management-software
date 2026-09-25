@@ -6133,7 +6133,32 @@ function recordVoucherGeneration(student, source = 'individual', importPrevious 
     // already short-circuits a repeat generation before reaching here.
     // _backendSave adds schoolId itself, matching every other call in this
     // file (see its definition above).
-    _backendSave(API_BASE, '/generate-voucher', 'POST', { regNo: studentId, monthKey });
+    //
+    // BUGFIX — "Dashboard Pending/Generated never matches Manage Finance,
+    // and an unpaid balance doesn't roll into next month's voucher
+    // correctly": this used to send only { regNo, monthKey }, so the
+    // backend row that the Dashboard sums (and that next month's arrears
+    // roll-forward reads back) recomputed its own total from server-side
+    // roster data only — with no idea about a custom fee row, a bulk
+    // discount, or the admin opting OUT of the arrears carry-forward via
+    // "Carry forward previous pending balance", all of which only ever
+    // lived in `f` here. Sending the same breakdown `f` (computeFeeBreakdown,
+    // the exact numbers on the voucher the admin/parent actually sees) lets
+    // the backend persist THIS total instead of guessing its own — so the
+    // Dashboard, Manage Finance, and next month's carried-forward balance
+    // all agree with the one real voucher that was generated.
+    _backendSave(API_BASE, '/generate-voucher', 'POST', {
+        regNo: studentId,
+        monthKey,
+        baseTuitionFee: Number(f.tuitionFee) || 0,
+        transportFee: Number(f.transportFee) || 0,
+        // Rolled-over arrears + any one-time custom fee rows, combined —
+        // matches how Finance#calculateNetPayable treats `otherCharges` on
+        // the backend (see its field doc: "includes rolled-over arrears").
+        otherCharges: (Number(f.arrears) || 0) + (Number(f.otherFee) || 0),
+        totalDiscountApplied: Number(f.totalDiscounts) || 0,
+        totalFineCharged: (Number(f.fineAmount) || 0) + (Number(f.monthlyFineTotal) || 0)
+    });
 
     return { created: true, record };
 }
