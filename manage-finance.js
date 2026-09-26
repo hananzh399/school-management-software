@@ -2325,8 +2325,34 @@ function _computeRealtimePendingTotal(students) {
         // already billed this month stays counted here regardless of the
         // student's current roster status — see getAllStudentsForFinanceTotals()
         // and the matching backend fix on /status-all.
+        //
+        // BUGFIX — "defaulter's old debt keeps re-billing every month
+        // forever": this used to gate on _hasAnyGeneratedVoucher(studentId)
+        // — TRUE the moment a voucher was EVER generated for this student,
+        // in ANY month, past or present. computeFeeBreakdown() below always
+        // computes a fresh "this month's fee" from the student's current
+        // profile — it has no idea whether a voucher for THIS month was
+        // ever actually issued. So once a student had a single voucher in
+        // their history, this recurring monthly total kept re-adding a
+        // brand-new month's worth of fee for them forever, in every month
+        // after — including every month after they were dropped and could
+        // never be billed again (Generate Monthly Fees already correctly
+        // excludes non-billable students — see getPendingStudentsSchoolWide/
+        // ForClass — so this live total was the ONE place still silently
+        // inventing new charges nothing ever actually billed).
+        //
+        // Fix: only count a student toward THIS recurring monthly total if
+        // a voucher was actually generated for THIS SPECIFIC month
+        // (isVoucherGenerated(studentId, monthKey) — exact month match, the
+        // same check "Generated" above already uses). Their real, unpaid,
+        // already-billed balance from earlier months never disappears —
+        // it still lives permanently on the Fee Defaulters page (which
+        // deliberately keeps using _hasAnyGeneratedVoucher/any-month-ever,
+        // since surfacing exactly that old debt is its whole job) — it
+        // simply stops being re-charged into every future month's running
+        // Pending/Total-with-Fine figure on top of that.
         const studentId = s.regNo || s.id;
-        if (!_hasAnyGeneratedVoucher(studentId)) return;
+        if (!isVoucherGenerated(studentId, monthKey)) return;
         // BUGFIX — "late fee fine not working": payableNow, not voucherTotal
         // — see computeFeeBreakdown's isPastDue/payableNow BUGFIX — so a
         // student who's actually overdue with the grace period expired
@@ -2336,6 +2362,119 @@ function _computeRealtimePendingTotal(students) {
         try { feeTotal = computeFeeBreakdown(s).payableNow; } catch (e) { feeTotal = Number(s.standardFee) || 0; }
         const paidThisMonth = getPaidThisMonthAuthoritative(s, monthKey);
         total += Math.max(0, feeTotal - paidThisMonth);
+    });
+    return total;
+}
+
+/**
+ * BUGFIX — "paying a Fee Defaulter doesn't update Collected": the header's
+ * Collected figure used to be `students.reduce((sum, s) =>
+ * sum + getPaidThisMonthAuthoritative(s, monthKey), ...)`, which only ever
+ * sums a student's payments whose OWN monthKey equals the CURRENT fee
+ * month. That's correct for money paid against THIS month's own bill, but
+ * the Fee Defaulters page (openFdPayModal/submitFdPayment) intentionally —
+ * and correctly — stamps a defaulter payment with the monthKey of whichever
+ * OLDER bill it's actually settling (so that month's own remaining balance
+ * drops to 0), never the current month's key. So any money collected from
+ * a defaulter for an older month was real, on the books, and yet completely
+ * invisible to this header forever — it never counted as "Collected"
+ * anywhere on the dashboard.
+ *
+ * Fix: "Collected" here means real cash actually received DURING the
+ * current billing period — not "payments filed under the current month's
+ * bill". So this sums every payment (any student, any monthKey) whose own
+ * payment timestamp falls inside the current billing period, using the
+ * exact moment the period began (the "Move to Next Month" marker's
+ * timestamp — see setFeeMonthOverride — or the 1st of the calendar month
+ * when no override is active). A legacy payment row saved before the
+ * `date` field existed falls back to matching monthKey directly, so old
+ * data never silently vanishes from the total. This mirrors the backend's
+ * own reasoning for switching Reports' revenue charts to the real
+ * transaction date (see FinanceController#processPayment's
+ * lastTransactionDate fix) — money is counted in the period it was
+ * actually collected, regardless of which month's bill it happened to
+ * settle. Per-bill figures (remaining balance, Paid/Partial/Pending status,
+ * Fee Defaulters' own per-row Collected column) are untouched by this and
+ * keep using getPaidThisMonthAuthoritative/monthKey exactly as before —
+ * this is a separate, dashboard-level aggregate only.
+ */
+function _currentBillingPeriodStart(monthKey) {
+    const vouchers = typeof getGeneratedVouchers === 'function' ? getGeneratedVouchers() : [];
+
+    // Preferred: the "Move to Next Month" marker's own timestamp, when it's
+    // the one that actually pushed the cycle onto THIS specific month.
+    const marker = vouchers.find(r => r.key === FEE_MONTH_STATE_KEY);
+    if (marker && marker.activeMonthKey === monthKey && marker.updatedAt) {
+        const t = new Date(marker.updatedAt).getTime();
+        if (!isNaN(t)) return t;
+    }
+
+    // BUGFIX — falling straight back to "the 1st of the calendar month
+    // this key names" breaks the instant an admin has pushed the fee cycle
+    // AHEAD of the real calendar (a normal, supported use of "Move to Next
+    // Month" — e.g. the fee month is already January 2027 while the real
+    // date is still in 2026). In that case the 1st of that future month is
+    // still in the future, so every payment made today would look like it
+    // happened BEFORE the period even started, and get silently excluded.
+    // The earliest voucher actually generated for this month is real proof
+    // of when this billing period actually started producing bills —
+    // use that instead whenever it's available.
+    const genTimes = vouchers
+        .filter(r => r.monthKey === monthKey && r.generatedAt)
+        .map(r => new Date(r.generatedAt).getTime())
+        .filter(t => !isNaN(t));
+    if (genTimes.length > 0) return Math.min.apply(null, genTimes);
+
+    // Last resort — no override marker AND nothing generated for this
+    // month yet: fall back to the 1st of the calendar month this key
+    // names. Correct whenever the fee month simply IS the real calendar
+    // month (the common case, and the only case this can still be wrong
+    // for a manually-advanced cycle with zero vouchers generated yet —
+    // which also means there is nothing to be "Collected" against it yet
+    // anyway).
+    const [y, m] = monthKey.split('-').map(Number);
+    return new Date(y, (m || 1) - 1, 1).getTime();
+}
+
+function _computeCollectedThisPeriod(students, monthKey) {
+    const periodStart = _currentBillingPeriodStart(monthKey);
+    let total = 0;
+    students.forEach(s => {
+        const studentId = s.regNo || s.id;
+        const payments = Array.isArray(s.feePayments) ? s.feePayments : [];
+
+        // This month's OWN bill: keep preferring the backend's persisted
+        // paidAmount (it's what survives a page refresh — see
+        // getPaidThisMonthAuthoritative's own docs), but never let it
+        // under-report versus what's already visible locally this session
+        // (e.g. a payment just made a moment ago, before the next backend
+        // poll has landed). Same Math.max safety net getFeeRowFinance
+        // already relies on elsewhere in this file.
+        const localThisMonth = payments
+            .filter(p => p.monthKey === monthKey)
+            .reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
+        const backendThisMonth = (_studentFeeStatusMonthKey === monthKey && _studentFeeStatusCache[studentId])
+            ? Number(_studentFeeStatusCache[studentId].paidAmount) || 0
+            : 0;
+        total += Math.max(localThisMonth, backendThisMonth);
+
+        // Money collected THIS PERIOD against an OLDER bill — e.g. a Fee
+        // Defaulters payment settling an earlier month's arrears
+        // (openFdPayModal/submitFdPayment always stamps these with the
+        // OLDER bill's own monthKey, never the current one, so the block
+        // above never sees them). There's no bulk "every month at once"
+        // status endpoint to check the backend for these, so local payment
+        // history — always written regardless of backend reachability — is
+        // the source of truth here, the same best-effort pattern this file
+        // already uses throughout.
+        payments
+            .filter(p => p.monthKey !== monthKey)
+            .forEach(p => {
+                const paidAt = p.date ? new Date(p.date).getTime() : NaN;
+                if (!isNaN(paidAt) && paidAt >= periodStart) {
+                    total += Number(p.amount) || 0;
+                }
+            });
     });
     return total;
 }
@@ -2399,7 +2538,12 @@ function updateFeeStatsHeader() {
     let totalCollected = 0;
     try {
         const students = getAllStudentsForFinanceTotals();
-        totalCollected = students.reduce((sum, s) => sum + getPaidThisMonthAuthoritative(s, monthKey), 0);
+        // See _computeCollectedThisPeriod's own docs — this now counts every
+        // rupee actually received during the current billing period,
+        // including a defaulter settling an older month's bill from the Fee
+        // Defaulters page, not just payments filed under this month's own
+        // monthKey.
+        totalCollected = _computeCollectedThisPeriod(students, monthKey);
     } catch (e) { totalCollected = 0; }
 
     let totalPending = 0;
@@ -2472,7 +2616,11 @@ function updateClassFeeStats(className) {
     try {
         const students = getAllStudentsForFinanceTotals()
             .filter(s => s.studentClass === className);
-        totalCollected = students.reduce((sum, s) => sum + getPaidThisMonthAuthoritative(s, monthKey), 0);
+        // See updateFeeStatsHeader() / _computeCollectedThisPeriod's own
+        // docs — counts real cash received this billing period, including a
+        // defaulter paying off an older month's bill from the Fee
+        // Defaulters page, not just payments filed under this month's key.
+        totalCollected = _computeCollectedThisPeriod(students, monthKey);
     } catch (e) { totalCollected = 0; }
 
     let totalPending = 0;
