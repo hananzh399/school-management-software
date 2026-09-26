@@ -6799,21 +6799,39 @@ window.printStudentVoucher = printStudentVoucher;
 /* ── Helpers ─────────────────────────────────────────────── */
 function _escHtml(s) { return typeof escapeHtml === 'function' ? escapeHtml(s) : String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 function _escAttr(s) { return typeof escapeForAttr === 'function' ? escapeForAttr(s) : String(s).replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/"/g,'&quot;'); }
-function _monthKey() { return typeof getCurrentMonthKey === 'function' ? getCurrentMonthKey() : new Date().toISOString().slice(0,7); }
+// BUGFIX — "Defaulters still on the 27-date logic / doesn't renew when we
+// Move to Next Month": this used to resolve "the current month" via
+// getCurrentMonthKey() — the plain calendar month — which has nothing to do
+// with the fee-voucher billing cycle. The rest of Manage Finance (voucher
+// generation, computeFeeBreakdown, the header stats) abandoned the fixed
+// "resets on the 27th" behaviour a while ago in favour of an explicit
+// "Move to Next Month" admin action (see getCurrentFeeMonthKey()'s own
+// docs) — but Fee Defaulters was never updated to match, so it kept
+// checking the raw calendar date against a hardcoded 27, completely
+// disconnected from the billing cycle the rest of the page already uses.
+// That's why clicking "Move to Next Month" never "renewed" anything here.
+// Routing through getCurrentFeeMonthKey() makes Defaulters follow the
+// exact same billing month as everywhere else, and roll over at the exact
+// same moment (the admin's explicit action, or the calendar catching up).
+function _monthKey() { return typeof getCurrentFeeMonthKey === 'function' ? getCurrentFeeMonthKey() : new Date().toISOString().slice(0,7); }
 function _isBillable(s) { return typeof isStudentBillable === 'function' ? isStudentBillable(s) : true; }
 
 /**
- * FEATURE — a month's fee only counts as "due" (i.e. can make a student a
- * defaulter) once that month has actually arrived, and — for the CURRENT
- * calendar month specifically — only from the 27th onward. Parents get
- * until the 27th of the month to pay before that month's fee is treated
- * as overdue. Past months are always due; future months never are.
+ * BUGFIX — "student with any amount of pending fees has to show" / no more
+ * fixed 27-date gate: this used to also require `new Date().getDate() >= 27`
+ * before the CURRENT billing month counted as "due" at all — so a student
+ * who owed money from day 1 of the month stayed completely invisible on
+ * this page until the 27th, even though updateFeeStatsHeader()'s own
+ * real-time Pending figure (and every other Pending total in this file)
+ * already counts that same money as owed the moment it's billed. A month
+ * is "due" the instant it becomes the active billing month (or has already
+ * passed) — there is no separate grace-period gate here any more; any
+ * pending amount, however small and however early in the month, belongs on
+ * this list. Future months (only reachable if an admin has explicitly
+ * pushed the billing cycle ahead via "Move to Next Month") are never due.
  */
 function _isMonthDue(monthKey) {
-    const curKey = _monthKey();
-    if (monthKey < curKey) return true;
-    if (monthKey > curKey) return false;
-    return new Date().getDate() >= 27;
+    return monthKey <= _monthKey();
 }
 
 /**
@@ -7409,13 +7427,22 @@ function initFeeDefaulterPage() {
     loadFeeDefaulters();
 }
 
+// BUGFIX — "doesn't renew when we move to next month": this built its list
+// of selectable months from the raw calendar date (`new Date()`), same
+// disconnect as the old _isMonthDue() above. If an admin had already
+// clicked "Move to Next Month" ahead of the real calendar date, the
+// dropdown's own "current month" entry still pointed at the OLD billing
+// month, not the one actually active. Anchoring on _monthKey() (now the
+// real fee-billing month, override included) means this list — and which
+// entry represents "the current period" — moves in lockstep with the rest
+// of Manage Finance the instant the billing month changes.
 function _populateFdMonthDropdown() {
     const sel = document.getElementById('fd-month-filter');
     if (!sel) return;
-    const now = new Date();
+    const [curYear, curMonth] = _monthKey().split('-').map(Number);
     const opts = [];
     for (let i = 0; i < 12; i++) {
-        const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+        const d = new Date(curYear, (curMonth - 1) - i, 1);
         const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
         const lbl = d.toLocaleDateString('en-US', { month:'long', year:'numeric' });
         opts.push(`<option value="${key}">${lbl}</option>`);
@@ -7427,24 +7454,25 @@ async function loadFeeDefaulters() {
     const tbody = document.getElementById('fd-tbody');
     const countEl = document.getElementById('fd-count');
     if (!tbody) return;
-    tbody.innerHTML = `<tr><td colspan="10" class="empty-row"><i class="fas fa-spinner fa-spin"></i> Loading fee defaulters…</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="11" class="empty-row"><i class="fas fa-spinner fa-spin"></i> Loading fee defaulters…</td></tr>`;
     if (countEl) countEl.textContent = '';
 
     const students = _getStudents();
     const monthKey = _fdMonth || _monthKey();
 
     if (!students.length) {
-        tbody.innerHTML = `<tr><td colspan="10" class="empty-row">No students found. Add students from Admissions first.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="11" class="empty-row">No students found. Add students from Admissions first.</td></tr>`;
         return;
     }
 
-    // FEATURE — the current month only becomes "due" from the 27th onward.
-    // If that's the month being viewed and we haven't reached the 27th yet,
-    // nobody can be a defaulter for it, so skip the work entirely and show
-    // a clear message instead of the generic empty-state one.
-    const monthIsDue = _isMonthDue(monthKey);
-    if (!monthIsDue) {
-        tbody.innerHTML = `<tr><td colspan="10" class="empty-row"><i class="fas fa-check-circle" style="color:#16a34a;"></i>&nbsp; This month's fee becomes overdue on the 27th. No defaulters yet for this period.</td></tr>`;
+    // BUGFIX — "still on the 27-date logic": a selected month is only ever
+    // NOT due when it's genuinely still in the future relative to the
+    // active billing cycle (see _isMonthDue's own docs above) — which the
+    // month dropdown never even offers (it only lists the last 12 months).
+    // There is no more separate "wait until the 27th" gate blocking the
+    // CURRENT billing month, so any real pending amount shows immediately.
+    if (!_isMonthDue(monthKey)) {
+        tbody.innerHTML = `<tr><td colspan="11" class="empty-row"><i class="fas fa-check-circle" style="color:#16a34a;"></i>&nbsp; This billing month hasn't started yet. No defaulters yet for this period.</td></tr>`;
         if (countEl) countEl.textContent = '0 defaulters found';
         _fdAllData = [];
         updateFdOverviewStats([]);
@@ -7453,7 +7481,24 @@ async function loadFeeDefaulters() {
 
     const defaulters = [];
     for (const s of students) {
-        if (!_isBillable(s)) continue;
+        // BUGFIX — "student deleted from Manage Students still owes fees —
+        // it should stay listed here with a Pay button until it's cleared":
+        // this used to `continue` (skip entirely) the moment a student
+        // wasn't on the active roster (isStudentBillable/_isBillable), so a
+        // student who was dropped while they still owed money simply
+        // vanished from Defaulters along with their unpaid balance — with
+        // no way to ever collect or even see it again. Money already billed
+        // doesn't stop being owed just because the roster status changed
+        // (same reasoning as getAllStudentsForFinanceTotals() /
+        // FinanceController's /status-all fix). A dropped/inactive student
+        // is still blocked everywhere ACTIONABLE (a NEW voucher can't be
+        // generated for them — see _hasAnyGeneratedVoucher below, which
+        // only ever looks at vouchers that already exist), so this can't
+        // resurrect billing for them — it only stops a real, already-billed
+        // debt from being silently erased. They naturally drop off this
+        // list themselves the moment their balance is actually paid off, via
+        // the Pay button this page now has (see openFdPayModal below).
+        //
         // FEATURE — pending fees must be tied to vouchers that have actually
         // been generated. A student with no generated voucher at all hasn't
         // been billed anything yet, so they don't belong on the Defaulters
@@ -7542,6 +7587,16 @@ async function loadFeeDefaulters() {
                 studentName: finance.studentName || s.fullName || 'Unnamed',
                 studentClass: s.studentClass || '-', section: s.section || '',
                 guardianName: finance.guardianName || s.guardianName || '-',
+                // The exact ledger month this row's balance belongs to — the
+                // Pay button (openFdPayModal) needs this to settle the right
+                // month's bill, since Defaulters can show a month other than
+                // the live current one.
+                monthKey,
+                // Surfaced so a dropped/inactive student who still owes
+                // money is visibly flagged as such, rather than looking like
+                // any other active student on the list.
+                isBillableNow: _isBillable(s),
+                rosterStatus: typeof studentStatusLabel === 'function' ? studentStatusLabel(s) : 'Active',
                 remainingBalance: finance.remainingBalance, paymentStatus: finance.paymentStatus,
                 paidAmount: collectedThisMonth,
                 pendingTotal,
@@ -7562,11 +7617,19 @@ async function loadFeeDefaulters() {
 }
 
 function _computePendingMonths(student) {
-    const now = new Date(), pending = [];
+    const pending = [];
     const admissionKey = _admissionMonthKey(student);
     const currentFeeMonthKey = getCurrentFeeMonthKey();
+    // BUGFIX — "doesn't renew when we move to next month": this used to
+    // scan the 6 months back from the raw calendar date. If an admin had
+    // already clicked "Move to Next Month" ahead of the real calendar date,
+    // the active billing month (currentFeeMonthKey) could fall outside this
+    // calendar-anchored window entirely, so the one month that's actually
+    // live never got checked as "the current month" branch below. Anchor
+    // the scan on the billing month itself so it always includes it.
+    const [curYear, curMonth] = currentFeeMonthKey.split('-').map(Number);
     for (let i = 0; i < 6; i++) {
-        const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+        const d = new Date(curYear, (curMonth - 1) - i, 1);
         const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
         // FEATURE — never count a month before the student was admitted
         // (fixes new schools/students showing months of fake back-dated
@@ -7650,7 +7713,7 @@ function _renderDefaultersTable(defaulters) {
     if (!tbody) return;
     if (countEl) countEl.textContent = `${defaulters.length} defaulter${defaulters.length !== 1 ? 's' : ''} found`;
     if (!defaulters.length) {
-        tbody.innerHTML = `<tr><td colspan="10" class="empty-row"><i class="fas fa-check-circle" style="color:#16a34a;"></i>&nbsp; No fee defaulters found for this period. All caught up!</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="11" class="empty-row"><i class="fas fa-check-circle" style="color:#16a34a;"></i>&nbsp; No fee defaulters found for this period. All caught up!</td></tr>`;
         return;
     }
     // FEATURE — "Pending / Collected / Remaining" now render as three
@@ -7661,6 +7724,13 @@ function _renderDefaultersTable(defaulters) {
     // note above loadFeeDefaulters' pendingTotal calc).
     tbody.innerHTML = defaulters.map(d => {
         const cls = d.studentClass + (d.section ? ' – ' + d.section : '');
+        // FEATURE — a dropped/inactive student who still shows up here
+        // (see the BUGFIX note above loadFeeDefaulters' student loop) is
+        // now visibly flagged, so it's obvious at a glance why someone no
+        // longer in Manage Students is still on this list.
+        const rosterBadge = !d.isBillableNow
+            ? `<span class="fee-status-badge fee-overdue" style="margin-left:6px;" title="No longer on the active roster">${_escHtml(d.rosterStatus)}</span>`
+            : '';
         const monthsTitle = d.pendingMonthsList.join(', ') || 'Current month';
         const monthsHtml = d.pendingMonthsCount > 0
             ? `<div class="fd-months-badge" title="${_escHtml(monthsTitle)}"><i class="fas fa-calendar-times" style="color:#dc2626;"></i> <strong>${d.pendingMonthsCount}</strong> month${d.pendingMonthsCount !== 1 ? 's' : ''}<span class="fd-months-list">${d.pendingMonthsList.slice(0,3).map(_escHtml).join(', ')}${d.pendingMonthsCount > 3 ? '…' : ''}</span></div>`
@@ -7680,7 +7750,7 @@ function _renderDefaultersTable(defaulters) {
 
         return `<tr>
             <td><span class="hrk-id-badge">${_escHtml(d.studentId)}</span></td>
-            <td><strong>${_escHtml(d.studentName)}</strong></td>
+            <td><strong>${_escHtml(d.studentName)}</strong>${rosterBadge}</td>
             <td><span class="class-chip" style="background:rgba(139,92,246,0.1);color:#8b5cf6;">${_escHtml(cls)}</span></td>
             <td>${_escHtml(d.guardianName)}</td>
             <td><strong title="Rs. ${d.pendingTotal.toLocaleString()}">${_fmtStatMoney(d.pendingTotal)}</strong></td>
@@ -7689,6 +7759,12 @@ function _renderDefaultersTable(defaulters) {
             <td>${arrearsHtml}</td>
             <td>${monthsHtml}</td>
             <td><span class="fee-status-badge ${d.paymentStatus === 'Partial' ? 'fee-pending' : 'fee-overdue'}">${_escHtml(d.paymentStatus)}</span></td>
+            <td>
+                <button type="button" class="btn-tiny btn-add-fees"
+                    onclick="openFdPayModal('${_escAttr(d.studentId)}', '${_escAttr(d.studentName)}', '${_escAttr(d.monthKey)}', ${Number(d.remainingBalance) || 0})">
+                    <i class="fas fa-money-bill-wave"></i> Pay
+                </button>
+            </td>
         </tr>`;
     }).join('');
 }
@@ -7705,6 +7781,118 @@ function onFdMonthChange() {
     _fdMonth = (document.getElementById('fd-month-filter') || {}).value || _monthKey();
     loadFeeDefaulters();
 }
+
+/* ── Fee Defaulters: Pay directly from this page ────────────
+ * FEATURE — "any student with pending fees shows here with a Pay button —
+ * including one deleted from Manage Students — and paying clears them."
+ *
+ * Deliberately does NOT reuse openAddFeesModal()/renderAddFeesModal(): that
+ * flow is hardwired to computeFeeBreakdown()/getCurrentFeeMonthKey() (the
+ * LIVE current billing month only) and looks the student up via
+ * getRealStudents() (active roster only) — so it can neither settle an
+ * older month's voucher (Defaulters can show any of the last 12 months) nor
+ * find a student who has since been dropped, both of which this page must
+ * support. This uses the same underlying write path instead (POST /pay +
+ * a matching student.feePayments entry — see saveSimpleStudentFeePayment's
+ * own BUGFIX notes on why both are needed), so a payment made here is just
+ * as real/authoritative as one made from the regular Pay Bill flow, for
+ * any student and any month.
+ */
+let _fdPayContext = null;
+
+function _ensureFdPayModal() {
+    if (document.getElementById('fd-pay-modal')) return;
+    const wrap = document.createElement('div');
+    wrap.id = 'fd-pay-modal';
+    wrap.style.cssText = 'display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.45);align-items:center;justify-content:center;';
+    wrap.innerHTML = `
+        <div style="background:var(--card-bg,#fff);border-radius:12px;padding:24px;width:360px;max-width:92vw;box-shadow:0 20px 60px rgba(0,0,0,0.3);">
+            <h3 style="margin:0 0 4px;font-size:1.05rem;">Pay Pending Fee</h3>
+            <div id="fd-pay-student-line" style="color:var(--text-secondary);font-size:0.85rem;margin-bottom:14px;"></div>
+            <label style="font-size:0.8rem;color:var(--text-secondary);">Amount (Rs.)</label>
+            <input type="number" id="fd-pay-amount" min="0" step="1"
+                style="width:100%;box-sizing:border-box;padding:8px 10px;margin:6px 0 16px;border:1px solid var(--border-color,#ddd);border-radius:8px;font-size:1rem;">
+            <div style="display:flex;gap:10px;justify-content:flex-end;">
+                <button type="button" class="btn-tiny" onclick="closeFdPayModal()" style="background:transparent;border:1px solid var(--border-color,#ddd);">Cancel</button>
+                <button type="button" class="btn-tiny btn-add-fees" onclick="submitFdPayment()">Confirm Payment</button>
+            </div>
+        </div>`;
+    document.body.appendChild(wrap);
+    // Click on the dark backdrop (not the card itself) also closes it.
+    wrap.addEventListener('click', (e) => { if (e.target === wrap) closeFdPayModal(); });
+}
+
+function openFdPayModal(studentId, studentName, monthKey, remainingBalance) {
+    _ensureFdPayModal();
+    const balance = Math.max(0, Number(remainingBalance) || 0);
+    _fdPayContext = { studentId, studentName, monthKey, remainingBalance: balance };
+
+    const line = document.getElementById('fd-pay-student-line');
+    if (line) line.textContent = `${studentName} — Rs. ${balance.toLocaleString()} pending for ${monthKey}`;
+
+    const amountInput = document.getElementById('fd-pay-amount');
+    if (amountInput) { amountInput.value = balance || ''; amountInput.max = String(balance || ''); }
+
+    document.getElementById('fd-pay-modal').style.display = 'flex';
+    if (amountInput) amountInput.focus();
+}
+
+function closeFdPayModal() {
+    const modal = document.getElementById('fd-pay-modal');
+    if (modal) modal.style.display = 'none';
+    _fdPayContext = null;
+}
+
+async function submitFdPayment() {
+    if (!_fdPayContext) return;
+    const { studentId, studentName, monthKey, remainingBalance } = _fdPayContext;
+    const amountInput = document.getElementById('fd-pay-amount');
+    const typed = Math.max(0, parseFloat(amountInput ? amountInput.value : 0) || 0);
+
+    if (typed <= 0) { _toast('Enter a payment amount.', 'error'); return; }
+    // Never record more against this specific bill than it actually needed
+    // (a slightly-over typed amount, e.g. rounding to a note denomination,
+    // still only clears exactly what was owed) — matches Pay Bill's own
+    // remaining-balance clamp.
+    const amountToApply = remainingBalance > 0 ? Math.min(typed, remainingBalance) : typed;
+
+    // Look up the student in the FULL roster cache (not getRealStudents(),
+    // which excludes dropped/inactive students) — this page must be able to
+    // settle a defaulter's balance even after they've been deleted from
+    // Manage Students.
+    const student = findStudentExact(_studentsCache, studentId, studentName)
+        || _studentsCache.find(s => String(s.regNo || s.id) === String(studentId));
+    if (!student) { _toast('Student record not found.', 'error'); return; }
+
+    // Best-effort backend sync, same pattern as saveSimpleStudentFeePayment.
+    // Not required for THIS page to update correctly — loadFeeDefaulters'
+    // remaining-balance math (current month via computeFeeBreakdown, past
+    // months via _getHistoricalMonthFinance) reads student.feePayments
+    // directly, so the local write below is what actually clears this row.
+    try {
+        await apiRequest("/pay", "POST", { regNo: studentId, monthKey, amount: amountToApply, discount: 0 });
+    } catch (e) { /* local save below still clears it from this list */ }
+
+    if (!Array.isArray(student.feePayments)) student.feePayments = [];
+    student.feePayments.push({
+        amount: amountToApply,
+        monthKey,
+        monthLabel: monthKey,
+        feeType: 'Defaulter Payment',
+        method: 'cash',
+        date: new Date().toISOString(),
+        notes: 'Recorded from Fee Defaulters page'
+    });
+    saveStudentsCache([student]);
+
+    _toast(`Rs. ${amountToApply.toLocaleString()} recorded for ${studentName}.`, 'success');
+    closeFdPayModal();
+    loadFeeDefaulters();
+}
+
+window.openFdPayModal = openFdPayModal;
+window.closeFdPayModal = closeFdPayModal;
+window.submitFdPayment = submitFdPayment;
 
 /* ============================================================
    CUSTOM FEE WORKSPACE — Split-panel layout functions
