@@ -3018,6 +3018,40 @@ select option {
     padding-top: 6px;
 }
 
+/* Small software-brand credit shown at the very bottom of the BACK card
+   only — separate from the school's own logo/name in the header above. */
+.idc-software-brand {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    padding: 4px 0 9px;
+    font-size: 7.6px;
+    font-weight: 600;
+    color: #94a3b8;
+    letter-spacing: 0.01em;
+}
+
+.idc-software-logo {
+    width: 12px;
+    height: 12px;
+    border-radius: 4px;
+    background: linear-gradient(135deg, var(--idc-green-2), var(--idc-green-1));
+    color: #fff;
+    font-size: 7.5px;
+    font-weight: 800;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.idc-software-brand strong {
+    color: var(--idc-green-3);
+    font-weight: 800;
+}
+
 @media (max-width: 640px) {
     .idc-toolbar { padding: 12px 14px; }
     .idc-toolbar-title { font-size: 14px; }

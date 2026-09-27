@@ -4500,6 +4500,10 @@ if (certUploadInput) {
                 ${idcBuildBarcodeSvg(displayId)}
                 <div class="idc-card-barcode-text">${esc(displayId)}</div>
             </div>
+            <div class="idc-software-brand">
+                <span class="idc-software-logo">S</span>
+                <span>Powered by <strong>SoftSchool</strong></span>
+            </div>
         `;
     }
 
