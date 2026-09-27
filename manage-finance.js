@@ -7760,61 +7760,85 @@ async function loadFeeDefaulters() {
                 finance = { remainingBalance: remaining, paidAmount, billed: feeTotal, arrearsDue: arrearsPortion, paymentStatus: remaining <= 0 ? 'Paid' : (paidAmount > 0 ? 'Partial' : 'Pending'), studentName: s.fullName || s.name, guardianName: s.guardianName };
             }
         }
-        if (finance.remainingBalance > 0 && finance.paymentStatus !== 'Paid') {
+        // FEATURE — a currently-enrolled (billable) student's REGULAR bill
+        // for the live current month is paid through the normal Manage
+        // Student Fees → Pay Bill flow, not from this page — that flow is
+        // unaffected by anything below. This page's whole job for a
+        // billable student is narrower: surface OLD, already-frozen,
+        // carried-over debt (arrears) that rolled forward from a PAST
+        // month they never fully paid off. Being merely late on THIS
+        // month's own bill does not make someone a "defaulter" yet — that
+        // only happens the moment "Move to Next Month" freezes today's
+        // unpaid balance into next month's Previous Arrears (see
+        // computeOutstandingArrears/recordVoucherGeneration, which already
+        // do exactly that, unchanged). A DROPPED/inactive student has no
+        // such normal-flow page left to pay through at all, so for them
+        // the ENTIRE outstanding balance (whatever mix of old arrears and
+        // their own last bill it is) is treated as defaulter debt, exactly
+        // as before.
+        const isBillableNow = _isBillable(s);
+
+        // FEATURE — arrears vs current-fee breakdown (see
+        // _splitFeeAndArrears above). `billed` and `arrearsDue` come
+        // straight from the same billed-total the rest of this row already
+        // relies on; when a caller/branch didn't have them available,
+        // `billed` safely defaults to the full billed amount and
+        // `arrearsDue` to 0 (nothing to split — the whole amount is
+        // treated as current-period charges, never invented).
+        const collectedThisMonth = Number(finance.paidAmount) || 0;
+        const fullBilled = finance.remainingBalance + collectedThisMonth;
+        const billedTotal = Number(finance.billed) || fullBilled;
+        const arrearsDue = Math.max(0, Math.min(billedTotal, Number(finance.arrearsDue) || 0));
+        const split = _splitFeeAndArrears(billedTotal, arrearsDue, collectedThisMonth);
+
+        // BUGFIX — "defaulter pending has to freeze until the next Move to
+        // Next Month, not float with this month's own lateness": a billable
+        // student is only ever a defaulter here for their ARREARS
+        // (Pending=arrearsDue, Collected=arrearsCollected,
+        // Remaining=arrearsRemaining — Remaining is exactly Pending minus
+        // Collected, basic subtraction, nothing else added in). A dropped
+        // student keeps the full pending/paid/remaining figures used before,
+        // since every rupee they owe is equally uncollectable through any
+        // other page.
+        const pendingTotal = isBillableNow ? split.arrearsDue : fullBilled;
+        const paidAmount = isBillableNow ? split.arrearsCollected : collectedThisMonth;
+        const remainingBalance = isBillableNow ? split.arrearsRemaining : finance.remainingBalance;
+        const paymentStatus = remainingBalance <= 0 ? 'Paid' : (paidAmount > 0 ? 'Partial' : 'Pending');
+
+        // A billable student only belongs on THIS list while they still
+        // have real, frozen arrears left; a dropped student stays listed
+        // for as long as anything at all remains unpaid — matching the
+        // Pending/Remaining definitions chosen just above for each case.
+        const stillOwesAsDefaulter = isBillableNow ? split.arrearsRemaining > 0 : finance.remainingBalance > 0;
+
+        if (stillOwesAsDefaulter) {
             const pendingMonths = _computePendingMonths(s);
-            // FEATURE — "Pending / Collected / Remaining" breakdown per
-            // defaulter. `remainingBalance` and `paidAmount` above already
-            // come from the SAME billed-vs-paid figures used everywhere else
-            // on this page (current month: computeFeeBreakdown().payableNow
-            // minus this month's payments; past months: the actual voucher
-            // that was generated for that month minus payments made inside
-            // its billing window — see getFeeRowFinance/_getHistoricalMonthFinance
-            // above). So the true TOTAL billed for the selected month is
-            // simply what's left to pay plus what's already been paid —
-            // no separate lookup needed, and nothing here changes what was
-            // already being computed, only what gets surfaced in the UI.
-            //   pendingTotal (this month's full bill)
-            // − collectedThisMonth (paid so far against that bill)
-            // = remainingBalance (what's left — becomes next month's
-            //   rolled-over arrears automatically, since the backend/voucher
-            //   generation already bakes last month's remainingBalance into
-            //   the next bill — see FinanceController#getOrCreateStudentFeeMaster
-            //   "roll-over arrears" and computeOutstandingArrears()).
-            const collectedThisMonth = Number(finance.paidAmount) || 0;
-            const pendingTotal = finance.remainingBalance + collectedThisMonth;
-
-            // FEATURE — arrears vs current-fee breakdown (see
-            // _splitFeeAndArrears above). `billed` and `arrearsDue` come
-            // straight from the same billed-total the rest of this row
-            // already relies on; when a caller/branch didn't have them
-            // available, `billed` safely defaults to pendingTotal and
-            // `arrearsDue` to 0 (nothing to split — the whole amount is
-            // treated as current-period charges, never invented).
-            const billedTotal = Number(finance.billed) || pendingTotal;
-            const arrearsDue = Math.max(0, Math.min(billedTotal, Number(finance.arrearsDue) || 0));
-            const split = _splitFeeAndArrears(billedTotal, arrearsDue, collectedThisMonth);
-
             defaulters.push({
                 studentId: s.regNo || s.id || '',
                 studentName: finance.studentName || s.fullName || 'Unnamed',
                 studentClass: s.studentClass || '-', section: s.section || '',
                 guardianName: finance.guardianName || s.guardianName || '-',
                 // The exact ledger month this row's balance belongs to — the
-                // Pay button (openFdPayModal) needs this to settle the right
-                // month's bill. This is the RESOLVED month (see
-                // _resolveFeeMonthPlan above) — a dropped student's own last
-                // real bill, which can be an earlier month than the one
-                // currently selected in the dropdown.
+                // Pay button (openFdPayModal, dropped students only) needs
+                // this to settle the right month's bill. This is the
+                // RESOLVED month (see _resolveFeeMonthPlan above) — a
+                // dropped student's own last real bill, which can be an
+                // earlier month than the one currently selected in the
+                // dropdown.
                 monthKey: effectiveMonthKey,
                 // Surfaced so a dropped/inactive student who still owes
                 // money is visibly flagged as such, rather than looking like
-                // any other active student on the list.
-                isBillableNow: _isBillable(s),
+                // any other active student on the list — and gates the Pay
+                // button (see _renderDefaultersTable): only ever shown when
+                // this is false.
+                isBillableNow,
                 rosterStatus: typeof studentStatusLabel === 'function' ? studentStatusLabel(s) : 'Active',
-                remainingBalance: finance.remainingBalance, paymentStatus: finance.paymentStatus,
-                paidAmount: collectedThisMonth,
+                remainingBalance, paymentStatus,
+                paidAmount,
                 pendingTotal,
-                // Real, computed arrears breakdown — no fixed/example amounts.
+                // Real, computed arrears breakdown — no fixed/example
+                // amounts. Kept regardless of isBillableNow so the Arrears
+                // column always has real numbers to show.
                 arrearsDue: split.arrearsDue,
                 arrearsCollected: split.arrearsCollected,
                 arrearsRemaining: split.arrearsRemaining,
@@ -7887,24 +7911,26 @@ function _computePendingMonths(student) {
  * Runs on whatever list is currently being shown (all defaulters, or a
  * filtered/searched subset), so the totals always match what's on screen.
  *
- * BUGFIX — "Pending Fees" card was actually showing "sum owed by defaulters
- * pending more than 1 month", a completely different figure than its own
- * label. That mismatch (plus the Fee Defaulters page having no visible
- * "Collected" figure per row at all) is what made Pending/Remaining look
- * like they weren't working: the number under "Pending Fees" never lined
- * up with "Total Remaining" the way the label implied it should.
+ * These three cards just sum whatever loadFeeDefaulters() already put on
+ * each row — d.pendingTotal / d.paidAmount / d.remainingBalance — so they
+ * automatically stay linked, per the same equation as every individual row:
+ *   Pending Fees (d.pendingTotal) − Total Collected (d.paidAmount)
+ *     = Total Remaining (d.remainingBalance)
  *
- * Fix — the three cards now form one consistent equation, matching the
- * same Pending → Collected → Remaining loop used per student/per month:
- *   - Pending Fees:    the FULL amount billed this period for every
- *                       defaulter (before any payment) — d.pendingTotal.
- *   - Total Collected: how much of that has actually been paid in
- *                       THIS month — d.paidAmount.
- *   - Total Remaining: Pending − Collected, still owed — d.remainingBalance.
- * Next month, whatever is left in "Total Remaining" today is exactly what
- * rolls forward into next month's "Pending Fees" automatically (see the
- * BUGFIX note on the pendingTotal calc in loadFeeDefaulters above) — no
- * extra step needed for the loop to continue on its own.
+ * BUGFIX — "defaulter pending has to freeze until Move to Next Month, not
+ * float with this month's own lateness, and only a dropped student gets a
+ * Pay button here": what those three fields actually MEAN per row now
+ * depends on whether that student is still on the active roster (see
+ * loadFeeDefaulters' isBillableNow branch) — for a billable student they're
+ * the ARREARS split only (split.arrearsDue/arrearsCollected/arrearsRemaining
+ * — old, already-frozen carried-over debt; this month's own bill is paid
+ * through Manage Student Fees, not this page, and doesn't count as
+ * "defaulter" money until it's rolled into arrears by Move to Next Month);
+ * for a dropped student — who has no other page left to pay through — it's
+ * still the full billed/paid/remaining amount, exactly as before. Either
+ * way, this function itself never needs to know which case it's looking
+ * at: it just sums whatever's already on each row, and the equation above
+ * always holds.
  */
 function updateFdOverviewStats(defaulters) {
     const afterEl = document.getElementById('fd-overview-after1month');
@@ -7965,6 +7991,22 @@ function _renderDefaultersTable(defaulters) {
                </div>`
             : `<span style="color:var(--text-secondary);">—</span>`;
 
+        // BUGFIX — "don't add a Pay button for a currently-enrolled
+        // student — that's what Manage Student Fees → Pay Bill is for; this
+        // page's Pay button is only for a dropped/inactive student who has
+        // no other page left to pay through." A billable student's row
+        // clears itself automatically the moment their arrears reach 0 —
+        // either because they paid 100% of what they owe, or because any
+        // amount paid beyond this month's own tuition/current-fee due was
+        // applied to arrears first (see _splitFeeAndArrears's allocation
+        // rule) — no button needed or shown here for them.
+        const actionCell = d.isBillableNow
+            ? `<span style="color:var(--text-secondary);font-size:0.78rem;" title="Pay this from Manage Student Fees — this page only accepts direct payment for dropped/inactive students.">Pay via Manage Fees</span>`
+            : `<button type="button" class="btn-tiny btn-add-fees"
+                    onclick="openFdPayModal('${_escAttr(d.studentId)}', '${_escAttr(d.studentName)}', '${_escAttr(d.monthKey)}', ${Number(d.remainingBalance) || 0})">
+                    <i class="fas fa-money-bill-wave"></i> Pay
+                </button>`;
+
         return `<tr>
             <td><span class="hrk-id-badge">${_escHtml(d.studentId)}</span></td>
             <td><strong>${_escHtml(d.studentName)}</strong>${rosterBadge}</td>
@@ -7976,12 +8018,7 @@ function _renderDefaultersTable(defaulters) {
             <td>${arrearsHtml}</td>
             <td>${monthsHtml}</td>
             <td><span class="fee-status-badge ${d.paymentStatus === 'Partial' ? 'fee-pending' : 'fee-overdue'}">${_escHtml(d.paymentStatus)}</span></td>
-            <td>
-                <button type="button" class="btn-tiny btn-add-fees"
-                    onclick="openFdPayModal('${_escAttr(d.studentId)}', '${_escAttr(d.studentName)}', '${_escAttr(d.monthKey)}', ${Number(d.remainingBalance) || 0})">
-                    <i class="fas fa-money-bill-wave"></i> Pay
-                </button>
-            </td>
+            <td>${actionCell}</td>
         </tr>`;
     }).join('');
 }
