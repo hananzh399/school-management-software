@@ -2327,32 +2327,31 @@ function _computeRealtimePendingTotal(students) {
         // and the matching backend fix on /status-all.
         //
         // BUGFIX — "defaulter's old debt keeps re-billing every month
-        // forever": this used to gate on _hasAnyGeneratedVoucher(studentId)
-        // — TRUE the moment a voucher was EVER generated for this student,
-        // in ANY month, past or present. computeFeeBreakdown() below always
-        // computes a fresh "this month's fee" from the student's current
-        // profile — it has no idea whether a voucher for THIS month was
-        // ever actually issued. So once a student had a single voucher in
-        // their history, this recurring monthly total kept re-adding a
-        // brand-new month's worth of fee for them forever, in every month
-        // after — including every month after they were dropped and could
-        // never be billed again (Generate Monthly Fees already correctly
-        // excludes non-billable students — see getPendingStudentsSchoolWide/
-        // ForClass — so this live total was the ONE place still silently
-        // inventing new charges nothing ever actually billed).
+        // forever" (see the original note above) was fixed by requiring
+        // isVoucherGenerated(studentId, monthKey) — an exact match for THIS
+        // month — but that alone silently reintroduced the very bug the
+        // ORIGINAL "Pending always shows 0" fix above exists to prevent: an
+        // ACTIVE student who simply hasn't had this month's voucher
+        // generated yet (the normal state for most of any month before
+        // "Generate Monthly Fees" is clicked) was excluded here too, so
+        // Pending dropped back to Rs. 0 for everyone the moment the
+        // billing cycle rolled over to a month with no vouchers generated
+        // yet — exactly the "stuck at 0" symptom this function was built
+        // to eliminate in the first place.
         //
-        // Fix: only count a student toward THIS recurring monthly total if
-        // a voucher was actually generated for THIS SPECIFIC month
-        // (isVoucherGenerated(studentId, monthKey) — exact month match, the
-        // same check "Generated" above already uses). Their real, unpaid,
-        // already-billed balance from earlier months never disappears —
-        // it still lives permanently on the Fee Defaulters page (which
-        // deliberately keeps using _hasAnyGeneratedVoucher/any-month-ever,
-        // since surfacing exactly that old debt is its whole job) — it
-        // simply stops being re-charged into every future month's running
-        // Pending/Total-with-Fine figure on top of that.
+        // Fix: use the same live-vs-frozen decision the rest of this file
+        // (Fee Defaulters' getFeeRowFinance/_computePendingMonths) already
+        // makes via _resolveFeeMonthPlan — a student still on the active
+        // roster is ALWAYS counted live here, Generate clicked or not
+        // (restoring the original fix above); a dropped student is only
+        // counted here if they were genuinely billed this exact month.
+        // Once a month passes with no new voucher for a dropped student,
+        // they stop being recomputed here — their real, unpaid,
+        // already-billed balance from earlier months never disappears, it
+        // just moves permanently onto the Fee Defaulters page instead of
+        // also being double-counted (and endlessly re-inflated) here.
         const studentId = s.regNo || s.id;
-        if (!isVoucherGenerated(studentId, monthKey)) return;
+        if (!_resolveFeeMonthPlan(s, monthKey).useLive) return;
         // BUGFIX — "late fee fine not working": payableNow, not voucherTotal
         // — see computeFeeBreakdown's isPastDue/payableNow BUGFIX — so a
         // student who's actually overdue with the grace period expired
@@ -3923,6 +3922,56 @@ async function syncStudentFineFromBackend(student, monthKey) {
 }
 
 /**
+ * BUGFIX — "a dropped defaulter's pending/generated keeps compounding every
+ * month forever": getFeeRowFinance's live branch below used to trigger
+ * purely because `monthKey === getCurrentFeeMonthKey()` — with no regard
+ * for whether this particular student is actually still being billed.
+ * That's correct for a student still on the active roster (always live,
+ * Generate clicked or not), and correct for anyone genuinely billed THIS
+ * exact month (their voucher is real, whatever their roster status becomes
+ * a moment later). But for a student who was dropped and never billed
+ * again, the live branch recomputes a brand-new month's base tuition +
+ * transport + rolled arrears via computeFeeBreakdown() AS IF they were
+ * still being actively billed — so every time "today" rolled past their
+ * last real bill, their frozen, already-billed debt got a fresh invoice
+ * added on top of it, forever. Meanwhile the exact same debt correctly
+ * never grows when a specific PAST month is looked up directly (the
+ * historical voucher-snapshot path already freezes it).
+ *
+ * Fix: only take the live current-month path when the student is still
+ * billable OR was genuinely billed this exact month. Otherwise — dropped,
+ * and not billed this month — redirect to their own MOST RECENT real
+ * voucher (whatever month that was) via the same frozen historical lookup
+ * used for an explicitly-selected past month. Their balance then neither
+ * vanishes the moment the calendar moves on, nor silently grows a fee they
+ * were never actually charged. A caller that explicitly asks about an
+ * OLDER month (the Defaulters month dropdown) is untouched by any of this
+ * — it always uses exactly the month it asked for, live or not.
+ */
+function _lastBilledMonthKeyFor(studentId, fullName) {
+    const list = getGeneratedVouchers()
+        .filter(r => String(r.studentId) === String(studentId)
+                   && (!r.studentName || r.studentName === fullName))
+        .sort((a, b) => a.monthKey.localeCompare(b.monthKey));
+    return list.length ? list[list.length - 1].monthKey : null;
+}
+
+function _resolveFeeMonthPlan(student, requestedMonthKey) {
+    const currentFeeMonthKey = getCurrentFeeMonthKey();
+    if (requestedMonthKey !== currentFeeMonthKey) {
+        // An explicit past (or, in principle, future) month was asked for
+        // directly — always exactly that month, never redirected.
+        return { useLive: false, targetMonthKey: requestedMonthKey };
+    }
+    const studentId = student.regNo || student.id;
+    const billedThisMonth = typeof isVoucherGenerated === 'function' && isVoucherGenerated(studentId, currentFeeMonthKey);
+    if (_isBillable(student) || billedThisMonth) {
+        return { useLive: true, targetMonthKey: currentFeeMonthKey };
+    }
+    return { useLive: false, targetMonthKey: _lastBilledMonthKeyFor(studentId, student.fullName) };
+}
+
+/**
  * Best-effort finance status for a single student.
  * Tries the backend first (so a live server, when present, always wins);
  * if it's unreachable/404 we fall back to a status computed entirely from
@@ -3936,15 +3985,20 @@ async function getFeeRowFinance(student, monthKey) {
     // parameter). Every branch below used to run for ANY requested monthKey,
     // silently substituting today's cumulative total for whatever past month
     // was actually being asked about. Only take the live/current-month path
-    // when the requested month really IS the current fee-billing month;
-    // otherwise use the historical voucher-snapshot lookup, which reflects
-    // what was actually billed and paid for that specific month.
-    const isCurrentFeeMonth = monthKey === getCurrentFeeMonthKey();
-    if (!isCurrentFeeMonth) {
-        const hist = _getHistoricalMonthFinance(student, monthKey);
+    // when the requested month really IS the current fee-billing month AND
+    // this student is actually still being billed — see _resolveFeeMonthPlan
+    // above for why the second half of that condition had to be added;
+    // otherwise use the historical voucher-snapshot lookup (redirected to
+    // this student's own last real bill when they're not being billed live),
+    // which reflects what was actually billed and paid, frozen.
+    const plan = _resolveFeeMonthPlan(student, monthKey);
+    if (!plan.useLive) {
+        const hist = plan.targetMonthKey ? _getHistoricalMonthFinance(student, plan.targetMonthKey) : null;
         if (hist) return hist;
-        // No voucher was ever generated for that month — nothing was billed,
-        // so there's nothing outstanding to report.
+        // No voucher was ever generated for that month (or, for a dropped
+        // student redirected to their "last billed month", no voucher was
+        // ever generated at all) — nothing was billed, so there's nothing
+        // outstanding to report.
         return {
             regNo: student.regNo || student.id,
             studentName: student.fullName,
@@ -7659,19 +7713,29 @@ async function loadFeeDefaulters() {
         // should never show months of back-dated dues that never existed).
         const admissionKey = _admissionMonthKey(s);
         if (admissionKey && monthKey < admissionKey) continue;
+
+        // BUGFIX — "a dropped defaulter's old debt keeps compounding every
+        // month forever": see _resolveFeeMonthPlan's own docs. When the
+        // admin is viewing the live current month (the default tab) for a
+        // student who isn't billable and wasn't billed THIS specific month,
+        // this redirects to their own last real bill (whatever month that
+        // was) instead of inventing a brand-new month's charge on top of
+        // their frozen debt. `effectiveMonthKey` — not the raw selected
+        // `monthKey` — is what actually gets stored on this row (needed so
+        // the Pay button settles the RIGHT ledger entry) and shown in the
+        // "Months Pending" / row context.
+        const plan = _resolveFeeMonthPlan(s, monthKey);
+        const effectiveMonthKey = plan.targetMonthKey || monthKey;
+
         let finance = null;
         try { if (typeof getFeeRowFinance === 'function') finance = await getFeeRowFinance(s, monthKey); } catch(e) {}
         if (!finance) {
-            // BUGFIX — "arrears of past months not working properly": this
-            // fallback used to always call computeFeeBreakdown(s), which is
-            // hardwired to the CURRENT fee-billing month only, regardless of
-            // which `monthKey` was actually being checked. Route through the
-            // same month-aware helper getFeeRowFinance() uses, so a past
-            // month's real billed/paid amounts are used instead of today's
-            // cumulative total.
-            const isCurrentFeeMonth = monthKey === getCurrentFeeMonthKey();
-            if (!isCurrentFeeMonth) {
-                finance = _getHistoricalMonthFinance(s, monthKey) || {
+            // Defensive fallback only — getFeeRowFinance() above already
+            // implements this exact plan itself, so this only runs if it
+            // threw. Mirrors the same live-vs-historical decision so the
+            // two paths can never disagree with each other.
+            if (!plan.useLive) {
+                finance = (plan.targetMonthKey && _getHistoricalMonthFinance(s, plan.targetMonthKey)) || {
                     remainingBalance: 0, paidAmount: 0, paymentStatus: 'Paid',
                     studentName: s.fullName || s.name, guardianName: s.guardianName
                 };
@@ -7690,7 +7754,7 @@ async function loadFeeDefaulters() {
                     // _splitFeeAndArrears below for how this gets used.
                     arrearsPortion = Number(fb.arrears) || 0;
                 } catch(e) { feeTotal = Number(s.standardFee || 0); }
-                const payments = (s.feePayments || []).filter(p => p.monthKey === monthKey);
+                const payments = (s.feePayments || []).filter(p => p.monthKey === effectiveMonthKey);
                 const paidAmount = payments.reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
                 const remaining = Math.max(0, feeTotal - paidAmount);
                 finance = { remainingBalance: remaining, paidAmount, billed: feeTotal, arrearsDue: arrearsPortion, paymentStatus: remaining <= 0 ? 'Paid' : (paidAmount > 0 ? 'Partial' : 'Pending'), studentName: s.fullName || s.name, guardianName: s.guardianName };
@@ -7737,9 +7801,11 @@ async function loadFeeDefaulters() {
                 guardianName: finance.guardianName || s.guardianName || '-',
                 // The exact ledger month this row's balance belongs to — the
                 // Pay button (openFdPayModal) needs this to settle the right
-                // month's bill, since Defaulters can show a month other than
-                // the live current one.
-                monthKey,
+                // month's bill. This is the RESOLVED month (see
+                // _resolveFeeMonthPlan above) — a dropped student's own last
+                // real bill, which can be an earlier month than the one
+                // currently selected in the dropdown.
+                monthKey: effectiveMonthKey,
                 // Surfaced so a dropped/inactive student who still owes
                 // money is visibly flagged as such, rather than looking like
                 // any other active student on the list.
@@ -7786,16 +7852,19 @@ function _computePendingMonths(student) {
         if (!_isMonthDue(key)) continue;
         const lbl = d.toLocaleDateString('en-US', { month:'short', year:'numeric' });
 
-        // BUGFIX — "arrears of past months not working properly": this used
-        // to call computeFeeBreakdown(student) inside the loop, which always
-        // returns the SAME current-month total on every iteration (it has no
-        // month parameter) — so every one of the last 6 months was being
-        // compared against today's cumulative, arrears-inclusive bill
-        // instead of what was actually billed for that specific month. Use
-        // the same historical voucher-snapshot lookup as getFeeRowFinance()
-        // for any month that isn't the live current fee-billing month.
+        // BUGFIX — "arrears of past months not working properly" / "a
+        // dropped defaulter's old debt keeps compounding every month
+        // forever": this used to call computeFeeBreakdown(student) for the
+        // live current month unconditionally — always returning the SAME
+        // fresh current-month total (it has no month parameter) regardless
+        // of whether this specific student is actually still being billed
+        // this month. Route through the same live-vs-historical decision
+        // getFeeRowFinance()/_resolveFeeMonthPlan() use, so a dropped
+        // student's last real bill (frozen) is checked here too instead of
+        // a brand-new invented month's charge.
         let remaining;
-        if (key === currentFeeMonthKey) {
+        const plan = _resolveFeeMonthPlan(student, key);
+        if (plan.useLive) {
             const payments = (student.feePayments || []).filter(p => p.monthKey === key);
             const paidAmount = payments.reduce((s, p) => s + (Number(p.amount) || 0), 0);
             // BUGFIX — "late fee fine not working": payableNow, not
@@ -7805,7 +7874,7 @@ function _computePendingMonths(student) {
             try { feeTotal = computeFeeBreakdown(student).payableNow; } catch(e) { feeTotal = Number(student.standardFee || 0); }
             remaining = Math.max(0, feeTotal - paidAmount);
         } else {
-            const hist = _getHistoricalMonthFinance(student, key);
+            const hist = plan.targetMonthKey ? _getHistoricalMonthFinance(student, plan.targetMonthKey) : null;
             remaining = hist ? hist.remainingBalance : 0; // no voucher generated that month = nothing billed
         }
         if (remaining > 0) pending.push(lbl);
