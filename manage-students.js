@@ -4342,6 +4342,517 @@ if (certUploadInput) {
     // another tab/device) already happens via refreshClassUI(), called from
     // the backend poll tick in pollClassConfigs() — see startLiveSync().
 
+    // ── STUDENT ID CARD GENERATOR (View Database) ────────────────────────────
+    // Triggered by the "Generate ID Cards" button on the View Database
+    // student-table stage. Builds one printable ID card per student in
+    // whichever scope is currently selected there — a single section, a
+    // whole class (all sections), or the whole school ("All Students") —
+    // and lets the admin download every card as a PNG sized exactly
+    // 1012 x 638 px (standard CR80 ID card size at 300 DPI) or send them to
+    // a print-ready, cut-to-size sheet.
+
+    const IDC_CARD_PIXEL_WIDTH  = 1012; // 3.375in @ 300 DPI
+    const IDC_CARD_PIXEL_HEIGHT = 638;  // 2.125in @ 300 DPI
+    const IDC_CAPTURE_SCALE     = 3;    // render the ~320x202 on-screen card 3x, then resize to the exact target below
+
+    // The list of students the generator was last opened for, kept around so
+    // Download All / Print All / a single card's download button don't need
+    // to re-derive the class/section filter after the modal is open.
+    let idcCurrentStudents = [];
+
+    /** Resolve the same "class/section/all" filter the View Database table stage is
+     *  currently showing, ignoring its free-text search box — the generator always
+     *  produces cards for the WHOLE selected group, not just a filtered-down search. */
+    function idcGetStudentsForCurrentVoScope() {
+        const db = getActiveDatabase();
+        let list = db;
+        if (voActiveClass && voActiveClass !== ALL_STUDENTS_KEY) {
+            list = list.filter(s => s.studentClass === voActiveClass);
+            if (voActiveSection && voActiveSection !== 'ALL') {
+                list = list.filter(s => s.section === voActiveSection);
+            }
+        }
+        return list.slice().sort((a, b) => {
+            const ca = (a.studentClass || '').localeCompare(b.studentClass || '', undefined, { numeric: true });
+            if (ca !== 0) return ca;
+            const sa = (a.section || '').localeCompare(b.section || '');
+            if (sa !== 0) return sa;
+            const ra = parseInt(a.rollNo) || 0, rb = parseInt(b.rollNo) || 0;
+            if (ra !== rb) return ra - rb;
+            return (a.fullName || '').localeCompare(b.fullName || '');
+        });
+    }
+
+    /**
+     * Build a deterministic, decorative barcode (Code-128-style bars) as an
+     * inline SVG string from an ID string. It's not meant to be scanned —
+     * there's no real barcode library on this page — it's a visual finishing
+     * touch that always looks the same for the same student ID, spans the
+     * card's full usable width, and renders cleanly through html2canvas.
+     */
+    function idcBuildBarcodeSvg(text) {
+        const VIEW_W = 480, VIEW_H = 60;
+        const str = String(text || '000000');
+        let seed = 0;
+        for (let i = 0; i < str.length; i++) seed = (seed * 131 + str.charCodeAt(i) + 7) >>> 0;
+        const rand = () => {
+            seed = (seed * 1664525 + 1013904223) >>> 0;
+            return seed / 4294967296;
+        };
+        let bars = '';
+        let x = 0;
+        while (x < VIEW_W) {
+            const w = 2 + Math.floor(rand() * 6); // bar/gap width 2–7
+            if (rand() > 0.42) {
+                bars += `<rect x="${x}" y="0" width="${w}" height="${VIEW_H}" fill="#0f172a"/>`;
+            }
+            x += w;
+        }
+        return `<svg viewBox="0 0 ${VIEW_W} ${VIEW_H}" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">${bars}</svg>`;
+    }
+
+    /** Build the inner HTML for one ID card (front side) from a student record. */
+    function idcBuildCardHtml(s, qrPlaceholderId) {
+        const esc = SSValidate.escapeHtml;
+
+        const schoolEl   = document.querySelector('.school-name');
+        const schoolName = schoolEl ? schoolEl.textContent.trim() : 'ST. LAWRENCE INTERNATIONAL SCHOOL';
+        const logoUrl    = getSchoolLogoUrl();
+
+        const photoSrc      = storedStudentFileSrc(s, 'photo');
+        const displayId     = s.regNo || s.id || '—';
+        const classSection  = `${s.studentClass || '—'}${s.section ? ' - ' + s.section : ''}`;
+        const contactNumber = s.phone1 || s.phone2 || '—';
+        const address       = s.permanentAddress || s.address || '—';
+
+        const logoInner = logoUrl
+            ? `<img src="${esc(logoUrl)}" alt="Logo">`
+            : `<i class="fas fa-graduation-cap"></i>`;
+        const photoInner = photoSrc
+            ? `<img src="${esc(photoSrc)}" alt="${esc(s.fullName)}" crossorigin="anonymous">`
+            : `<i class="fas fa-user"></i>`;
+
+        return `
+            <div class="idc-card-header">
+                <div class="idc-card-logo">${logoInner}</div>
+                <div class="idc-card-header-text">
+                    <div class="idc-card-school-name">${esc(schoolName)}</div>
+                    <div class="idc-card-doc-label">Student Identity Card</div>
+                </div>
+            </div>
+            <div class="idc-card-body">
+                <div class="idc-card-photo">${photoInner}</div>
+                <div class="idc-card-info">
+                    <div class="idc-card-name">${esc(s.fullName || '—')}</div>
+                    <span class="idc-card-idbadge">ID: ${esc(displayId)}</span>
+                    <div class="idc-card-row"><span class="idc-label">Class:</span><span class="idc-value">${esc(classSection)}</span></div>
+                    <div class="idc-card-row"><span class="idc-label">Guardian:</span><span class="idc-value">${esc(s.guardianName || '—')}</span></div>
+                    <div class="idc-card-row"><span class="idc-label">Contact:</span><span class="idc-value">${esc(contactNumber)}</span></div>
+                    <div class="idc-card-row idc-row-clamp"><span class="idc-label">Address:</span><span class="idc-value idc-value-clamp">${esc(address)}</span></div>
+                </div>
+            </div>
+            <div class="idc-card-barcode-wrap">
+                <div class="idc-card-barcode-label">Scan for Attendance</div>
+                <div class="idc-card-front-qr-box" id="${qrPlaceholderId}"><i class="fas fa-qrcode idc-card-front-qr-fallback"></i></div>
+                <div class="idc-card-barcode-text">${esc(displayId)}</div>
+            </div>
+        `;
+    }
+
+    /** Build the inner HTML for the BACK of one ID card — school contact
+     *  details plus a "for attendance" barcode along the bottom (the mirror
+     *  of the QR strip on the front). */
+    function idcBuildBackCardHtml(s) {
+        const esc = SSValidate.escapeHtml;
+
+        const schoolEl   = document.querySelector('.school-name');
+        const schoolName = schoolEl ? schoolEl.textContent.trim() : 'ST. LAWRENCE INTERNATIONAL SCHOOL';
+        const logoUrl       = getSchoolLogoUrl();
+        const schoolPhone   = getSchoolContactPhone() || 'Not set in Settings';
+        const schoolAddress = getSchoolContactAddress() || 'Not set in Settings';
+        const displayId     = s.regNo || s.id || '—';
+
+        const logoInner = logoUrl
+            ? `<img src="${esc(logoUrl)}" alt="Logo">`
+            : `<i class="fas fa-graduation-cap"></i>`;
+
+        return `
+            <div class="idc-card-header">
+                <div class="idc-card-logo">${logoInner}</div>
+                <div class="idc-card-header-text">
+                    <div class="idc-card-school-name">${esc(schoolName)}</div>
+                    <div class="idc-card-doc-label">School Contact &amp; Attendance</div>
+                </div>
+            </div>
+            <div class="idc-card-back-body">
+                <div class="idc-back-contact-col">
+                    <div class="idc-back-section-label">School Address</div>
+                    <div class="idc-back-line"><i class="fas fa-map-marker-alt"></i><span>${esc(schoolAddress)}</span></div>
+                    <div class="idc-back-section-label" style="margin-top:2px;">Contact Number</div>
+                    <div class="idc-back-line"><i class="fas fa-phone"></i><span>${esc(schoolPhone)}</span></div>
+                    <div class="idc-back-note">If found, please return this card to the school address above. This card remains the property of ${esc(schoolName)}.</div>
+                </div>
+            </div>
+            <div class="idc-card-barcode-wrap">
+                <div class="idc-card-barcode-label">Scan for Attendance</div>
+                ${idcBuildBarcodeSvg(displayId)}
+                <div class="idc-card-barcode-text">${esc(displayId)}</div>
+            </div>
+        `;
+    }
+
+    /** Sanitize a student's regNo/id for safe use as a DOM id / attribute. */
+    function idcSafeId(regNo) {
+        return String(regNo).replace(/[^a-zA-Z0-9_-]/g, '_');
+    }
+
+    /** Populate the ID card grid for a given list of students and show the overlay. */
+    function idcRenderGrid(students) {
+        const grid  = document.getElementById('idc-cards-grid');
+        const empty = document.getElementById('idc-empty-state');
+        if (!grid) return;
+
+        if (students.length === 0) {
+            grid.innerHTML = '';
+            if (empty) empty.style.display = 'block';
+            return;
+        }
+        if (empty) empty.style.display = 'none';
+
+        grid.innerHTML = students.map((s, idx) => {
+            const displayId = s.regNo || s.id || `row${idx}`;
+            const safeId    = idcSafeId(displayId);
+            const safeName  = SSValidate.escapeHtml(`${s.fullName || 'Unnamed'} — ${s.studentClass || ''}${s.section ? ' ' + s.section : ''}`);
+            const qrId      = `idc-qr-${safeId}`;
+            return `
+                <div class="idc-pair" data-reg="${safeId}">
+                    <div class="idc-pair-header">
+                        <span class="idc-pair-name" title="${safeName}">${safeName}</span>
+                        <button type="button" class="idc-pair-download-btn" onclick="downloadStudentIdCardPair('${safeId}')">
+                            <i class="fas fa-download"></i> Both Sides
+                        </button>
+                    </div>
+                    <div class="idc-pair-row">
+                        <div class="idc-card-thumb" data-reg="${safeId}" data-side="front">
+                            <span class="idc-side-tag">Front</span>
+                            <button type="button" class="idc-card-thumb-download" title="Download front side" onclick="downloadSingleIdCard('${safeId}','front')">
+                                <i class="fas fa-download"></i>
+                            </button>
+                            <div class="idc-card" id="idc-card-front-${safeId}">
+                                ${idcBuildCardHtml(s, qrId)}
+                            </div>
+                        </div>
+                        <div class="idc-card-thumb" data-reg="${safeId}" data-side="back">
+                            <span class="idc-side-tag">Back</span>
+                            <button type="button" class="idc-card-thumb-download" title="Download back side" onclick="downloadSingleIdCard('${safeId}','back')">
+                                <i class="fas fa-download"></i>
+                            </button>
+                            <div class="idc-card idc-card-back" id="idc-card-back-${safeId}">
+                                ${idcBuildBackCardHtml(s)}
+                            </div>
+                        </div>
+                    </div>
+                </div>`;
+        }).join('');
+
+        idcInitQrCodes(students);
+    }
+
+    /**
+     * Draw the "for attendance" QR code into each FRONT card's placeholder.
+     * Runs after idcRenderGrid() has inserted the markup into the DOM, since
+     * QRCode.js draws directly into a live element rather than returning a
+     * string. The QR simply encodes the student's Reg./ID number — the same
+     * value an attendance scanner would look up — so it stays scannable and
+     * useful, not just decorative like the back's barcode.
+     */
+    function idcInitQrCodes(students) {
+        if (typeof QRCode === 'undefined') return; // library failed to load (e.g. offline) — CSS fallback icon stays visible
+        students.forEach(s => {
+            const displayId = s.regNo || s.id;
+            if (!displayId) return;
+            const el = document.getElementById(`idc-qr-${idcSafeId(displayId)}`);
+            if (!el) return;
+            el.innerHTML = ''; // clear the fallback icon before drawing
+            try {
+                new QRCode(el, {
+                    text: String(displayId),
+                    width: 120,
+                    height: 120,
+                    colorDark: '#0f5132',
+                    colorLight: '#ffffff',
+                    correctLevel: QRCode.CorrectLevel.M
+                });
+            } catch (err) {
+                console.error('QR generation failed for', displayId, err);
+                el.innerHTML = '<i class="fas fa-qrcode idc-card-front-qr-fallback"></i>';
+            }
+        });
+    }
+
+    /** "Generate ID Cards" button on the View Database table stage. */
+    window.voOpenIdCardGenerator = function() {
+        idcCurrentStudents = idcGetStudentsForCurrentVoScope();
+
+        const label = document.getElementById('idc-toolbar-label');
+        if (label) {
+            if (voActiveClass === ALL_STUDENTS_KEY) {
+                label.textContent = `Student ID Cards — All Students (${idcCurrentStudents.length})`;
+            } else if (!voActiveSection || voActiveSection === 'ALL') {
+                label.textContent = `Student ID Cards — ${voActiveClass} — All Sections (${idcCurrentStudents.length})`;
+            } else {
+                label.textContent = `Student ID Cards — ${voActiveClass} — Section ${voActiveSection} (${idcCurrentStudents.length})`;
+            }
+        }
+
+        const downloadBtn = document.getElementById('idc-download-all-btn');
+        const printBtn    = document.getElementById('idc-print-all-btn');
+        const hasStudents = idcCurrentStudents.length > 0;
+        if (downloadBtn) downloadBtn.style.display = hasStudents ? '' : 'none';
+        if (printBtn)    printBtn.style.display    = hasStudents ? '' : 'none';
+
+        if (!hasStudents) {
+            showToast('No Students', 'There are no students in this selection to generate ID cards for.', 'danger');
+        }
+
+        idcRenderGrid(idcCurrentStudents);
+
+        const overlay = document.getElementById('idc-overlay');
+        if (overlay) overlay.classList.add('active');
+        document.body.style.overflow = 'hidden';
+    };
+
+    window.closeIdCardGenerator = function() {
+        const overlay = document.getElementById('idc-overlay');
+        if (overlay) overlay.classList.remove('active');
+        document.body.style.overflow = 'auto';
+    };
+
+    /**
+     * Capture one .idc-card DOM node (rendered on-screen at ~320x202) and
+     * return a PNG blob at the exact print resolution (1012 x 638 px / CR80
+     * @ 300 DPI), regardless of how large the on-screen preview is. html2canvas
+     * renders at IDC_CAPTURE_SCALE for crisp text/edges, then a plain <canvas>
+     * resize step stretches that render to the exact final pixel dimensions
+     * so every downloaded/printed card is pixel-identical in size.
+     */
+    async function idcCaptureCardBlob(cardEl) {
+        if (!cardEl || typeof html2canvas === 'undefined') return null;
+        const rawCanvas = await html2canvas(cardEl, {
+            scale: IDC_CAPTURE_SCALE,
+            backgroundColor: '#ffffff',
+            useCORS: true
+        });
+        const finalCanvas = document.createElement('canvas');
+        finalCanvas.width  = IDC_CARD_PIXEL_WIDTH;
+        finalCanvas.height = IDC_CARD_PIXEL_HEIGHT;
+        const ctx = finalCanvas.getContext('2d');
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'high';
+        ctx.drawImage(rawCanvas, 0, 0, IDC_CARD_PIXEL_WIDTH, IDC_CARD_PIXEL_HEIGHT);
+        return new Promise(res => finalCanvas.toBlob(res, 'image/png'));
+    }
+
+    function idcFilenameFor(s, side) {
+        const safeName = String(s.fullName || 'Student').replace(/[^a-z0-9]+/gi, '_').replace(/^_+|_+$/g, '');
+        const safeId   = String(s.regNo || s.id || '').replace(/[^a-z0-9]+/gi, '_');
+        const sidePart = side === 'back' ? 'Back' : 'Front';
+        return `ID_Card_${sidePart}_${safeName}${safeId ? '_' + safeId : ''}.png`;
+    }
+
+    function idcTriggerDownload(blob, filename) {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url; a.download = filename;
+        document.body.appendChild(a); a.click(); a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 4000);
+    }
+
+    function idcFindStudent(safeId) {
+        return idcCurrentStudents.find(x => idcSafeId(x.regNo || x.id) === safeId);
+    }
+
+    function idcCardElFor(safeId, side) {
+        return document.getElementById(`idc-card-${side}-${safeId}`);
+    }
+
+    /** Small per-card download button inside the grid — one side at a time. */
+    window.downloadSingleIdCard = async function(safeId, side) {
+        const s = idcFindStudent(safeId);
+        const cardEl = idcCardElFor(safeId, side);
+        if (!s || !cardEl) return;
+        try {
+            const blob = await idcCaptureCardBlob(cardEl);
+            if (!blob) throw new Error('capture failed');
+            idcTriggerDownload(blob, idcFilenameFor(s, side));
+        } catch (err) {
+            console.error('ID card capture failed', err);
+            showToast('Generation Failed', `Could not generate the ${side} of the ID card for ${s.fullName || 'this student'}.`, 'danger');
+        }
+    };
+
+    /** "Both Sides" button on a single student's pair header. */
+    window.downloadStudentIdCardPair = async function(safeId) {
+        const s = idcFindStudent(safeId);
+        if (!s) return;
+        const frontEl = idcCardElFor(safeId, 'front');
+        const backEl  = idcCardElFor(safeId, 'back');
+        try {
+            const frontBlob = await idcCaptureCardBlob(frontEl);
+            if (frontBlob) idcTriggerDownload(frontBlob, idcFilenameFor(s, 'front'));
+            await new Promise(r => setTimeout(r, 200));
+            const backBlob = await idcCaptureCardBlob(backEl);
+            if (backBlob) idcTriggerDownload(backBlob, idcFilenameFor(s, 'back'));
+        } catch (err) {
+            console.error('ID card capture failed', err);
+            showToast('Generation Failed', `Could not generate the ID card for ${s.fullName || 'this student'}.`, 'danger');
+        }
+    };
+
+    /** Toolbar "Download All" — generates and downloads BOTH sides of every card in the current scope, one at a time. */
+    window.downloadAllIdCards = async function() {
+        if (!idcCurrentStudents.length) return;
+
+        const btn = document.getElementById('idc-download-all-btn');
+        const progress = document.getElementById('idc-progress');
+        const progressText = document.getElementById('idc-progress-text');
+        if (btn) btn.disabled = true;
+        if (progress) progress.style.display = 'flex';
+
+        const total = idcCurrentStudents.length * 2;
+        let done = 0, failed = 0;
+        for (const s of idcCurrentStudents) {
+            const safeId = idcSafeId(s.regNo || s.id);
+            for (const side of ['front', 'back']) {
+                const cardEl = idcCardElFor(safeId, side);
+                if (progressText) progressText.textContent = `Generating ${done + 1} of ${total}…`;
+                try {
+                    const blob = await idcCaptureCardBlob(cardEl);
+                    if (!blob) throw new Error('capture failed');
+                    idcTriggerDownload(blob, idcFilenameFor(s, side));
+                    done++;
+                    // Small gap between downloads so the browser doesn't treat
+                    // a burst of instant downloads as a pop-up-style spam block.
+                    await new Promise(r => setTimeout(r, 220));
+                } catch (err) {
+                    console.error('ID card capture failed for', safeId, side, err);
+                    failed++;
+                }
+            }
+        }
+
+        if (progress) progress.style.display = 'none';
+        if (btn) btn.disabled = false;
+
+        if (failed === 0) {
+            showToast('ID Cards Ready', `Downloaded ${done} ID card image${done === 1 ? '' : 's'} (front + back for ${idcCurrentStudents.length} student${idcCurrentStudents.length === 1 ? '' : 's'}).`, 'success');
+        } else {
+            showToast('Partially Completed', `Downloaded ${done} image${done === 1 ? '' : 's'}; ${failed} failed.`, 'danger');
+        }
+    };
+
+    /** Toolbar "Print All" — captures every front and back, then opens a print-ready sheet with them laid out at their true physical size (3.375in x 2.125in each = 1012x638px @ 300 DPI) so they print at the correct real-world size on any printer. Fronts are printed first, followed by the matching backs in the same student order, so double-sided assembly is easy. */
+    window.printAllIdCards = async function() {
+        if (!idcCurrentStudents.length) return;
+
+        const btn = document.getElementById('idc-print-all-btn');
+        const progress = document.getElementById('idc-progress');
+        const progressText = document.getElementById('idc-progress-text');
+        if (btn) btn.disabled = true;
+        if (progress) progress.style.display = 'flex';
+
+        const total = idcCurrentStudents.length * 2;
+        const frontUrls = [];
+        const backUrls  = [];
+
+        const captureAndPush = async (cardEl, bucket) => {
+            const blob = await idcCaptureCardBlob(cardEl);
+            if (blob) bucket.push(await new Promise(res => {
+                const reader = new FileReader();
+                reader.onload = () => res(reader.result);
+                reader.readAsDataURL(blob);
+            }));
+        };
+
+        let processed = 0;
+        for (const s of idcCurrentStudents) {
+            const safeId = idcSafeId(s.regNo || s.id);
+            if (progressText) progressText.textContent = `Preparing ${processed + 1} of ${total}…`;
+            try { await captureAndPush(idcCardElFor(safeId, 'front'), frontUrls); } catch (err) { console.error(err); }
+            processed++;
+            if (progressText) progressText.textContent = `Preparing ${processed + 1} of ${total}…`;
+            try { await captureAndPush(idcCardElFor(safeId, 'back'), backUrls); } catch (err) { console.error(err); }
+            processed++;
+        }
+
+        if (progress) progress.style.display = 'none';
+        if (btn) btn.disabled = false;
+
+        if (frontUrls.length === 0 && backUrls.length === 0) {
+            showToast('Print Failed', 'Could not generate any ID cards to print.', 'danger');
+            return;
+        }
+
+        const printWin = window.open('', '_blank', 'width=1000,height=800');
+        if (!printWin) {
+            showToast('Pop-up Blocked', 'Please allow pop-ups to print the ID cards.', 'danger');
+            return;
+        }
+
+        const toImgs = (urls) => urls.map(src => `<img class="idc-print-card" src="${src}" alt="ID Card">`).join('');
+
+        printWin.document.write(`
+<!DOCTYPE html>
+<html>
+<head>
+<title>Student ID Cards — Print</title>
+<style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    @page { size: A4; margin: 10mm; }
+    body { background: #fff; padding: 6mm; }
+    .idc-print-section-label {
+        font-family: Arial, sans-serif;
+        font-size: 12px;
+        font-weight: 700;
+        color: #64748b;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        margin: 4mm 0 3mm;
+    }
+    .idc-print-sheet {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6mm;
+    }
+    /* Each card printed at its true physical CR80 size: 3.375in x 2.125in
+       (the source image is 1012 x 638 px, i.e. exactly 300 DPI at this size). */
+    .idc-print-card {
+        width: 3.375in;
+        height: 2.125in;
+        object-fit: contain;
+        border: 1px dashed #cbd5e1; /* cut guide — doesn't print if the printer ignores light dashed lines; kept for visual cutting reference on-screen */
+    }
+    .idc-print-break { break-before: page; }
+    @media print {
+        .idc-print-card { border-color: #e2e8f0; }
+    }
+</style>
+</head>
+<body>
+    <div class="idc-print-section-label">Front Side — ${frontUrls.length} card${frontUrls.length === 1 ? '' : 's'}</div>
+    <div class="idc-print-sheet">${toImgs(frontUrls)}</div>
+    <div class="idc-print-section-label idc-print-break">Back Side — ${backUrls.length} card${backUrls.length === 1 ? '' : 's'} (same order as front)</div>
+    <div class="idc-print-sheet">${toImgs(backUrls)}</div>
+    <script>
+        window.onload = function() {
+            setTimeout(function() { window.focus(); window.print(); }, 300);
+        };
+    <\/script>
+</body>
+</html>`);
+        printWin.document.close();
+    };
+
     // ── PROMOTE ALL STUDENTS ─────────────────────────────────────────────────
 
     // Fallback progression, only used if no classes have been configured yet

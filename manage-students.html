@@ -12,6 +12,7 @@
     <script>(function(){const s=localStorage.getItem('softschool-theme');const t=(s==='light'||s==='dark')?s:'dark';document.documentElement.setAttribute('data-theme',t);})()</script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <script src="shared-data.js"></script>
     <script src="input-validation.js"></script>
 <script src="access-control.js"></script>
@@ -749,6 +750,9 @@
                     <div class="msc-stage-header">
                         <button class="btn-ghost msc-back-btn" onclick="voBackToSections()"><i class="fas fa-arrow-left"></i> Back</button>
                         <h4 id="vo-table-context-title" class="msc-stage-title"></h4>
+                        <button class="btn-secondary btn-sm-upd idc-generate-btn" id="vo-idcard-btn" onclick="voOpenIdCardGenerator()" title="Generate printable ID cards for every student in this class/section">
+                            <i class="fas fa-id-card"></i> Generate ID Cards
+                        </button>
                     </div>
 
                     <!-- CLASS TEACHER / INCHARGE -->
@@ -1296,6 +1300,43 @@
         </div>
         <div class="photo-viewer-body">
             <img id="photo-viewer-image" class="photo-viewer-image" alt="Student Photo">
+        </div>
+    </div>
+
+    <!-- STUDENT ID CARD GENERATOR — opened from the "Generate ID Cards" button
+         on the View Database student-table stage. Renders one printable ID
+         card per student currently in view (whichever class/section/"All
+         Students" scope is selected) at 1012 x 638 px (CR80 card size @ 300
+         DPI), with options to download every card as a PNG or print them all
+         on ready-to-cut sheets. -->
+    <div id="idc-overlay" class="idc-overlay" onclick="if(event.target===this) closeIdCardGenerator()">
+        <div class="idc-panel">
+            <div class="idc-toolbar">
+                <span class="idc-toolbar-title"><i class="fas fa-id-card"></i> <span id="idc-toolbar-label">Student ID Cards</span></span>
+                <div class="idc-toolbar-actions">
+                    <button type="button" class="cert-viewer-btn cert-viewer-btn-primary" id="idc-download-all-btn" onclick="downloadAllIdCards()">
+                        <i class="fas fa-download"></i> <span>Download All</span>
+                    </button>
+                    <button type="button" class="cert-viewer-btn" id="idc-print-all-btn" onclick="printAllIdCards()">
+                        <i class="fas fa-print"></i> <span>Print All</span>
+                    </button>
+                    <button type="button" class="cert-viewer-btn cert-viewer-close" onclick="closeIdCardGenerator()" aria-label="Close ID card generator">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="idc-body">
+                <div id="idc-progress" class="idc-progress" style="display:none;">
+                    <i class="fas fa-spinner fa-spin"></i> <span id="idc-progress-text">Generating…</span>
+                </div>
+                <div id="idc-empty-state" class="idc-empty-state" style="display:none;">
+                    <i class="fas fa-id-card"></i>
+                    <p>No students found for this selection.</p>
+                </div>
+                <div id="idc-cards-grid" class="idc-cards-grid">
+                    <!-- populated by JS: one .idc-card-thumb per student -->
+                </div>
+            </div>
         </div>
     </div>
 
