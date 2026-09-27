@@ -4353,7 +4353,7 @@ if (certUploadInput) {
 
     const IDC_CARD_PIXEL_WIDTH  = 638;  // 2.125in @ 300 DPI (vertical CR80 card)
     const IDC_CARD_PIXEL_HEIGHT = 1012; // 3.375in @ 300 DPI
-    const IDC_CAPTURE_SCALE     = 3;    // render the ~202x320 on-screen card 3x, then resize to the exact target below
+    const IDC_CAPTURE_SCALE     = 3;    // render the ~340x540 on-screen card 3x, then resize to the exact target below
 
     // The list of students the generator was last opened for, kept around so
     // Download All / Print All / a single card's download button don't need
@@ -4631,7 +4631,7 @@ if (certUploadInput) {
     };
 
     /**
-     * Capture one .idc-card DOM node (rendered on-screen at ~202x320) and
+     * Capture one .idc-card DOM node (rendered on-screen at ~340x540) and
      * return a PNG blob at the exact print resolution (638 x 1012 px / vertical CR80
      * @ 300 DPI), regardless of how large the on-screen preview is. html2canvas
      * renders at IDC_CAPTURE_SCALE for crisp text/edges, then a plain <canvas>
