@@ -2551,14 +2551,27 @@ function updateFeeStatsHeader() {
         totalPending = _computeRealtimePendingTotal(allStudents);
     } catch (e) { totalPending = 0; }
 
-    // "Total with Fine" — the full amount payable this month across every
-    // billable, voucher-generated student, fines included. totalCollected
-    // and totalPending are both derived from computeFeeBreakdown().voucherTotal
-    // (see _computeRealtimePendingTotal above), and voucherTotal already
-    // folds in the student's live fine amount — so simply adding what's
-    // already been collected to what's still pending gives the true
-    // fine-inclusive total payable, with no separate fine math needed here.
-    const totalWithFine = totalCollected + totalPending;
+    // BUGFIX — "Total with Fine can be bigger than what was actually billed
+    // this month": totalCollected (above) now deliberately counts ANY
+    // payment received this period, including a Fee Defaulters payment
+    // settling an OLDER month's arrears (see _computeCollectedThisPeriod) —
+    // that's what makes the Collected card actually move when a defaulter
+    // pays. But totalPending only ever covers students billed THIS month
+    // (see _computeRealtimePendingTotal). Adding the two together mixed a
+    // wider-scoped number with a narrower-scoped one, so paying off an old
+    // defaulter could inflate "Total with Fine" past what this month's
+    // billing actually adds up to, even though nothing new was billed.
+    // Fix: keep totalCollected's broader scope for the Collected card
+    // (unchanged, still what makes paying a defaulter move that number),
+    // but compute "Total with Fine" from a matching, THIS-MONTH-ONLY
+    // collected figure — same scope as totalPending — so the two always
+    // describe the same billing period and the equation stays true.
+    let currentMonthOnlyCollected = 0;
+    try {
+        const students = getAllStudentsForFinanceTotals();
+        currentMonthOnlyCollected = students.reduce((sum, s) => sum + getPaidThisMonthAuthoritative(s, monthKey), 0);
+    } catch (e) { currentMonthOnlyCollected = 0; }
+    const totalWithFine = currentMonthOnlyCollected + totalPending;
 
     genEl.textContent = _fmtStatMoney(totalGenerated); genEl.title = `Rs. ${totalGenerated.toLocaleString()}`;
     colEl.textContent = _fmtStatMoney(totalCollected); colEl.title = `Rs. ${totalCollected.toLocaleString()}`;
@@ -3575,6 +3588,37 @@ function computeFeeBreakdown(s) {
     const dueDate = new Date(feeYear, feeMonth, vs.dueDayOfMonth);
     const graceExpiryDate = new Date(feeYear, feeMonth, vs.expiryDayOfMonth);
 
+    // BUGFIX — "late fee never actually charges once the fee cycle is
+    // pushed ahead of the real calendar": graceExpiryDate above is built
+    // from the FEE-billing month (feeYear/feeMonth), not the real calendar.
+    // A school that has clicked "Move to Next Month" ahead of real time
+    // (e.g. billing month is already January 2027 while the real date is
+    // still September 2026 — exactly what "Move to Next Month" is built to
+    // let a school do) ends up with graceExpiryDate sitting in the future
+    // relative to `today` FOREVER, no matter how overdue a bill really is —
+    // `today` can never catch up to a date that's defined in terms of a
+    // billing month that itself keeps getting pushed further ahead.
+    // Fix: ALSO treat a bill as overdue once enough real days have actually
+    // elapsed since its voucher was generated — a plain backstop that
+    // doesn't care what the billing-month label says. The threshold
+    // (30 + graceDays) approximates "one full month, plus the configured
+    // grace" — i.e. about how long the calendar-based rule above already
+    // takes to fire for a school whose fee month tracks the real calendar
+    // (voucher generated on/near the 1st, due on/near the 10th of the
+    // FOLLOWING month ≈ 30-40 real days later). So for a normally-paced
+    // school this real-time check essentially never fires any earlier than
+    // the calendar check already would — nothing changes for them — it
+    // only closes the gap for a school whose billing month has outrun the
+    // real calendar, where the calendar check alone can never fire at all.
+    const generatedAt = generatedVoucher && generatedVoucher.generatedAt
+        ? new Date(generatedVoucher.generatedAt)
+        : null;
+    const realDaysSinceGenerated = generatedAt
+        ? Math.floor((today.getTime() - generatedAt.getTime()) / 86400000)
+        : -1; // no voucher yet at all — can't be overdue on a bill that hasn't been issued
+    const isPastDueByElapsedTime = vs.lateFineEnabled
+        && realDaysSinceGenerated >= (30 + vs.graceDays);
+
     // BUGFIX — "late fee fine not working / fees after due date don't
     // work": lateFeeSurcharge was always fully computed, but only ever
     // displayed as an informational note on the printed voucher
@@ -3589,7 +3633,8 @@ function computeFeeBreakdown(s) {
     // this student billed for right now" should read payableNow, not
     // voucherTotal (which stays the pre-fine base, still shown on its own
     // line on the printed voucher).
-    const isPastDue = vs.lateFineEnabled && today.getTime() > graceExpiryDate.getTime();
+    const isPastDue = vs.lateFineEnabled
+        && (today.getTime() > graceExpiryDate.getTime() || isPastDueByElapsedTime);
     const payableNow = isPastDue ? (voucherTotal + lateFeeSurcharge) : voucherTotal;
 
     return {
@@ -3868,8 +3913,16 @@ buildVoucherHTML = function(s) {
     
     if (f.monthlyFineTotal > 0) {
         const fineRow = `<tr><td>Disciplinary Fines</td><td>${f.fineDetails}</td><td>Rs. ${f.monthlyFineTotal.toLocaleString()}</td></tr>`;
-        // Insert the row before the totals (using simple string replace for demo)
-        html = html.replace('</tbody>', `${fineRow}</tbody>`);
+        // BUGFIX — "Student Copy is missing the fine line, School Copy has
+        // it": a printed voucher is actually TWO stacked copies ("School
+        // Copy" + "Student Copy"), each with its own <tbody>...</tbody>.
+        // A plain string .replace() only ever touches the FIRST match, so
+        // the fine row landed in one copy only — both copies' TOTAL already
+        // included the fine correctly (that comes from payableNow, computed
+        // once above), so the copy missing the row showed a total that
+        // didn't add up to the rows printed above it. A global replace
+        // inserts the row into every copy's table, not just the first.
+        html = html.replace(/<\/tbody>/g, `${fineRow}</tbody>`);
     }
     return html;
 };
@@ -6278,6 +6331,27 @@ function recordVoucherGeneration(student, source = 'individual', importPrevious 
     // locked into the voucher always matches what's actually on record.
     const freshStudent = findStudentExact(getRealStudents(), studentId, student.fullName) || student;
 
+    // BUGFIX — "installment fines never end": computeFeeBreakdown's fine
+    // wrapper (see monthlyFineTotal above) charges every fine in
+    // student.fines with fine.remainingInstallments > 0 again this month,
+    // but nothing anywhere ever decremented remainingInstallments — so an
+    // "N-installment" fine was actually charged forever, every month,
+    // regardless of N. This is currently inert (nothing in the app writes
+    // to student.fines yet), so this has no effect on anything working
+    // today — it only makes the counter behave correctly the moment that
+    // feature is ever wired up to add one. Ticking it down here, at the
+    // same monthly-rollover point every other per-month state (arrears,
+    // one-time discounts, custom voucher rows) already resets, keeps it
+    // consistent with how the rest of this function treats "a new month
+    // has started."
+    if (Array.isArray(freshStudent.fines) && freshStudent.fines.length > 0) {
+        freshStudent.fines = freshStudent.fines
+            .map(fine => (Number(fine.remainingInstallments) > 0)
+                ? { ...fine, remainingInstallments: Number(fine.remainingInstallments) - 1 }
+                : fine)
+            .filter(fine => Number(fine.remainingInstallments) !== 0 || fine.remainingInstallments == null);
+    }
+
     // Roll forward any unpaid balance from earlier months into this
     // month's "Previous Arrears" BEFORE snapshotting, and expire any
     // one-time discount/custom-fee edits that belonged to the month that
@@ -7761,22 +7835,42 @@ async function loadFeeDefaulters() {
             }
         }
         // FEATURE — a currently-enrolled (billable) student's REGULAR bill
-        // for the live current month is paid through the normal Manage
+        // for the LIVE current month is paid through the normal Manage
         // Student Fees → Pay Bill flow, not from this page — that flow is
-        // unaffected by anything below. This page's whole job for a
-        // billable student is narrower: surface OLD, already-frozen,
-        // carried-over debt (arrears) that rolled forward from a PAST
-        // month they never fully paid off. Being merely late on THIS
-        // month's own bill does not make someone a "defaulter" yet — that
-        // only happens the moment "Move to Next Month" freezes today's
-        // unpaid balance into next month's Previous Arrears (see
+        // unaffected by anything below. This page's job for that one case
+        // (billable AND it's the live current month) is narrower: surface
+        // OLD, already-frozen, carried-over debt (arrears) that rolled
+        // forward from a PAST month they never fully paid off. Being merely
+        // late on THIS month's own bill does not make someone a "defaulter"
+        // yet — that only happens the moment "Move to Next Month" freezes
+        // today's unpaid balance into next month's Previous Arrears (see
         // computeOutstandingArrears/recordVoucherGeneration, which already
-        // do exactly that, unchanged). A DROPPED/inactive student has no
-        // such normal-flow page left to pay through at all, so for them
-        // the ENTIRE outstanding balance (whatever mix of old arrears and
-        // their own last bill it is) is treated as defaulter debt, exactly
-        // as before.
+        // do exactly that, unchanged).
+        //
+        // BUGFIX — "switching the month dropdown shows a wrong/huge amount,
+        // and real defaulters disappear": this used to gate the
+        // arrears-only view on roster status alone (isBillableNow), for
+        // EVERY month shown on this page — including a PAST month the
+        // admin picked directly from the dropdown. But "pay it through
+        // Manage Student Fees instead" is only actually true for the LIVE
+        // current month — that page only ever shows today's bill, never an
+        // old one. So a still-active student's genuinely unpaid OLD month
+        // was being squeezed through the arrears-only lens too: if that old
+        // month's own carried-in arrears happened to be small or zero (e.g.
+        // it was an early month, or arrears had just been cleared), the
+        // WHOLE unpaid bill for that month vanished from Pending — a real
+        // default incorrectly "cleared" itself. And browsing a month where
+        // arrears had compounded a lot showed only that raw compounded
+        // figure with no accompanying context, reading as an oddly large
+        // number for "one month". Fix: only apply the arrears-only,
+        // pay-elsewhere view when BOTH conditions hold at once — billable
+        // AND this is genuinely the live current month (plan.useLive, set
+        // by _resolveFeeMonthPlan above). Any other month for ANY student —
+        // active or dropped — has no other page left to pay it through, so
+        // it shows the real, full remaining balance for that specific
+        // month, exactly like a dropped student always has.
         const isBillableNow = _isBillable(s);
+        const payableElsewhere = plan.useLive && isBillableNow;
 
         // FEATURE — arrears vs current-fee breakdown (see
         // _splitFeeAndArrears above). `billed` and `arrearsDue` come
@@ -7792,24 +7886,24 @@ async function loadFeeDefaulters() {
         const split = _splitFeeAndArrears(billedTotal, arrearsDue, collectedThisMonth);
 
         // BUGFIX — "defaulter pending has to freeze until the next Move to
-        // Next Month, not float with this month's own lateness": a billable
-        // student is only ever a defaulter here for their ARREARS
-        // (Pending=arrearsDue, Collected=arrearsCollected,
-        // Remaining=arrearsRemaining — Remaining is exactly Pending minus
-        // Collected, basic subtraction, nothing else added in). A dropped
-        // student keeps the full pending/paid/remaining figures used before,
-        // since every rupee they owe is equally uncollectable through any
-        // other page.
-        const pendingTotal = isBillableNow ? split.arrearsDue : fullBilled;
-        const paidAmount = isBillableNow ? split.arrearsCollected : collectedThisMonth;
-        const remainingBalance = isBillableNow ? split.arrearsRemaining : finance.remainingBalance;
+        // Next Month, not float with this month's own lateness": ONLY when
+        // payableElsewhere is true (billable AND the live current month) is
+        // this row narrowed down to ARREARS only (Pending=arrearsDue,
+        // Collected=arrearsCollected, Remaining=arrearsRemaining — Remaining
+        // is exactly Pending minus Collected, basic subtraction, nothing
+        // else added in). Every other case (a dropped student, or ANY
+        // student's genuinely past month) shows the full pending/paid/
+        // remaining figures, since there is no other page where that
+        // specific bill can be paid.
+        const pendingTotal = payableElsewhere ? split.arrearsDue : fullBilled;
+        const paidAmount = payableElsewhere ? split.arrearsCollected : collectedThisMonth;
+        const remainingBalance = payableElsewhere ? split.arrearsRemaining : finance.remainingBalance;
         const paymentStatus = remainingBalance <= 0 ? 'Paid' : (paidAmount > 0 ? 'Partial' : 'Pending');
 
-        // A billable student only belongs on THIS list while they still
-        // have real, frozen arrears left; a dropped student stays listed
-        // for as long as anything at all remains unpaid — matching the
+        // A row only belongs on THIS list while it still owes money under
+        // whichever definition applies to it above — matching the
         // Pending/Remaining definitions chosen just above for each case.
-        const stillOwesAsDefaulter = isBillableNow ? split.arrearsRemaining > 0 : finance.remainingBalance > 0;
+        const stillOwesAsDefaulter = payableElsewhere ? split.arrearsRemaining > 0 : finance.remainingBalance > 0;
 
         if (stillOwesAsDefaulter) {
             const pendingMonths = _computePendingMonths(s);
@@ -7828,10 +7922,18 @@ async function loadFeeDefaulters() {
                 monthKey: effectiveMonthKey,
                 // Surfaced so a dropped/inactive student who still owes
                 // money is visibly flagged as such, rather than looking like
-                // any other active student on the list — and gates the Pay
-                // button (see _renderDefaultersTable): only ever shown when
-                // this is false.
+                // any other active student on the list. This is roster
+                // status only (for the badge) — it does NOT by itself
+                // decide the Pay button; see payableElsewhere below for that.
                 isBillableNow,
+                // Gates the Pay button (see _renderDefaultersTable): shown
+                // whenever this is false — i.e. for a dropped student, OR
+                // for a still-active student's genuinely PAST month, since
+                // neither has any other page where this specific bill can
+                // be paid. Only false — meaning "yes, pay this elsewhere,
+                // no button needed here" — for a billable student's live
+                // current-month row.
+                payableElsewhere,
                 rosterStatus: typeof studentStatusLabel === 'function' ? studentStatusLabel(s) : 'Active',
                 remainingBalance, paymentStatus,
                 paidAmount,
@@ -7992,16 +8094,19 @@ function _renderDefaultersTable(defaulters) {
             : `<span style="color:var(--text-secondary);">—</span>`;
 
         // BUGFIX — "don't add a Pay button for a currently-enrolled
-        // student — that's what Manage Student Fees → Pay Bill is for; this
-        // page's Pay button is only for a dropped/inactive student who has
-        // no other page left to pay through." A billable student's row
-        // clears itself automatically the moment their arrears reach 0 —
-        // either because they paid 100% of what they owe, or because any
-        // amount paid beyond this month's own tuition/current-fee due was
-        // applied to arrears first (see _splitFeeAndArrears's allocation
-        // rule) — no button needed or shown here for them.
-        const actionCell = d.isBillableNow
-            ? `<span style="color:var(--text-secondary);font-size:0.78rem;" title="Pay this from Manage Student Fees — this page only accepts direct payment for dropped/inactive students.">Pay via Manage Fees</span>`
+        // student — that's what Manage Student Fees → Pay Bill is for":
+        // that's only true for a billable student's row that is ALSO the
+        // live current month (payableElsewhere — see loadFeeDefaulters).
+        // A dropped student, OR a still-active student's genuinely PAST
+        // month, has no such other page to pay through — either way, this
+        // is the only place that balance can be settled, so it gets the Pay
+        // button. A live-current-month billable row clears itself
+        // automatically the moment its arrears reach 0 — either because
+        // 100% was paid, or because any amount paid beyond this month's own
+        // tuition/current-fee due was applied to arrears first (see
+        // _splitFeeAndArrears's allocation rule) — no button needed there.
+        const actionCell = d.payableElsewhere
+            ? `<span style="color:var(--text-secondary);font-size:0.78rem;" title="Pay this from Manage Student Fees — this page only accepts direct payment for a dropped/inactive student, or a past month's bill.">Pay via Manage Fees</span>`
             : `<button type="button" class="btn-tiny btn-add-fees"
                     onclick="openFdPayModal('${_escAttr(d.studentId)}', '${_escAttr(d.studentName)}', '${_escAttr(d.monthKey)}', ${Number(d.remainingBalance) || 0})">
                     <i class="fas fa-money-bill-wave"></i> Pay
