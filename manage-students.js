@@ -4348,12 +4348,12 @@ if (certUploadInput) {
     // whichever scope is currently selected there — a single section, a
     // whole class (all sections), or the whole school ("All Students") —
     // and lets the admin download every card as a PNG sized exactly
-    // 1012 x 638 px (standard CR80 ID card size at 300 DPI) or send them to
+    // 638 x 1012 px (standard vertical CR80 ID card size at 300 DPI) or send them to
     // a print-ready, cut-to-size sheet.
 
-    const IDC_CARD_PIXEL_WIDTH  = 1012; // 3.375in @ 300 DPI
-    const IDC_CARD_PIXEL_HEIGHT = 638;  // 2.125in @ 300 DPI
-    const IDC_CAPTURE_SCALE     = 3;    // render the ~320x202 on-screen card 3x, then resize to the exact target below
+    const IDC_CARD_PIXEL_WIDTH  = 638;  // 2.125in @ 300 DPI (vertical CR80 card)
+    const IDC_CARD_PIXEL_HEIGHT = 1012; // 3.375in @ 300 DPI
+    const IDC_CAPTURE_SCALE     = 3;    // render the ~202x320 on-screen card 3x, then resize to the exact target below
 
     // The list of students the generator was last opened for, kept around so
     // Download All / Print All / a single card's download button don't need
@@ -4445,10 +4445,12 @@ if (certUploadInput) {
                 <div class="idc-card-info">
                     <div class="idc-card-name">${esc(s.fullName || '—')}</div>
                     <span class="idc-card-idbadge">ID: ${esc(displayId)}</span>
-                    <div class="idc-card-row"><span class="idc-label">Class:</span><span class="idc-value">${esc(classSection)}</span></div>
-                    <div class="idc-card-row"><span class="idc-label">Guardian:</span><span class="idc-value">${esc(s.guardianName || '—')}</span></div>
-                    <div class="idc-card-row"><span class="idc-label">Contact:</span><span class="idc-value">${esc(contactNumber)}</span></div>
-                    <div class="idc-card-row idc-row-clamp"><span class="idc-label">Address:</span><span class="idc-value idc-value-clamp">${esc(address)}</span></div>
+                    <div class="idc-card-rows">
+                        <div class="idc-card-row"><span class="idc-label">Class:</span><span class="idc-value">${esc(classSection)}</span></div>
+                        <div class="idc-card-row"><span class="idc-label">Guardian:</span><span class="idc-value">${esc(s.guardianName || '—')}</span></div>
+                        <div class="idc-card-row"><span class="idc-label">Contact:</span><span class="idc-value">${esc(contactNumber)}</span></div>
+                        <div class="idc-card-row idc-row-clamp"><span class="idc-label">Address:</span><span class="idc-value idc-value-clamp">${esc(address)}</span></div>
+                    </div>
                 </div>
             </div>
             <div class="idc-card-barcode-wrap">
@@ -4629,8 +4631,8 @@ if (certUploadInput) {
     };
 
     /**
-     * Capture one .idc-card DOM node (rendered on-screen at ~320x202) and
-     * return a PNG blob at the exact print resolution (1012 x 638 px / CR80
+     * Capture one .idc-card DOM node (rendered on-screen at ~202x320) and
+     * return a PNG blob at the exact print resolution (638 x 1012 px / vertical CR80
      * @ 300 DPI), regardless of how large the on-screen preview is. html2canvas
      * renders at IDC_CAPTURE_SCALE for crisp text/edges, then a plain <canvas>
      * resize step stretches that render to the exact final pixel dimensions
@@ -4751,7 +4753,7 @@ if (certUploadInput) {
         }
     };
 
-    /** Toolbar "Print All" — captures every front and back, then opens a print-ready sheet with them laid out at their true physical size (3.375in x 2.125in each = 1012x638px @ 300 DPI) so they print at the correct real-world size on any printer. Fronts are printed first, followed by the matching backs in the same student order, so double-sided assembly is easy. */
+    /** Toolbar "Print All" — captures every front and back, then opens a print-ready sheet with them laid out at their true physical size (2.125in x 3.375in each = 638x1012px @ 300 DPI, vertical CR80) so they print at the correct real-world size on any printer. Fronts are printed first, followed by the matching backs in the same student order, so double-sided assembly is easy. */
     window.printAllIdCards = async function() {
         if (!idcCurrentStudents.length) return;
 
@@ -4824,11 +4826,12 @@ if (certUploadInput) {
         flex-wrap: wrap;
         gap: 6mm;
     }
-    /* Each card printed at its true physical CR80 size: 3.375in x 2.125in
-       (the source image is 1012 x 638 px, i.e. exactly 300 DPI at this size). */
+    /* Each card printed at its true physical, vertical CR80 size: 2.125in x
+       3.375in (the source image is 638 x 1012 px, i.e. exactly 300 DPI at
+       this size). */
     .idc-print-card {
-        width: 3.375in;
-        height: 2.125in;
+        width: 2.125in;
+        height: 3.375in;
         object-fit: contain;
         border: 1px dashed #cbd5e1; /* cut guide — doesn't print if the printer ignores light dashed lines; kept for visual cutting reference on-screen */
     }

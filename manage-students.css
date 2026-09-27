@@ -2520,7 +2520,7 @@ select option {
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    max-width: 470px;
+    max-width: 300px;
 }
 
 .idc-pair-download-btn {
@@ -2551,14 +2551,14 @@ select option {
 
 /* Thumbnail wrapper — fixed on-screen size; the actual card node inside is
    captured at full resolution via html2canvas + a canvas resize step, so
-   what's rendered here only needs to LOOK right, not BE 1012x638 in the DOM. */
+   what's rendered here only needs to LOOK right, not BE 638x1012 in the DOM. */
 .idc-card-thumb {
     position: relative;
-    width: 320px;
-    height: 202px;
-    border-radius: 10px;
+    width: 202px;
+    height: 320px;
+    border-radius: 14px;
     overflow: hidden;
-    box-shadow: 0 8px 22px rgba(0,0,0,0.35);
+    box-shadow: 0 10px 26px rgba(0,0,0,0.4);
     background: #fff;
     flex-shrink: 0;
 }
@@ -2606,12 +2606,15 @@ select option {
     background: var(--accent-primary, #3b82f6);
 }
 
-/* ---- Front-side ID card design — professional, green brand theme ----
-   Fixed dimensions: 320x202 on-screen (captured/printed at 1012x638 =
-   exact CR80 card size at 300 DPI). Layout, top to bottom:
-     1. Header band  — school logo + school name
-     2. Body         — student photo + full details column
-     3. Barcode strip — full width, inset by side margins
+/* ---- ID card design — vertical (portrait) layout, professional green
+   brand theme. Fixed dimensions: 202x320 on-screen (captured/printed at
+   638x1012 = exact vertical CR80 card size at 300 DPI). Layout, top to
+   bottom, centered:
+     1. Header band     — logo + school name, centered
+     2. Photo           — centered, framed
+     3. Name/ID/details — centered heading, left-aligned detail rows
+     4. Attendance strip — QR (front) / barcode (back), with generous
+                            breathing room above it
 */
 :root {
     --idc-green-1: #0f5132;
@@ -2621,8 +2624,8 @@ select option {
 }
 
 .idc-card {
-    width: 320px;
-    height: 202px;
+    width: 202px;
+    height: 320px;
     position: relative;
     background: #ffffff;
     color: #0f172a;
@@ -2633,56 +2636,69 @@ select option {
     border: 1px solid #d1fae5;
 }
 
-/* Slim decorative rail down the left edge — a common, tidy touch on
-   professionally printed ID cards. Purely cosmetic. */
-.idc-card::before {
+/* Slim decorative bar along the very bottom edge — a tidy finishing touch
+   common on professionally printed vertical ID cards. Purely cosmetic. */
+.idc-card::after {
     content: "";
     position: absolute;
-    top: 0; left: 0; bottom: 0;
-    width: 5px;
-    background: linear-gradient(180deg, var(--idc-green-2), var(--idc-green-1));
+    left: 0; right: 0; bottom: 0;
+    height: 6px;
+    background: linear-gradient(90deg, var(--idc-green-2), var(--idc-green-1), var(--idc-green-2));
     z-index: 2;
 }
 
 .idc-card-header {
     position: relative;
     display: flex;
+    flex-direction: column;
     align-items: center;
-    gap: 8px;
-    padding: 8px 10px 8px 14px;
-    background: linear-gradient(120deg, var(--idc-green-1), var(--idc-green-3) 65%, var(--idc-green-2));
+    text-align: center;
+    gap: 3px;
+    padding: 16px 14px 13px;
+    background: linear-gradient(160deg, var(--idc-green-1), var(--idc-green-3) 55%, var(--idc-green-2));
     color: #fff;
     flex-shrink: 0;
     overflow: hidden;
 }
 
-/* Faint diagonal watermark stripe in the header for a bit of texture,
+/* Faint diagonal watermark stripes across the header for a bit of texture,
    like a security-print accent — subtle, not decorative overload. */
 .idc-card-header::after {
     content: "";
     position: absolute;
-    top: -60%; right: -18%;
-    width: 70px;
-    height: 220%;
-    background: rgba(255,255,255,0.08);
+    top: -80%; right: -30%;
+    width: 90px;
+    height: 260%;
+    background: rgba(255,255,255,0.07);
+    transform: rotate(18deg);
+}
+
+.idc-card-header::before {
+    content: "";
+    position: absolute;
+    top: -80%; left: -40%;
+    width: 60px;
+    height: 260%;
+    background: rgba(255,255,255,0.05);
     transform: rotate(18deg);
 }
 
 .idc-card-logo {
-    width: 24px;
-    height: 24px;
+    width: 32px;
+    height: 32px;
     border-radius: 50%;
-    background: rgba(255,255,255,0.92);
+    background: rgba(255,255,255,0.94);
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 12px;
+    font-size: 14px;
     color: var(--idc-green-1);
     flex-shrink: 0;
     overflow: hidden;
-    box-shadow: 0 0 0 1.5px rgba(255,255,255,0.5);
+    box-shadow: 0 2px 6px rgba(0,0,0,0.2), 0 0 0 1.5px rgba(255,255,255,0.6);
     position: relative;
     z-index: 1;
+    margin-bottom: 2px;
 }
 
 .idc-card-logo img {
@@ -2692,21 +2708,20 @@ select option {
 }
 
 .idc-card-header-text {
-    flex: 1;
     min-width: 0;
+    max-width: 100%;
     position: relative;
     z-index: 1;
 }
 
 .idc-card-school-name {
-    font-size: 10px;
+    font-size: 10.5px;
     font-weight: 800;
-    letter-spacing: 0.02em;
+    letter-spacing: 0.03em;
     text-transform: uppercase;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    line-height: 1.2;
+    line-height: 1.25;
+    max-width: 100%;
+    overflow-wrap: break-word;
 }
 
 .idc-card-doc-label {
@@ -2716,31 +2731,33 @@ select option {
     text-transform: uppercase;
     opacity: 0.9;
     color: #d1fae5;
+    margin-top: 2px;
 }
 
 .idc-card-body {
     flex: 1;
     display: flex;
-    align-items: flex-start;
-    gap: 9px;
-    padding: 8px 10px 4px 14px;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+    padding: 13px 16px 0;
     min-height: 0;
 }
 
 .idc-card-photo {
-    width: 58px;
-    height: 68px;
-    border-radius: 5px;
-    border: 2px solid var(--idc-green-2);
+    width: 88px;
+    height: 104px;
+    border-radius: 8px;
+    border: 3px solid var(--idc-green-2);
     background: #ecfdf5 center/cover no-repeat;
     display: flex;
     align-items: center;
     justify-content: center;
     color: #86efac;
-    font-size: 20px;
+    font-size: 30px;
     flex-shrink: 0;
     overflow: hidden;
-    margin-top: 1px;
+    box-shadow: 0 3px 10px rgba(15,81,50,0.18);
 }
 
 .idc-card-photo img {
@@ -2750,31 +2767,43 @@ select option {
 }
 
 .idc-card-info {
-    flex: 1;
+    width: 100%;
     min-width: 0;
     display: flex;
     flex-direction: column;
-    gap: 1.5px;
+    align-items: center;
+    gap: 3px;
+    margin-top: 8px;
 }
 
 .idc-card-name {
-    font-size: 12px;
+    font-size: 13.5px;
     font-weight: 800;
     color: var(--idc-green-1);
-    line-height: 1.15;
+    line-height: 1.2;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    margin-bottom: 1px;
+    max-width: 100%;
+    text-align: center;
+}
+
+.idc-card-rows {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-top: 6px;
+    text-align: left;
 }
 
 .idc-card-row {
     display: flex;
     align-items: baseline;
-    gap: 4px;
-    font-size: 7.4px;
+    gap: 5px;
+    font-size: 8px;
     color: #334155;
-    line-height: 1.3;
+    line-height: 1.35;
 }
 
 .idc-card-row.idc-row-clamp {
@@ -2787,7 +2816,7 @@ select option {
     text-transform: uppercase;
     letter-spacing: 0.03em;
     flex-shrink: 0;
-    min-width: 40px;
+    min-width: 46px;
 }
 
 .idc-card-row .idc-value {
@@ -2810,71 +2839,73 @@ select option {
 
 .idc-card-idbadge {
     display: inline-block;
-    margin: 2px 0 3px;
-    padding: 2px 8px;
+    margin: 3px 0 0;
+    padding: 2px 10px;
     border-radius: 20px;
     background: var(--idc-green-tint);
     color: var(--idc-green-3);
-    font-size: 8px;
+    font-size: 8.4px;
     font-weight: 800;
     letter-spacing: 0.03em;
     width: fit-content;
     border: 1px solid rgba(21,128,61,0.25);
 }
 
-/* ---- Bottom "for attendance" strip: full card width, inset with
-   left/right margins so it never touches the card edges. The FRONT card
-   shows a centered QR code here; the BACK card (below) shows the barcode
-   in the same style of strip, so both sides carry one attendance code
-   each, clearly labelled. ---- */
+/* ---- Bottom "for attendance" strip, with generous breathing room above
+   it (margin-top) so it reads as a clearly separate, deliberate section
+   rather than crowding the details above. Inset with left/right margins
+   so it never touches the card edges. The FRONT card shows a centered QR
+   code here; the BACK card shows the barcode in the same style of strip,
+   so both sides carry one attendance code each, clearly labelled. ---- */
 .idc-card-barcode-wrap {
     flex-shrink: 0;
-    margin: 0 12px 8px 16px;
-    padding-top: 4px;
-    border-top: 1px solid #d1fae5;
+    margin: 16px 18px 16px;
+    padding-top: 10px;
+    border-top: 1px dashed #bbf7d0;
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 1px;
+    gap: 3px;
 }
 
 .idc-card-barcode-label {
-    font-size: 6.4px;
+    font-size: 6.8px;
     font-weight: 800;
     color: var(--idc-green-3);
     text-transform: uppercase;
-    letter-spacing: 0.08em;
-    margin-bottom: 1px;
+    letter-spacing: 0.09em;
+    margin-bottom: 3px;
 }
 
 .idc-card-barcode-wrap svg {
     display: block;
     width: 100%;
-    height: 20px;
+    height: 24px;
 }
 
 .idc-card-barcode-text {
-    font-size: 7px;
+    font-size: 7.4px;
     font-weight: 700;
     letter-spacing: 0.15em;
     color: #475569;
     font-family: 'Space Grotesk', 'Inter', monospace;
+    margin-top: 2px;
 }
 
 /* Centered QR box used inside the FRONT card's attendance strip. */
 .idc-card-front-qr-box {
-    width: 38px;
-    height: 38px;
-    padding: 2px;
-    margin: 1px 0 2px;
+    width: 52px;
+    height: 52px;
+    padding: 3px;
     background: #ffffff;
-    border: 1.5px solid var(--idc-green-2);
-    border-radius: 4px;
+    border: 2px solid var(--idc-green-2);
+    border-radius: 6px;
     display: flex;
     align-items: center;
     justify-content: center;
     overflow: hidden;
     flex-shrink: 0;
+    box-shadow: 0 2px 6px rgba(15,81,50,0.12);
 }
 
 .idc-card-front-qr-box canvas,
@@ -2886,22 +2917,23 @@ select option {
 
 .idc-card-front-qr-fallback {
     color: #86efac;
-    font-size: 16px;
+    font-size: 20px;
 }
 
 /* ============================================================
    ID CARD — BACK SIDE
-   Reuses the .idc-card shell (border + left accent rail) via the
+   Reuses the .idc-card shell (border + bottom accent bar) via the
    shared "idc-card" class: school contact details fill the body, and
-   the same full-width attendance strip as the front carries the
-   barcode here instead of the QR code.
+   the same attendance strip as the front carries the barcode here
+   instead of the QR code.
    ============================================================ */
 .idc-card-back-body {
     flex: 1;
     display: flex;
-    align-items: stretch;
-    padding: 9px 10px 4px 14px;
+    flex-direction: column;
+    padding: 15px 16px 0;
     min-height: 0;
+    gap: 8px;
 }
 
 .idc-back-contact-col {
@@ -2909,33 +2941,33 @@ select option {
     min-width: 0;
     display: flex;
     flex-direction: column;
-    gap: 5px;
+    gap: 6px;
 }
 
 .idc-back-section-label {
-    font-size: 7px;
+    font-size: 7.4px;
     font-weight: 800;
     color: var(--idc-green-3);
     text-transform: uppercase;
-    letter-spacing: 0.06em;
+    letter-spacing: 0.07em;
     margin-bottom: 1px;
 }
 
 .idc-back-line {
     display: flex;
     align-items: flex-start;
-    gap: 6px;
-    font-size: 7.6px;
+    gap: 7px;
+    font-size: 8.2px;
     color: #334155;
-    line-height: 1.35;
+    line-height: 1.4;
 }
 
 .idc-back-line i {
     color: var(--idc-green-2);
-    font-size: 8px;
+    font-size: 9px;
     margin-top: 1px;
     flex-shrink: 0;
-    width: 10px;
+    width: 11px;
     text-align: center;
 }
 
@@ -2947,12 +2979,12 @@ select option {
 
 .idc-back-note {
     margin-top: auto;
-    font-size: 6.3px;
+    font-size: 6.8px;
     font-style: italic;
     color: #64748b;
-    line-height: 1.3;
+    line-height: 1.35;
     border-top: 1px dashed #d1fae5;
-    padding-top: 4px;
+    padding-top: 6px;
 }
 
 @media (max-width: 640px) {
@@ -2963,7 +2995,7 @@ select option {
     .idc-body { padding: 14px; }
     .idc-cards-grid { gap: 24px; justify-content: center; }
     .idc-pair-row { flex-direction: column; align-items: center; }
-    .idc-pair-name { max-width: 240px; }
+    .idc-pair-name { max-width: 202px; }
 }
 
 
