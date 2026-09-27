@@ -4353,7 +4353,7 @@ if (certUploadInput) {
 
     const IDC_CARD_PIXEL_WIDTH  = 638;  // 2.125in @ 300 DPI (vertical CR80 card)
     const IDC_CARD_PIXEL_HEIGHT = 1012; // 3.375in @ 300 DPI
-    const IDC_CAPTURE_SCALE     = 3;    // render the ~340x540 on-screen card 3x, then resize to the exact target below
+    const IDC_CAPTURE_SCALE     = 3;    // render the ~300x476 on-screen card 3x, then resize to the exact target below
 
     // The list of students the generator was last opened for, kept around so
     // Download All / Print All / a single card's download button don't need
@@ -4421,7 +4421,6 @@ if (certUploadInput) {
 
         const photoSrc      = storedStudentFileSrc(s, 'photo');
         const displayId     = s.regNo || s.id || '—';
-        const classSection  = `${s.studentClass || '—'}${s.section ? ' - ' + s.section : ''}`;
         const contactNumber = s.phone1 || s.phone2 || '—';
         const address       = s.permanentAddress || s.address || '—';
 
@@ -4446,7 +4445,8 @@ if (certUploadInput) {
                     <div class="idc-card-name">${esc(s.fullName || '—')}</div>
                     <span class="idc-card-idbadge">ID: ${esc(displayId)}</span>
                     <div class="idc-card-rows">
-                        <div class="idc-card-row"><span class="idc-label">Class:</span><span class="idc-value">${esc(classSection)}</span></div>
+                        <div class="idc-card-row"><span class="idc-label">Class:</span><span class="idc-value">${esc(s.studentClass || '—')}</span></div>
+                        <div class="idc-card-row"><span class="idc-label">Section:</span><span class="idc-value">${esc(s.section || '—')}</span></div>
                         <div class="idc-card-row"><span class="idc-label">Guardian:</span><span class="idc-value">${esc(s.guardianName || '—')}</span></div>
                         <div class="idc-card-row"><span class="idc-label">Contact:</span><span class="idc-value">${esc(contactNumber)}</span></div>
                         <div class="idc-card-row idc-row-clamp"><span class="idc-label">Address:</span><span class="idc-value idc-value-clamp">${esc(address)}</span></div>
@@ -4631,7 +4631,7 @@ if (certUploadInput) {
     };
 
     /**
-     * Capture one .idc-card DOM node (rendered on-screen at ~340x540) and
+     * Capture one .idc-card DOM node (rendered on-screen at ~300x476) and
      * return a PNG blob at the exact print resolution (638 x 1012 px / vertical CR80
      * @ 300 DPI), regardless of how large the on-screen preview is. html2canvas
      * renders at IDC_CAPTURE_SCALE for crisp text/edges, then a plain <canvas>
