@@ -4753,7 +4753,7 @@ if (certUploadInput) {
         }
     };
 
-    /** Toolbar "Print All" — opens the print window immediately (so there's no long, blank wait before anything appears), then captures every front and back — in parallel, for speed — and fills the window in once ready. Groups students onto pages (2 or 3 per page, per the "Per page" selector), each page showing that student's front and back side by side so a printed sheet can be cut straight into complete, ready-to-use cards. Every card prints at its true physical size (2.125in x 3.375in = 638x1012px @ 300 DPI, vertical CR80). */
+    /** Toolbar "Print All" — opens the print window immediately with a loading screen (so there's no blank/frozen-looking wait before anything appears), then captures each student's front and back one at a time, yielding back to the browser between each so the tab actually repaints and the "Preparing X of Y" progress stays visibly live instead of the page looking stuck. Groups students onto pages (2 or 3 per page, per the "Per page" selector), each page showing that student's front and back side by side so a printed sheet can be cut straight into complete, ready-to-use cards. Every card prints at its true physical size (2.125in x 3.375in = 638x1012px @ 300 DPI, vertical CR80). */
     window.printAllIdCards = async function() {
         if (!idcCurrentStudents.length) return;
 
@@ -4804,6 +4804,12 @@ if (certUploadInput) {
 </html>`);
         printWin.document.close();
 
+        // Give the browser an actual chance to paint that loading screen
+        // before the (CPU-heavy, single-threaded) card capturing below
+        // starts — otherwise the capture work can run back-to-back with no
+        // yield in between and the new tab appears to just sit there blank.
+        await new Promise(r => setTimeout(r, 60));
+
         const btn = document.getElementById('idc-print-all-btn');
         const progress = document.getElementById('idc-progress');
         const progressText = document.getElementById('idc-progress-text');
@@ -4814,8 +4820,7 @@ if (certUploadInput) {
 
         const total = idcCurrentStudents.length * 2;
         let done = 0;
-        const bumpProgress = () => {
-            done++;
+        const updateProgressLabel = () => {
             const label = `Preparing ${done} of ${total}…`;
             if (progressText) progressText.textContent = label;
             // Keep the print window's own loading text in sync too, in case
@@ -4827,10 +4832,9 @@ if (certUploadInput) {
         };
 
         const captureDataUrl = async (cardEl) => {
-            if (!cardEl) { bumpProgress(); return null; }
+            if (!cardEl) return null;
             try {
                 const blob = await idcCaptureCardBlob(cardEl);
-                bumpProgress();
                 if (!blob) return null;
                 return await new Promise(res => {
                     const reader = new FileReader();
@@ -4839,23 +4843,29 @@ if (certUploadInput) {
                 });
             } catch (err) {
                 console.error(err);
-                bumpProgress();
                 return null;
             }
         };
 
-        // Capture every card IN PARALLEL rather than one at a time — this is
-        // the main speed-up: with N students that's ~N x faster than the old
-        // sequential loop, since html2canvas isn't blocked waiting on the
-        // previous card to finish before starting the next one.
-        const pairs = await Promise.all(idcCurrentStudents.map(async (s) => {
+        // Capture card-by-card (front + back together) rather than firing
+        // every capture at once: html2canvas's actual drawing work is
+        // synchronous and single-threaded, so blasting the whole batch at
+        // once just queues it all back-to-back with no chance for the
+        // browser to repaint — which is what made the print tab look
+        // frozen. A short yield between students keeps the UI (and the
+        // "Preparing X of Y" text, in both windows) visibly responsive.
+        const pairs = [];
+        for (const s of idcCurrentStudents) {
             const safeId = idcSafeId(s.regNo || s.id);
             const [front, back] = await Promise.all([
                 captureDataUrl(idcCardElFor(safeId, 'front')),
                 captureDataUrl(idcCardElFor(safeId, 'back'))
             ]);
-            return (front || back) ? { front, back, name: s.fullName || 'Student' } : null;
-        })).then(list => list.filter(Boolean));
+            done += 2;
+            updateProgressLabel();
+            if (front || back) pairs.push({ front, back, name: s.fullName || 'Student' });
+            await new Promise(r => setTimeout(r, 0)); // yield so the browser can repaint before the next card
+        }
 
         if (progress) progress.style.display = 'none';
         if (btn) btn.disabled = false;
