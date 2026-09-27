@@ -1317,6 +1317,13 @@
                     <button type="button" class="cert-viewer-btn cert-viewer-btn-primary" id="idc-download-all-btn" onclick="downloadAllIdCards()">
                         <i class="fas fa-download"></i> <span>Download All</span>
                     </button>
+                    <label class="idc-per-page-label" for="idc-print-per-page">
+                        <span>Per page</span>
+                        <select id="idc-print-per-page" class="idc-per-page-select">
+                            <option value="2">2 students</option>
+                            <option value="3" selected>3 students</option>
+                        </select>
+                    </label>
                     <button type="button" class="cert-viewer-btn" id="idc-print-all-btn" onclick="printAllIdCards()">
                         <i class="fas fa-print"></i> <span>Print All</span>
                     </button>

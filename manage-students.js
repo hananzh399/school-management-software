@@ -4753,56 +4753,19 @@ if (certUploadInput) {
         }
     };
 
-    /** Toolbar "Print All" — captures every front and back, then opens a print-ready sheet with them laid out at their true physical size (2.125in x 3.375in each = 638x1012px @ 300 DPI, vertical CR80) so they print at the correct real-world size on any printer. Fronts are printed first, followed by the matching backs in the same student order, so double-sided assembly is easy. */
+    /** Toolbar "Print All" — opens the print window immediately (so there's no long, blank wait before anything appears), then captures every front and back — in parallel, for speed — and fills the window in once ready. Groups students onto pages (2 or 3 per page, per the "Per page" selector), each page showing that student's front and back side by side so a printed sheet can be cut straight into complete, ready-to-use cards. Every card prints at its true physical size (2.125in x 3.375in = 638x1012px @ 300 DPI, vertical CR80). */
     window.printAllIdCards = async function() {
         if (!idcCurrentStudents.length) return;
 
-        const btn = document.getElementById('idc-print-all-btn');
-        const progress = document.getElementById('idc-progress');
-        const progressText = document.getElementById('idc-progress-text');
-        if (btn) btn.disabled = true;
-        if (progress) progress.style.display = 'flex';
-
-        const total = idcCurrentStudents.length * 2;
-        const frontUrls = [];
-        const backUrls  = [];
-
-        const captureAndPush = async (cardEl, bucket) => {
-            const blob = await idcCaptureCardBlob(cardEl);
-            if (blob) bucket.push(await new Promise(res => {
-                const reader = new FileReader();
-                reader.onload = () => res(reader.result);
-                reader.readAsDataURL(blob);
-            }));
-        };
-
-        let processed = 0;
-        for (const s of idcCurrentStudents) {
-            const safeId = idcSafeId(s.regNo || s.id);
-            if (progressText) progressText.textContent = `Preparing ${processed + 1} of ${total}…`;
-            try { await captureAndPush(idcCardElFor(safeId, 'front'), frontUrls); } catch (err) { console.error(err); }
-            processed++;
-            if (progressText) progressText.textContent = `Preparing ${processed + 1} of ${total}…`;
-            try { await captureAndPush(idcCardElFor(safeId, 'back'), backUrls); } catch (err) { console.error(err); }
-            processed++;
-        }
-
-        if (progress) progress.style.display = 'none';
-        if (btn) btn.disabled = false;
-
-        if (frontUrls.length === 0 && backUrls.length === 0) {
-            showToast('Print Failed', 'Could not generate any ID cards to print.', 'danger');
-            return;
-        }
-
+        // Open the print window right away, synchronously, so (a) it isn't
+        // blocked as a delayed pop-up and (b) the person sees *something*
+        // immediately instead of staring at the toolbar for several seconds
+        // while every card is captured in the background.
         const printWin = window.open('', '_blank', 'width=1000,height=800');
         if (!printWin) {
             showToast('Pop-up Blocked', 'Please allow pop-ups to print the ID cards.', 'danger');
             return;
         }
-
-        const toImgs = (urls) => urls.map(src => `<img class="idc-print-card" src="${src}" alt="ID Card">`).join('');
-
         printWin.document.write(`
 <!DOCTYPE html>
 <html>
@@ -4810,42 +4773,179 @@ if (certUploadInput) {
 <title>Student ID Cards — Print</title>
 <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    @page { size: A4; margin: 10mm; }
-    body { background: #fff; padding: 6mm; }
-    .idc-print-section-label {
-        font-family: Arial, sans-serif;
-        font-size: 12px;
-        font-weight: 700;
-        color: #64748b;
-        text-transform: uppercase;
-        letter-spacing: 0.06em;
-        margin: 4mm 0 3mm;
-    }
-    .idc-print-sheet {
+    body {
+        min-height: 100vh;
         display: flex;
-        flex-wrap: wrap;
-        gap: 6mm;
+        align-items: center;
+        justify-content: center;
+        font-family: Arial, sans-serif;
+        color: #475569;
+        background: #f8fafc;
     }
-    /* Each card printed at its true physical, vertical CR80 size: 2.125in x
-       3.375in (the source image is 638 x 1012 px, i.e. exactly 300 DPI at
-       this size). */
+    .idc-loading { text-align: center; }
+    .idc-loading-spinner {
+        width: 34px; height: 34px;
+        margin: 0 auto 14px;
+        border: 4px solid #d1fae5;
+        border-top-color: #16a34a;
+        border-radius: 50%;
+        animation: idc-spin 0.8s linear infinite;
+    }
+    @keyframes idc-spin { to { transform: rotate(360deg); } }
+    #idc-loading-text { font-size: 14px; font-weight: 600; }
+</style>
+</head>
+<body>
+    <div class="idc-loading">
+        <div class="idc-loading-spinner"></div>
+        <div id="idc-loading-text">Preparing your ID cards for printing…</div>
+    </div>
+</body>
+</html>`);
+        printWin.document.close();
+
+        const btn = document.getElementById('idc-print-all-btn');
+        const progress = document.getElementById('idc-progress');
+        const progressText = document.getElementById('idc-progress-text');
+        const perPageSelect = document.getElementById('idc-print-per-page');
+        const perPage = Math.max(1, parseInt(perPageSelect && perPageSelect.value, 10) || 3);
+        if (btn) btn.disabled = true;
+        if (progress) progress.style.display = 'flex';
+
+        const total = idcCurrentStudents.length * 2;
+        let done = 0;
+        const bumpProgress = () => {
+            done++;
+            const label = `Preparing ${done} of ${total}…`;
+            if (progressText) progressText.textContent = label;
+            // Keep the print window's own loading text in sync too, in case
+            // it takes a while — so it never looks stuck or frozen.
+            try {
+                const loadingEl = printWin.document.getElementById('idc-loading-text');
+                if (loadingEl) loadingEl.textContent = label;
+            } catch (err) { /* print window may already be mid-navigation; ignore */ }
+        };
+
+        const captureDataUrl = async (cardEl) => {
+            if (!cardEl) { bumpProgress(); return null; }
+            try {
+                const blob = await idcCaptureCardBlob(cardEl);
+                bumpProgress();
+                if (!blob) return null;
+                return await new Promise(res => {
+                    const reader = new FileReader();
+                    reader.onload = () => res(reader.result);
+                    reader.readAsDataURL(blob);
+                });
+            } catch (err) {
+                console.error(err);
+                bumpProgress();
+                return null;
+            }
+        };
+
+        // Capture every card IN PARALLEL rather than one at a time — this is
+        // the main speed-up: with N students that's ~N x faster than the old
+        // sequential loop, since html2canvas isn't blocked waiting on the
+        // previous card to finish before starting the next one.
+        const pairs = await Promise.all(idcCurrentStudents.map(async (s) => {
+            const safeId = idcSafeId(s.regNo || s.id);
+            const [front, back] = await Promise.all([
+                captureDataUrl(idcCardElFor(safeId, 'front')),
+                captureDataUrl(idcCardElFor(safeId, 'back'))
+            ]);
+            return (front || back) ? { front, back, name: s.fullName || 'Student' } : null;
+        })).then(list => list.filter(Boolean));
+
+        if (progress) progress.style.display = 'none';
+        if (btn) btn.disabled = false;
+
+        if (pairs.length === 0) {
+            showToast('Print Failed', 'Could not generate any ID cards to print.', 'danger');
+            try { printWin.close(); } catch (err) { /* ignore */ }
+            return;
+        }
+
+        // Group students into pages of `perPage`. Each page is a 2-column
+        // (front | back) grid with one row per student, so cutting along the
+        // grid lines yields complete, correctly paired front/back cards.
+        const pages = [];
+        for (let i = 0; i < pairs.length; i += perPage) pages.push(pairs.slice(i, i + perPage));
+
+        const cardImg = (src, label) => src
+            ? `<img class="idc-print-card" src="${src}" alt="${label}">`
+            : `<div class="idc-print-card idc-print-card-missing">${label} unavailable</div>`;
+
+        const pagesHtml = pages.map((group, pageIdx) => {
+            const rows = group.map(p => `${cardImg(p.front, 'Front')}${cardImg(p.back, 'Back')}`).join('');
+            const isLast = pageIdx === pages.length - 1;
+            return `
+    <div class="idc-print-page${isLast ? '' : ' idc-print-page-break'}">
+        <div class="idc-print-page-label">Front &amp; Back — ${group.map(p => SSValidate.escapeHtml(p.name)).join(', ')}</div>
+        <div class="idc-print-grid">${rows}</div>
+    </div>`;
+        }).join('');
+
+        printWin.document.open();
+        printWin.document.write(`
+<!DOCTYPE html>
+<html>
+<head>
+<title>Student ID Cards — Print</title>
+<style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    @page { size: A4; margin: 6mm; }
+    body { background: #fff; }
+    .idc-print-page {
+        padding-top: 2mm;
+    }
+    .idc-print-page-break {
+        break-after: page;
+        page-break-after: always;
+    }
+    .idc-print-page-label {
+        font-family: Arial, sans-serif;
+        font-size: 10px;
+        font-weight: 700;
+        color: #94a3b8;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        margin-bottom: 3mm;
+    }
+    /* 2 columns (front | back), one row per student — matches how the
+       cards should be cut apart. Each card prints at its true physical,
+       vertical CR80 size: 2.125in x 3.375in (source image is 638 x 1012 px,
+       i.e. exactly 300 DPI at this size). */
+    .idc-print-grid {
+        display: grid;
+        grid-template-columns: repeat(2, 2.125in);
+        grid-auto-rows: 3.375in;
+        column-gap: 10mm;
+        row-gap: 6mm;
+        justify-content: center;
+    }
     .idc-print-card {
         width: 2.125in;
         height: 3.375in;
         object-fit: contain;
         border: 1px dashed #cbd5e1; /* cut guide — doesn't print if the printer ignores light dashed lines; kept for visual cutting reference on-screen */
     }
-    .idc-print-break { break-before: page; }
+    .idc-print-card-missing {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-family: Arial, sans-serif;
+        font-size: 11px;
+        color: #94a3b8;
+        border: 1px dashed #cbd5e1;
+    }
     @media print {
-        .idc-print-card { border-color: #e2e8f0; }
+        .idc-print-card, .idc-print-card-missing { border-color: #e2e8f0; }
     }
 </style>
 </head>
 <body>
-    <div class="idc-print-section-label">Front Side — ${frontUrls.length} card${frontUrls.length === 1 ? '' : 's'}</div>
-    <div class="idc-print-sheet">${toImgs(frontUrls)}</div>
-    <div class="idc-print-section-label idc-print-break">Back Side — ${backUrls.length} card${backUrls.length === 1 ? '' : 's'} (same order as front)</div>
-    <div class="idc-print-sheet">${toImgs(backUrls)}</div>
+${pagesHtml}
     <script>
         window.onload = function() {
             setTimeout(function() { window.focus(); window.print(); }, 300);
