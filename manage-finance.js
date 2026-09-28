@@ -6288,7 +6288,7 @@ function syncVoucherSnapshotForCurrentMonth(studentId, fullName) {
     const key = voucherRecordKey(studentId, monthKey);
     const list = getGeneratedVouchers();
     const recIdx = list.findIndex(r => r.key === key);
-    if (recIdx === -1) return; // no voucher generated yet this month — nothing to sync
+    if (recIdx === -1) return;
 
     const students = getRealStudents();
     const student = findStudentExact(students, studentId, fullName);
@@ -6308,8 +6308,24 @@ function syncVoucherSnapshotForCurrentMonth(studentId, fullName) {
         expiryDateStr: f.expiryDateStr
     };
     saveGeneratedVouchers(list);
-}
 
+    // ===== ADD FROM HERE =====
+    // Push the edited breakdown to the backend row so the Dashboard's
+    // Expected/Pending (sums Finance.netPayable) matches this voucher.
+    // Same payload as recordVoucherGeneration; endpoint is idempotent.
+    try {
+        _backendSave(API_BASE, '/generate-voucher', 'POST', {
+            regNo: studentId,
+            monthKey,
+            baseTuitionFee: Number(f.tuitionFee) || 0,
+            transportFee: Number(f.transportFee) || 0,
+            otherCharges: (Number(f.arrears) || 0) + (Number(f.otherFee) || 0),
+            totalDiscountApplied: Number(f.totalDiscounts) || 0,
+            totalFineCharged: (Number(f.fineAmount) || 0) + (Number(f.monthlyFineTotal) || 0)
+        });
+    } catch (e) { /* never block the voucher edit if the sync fails */ }
+    // ===== ADD UNTIL HERE =====
+}
 function recordVoucherGeneration(student, source = 'individual', importPrevious = true) {
     const monthKey = getCurrentFeeMonthKey();
     const studentId = student.regNo || student.id;
