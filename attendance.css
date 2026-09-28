@@ -923,9 +923,9 @@ body {
 }
 
 /* ============================================================
-   CAMERA BUTTON (header)
+   SCANNER BUTTON (header)
    ============================================================ */
-.camera-btn {
+.scanner-btn {
     display: inline-flex;
     align-items: center;
     gap: 7px;
@@ -941,12 +941,12 @@ body {
     box-shadow: 0 2px 8px var(--indigo-glow);
     white-space: nowrap;
 }
-.camera-btn:hover {
+.scanner-btn:hover {
     transform: translateY(-1px);
     box-shadow: 0 4px 14px var(--indigo-glow);
 }
-.camera-btn i { font-size: 0.95rem; }
-@media (max-width: 600px) { .camera-btn__label { display: none; } }
+.scanner-btn i { font-size: 0.95rem; }
+@media (max-width: 600px) { .scanner-btn__label { display: none; } }
 
 /* ============================================================
    PERIOD SWITCHER (Week / Month / Year)
@@ -987,45 +987,115 @@ body {
 .period-btn i { font-size: 0.8rem; }
 
 /* ============================================================
-   CAMERA MODAL
+   SCANNER MODAL (QR / barcode attendance scanner)
    ============================================================ */
-.camera-panel {
-    max-width: 620px !important;
+.scanner-panel {
+    max-width: 560px !important;
     width: 95vw !important;
 }
-.camera-body {
+.scanner-body {
     padding: 20px;
     display: flex;
     flex-direction: column;
-    gap: 16px;
+    gap: 14px;
 }
-.camera-video-wrap {
+.scanner-video-wrap {
     position: relative;
     width: 100%;
     background: #000;
-    border-radius: 12px;
+    border-radius: 14px;
     overflow: hidden;
     aspect-ratio: 4/3;
     display: flex;
     align-items: center;
     justify-content: center;
 }
-#camera-video {
+#scanner-video {
     width: 100%;
     height: 100%;
     object-fit: cover;
     display: none;
-    transform: scaleX(-1); /* mirror front cam */
 }
-.camera-placeholder {
+#scanner-video.scanner-mirrored { transform: scaleX(-1); } /* only mirror the front (selfie) camera */
+.scanner-placeholder {
+    display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
     gap: 10px;
-    color: #475569;
+    color: #64748b;
     font-size: 0.9rem;
+    text-align: center;
+    padding: 0 16px;
 }
-.camera-placeholder i { font-size: 3rem; opacity: 0.4; }
+.scanner-placeholder i { font-size: 3rem; opacity: 0.4; }
+
+/* Viewfinder: corner brackets + a green line sweeping top -> bottom, forever. */
+.scanner-frame {
+    position: absolute;
+    inset: 12% 10%;
+    pointer-events: none;
+    z-index: 2;
+}
+.scanner-corner {
+    position: absolute;
+    width: 30px;
+    height: 30px;
+    border: 0 solid #22c55e;
+    filter: drop-shadow(0 0 4px rgba(34,197,94,0.7));
+}
+.scanner-corner--tl { top: 0;    left: 0;  border-top-width: 4px;    border-left-width: 4px;  border-top-left-radius: 8px; }
+.scanner-corner--tr { top: 0;    right: 0; border-top-width: 4px;    border-right-width: 4px; border-top-right-radius: 8px; }
+.scanner-corner--bl { bottom: 0; left: 0;  border-bottom-width: 4px; border-left-width: 4px;  border-bottom-left-radius: 8px; }
+.scanner-corner--br { bottom: 0; right: 0; border-bottom-width: 4px; border-right-width: 4px; border-bottom-right-radius: 8px; }
+.scanner-line {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 0;
+    height: 3px;
+    border-radius: 2px;
+    background: linear-gradient(90deg, transparent, #22c55e 15%, #86efac 50%, #22c55e 85%, transparent);
+    box-shadow: 0 0 14px 3px rgba(34,197,94,0.75);
+    animation: scanner-sweep 2.2s linear infinite;
+}
+@keyframes scanner-sweep {
+    0%   { top: 0;                opacity: 0; }
+    8%   { opacity: 1; }
+    92%  { opacity: 1; }
+    100% { top: calc(100% - 3px); opacity: 0; }
+}
+
+/* Full-view colour flash confirming a scan result. */
+.scanner-flash {
+    position: absolute;
+    inset: 0;
+    z-index: 3;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.25s ease;
+}
+.scanner-flash.show { opacity: 1; }
+.scanner-flash--success { background: rgba(34,197,94,0.35); box-shadow: inset 0 0 0 5px #22c55e; }
+.scanner-flash--error   { background: rgba(244,63,94,0.30); box-shadow: inset 0 0 0 5px #f43f5e; }
+
+.scanner-hint {
+    margin: 0;
+    text-align: center;
+    font-size: 0.82rem;
+    color: var(--text-secondary);
+}
+.scanner-hint i { margin-right: 5px; color: var(--emerald); }
+.scanner-last-result {
+    padding: 10px 14px;
+    border-radius: 10px;
+    font-size: 0.9rem;
+    font-weight: 600;
+    text-align: center;
+}
+.scanner-last-result--ok  { background: rgba(16,185,129,0.14); color: var(--emerald); border: 1px solid rgba(16,185,129,0.35); }
+.scanner-last-result--err { background: rgba(244,63,94,0.12);  color: var(--rose);    border: 1px solid rgba(244,63,94,0.35); }
+
 .camera-controls {
     display: flex;
     flex-wrap: wrap;
@@ -1045,38 +1115,10 @@ body {
     transition: var(--transition);
 }
 .cam-ctrl-btn:disabled { opacity: 0.4; cursor: not-allowed; pointer-events: none; }
-.cam-ctrl-start  { background: var(--emerald); color: #fff; }
-.cam-ctrl-capture { background: var(--indigo); color: #fff; }
 .cam-ctrl-switch  { background: var(--amber); color: #0f172a; }
 .cam-ctrl-stop    { background: var(--rose); color: #fff; }
 .cam-ctrl-btn:hover:not(:disabled) { filter: brightness(1.1); transform: translateY(-1px); }
 
-.camera-preview-wrap {
-    border-top: 1px solid var(--border-subtle);
-    padding-top: 14px;
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    align-items: center;
-}
-.camera-preview-label {
-    font-weight: 600;
-    font-size: 0.88rem;
-    color: var(--text-secondary);
-}
-.camera-preview-wrap img {
-    width: 100%;
-    max-width: 480px;
-    border-radius: 10px;
-    border: 2px solid var(--border-hover);
-    object-fit: contain;
-}
-.camera-preview-actions {
-    display: flex;
-    gap: 10px;
-    flex-wrap: wrap;
-    justify-content: center;
-}
 /* ===== Biometric (real-time fingerprint) row styling ===== */
 .row-biometric { background: rgba(16,185,129,0.06); }
 .row-biometric td { border-top: 1px solid var(--emerald-glow); }

@@ -80,9 +80,9 @@
             </div>
             <div class="header-right">
                 <div class="header-date" id="header-date"></div>
-                <button id="open-camera-btn" class="camera-btn" aria-label="Open Camera" title="Open Camera">
-                    <i class="fas fa-camera"></i>
-                    <span class="camera-btn__label">Camera</span>
+                <button id="open-scanner-btn" class="scanner-btn" aria-label="Open Scanner" title="Scan student ID cards">
+                    <i class="fas fa-qrcode"></i>
+                    <span class="scanner-btn__label">Scanner</span>
                 </button>
                 <button id="theme-toggle" class="theme-toggle" aria-label="Toggle theme">
                     <i id="theme-icon-moon" class="fas fa-moon"></i>
@@ -671,36 +671,38 @@
             </div>
         </div>
 
-        <!-- CAMERA MODAL -->
-        <div id="camera-modal" class="report-modal hidden" aria-hidden="true">
-            <div class="report-modal__backdrop" id="camera-backdrop"></div>
-            <div class="report-modal__panel camera-panel" role="dialog" aria-modal="true" aria-labelledby="camera-modal-title">
+        <!-- SCANNER MODAL (QR / barcode attendance) -->
+        <div id="scanner-modal" class="report-modal hidden" aria-hidden="true">
+            <div class="report-modal__backdrop" id="scanner-backdrop"></div>
+            <div class="report-modal__panel scanner-panel" role="dialog" aria-modal="true" aria-labelledby="scanner-modal-title">
                 <div class="report-modal__head">
-                    <h3 id="camera-modal-title"><i class="fas fa-camera"></i> Camera</h3>
-                    <button class="report-modal__close" id="camera-close-btn" aria-label="Close"><i class="fas fa-times"></i></button>
+                    <h3 id="scanner-modal-title"><i class="fas fa-qrcode"></i> Scanner</h3>
+                    <button class="report-modal__close" id="scanner-close-btn" aria-label="Close"><i class="fas fa-times"></i></button>
                 </div>
-                <div class="camera-body">
-                    <div class="camera-video-wrap">
-                        <video id="camera-video" autoplay playsinline muted></video>
-                        <canvas id="camera-canvas" style="display:none;"></canvas>
-                        <div id="camera-placeholder" class="camera-placeholder">
-                            <i class="fas fa-camera-slash"></i>
-                            <p>Camera not started</p>
+                <div class="scanner-body">
+                    <div class="scanner-video-wrap">
+                        <video id="scanner-video" autoplay playsinline muted></video>
+                        <canvas id="scanner-canvas" style="display:none;"></canvas>
+                        <div id="scanner-placeholder" class="scanner-placeholder">
+                            <i class="fas fa-qrcode"></i>
+                            <p>Starting camera…</p>
                         </div>
+                        <div class="scanner-frame">
+                            <span class="scanner-corner scanner-corner--tl"></span>
+                            <span class="scanner-corner scanner-corner--tr"></span>
+                            <span class="scanner-corner scanner-corner--bl"></span>
+                            <span class="scanner-corner scanner-corner--br"></span>
+                            <div class="scanner-line"></div>
+                        </div>
+                        <div id="scanner-flash" class="scanner-flash"></div>
+                    </div>
+                    <p class="scanner-hint"><i class="fas fa-id-card"></i> Hold a student ID card (front QR code or back barcode) in front of the camera.</p>
+                    <div id="scanner-last-result" class="scanner-last-result hidden">
+                        <span id="scanner-last-result-text"></span>
                     </div>
                     <div class="camera-controls">
-                        <button id="camera-start-btn" class="cam-ctrl-btn cam-ctrl-start"><i class="fas fa-play"></i> Start Camera</button>
-                        <button id="camera-capture-btn" class="cam-ctrl-btn cam-ctrl-capture" disabled><i class="fas fa-circle"></i> Capture</button>
-                        <button id="camera-switch-btn" class="cam-ctrl-btn cam-ctrl-switch" disabled><i class="fas fa-sync-alt"></i> Switch</button>
-                        <button id="camera-stop-btn" class="cam-ctrl-btn cam-ctrl-stop" disabled><i class="fas fa-stop"></i> Stop</button>
-                    </div>
-                    <div id="camera-preview-wrap" class="camera-preview-wrap hidden">
-                        <p class="camera-preview-label"><i class="fas fa-image"></i> Captured Photo</p>
-                        <img id="camera-preview-img" src="" alt="Captured photo" />
-                        <div class="camera-preview-actions">
-                            <a id="camera-download-btn" class="cam-ctrl-btn cam-ctrl-capture" download="attendance-photo.png"><i class="fas fa-download"></i> Download</a>
-                            <button id="camera-retake-btn" class="cam-ctrl-btn cam-ctrl-switch"><i class="fas fa-redo"></i> Retake</button>
-                        </div>
+                        <button id="scanner-switch-btn" class="cam-ctrl-btn cam-ctrl-switch" disabled><i class="fas fa-sync-alt"></i> Switch Camera</button>
+                        <button id="scanner-stop-btn" class="cam-ctrl-btn cam-ctrl-stop" disabled><i class="fas fa-stop"></i> Stop</button>
                     </div>
                 </div>
             </div>
@@ -761,6 +763,8 @@
 
     <script src="shared-data.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@zxing/library@0.21.3/umd/index.min.js"></script>
     <script src="attendance.js"></script>
 </body>
 </html>

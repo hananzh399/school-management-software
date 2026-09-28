@@ -4384,28 +4384,57 @@ if (certUploadInput) {
     }
 
     /**
-     * Build a deterministic, decorative barcode (Code-128-style bars) as an
-     * inline SVG string from an ID string. It's not meant to be scanned —
-     * there's no real barcode library on this page — it's a visual finishing
-     * touch that always looks the same for the same student ID, spans the
-     * card's full usable width, and renders cleanly through html2canvas.
+     * Build a REAL, scannable Code 128 barcode as an inline SVG string from
+     * an ID string (the student's Reg./ID number). The bar pattern comes from
+     * JsBarcode's encoder; we draw it ourselves as plain <rect>s so this stays
+     * synchronous (no DOM element needed) and renders cleanly through
+     * html2canvas. A 10-module quiet zone is added on both sides, which
+     * scanners need in order to lock on. If JsBarcode failed to load, or the
+     * text can't be encoded, it falls back to a decorative (non-scannable)
+     * bar pattern so the card layout is never broken.
      */
     function idcBuildBarcodeSvg(text) {
-        const VIEW_W = 480, VIEW_H = 60;
-        const str = String(text || '000000');
+        const VIEW_H = 60, QUIET = 10;
+        const str = String(text || '').trim() || '0';
+
+        let binary = '';
+        try {
+            if (typeof JsBarcode !== 'undefined') {
+                const out = {};
+                JsBarcode(out, str, { format: 'CODE128' });
+                binary = out.encodings.map(e => e.data).join('');
+            }
+        } catch (err) {
+            console.error('Code 128 encoding failed for', str, err);
+        }
+
+        if (binary) {
+            let bars = '';
+            let i = 0;
+            while (i < binary.length) {
+                if (binary[i] === '1') {
+                    let j = i;
+                    while (j < binary.length && binary[j] === '1') j++;
+                    bars += `<rect x="${QUIET + i}" y="0" width="${j - i}" height="${VIEW_H}" fill="#000000"/>`;
+                    i = j;
+                } else {
+                    i++;
+                }
+            }
+            const viewW = binary.length + QUIET * 2;
+            return `<svg viewBox="0 0 ${viewW} ${VIEW_H}" preserveAspectRatio="none" shape-rendering="crispEdges" xmlns="http://www.w3.org/2000/svg">${bars}</svg>`;
+        }
+
+        // Fallback: decorative only (not scannable).
+        const VIEW_W = 480;
         let seed = 0;
-        for (let i = 0; i < str.length; i++) seed = (seed * 131 + str.charCodeAt(i) + 7) >>> 0;
-        const rand = () => {
-            seed = (seed * 1664525 + 1013904223) >>> 0;
-            return seed / 4294967296;
-        };
+        for (let k = 0; k < str.length; k++) seed = (seed * 131 + str.charCodeAt(k) + 7) >>> 0;
+        const rand = () => { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 4294967296; };
         let bars = '';
         let x = 0;
         while (x < VIEW_W) {
-            const w = 2 + Math.floor(rand() * 6); // bar/gap width 2–7
-            if (rand() > 0.42) {
-                bars += `<rect x="${x}" y="0" width="${w}" height="${VIEW_H}" fill="#0f172a"/>`;
-            }
+            const w = 2 + Math.floor(rand() * 6);
+            if (rand() > 0.42) bars += `<rect x="${x}" y="0" width="${w}" height="${VIEW_H}" fill="#0f172a"/>`;
             x += w;
         }
         return `<svg viewBox="0 0 ${VIEW_W} ${VIEW_H}" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">${bars}</svg>`;

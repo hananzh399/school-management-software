@@ -440,7 +440,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     initMonthlyToolbar();
     initStudentRecordFilters();
     initPeriodSwitchers();
-    initCamera();
+    initScanner();
 });
  
 function initDate() {
@@ -3066,158 +3066,281 @@ function initPeriodSwitchers() {
 }
 
 /* ============================================================
-   CAMERA MODULE
+   SCANNER MODULE (QR / barcode attendance scanner)
+   Replaces the old plain "Camera" (photo-only) tool. Opens the device
+   camera in a scanner-style view (viewfinder + a green line sweeping
+   top -> bottom on a loop) and continuously looks for a QR code or a
+   Code 128 barcode. Every student ID card generated in Manage Students
+   carries the student's Reg./ID number in BOTH its front QR code and
+   its back barcode, so scanning either side identifies the student.
+   On a successful scan the student is marked PRESENT for today, saved
+   straight to the database (the backend upserts per member/date/school,
+   so re-scanning never creates duplicates), and a beep confirms it.
    ============================================================ */
-function initCamera() {
-    const openBtn     = document.getElementById("open-camera-btn");
-    const modal       = document.getElementById("camera-modal");
-    const backdrop    = document.getElementById("camera-backdrop");
-    const closeBtn    = document.getElementById("camera-close-btn");
-    const video       = document.getElementById("camera-video");
-    const canvas      = document.getElementById("camera-canvas");
-    const placeholder = document.getElementById("camera-placeholder");
-    const startBtn    = document.getElementById("camera-start-btn");
-    const captureBtn  = document.getElementById("camera-capture-btn");
-    const switchBtn   = document.getElementById("camera-switch-btn");
-    const stopBtn     = document.getElementById("camera-stop-btn");
-    const previewWrap = document.getElementById("camera-preview-wrap");
-    const previewImg  = document.getElementById("camera-preview-img");
-    const downloadBtn = document.getElementById("camera-download-btn");
-    const retakeBtn   = document.getElementById("camera-retake-btn");
+function initScanner() {
+    const openBtn      = document.getElementById("open-scanner-btn");
+    const modal        = document.getElementById("scanner-modal");
+    const backdrop     = document.getElementById("scanner-backdrop");
+    const closeBtn     = document.getElementById("scanner-close-btn");
+    const video        = document.getElementById("scanner-video");
+    const canvas       = document.getElementById("scanner-canvas");
+    const placeholder  = document.getElementById("scanner-placeholder");
+    const switchBtn    = document.getElementById("scanner-switch-btn");
+    const stopBtn      = document.getElementById("scanner-stop-btn");
+    const flashEl      = document.getElementById("scanner-flash");
+    const lastResult   = document.getElementById("scanner-last-result");
+    const lastResultTx = document.getElementById("scanner-last-result-text");
 
     if (!openBtn || !modal) return;
 
-    let stream = null;
-    let facingMode = "user";
+    const RESCAN_COOLDOWN_MS = 4000;  // ignore the same card being re-read while it's still held up
+    const SCAN_INTERVAL_MS   = 140;   // how often a frame is examined
+    const MAX_DECODE_WIDTH   = 800;   // frames are downscaled to this width before decoding (speed)
 
-    function openModal() {
-        modal.classList.remove("hidden");
-        modal.setAttribute("aria-hidden", "false");
+    let stream = null;
+    let facingMode = "environment";   // rear camera is the natural choice for scanning cards
+    let scanTimer = null;
+    let scanning = false;             // true while the decode loop should keep running
+    let busy = false;                 // a frame is currently being processed
+    let nativeDetector = null;        // BarcodeDetector, when the browser has one that reads both formats
+    let zxingReader = null;           // ZXing MultiFormatReader fallback (needed for Code 128 on most desktops)
+    let audioCtx = null;
+    const lastSeen = {};              // code -> timestamp of last handled scan
+
+    // ---- feedback ----------------------------------------------------
+    function ensureAudio() {
+        try {
+            if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            if (audioCtx.state === "suspended") audioCtx.resume();
+        } catch (err) { audioCtx = null; }
     }
-    function closeModal() {
-        modal.classList.add("hidden");
-        modal.setAttribute("aria-hidden", "true");
-        stopCamera();
+    function beep(ok) {
+        if (!audioCtx) return;
+        try {
+            const t0 = audioCtx.currentTime;
+            // success = short two-note "beep-beep" (high); failure = one low buzz
+            const notes = ok ? [[988, 0, 0.11], [1319, 0.13, 0.13]] : [[220, 0, 0.28]];
+            notes.forEach(([freq, offset, dur]) => {
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.type = ok ? "sine" : "square";
+                osc.frequency.value = freq;
+                gain.gain.setValueAtTime(0.0001, t0 + offset);
+                gain.gain.exponentialRampToValueAtTime(ok ? 0.35 : 0.15, t0 + offset + 0.01);
+                gain.gain.exponentialRampToValueAtTime(0.0001, t0 + offset + dur);
+                osc.connect(gain); gain.connect(audioCtx.destination);
+                osc.start(t0 + offset);
+                osc.stop(t0 + offset + dur + 0.02);
+            });
+        } catch (err) { /* audio unavailable — scanning still works */ }
     }
-    function stopCamera() {
+    function flash(kind) {
+        flashEl.className = "scanner-flash scanner-flash--" + kind + " show";
+        setTimeout(() => flashEl.classList.remove("show"), 650);
+    }
+    function showResult(text, kind) {
+        lastResult.classList.remove("hidden", "scanner-last-result--ok", "scanner-last-result--err");
+        lastResult.classList.add(kind === "ok" ? "scanner-last-result--ok" : "scanner-last-result--err");
+        lastResultTx.textContent = text;
+    }
+
+    // ---- marking attendance -------------------------------------------
+    async function handleCode(rawCode) {
+        const code = String(rawCode || "").trim();
+        if (!code) return;
+        const now = Date.now();
+        if (lastSeen[code] && now - lastSeen[code] < RESCAN_COOLDOWN_MS) return;
+        lastSeen[code] = now;
+
+        const student = STUDENTS.find(s => String(s.regNo).toLowerCase() === code.toLowerCase());
+        if (!student) {
+            beep(false); flash("error");
+            showResult(`Not a student ID: "${code.length > 40 ? code.slice(0, 40) + "…" : code}"`, "err");
+            return;
+        }
+
+        const record = {
+            schoolId: getCurrentSchoolId(),
+            memberId: student.regNo,
+            memberName: student.name,
+            memberType: "STUDENT",
+            className: student.class,
+            section: student.section,
+            date: todayKey(),
+            status: "present",
+            reason: ""
+        };
+
+        try {
+            const res = await fetch(`${ATTENDANCE_API_BASE}/save`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify([record])
+            });
+            if (!res.ok) {
+                const msg = (await res.text().catch(() => "")) || `HTTP ${res.status}`;
+                throw new Error(msg);
+            }
+
+            beep(true); flash("success");
+            showResult(`✓ ${student.name} (${student.class}${student.section ? "-" + student.section : ""}) marked present`, "ok");
+            toast(`${student.name} marked present`, "success");
+
+            // Keep any on-screen sheet / cache in step with what was just saved.
+            const entry = { status: "present", reason: "" };
+            if (todayAttendanceCache[student.class]) todayAttendanceCache[student.class][student.regNo] = { ...entry };
+            if (state.selectedClass && state.selectedClass.name === student.class) {
+                state.attendance[student.regNo] = { ...entry };
+                state.savedStudentKeys.add(student.regNo);
+                state.studentEditMode.delete(student.regNo);
+                renderTable();
+            }
+        } catch (err) {
+            console.error("Scanner: saving attendance failed", err);
+            delete lastSeen[code]; // let the person retry straight away
+            beep(false); flash("error");
+            showResult(`Could not save attendance for ${student.name}: ${err.message}`, "err");
+        }
+    }
+
+    // ---- decoding ------------------------------------------------------
+    async function setupDecoders() {
+        nativeDetector = null;
+        try {
+            if ("BarcodeDetector" in window) {
+                const supported = await BarcodeDetector.getSupportedFormats();
+                if (supported.includes("qr_code") && supported.includes("code_128")) {
+                    nativeDetector = new BarcodeDetector({ formats: ["qr_code", "code_128"] });
+                }
+            }
+        } catch (err) { nativeDetector = null; }
+
+        if (!nativeDetector && !zxingReader && typeof ZXing !== "undefined") {
+            zxingReader = new ZXing.MultiFormatReader();
+            const hints = new Map();
+            hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [ZXing.BarcodeFormat.QR_CODE, ZXing.BarcodeFormat.CODE_128]);
+            hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
+            zxingReader.setHints(hints);
+        }
+    }
+
+    async function decodeCurrentFrame() {
+        if (nativeDetector) {
+            const found = await nativeDetector.detect(video);
+            return found.length ? found[0].rawValue : null;
+        }
+        // Fallback: copy the frame to a canvas and decode it ourselves.
+        const vw = video.videoWidth, vh = video.videoHeight;
+        if (!vw || !vh) return null;
+        const scale = Math.min(1, MAX_DECODE_WIDTH / vw);
+        const w = Math.round(vw * scale), h = Math.round(vh * scale);
+        canvas.width = w; canvas.height = h;
+        const ctx = canvas.getContext("2d", { willReadFrequently: true });
+        ctx.drawImage(video, 0, 0, w, h);
+
+        if (typeof jsQR === "function") {               // QR codes (front of card)
+            const img = ctx.getImageData(0, 0, w, h);
+            const qr = jsQR(img.data, w, h, { inversionAttempts: "dontInvert" });
+            if (qr && qr.data) return qr.data;
+        }
+        if (zxingReader) {                               // Code 128 barcodes (back of card)
+            try {
+                const lum = new ZXing.HTMLCanvasElementLuminanceSource(canvas);
+                const bmp = new ZXing.BinaryBitmap(new ZXing.HybridBinarizer(lum));
+                return zxingReader.decode(bmp).getText();
+            } catch (err) { /* NotFoundException = nothing in view; expected on most frames */ }
+        }
+        return null;
+    }
+
+    function scheduleNext() {
+        if (!scanning) return;
+        scanTimer = setTimeout(tick, SCAN_INTERVAL_MS);
+    }
+    async function tick() {
+        if (!scanning) return;
+        if (busy || video.readyState < 2) { scheduleNext(); return; }
+        busy = true;
+        try {
+            const text = await decodeCurrentFrame();
+            if (text) await handleCode(text);
+        } catch (err) {
+            console.error("Scanner: decode error", err);
+        } finally {
+            busy = false;
+            scheduleNext();
+        }
+    }
+
+    // ---- camera lifecycle ------------------------------------------------
+    function stopScanner(message) {
+        scanning = false;
+        clearTimeout(scanTimer); scanTimer = null;
         if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
         video.srcObject = null;
         video.style.display = "none";
         placeholder.style.display = "flex";
-        startBtn.disabled = false;
-        captureBtn.disabled = true;
+        placeholder.querySelector("p").textContent = message || "Scanner stopped";
         switchBtn.disabled = true;
         stopBtn.disabled = true;
-        previewWrap.classList.add("hidden");
     }
-    async function startCamera() {
+
+    async function startScanner() {
+        stopScanner("Starting camera…");
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+            placeholder.querySelector("p").textContent = "This browser can't access the camera (a secure https:// or localhost page is required).";
+            return;
+        }
         try {
-            stopCamera();
-            stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode }, audio: false });
+            await setupDecoders();
+            if (!nativeDetector && typeof jsQR !== "function" && !zxingReader) {
+                placeholder.querySelector("p").textContent = "Scanner libraries failed to load. Check your internet connection and reload.";
+                return;
+            }
+            stream = await navigator.mediaDevices.getUserMedia({
+                video: { facingMode: { ideal: facingMode }, width: { ideal: 1280 }, height: { ideal: 720 } },
+                audio: false
+            });
             video.srcObject = stream;
+            video.classList.toggle("scanner-mirrored", facingMode === "user");
             video.style.display = "block";
             placeholder.style.display = "none";
-            startBtn.disabled = true;
-            captureBtn.disabled = false;
+            await video.play().catch(() => {});
             switchBtn.disabled = false;
             stopBtn.disabled = false;
-            previewWrap.classList.add("hidden");
-        } catch(err) {
-            toast("Camera access denied or unavailable: " + err.message);
+            scanning = true;
+            scheduleNext();
+        } catch (err) {
+            console.error("Scanner: camera error", err);
+            stopScanner("Camera access denied or unavailable.");
+            toast("Camera access denied or unavailable: " + err.message, "error");
         }
     }
-    function capturePhoto() {
-        if (!stream) return;
-        canvas.width  = video.videoWidth  || 640;
-        canvas.height = video.videoHeight || 480;
-        const ctx = canvas.getContext("2d");
-        if (facingMode === "user") { ctx.translate(canvas.width, 0); ctx.scale(-1, 1); }
-        ctx.drawImage(video, 0, 0);
-        const dataUrl = canvas.toDataURL("image/png");
-        previewImg.src = dataUrl;
-        downloadBtn.href = dataUrl;
-        previewWrap.classList.remove("hidden");
-        toast("Photo captured!");
+
+    function openModal() {
+        ensureAudio();                         // created inside the click gesture so the beep is allowed to play
+        modal.classList.remove("hidden");
+        modal.setAttribute("aria-hidden", "false");
+        lastResult.classList.add("hidden");
+        startScanner();
     }
-    async function switchCamera() {
-        facingMode = facingMode === "user" ? "environment" : "user";
-        await startCamera();
+    function closeModal() {
+        modal.classList.add("hidden");
+        modal.setAttribute("aria-hidden", "true");
+        stopScanner();
     }
-
-    async function saveAttendanceToMySQL() {
-    const isStudent = state.mode === "student";
-    const date = todayKey(); // Gets YYYY-MM-DD
-    const schoolId = getCurrentSchoolId();
-
-    // Get the Base64 image from your camera preview
-    const photo = document.getElementById('camera-preview-img')?.src || "";
-
-    let finalRecords = [];
-
-    if (isStudent) {
-        // Collect all students currently shown in the table
-        const filteredStudents = STUDENTS.filter(s => s.class === state.selectedClass.name);
-        
-        finalRecords = filteredStudents.map(s => {
-            const entry = state.attendance[s.regNo] || { status: "absent", reason: "" };
-            return {
-                schoolId: schoolId,
-                memberId: s.regNo,
-                memberName: s.name,
-                memberType: "STUDENT",
-                className: s.class,
-                section: s.section,
-                date: date,
-                status: entry.status,
-                reason: entry.reason,
-                capturedPhoto: photo
-            };
-        });
-    } else {
-        // Collect all staff
-        finalRecords = STAFF.map(s => {
-            const entry = state.staffAttendance[s.id] || { status: "absent", reason: "" };
-            return {
-                schoolId: schoolId,
-                memberId: s.id,
-                memberName: s.name,
-                memberType: "STAFF",
-                role: s.role,
-                date: date,
-                status: entry.status,
-                reason: entry.reason,
-                capturedPhoto: photo
-            };
-        });
-    }
-
-    // SEND TO JAVA BACKEND
-    try {
-        const response = await fetch(`${ATTENDANCE_API_BASE}/save`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(finalRecords)
-        });
-
-        if (response.ok) {
-            toast("Attendance and photos saved to database!", "success");
-        } else {
-            toast("Could not save — check the server logs.", "error");
-        }
-    } catch (err) {
-        console.error("Connection failed:", err);
-        toast("Backend server is not running.", "error");
-    }
-}
 
     openBtn.addEventListener("click", openModal);
     closeBtn.addEventListener("click", closeModal);
     backdrop.addEventListener("click", closeModal);
-    startBtn.addEventListener("click", startCamera);
-    captureBtn.addEventListener("click", capturePhoto);
-    switchBtn.addEventListener("click", switchCamera);
-    stopBtn.addEventListener("click", stopCamera);
-    retakeBtn.addEventListener("click", () => { previewWrap.classList.add("hidden"); });
+    stopBtn.addEventListener("click", () => stopScanner());
+    switchBtn.addEventListener("click", () => {
+        facingMode = facingMode === "environment" ? "user" : "environment";
+        startScanner();
+    });
+    document.addEventListener("keydown", (e) => {
+        if (e.key === "Escape" && !modal.classList.contains("hidden")) closeModal();
+    });
 }
 
 
@@ -3228,7 +3351,7 @@ async function syncCurrentSheetWithDatabase() {
     const schoolId = getCurrentSchoolId();
 
     // We capture the photo if one was taken in this session
-    const photo = document.getElementById('camera-preview-img')?.src || "";
+    const photo = "";
 
     let records = [];
 
