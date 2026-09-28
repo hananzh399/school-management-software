@@ -2924,9 +2924,9 @@ select option {
 
 /* Centered QR box used inside the FRONT card's attendance strip. */
 .idc-card-front-qr-box {
-    width: 58px;
-    height: 58px;
-    padding: 3px;
+    width: 78px;
+    height: 78px;
+    padding: 6px; /* white quiet zone — scanners need this margin to lock on */
     background: #ffffff;
     border: 2px solid var(--idc-green-2);
     border-radius: 6px;

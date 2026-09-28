@@ -4612,11 +4612,11 @@ if (certUploadInput) {
             try {
                 new QRCode(el, {
                     text: String(displayId),
-                    width: 120,
-                    height: 120,
-                    colorDark: '#0f5132',
+                    width: 240,
+                    height: 240,
+                    colorDark: '#062a1a',   // near-black green: high contrast so it scans from further away
                     colorLight: '#ffffff',
-                    correctLevel: QRCode.CorrectLevel.M
+                    correctLevel: QRCode.CorrectLevel.L   // lowest error correction = fewest modules = each module printed larger
                 });
             } catch (err) {
                 console.error('QR generation failed for', displayId, err);

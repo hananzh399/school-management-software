@@ -1016,7 +1016,8 @@ body {
     object-fit: cover;
     display: none;
 }
-#scanner-video.scanner-mirrored { transform: scaleX(-1); } /* only mirror the front (selfie) camera */
+#scanner-video { transform: scale(var(--scanner-zoom, 1)); transform-origin: center; }   /* digital zoom */
+#scanner-video.scanner-mirrored { transform: scaleX(-1) scale(var(--scanner-zoom, 1)); } /* only mirror the front (selfie) camera */
 .scanner-placeholder {
     display: flex;
     flex-direction: column;

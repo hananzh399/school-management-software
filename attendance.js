@@ -3097,12 +3097,17 @@ function initScanner() {
     if (!openBtn || !modal) return;
 
     const RESCAN_COOLDOWN_MS = 4000;  // ignore the same card being re-read while it's still held up
-    // Frames are decoded back-to-back (one per new camera frame), cycling through
-    // these widths: mostly 1280px for speed, every 3rd frame at 1920px so a card
-    // held far away still has enough pixels for its code to be read.
-    const DECODE_WIDTHS      = [1280, 1280, 1920];
-    const AUTO_ZOOM_IDLE_MS  = 2200;  // nothing read for this long -> start stepping the zoom
-    const AUTO_ZOOM_STEP_MS  = 1100;  // ...one step per this interval
+    // Frames are decoded back-to-back (one pass per new camera frame). Each
+    // pass looks at a different part / size of the frame, in rotation, so the
+    // scanner finds a card whether it's up close or far away:
+    //   c1    = the centre 1280x720 at the camera's NATIVE resolution (best for far cards)
+    //   c2    = the centre 1920x1080 at native resolution
+    //   small = the whole frame shrunk to 960 px wide (fast; best for near cards)
+    // and each looks for a QR code ("q") or the Code 128 barcode ("b").
+    const PASS_SEQUENCE = ["c1q", "smallq", "c1q", "c1b", "c2q", "smallq", "smallb", "c1q", "c2b"];
+    const ZOOM_MAX_DIGITAL   = 4;     // top of the slider when the camera has no hardware zoom
+    const AUTO_ZOOM_IDLE_MS  = 1200;  // (hardware zoom only) nothing read for this long -> start stepping the zoom
+    const AUTO_ZOOM_STEP_MS  = 700;
     const AUTO_ZOOM_LEVELS   = [1, 1.6, 2.4, 3.4];
     const MANUAL_ZOOM_HOLD_MS = 10000; // after the person moves the slider, leave zoom alone this long
 
@@ -3114,7 +3119,9 @@ function initScanner() {
     let lastVideoTime = -1;
     let scanCtx = null;               // reused 2D context for the fallback decoder
     let track = null;                 // active video track (for focus / zoom control)
-    let zoomCaps = null;              // { min, max, step } when the camera supports zoom
+    let hwZoom = null;                // { min, max } raw camera zoom range, when the camera has real zoom
+    let zoomFactor = 1;               // current zoom (1 = none) — hardware OR digital
+    let zoomMaxFactor = ZOOM_MAX_DIGITAL;
     let lastDetectAt = 0, lastZoomStepAt = 0, manualZoomUntil = 0, autoZoomIdx = 0;
     let nativeDetector = null;        // BarcodeDetector, when the browser has one that reads both formats
     let zxingReader = null;           // ZXing MultiFormatReader fallback (needed for Code 128 on most desktops)
@@ -3306,7 +3313,7 @@ function initScanner() {
         } catch (err) { nativeDetector = null; }
 
         // ZXing is used ONLY for the Code 128 barcode (jsQR reads small/far QR
-        // codes better than ZXing does, so QR goes to jsQR first).
+        // codes better than ZXing does, so QR goes to jsQR).
         if (!nativeDetector && !zxingReader && typeof ZXing !== "undefined") {
             zxingReader = new ZXing.MultiFormatReader();
             const hints = new Map();
@@ -3316,26 +3323,58 @@ function initScanner() {
         }
     }
 
-    async function decodeCurrentFrame() {
-        if (nativeDetector) {                            // hardware-accelerated, full resolution
-            const found = await nativeDetector.detect(video);
-            return found.length ? found[0].rawValue : null;
+    // Which part of the frame a pass looks at (in the camera's native pixels).
+    // With DIGITAL zoom on, every pass looks at just the zoomed-in window.
+    function passRegion(name, vw, vh) {
+        const digital = !hwZoom && zoomFactor > 1;
+        let sx, sy, sw, sh, maxW;
+        if (digital) {
+            sw = vw / zoomFactor; sh = vh / zoomFactor;
+            sx = (vw - sw) / 2;   sy = (vh - sh) / 2;
+            maxW = name.startsWith("small") ? 960 : 1600;
+        } else if (name.startsWith("c1")) {
+            sw = Math.min(vw, 1280); sh = Math.min(vh, 720);
+            sx = (vw - sw) / 2;      sy = (vh - sh) / 2;   maxW = 1280;
+        } else if (name.startsWith("c2")) {
+            sw = Math.min(vw, 1920); sh = Math.min(vh, 1080);
+            sx = (vw - sw) / 2;      sy = (vh - sh) / 2;   maxW = 1920;
+        } else {                                            // "small": whole frame, shrunk
+            sx = 0; sy = 0; sw = vw; sh = vh;              maxW = 960;
         }
+        const scale = Math.min(1, maxW / sw);               // never upscale — extra pixels add nothing
+        return { sx, sy, sw, sh, w: Math.max(1, Math.round(sw * scale)), h: Math.max(1, Math.round(sh * scale)) };
+    }
+
+    async function decodeCurrentFrame() {
         const vw = video.videoWidth, vh = video.videoHeight;
         if (!vw || !vh) return null;
-        const targetW = DECODE_WIDTHS[frameCount++ % DECODE_WIDTHS.length];
-        const scale = Math.min(1, targetW / vw);
-        const w = Math.round(vw * scale), h = Math.round(vh * scale);
-        if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; scanCtx = null; }
-        if (!scanCtx) scanCtx = canvas.getContext("2d", { willReadFrequently: true });
-        scanCtx.drawImage(video, 0, 0, w, h);
+        const pass = PASS_SEQUENCE[frameCount++ % PASS_SEQUENCE.length];
+        const wantBarcode = pass.endsWith("b");
+        const r = passRegion(pass, vw, vh);
 
-        if (typeof jsQR === "function") {                // QR code (front of card)
-            const img = scanCtx.getImageData(0, 0, w, h);
-            const qr = jsQR(img.data, w, h, { inversionAttempts: "dontInvert" });
-            if (qr && qr.data) return qr.data;
+        // Hardware-accelerated detector (Chrome on Android / macOS): full-res, fast.
+        if (nativeDetector) {
+            if (!(!hwZoom && zoomFactor > 1)) {
+                const found = await nativeDetector.detect(video);
+                return found.length ? found[0].rawValue : null;
+            }
         }
-        if (zxingReader) {                               // Code 128 barcode (back of card)
+
+        if (canvas.width !== r.w || canvas.height !== r.h) { canvas.width = r.w; canvas.height = r.h; scanCtx = null; }
+        if (!scanCtx) scanCtx = canvas.getContext("2d", { willReadFrequently: true });
+        scanCtx.drawImage(video, r.sx, r.sy, r.sw, r.sh, 0, 0, r.w, r.h);
+
+        if (nativeDetector) {                              // digital-zoom window on a native-detector browser
+            const found = await nativeDetector.detect(canvas);
+            return found.length ? found[0].rawValue : null;
+        }
+        if (!wantBarcode) {                                // QR code (front of card)
+            if (typeof jsQR !== "function") return null;
+            const img = scanCtx.getImageData(0, 0, r.w, r.h);
+            const qr = jsQR(img.data, r.w, r.h, { inversionAttempts: "dontInvert" });
+            return (qr && qr.data) ? qr.data : null;
+        }
+        if (zxingReader) {                                 // Code 128 barcode (back of card)
             try {
                 const lum = new ZXing.HTMLCanvasElementLuminanceSource(canvas);
                 const bmp = new ZXing.BinaryBitmap(new ZXing.HybridBinarizer(lum));
@@ -3345,27 +3384,34 @@ function initScanner() {
         return null;
     }
 
-    // ---- zoom (for cards held far away) ----------------------------------
-    function applyZoom(value) {
-        if (!track || !zoomCaps) return;
-        const z = Math.min(zoomCaps.max, Math.max(zoomCaps.min, value));
-        track.applyConstraints({ advanced: [{ zoom: z }] }).catch(() => {});
-        zoomSlider.value = z;
-        zoomVal.textContent = z.toFixed(1) + "×";
+    // ---- zoom (works on EVERY camera) ------------------------------------
+    // Cameras with real zoom (most phones, some webcams) are zoomed in
+    // hardware. Everything else — including nearly all laptop/desktop webcams,
+    // which is why the earlier slider never showed up or did nothing — gets a
+    // DIGITAL zoom: the picture is magnified on screen and the scanner
+    // concentrates on that zoomed-in window at full camera resolution.
+    function setZoom(f) {
+        zoomFactor = Math.min(zoomMaxFactor, Math.max(1, f));
+        if (hwZoom && track) {
+            track.applyConstraints({ advanced: [{ zoom: hwZoom.min * zoomFactor }] }).catch(() => {});
+        } else {
+            video.style.setProperty("--scanner-zoom", zoomFactor);
+        }
+        zoomSlider.value = zoomFactor;
+        zoomVal.textContent = zoomFactor.toFixed(1) + "×";
     }
     function autoZoomTick(now) {
-        // Nothing read for a while -> gently step the zoom up (and back around)
-        // so a card that's too far away or too close comes into range by itself.
-        if (!zoomCaps || now < manualZoomUntil) return;
+        // Hardware zoom only: nothing read for a while -> step the zoom so a
+        // card that's too far away comes into range by itself.
+        if (!hwZoom || now < manualZoomUntil) return;
         if (now - lastDetectAt < AUTO_ZOOM_IDLE_MS || now - lastZoomStepAt < AUTO_ZOOM_STEP_MS) return;
         lastZoomStepAt = now;
         autoZoomIdx = (autoZoomIdx + 1) % AUTO_ZOOM_LEVELS.length;
-        applyZoom(AUTO_ZOOM_LEVELS[autoZoomIdx]);
+        setZoom(Math.min(AUTO_ZOOM_LEVELS[autoZoomIdx], zoomMaxFactor));
     }
 
     // ---- continuous scan loop --------------------------------------------
-    // One decode per NEW camera frame, back to back — no fixed delay between
-    // attempts (that 140 ms timer was the main source of lag).
+    // One decode pass per NEW camera frame, back to back — no fixed delay.
     function scheduleNext() {
         if (!scanning) return;
         if ("requestVideoFrameCallback" in video) video.requestVideoFrameCallback(tick);
@@ -3374,7 +3420,7 @@ function initScanner() {
     async function tick() {
         if (!scanning) return;
         if (video.readyState < 2 || video.currentTime === lastVideoTime) {   // no new frame yet
-            if (!("requestVideoFrameCallback" in video)) scanTimer = setTimeout(tick, 8);
+            if (!("requestVideoFrameCallback" in video)) scanTimer = setTimeout(tick, 6);
             else scheduleNext();
             return;
         }
@@ -3400,14 +3446,14 @@ function initScanner() {
         scanning = false;
         clearTimeout(scanTimer); scanTimer = null;
         if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
-        track = null; zoomCaps = null;
-        zoomRow.classList.add("hidden");
+        track = null; hwZoom = null;
         video.srcObject = null;
         video.style.display = "none";
         placeholder.style.display = "flex";
         placeholder.querySelector("p").textContent = message || "Scanner stopped";
         switchBtn.disabled = true;
         stopBtn.disabled = true;
+        zoomSlider.disabled = true;
     }
 
     async function tuneCamera() {
@@ -3420,13 +3466,17 @@ function initScanner() {
         if (caps.whiteBalanceMode && caps.whiteBalanceMode.includes("continuous")) advanced.push({ whiteBalanceMode: "continuous" });
         if (advanced.length) { try { await track.applyConstraints({ advanced }); } catch (err) { /* not fatal */ } }
 
-        if (caps.zoom && caps.zoom.max > caps.zoom.min) {
-            zoomCaps = { min: caps.zoom.min, max: Math.min(caps.zoom.max, 5), step: caps.zoom.step || 0.1 };
-            zoomSlider.min = zoomCaps.min; zoomSlider.max = zoomCaps.max; zoomSlider.step = zoomCaps.step;
-            zoomRow.classList.remove("hidden");
-            autoZoomIdx = 0;
-            applyZoom(zoomCaps.min);
+        hwZoom = null;
+        if (caps.zoom && caps.zoom.max > caps.zoom.min && caps.zoom.min > 0) {
+            hwZoom = { min: caps.zoom.min, max: caps.zoom.max };
+            zoomMaxFactor = Math.min(hwZoom.max / hwZoom.min, 5);
+        } else {
+            zoomMaxFactor = ZOOM_MAX_DIGITAL;
         }
+        zoomSlider.min = 1; zoomSlider.max = zoomMaxFactor; zoomSlider.step = 0.1;
+        zoomSlider.disabled = false;
+        autoZoomIdx = 0;
+        setZoom(1);
     }
 
     async function startScanner() {
@@ -3441,8 +3491,11 @@ function initScanner() {
                 placeholder.querySelector("p").textContent = "Scanner libraries failed to load. Check your internet connection and reload.";
                 return;
             }
+            // Ask for the sharpest picture the camera can give — more pixels on the
+            // card is what lets a small code be read from further away. (The browser
+            // hands back the closest mode the camera actually supports.)
             stream = await navigator.mediaDevices.getUserMedia({
-                video: { facingMode: { ideal: facingMode }, width: { ideal: 1920 }, height: { ideal: 1080 }, frameRate: { ideal: 30 } },
+                video: { facingMode: { ideal: facingMode }, width: { ideal: 3840 }, height: { ideal: 2160 }, frameRate: { ideal: 30 } },
                 audio: false
             });
             video.srcObject = stream;
@@ -3481,8 +3534,15 @@ function initScanner() {
 
     zoomSlider.addEventListener("input", () => {
         manualZoomUntil = Date.now() + MANUAL_ZOOM_HOLD_MS;   // person is in control — pause auto zoom
-        applyZoom(parseFloat(zoomSlider.value));
+        setZoom(parseFloat(zoomSlider.value));
     });
+    // Mouse wheel over the picture zooms too.
+    document.querySelector(".scanner-video-wrap").addEventListener("wheel", (e) => {
+        if (!scanning) return;
+        e.preventDefault();
+        manualZoomUntil = Date.now() + MANUAL_ZOOM_HOLD_MS;
+        setZoom(zoomFactor + (e.deltaY < 0 ? 0.3 : -0.3));
+    }, { passive: false });
     openBtn.addEventListener("click", openModal);
     closeBtn.addEventListener("click", closeModal);
     backdrop.addEventListener("click", closeModal);
