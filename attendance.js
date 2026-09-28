@@ -3090,18 +3090,32 @@ function initScanner() {
     const flashEl      = document.getElementById("scanner-flash");
     const lastResult   = document.getElementById("scanner-last-result");
     const lastResultTx = document.getElementById("scanner-last-result-text");
+    const zoomRow      = document.getElementById("scanner-zoom-row");
+    const zoomSlider   = document.getElementById("scanner-zoom");
+    const zoomVal      = document.getElementById("scanner-zoom-val");
 
     if (!openBtn || !modal) return;
 
     const RESCAN_COOLDOWN_MS = 4000;  // ignore the same card being re-read while it's still held up
-    const SCAN_INTERVAL_MS   = 140;   // how often a frame is examined
-    const MAX_DECODE_WIDTH   = 800;   // frames are downscaled to this width before decoding (speed)
+    // Frames are decoded back-to-back (one per new camera frame), cycling through
+    // these widths: mostly 1280px for speed, every 3rd frame at 1920px so a card
+    // held far away still has enough pixels for its code to be read.
+    const DECODE_WIDTHS      = [1280, 1280, 1920];
+    const AUTO_ZOOM_IDLE_MS  = 2200;  // nothing read for this long -> start stepping the zoom
+    const AUTO_ZOOM_STEP_MS  = 1100;  // ...one step per this interval
+    const AUTO_ZOOM_LEVELS   = [1, 1.6, 2.4, 3.4];
+    const MANUAL_ZOOM_HOLD_MS = 10000; // after the person moves the slider, leave zoom alone this long
 
     let stream = null;
     let facingMode = "environment";   // rear camera is the natural choice for scanning cards
     let scanTimer = null;
     let scanning = false;             // true while the decode loop should keep running
-    let busy = false;                 // a frame is currently being processed
+    let frameCount = 0;
+    let lastVideoTime = -1;
+    let scanCtx = null;               // reused 2D context for the fallback decoder
+    let track = null;                 // active video track (for focus / zoom control)
+    let zoomCaps = null;              // { min, max, step } when the camera supports zoom
+    let lastDetectAt = 0, lastZoomStepAt = 0, manualZoomUntil = 0, autoZoomIdx = 0;
     let nativeDetector = null;        // BarcodeDetector, when the browser has one that reads both formats
     let zxingReader = null;           // ZXing MultiFormatReader fallback (needed for Code 128 on most desktops)
     let audioCtx = null;
@@ -3175,7 +3189,7 @@ function initScanner() {
             u.pitch = femaleVoice ? 1.05 : 1.35;       // raise pitch when no female voice is installed
             u.rate = 1;
             u.volume = 1;
-            setTimeout(() => window.speechSynthesis.speak(u), 220); // let the beep finish first
+            setTimeout(() => window.speechSynthesis.speak(u), 120); // just after the beep starts
         } catch (err) { /* speech unavailable — the beep/flash still work */ }
     }
 
@@ -3242,6 +3256,12 @@ function initScanner() {
             reason: ""
         };
 
+        // INSTANT feedback: the moment the card is recognised, beep / flash /
+        // speak — don't wait for the server round-trip. If the save then
+        // fails, the failure is announced right after.
+        beep(true); flash("success"); speak("Thank you");
+        showResult(`✓ ${student.name} (${student.class}${student.section ? "-" + student.section : ""}) — saving…`, "ok");
+
         try {
             const res = await fetch(`${ATTENDANCE_API_BASE}/save`, {
                 method: "POST",
@@ -3253,7 +3273,6 @@ function initScanner() {
                 throw new Error(msg);
             }
 
-            beep(true); flash("success"); speak("Thank you");
             showResult(`✓ ${student.name} (${student.class}${student.section ? "-" + student.section : ""}) marked present`, "ok");
             toast(`${student.name} marked present`, "success");
 
@@ -3286,59 +3305,92 @@ function initScanner() {
             }
         } catch (err) { nativeDetector = null; }
 
+        // ZXing is used ONLY for the Code 128 barcode (jsQR reads small/far QR
+        // codes better than ZXing does, so QR goes to jsQR first).
         if (!nativeDetector && !zxingReader && typeof ZXing !== "undefined") {
             zxingReader = new ZXing.MultiFormatReader();
             const hints = new Map();
-            hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [ZXing.BarcodeFormat.QR_CODE, ZXing.BarcodeFormat.CODE_128]);
+            hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [ZXing.BarcodeFormat.CODE_128]);
             hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
             zxingReader.setHints(hints);
         }
     }
 
     async function decodeCurrentFrame() {
-        if (nativeDetector) {
+        if (nativeDetector) {                            // hardware-accelerated, full resolution
             const found = await nativeDetector.detect(video);
             return found.length ? found[0].rawValue : null;
         }
-        // Fallback: copy the frame to a canvas and decode it ourselves.
         const vw = video.videoWidth, vh = video.videoHeight;
         if (!vw || !vh) return null;
-        const scale = Math.min(1, MAX_DECODE_WIDTH / vw);
+        const targetW = DECODE_WIDTHS[frameCount++ % DECODE_WIDTHS.length];
+        const scale = Math.min(1, targetW / vw);
         const w = Math.round(vw * scale), h = Math.round(vh * scale);
-        canvas.width = w; canvas.height = h;
-        const ctx = canvas.getContext("2d", { willReadFrequently: true });
-        ctx.drawImage(video, 0, 0, w, h);
+        if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; scanCtx = null; }
+        if (!scanCtx) scanCtx = canvas.getContext("2d", { willReadFrequently: true });
+        scanCtx.drawImage(video, 0, 0, w, h);
 
-        if (typeof jsQR === "function") {               // QR codes (front of card)
-            const img = ctx.getImageData(0, 0, w, h);
+        if (typeof jsQR === "function") {                // QR code (front of card)
+            const img = scanCtx.getImageData(0, 0, w, h);
             const qr = jsQR(img.data, w, h, { inversionAttempts: "dontInvert" });
             if (qr && qr.data) return qr.data;
         }
-        if (zxingReader) {                               // Code 128 barcodes (back of card)
+        if (zxingReader) {                               // Code 128 barcode (back of card)
             try {
                 const lum = new ZXing.HTMLCanvasElementLuminanceSource(canvas);
                 const bmp = new ZXing.BinaryBitmap(new ZXing.HybridBinarizer(lum));
                 return zxingReader.decode(bmp).getText();
-            } catch (err) { /* NotFoundException = nothing in view; expected on most frames */ }
+            } catch (err) { /* nothing in view — expected on most frames */ }
         }
         return null;
     }
 
+    // ---- zoom (for cards held far away) ----------------------------------
+    function applyZoom(value) {
+        if (!track || !zoomCaps) return;
+        const z = Math.min(zoomCaps.max, Math.max(zoomCaps.min, value));
+        track.applyConstraints({ advanced: [{ zoom: z }] }).catch(() => {});
+        zoomSlider.value = z;
+        zoomVal.textContent = z.toFixed(1) + "×";
+    }
+    function autoZoomTick(now) {
+        // Nothing read for a while -> gently step the zoom up (and back around)
+        // so a card that's too far away or too close comes into range by itself.
+        if (!zoomCaps || now < manualZoomUntil) return;
+        if (now - lastDetectAt < AUTO_ZOOM_IDLE_MS || now - lastZoomStepAt < AUTO_ZOOM_STEP_MS) return;
+        lastZoomStepAt = now;
+        autoZoomIdx = (autoZoomIdx + 1) % AUTO_ZOOM_LEVELS.length;
+        applyZoom(AUTO_ZOOM_LEVELS[autoZoomIdx]);
+    }
+
+    // ---- continuous scan loop --------------------------------------------
+    // One decode per NEW camera frame, back to back — no fixed delay between
+    // attempts (that 140 ms timer was the main source of lag).
     function scheduleNext() {
         if (!scanning) return;
-        scanTimer = setTimeout(tick, SCAN_INTERVAL_MS);
+        if ("requestVideoFrameCallback" in video) video.requestVideoFrameCallback(tick);
+        else scanTimer = setTimeout(tick, 0);
     }
     async function tick() {
         if (!scanning) return;
-        if (busy || video.readyState < 2) { scheduleNext(); return; }
-        busy = true;
+        if (video.readyState < 2 || video.currentTime === lastVideoTime) {   // no new frame yet
+            if (!("requestVideoFrameCallback" in video)) scanTimer = setTimeout(tick, 8);
+            else scheduleNext();
+            return;
+        }
+        lastVideoTime = video.currentTime;
         try {
             const text = await decodeCurrentFrame();
-            if (text) await handleCode(text);
+            const now = Date.now();
+            if (text) {
+                lastDetectAt = now;
+                handleCode(text).catch(err => console.error("Scanner: handle error", err)); // don't hold up the next frame
+            } else {
+                autoZoomTick(now);
+            }
         } catch (err) {
             console.error("Scanner: decode error", err);
         } finally {
-            busy = false;
             scheduleNext();
         }
     }
@@ -3348,12 +3400,33 @@ function initScanner() {
         scanning = false;
         clearTimeout(scanTimer); scanTimer = null;
         if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
+        track = null; zoomCaps = null;
+        zoomRow.classList.add("hidden");
         video.srcObject = null;
         video.style.display = "none";
         placeholder.style.display = "flex";
         placeholder.querySelector("p").textContent = message || "Scanner stopped";
         switchBtn.disabled = true;
         stopBtn.disabled = true;
+    }
+
+    async function tuneCamera() {
+        track = stream.getVideoTracks()[0];
+        const caps = (track && track.getCapabilities) ? track.getCapabilities() : {};
+        const advanced = [];
+        // Continuous autofocus keeps the code sharp at any distance.
+        if (caps.focusMode && caps.focusMode.includes("continuous")) advanced.push({ focusMode: "continuous" });
+        if (caps.exposureMode && caps.exposureMode.includes("continuous")) advanced.push({ exposureMode: "continuous" });
+        if (caps.whiteBalanceMode && caps.whiteBalanceMode.includes("continuous")) advanced.push({ whiteBalanceMode: "continuous" });
+        if (advanced.length) { try { await track.applyConstraints({ advanced }); } catch (err) { /* not fatal */ } }
+
+        if (caps.zoom && caps.zoom.max > caps.zoom.min) {
+            zoomCaps = { min: caps.zoom.min, max: Math.min(caps.zoom.max, 5), step: caps.zoom.step || 0.1 };
+            zoomSlider.min = zoomCaps.min; zoomSlider.max = zoomCaps.max; zoomSlider.step = zoomCaps.step;
+            zoomRow.classList.remove("hidden");
+            autoZoomIdx = 0;
+            applyZoom(zoomCaps.min);
+        }
     }
 
     async function startScanner() {
@@ -3369,7 +3442,7 @@ function initScanner() {
                 return;
             }
             stream = await navigator.mediaDevices.getUserMedia({
-                video: { facingMode: { ideal: facingMode }, width: { ideal: 1280 }, height: { ideal: 720 } },
+                video: { facingMode: { ideal: facingMode }, width: { ideal: 1920 }, height: { ideal: 1080 }, frameRate: { ideal: 30 } },
                 audio: false
             });
             video.srcObject = stream;
@@ -3377,8 +3450,11 @@ function initScanner() {
             video.style.display = "block";
             placeholder.style.display = "none";
             await video.play().catch(() => {});
+            await tuneCamera();
             switchBtn.disabled = false;
             stopBtn.disabled = false;
+            lastVideoTime = -1; frameCount = 0;
+            lastDetectAt = Date.now(); lastZoomStepAt = 0; manualZoomUntil = 0;
             scanning = true;
             scheduleNext();
         } catch (err) {
@@ -3403,6 +3479,10 @@ function initScanner() {
         stopScanner();
     }
 
+    zoomSlider.addEventListener("input", () => {
+        manualZoomUntil = Date.now() + MANUAL_ZOOM_HOLD_MS;   // person is in control — pause auto zoom
+        applyZoom(parseFloat(zoomSlider.value));
+    });
     openBtn.addEventListener("click", openModal);
     closeBtn.addEventListener("click", closeModal);
     backdrop.addEventListener("click", closeModal);

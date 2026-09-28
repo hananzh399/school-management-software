@@ -1096,6 +1096,17 @@ body {
 .scanner-last-result--ok  { background: rgba(16,185,129,0.14); color: var(--emerald); border: 1px solid rgba(16,185,129,0.35); }
 .scanner-last-result--err { background: rgba(244,63,94,0.12);  color: var(--rose);    border: 1px solid rgba(244,63,94,0.35); }
 
+.scanner-zoom {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: var(--text-secondary);
+    font-size: 0.85rem;
+}
+.scanner-zoom.hidden { display: none; }
+.scanner-zoom input[type=range] { flex: 1; accent-color: #22c55e; }
+.scanner-zoom span { min-width: 38px; text-align: right; font-weight: 600; }
+
 .camera-controls {
     display: flex;
     flex-wrap: wrap;
