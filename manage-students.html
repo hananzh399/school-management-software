@@ -14,6 +14,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
     <script src="shared-data.js"></script>
     <script src="input-validation.js"></script>
 <script src="access-control.js"></script>
@@ -1316,7 +1317,7 @@
                 <span class="idc-toolbar-title"><i class="fas fa-id-card"></i> <span id="idc-toolbar-label">Student ID Cards</span></span>
                 <div class="idc-toolbar-actions">
                     <button type="button" class="cert-viewer-btn cert-viewer-btn-primary" id="idc-download-all-btn" onclick="downloadAllIdCards()">
-                        <i class="fas fa-download"></i> <span>Download All</span>
+                        <i class="fas fa-file-pdf"></i> <span>Download PDF</span>
                     </button>
                     <label class="idc-per-page-label" for="idc-print-per-page">
                         <span>Per page</span>

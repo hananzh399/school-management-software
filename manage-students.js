@@ -4671,7 +4671,7 @@ if (certUploadInput) {
      * resize step stretches that render to the exact final pixel dimensions
      * so every downloaded/printed card is pixel-identical in size.
      */
-    async function idcCaptureCardBlob(cardEl) {
+    async function idcCaptureCardCanvas(cardEl) {
         if (!cardEl || typeof html2canvas === 'undefined') return null;
         const rawCanvas = await html2canvas(cardEl, {
             scale: IDC_CAPTURE_SCALE,
@@ -4685,7 +4685,13 @@ if (certUploadInput) {
         ctx.imageSmoothingEnabled = true;
         ctx.imageSmoothingQuality = 'high';
         ctx.drawImage(rawCanvas, 0, 0, IDC_CARD_PIXEL_WIDTH, IDC_CARD_PIXEL_HEIGHT);
-        return new Promise(res => finalCanvas.toBlob(res, 'image/png'));
+        return finalCanvas;
+    }
+
+    async function idcCaptureCardBlob(cardEl) {
+        const canvas = await idcCaptureCardCanvas(cardEl);
+        if (!canvas) return null;
+        return new Promise(res => canvas.toBlob(res, 'image/png'));
     }
 
     function idcFilenameFor(s, side) {
@@ -4744,9 +4750,15 @@ if (certUploadInput) {
         }
     };
 
-    /** Toolbar "Download All" — generates and downloads BOTH sides of every card in the current scope, one at a time. */
+    /** Toolbar "Download PDF" — captures the front and back of every card in the current scope and saves them together as ONE PDF. Each page is exactly one card (2.125in x 3.375in, vertical CR80) holding the 638x1012 px image, front then back for each student, so the file can go straight to a card printer or be printed on any printer at true size. */
     window.downloadAllIdCards = async function() {
         if (!idcCurrentStudents.length) return;
+
+        const PDFCtor = window.jspdf && window.jspdf.jsPDF;
+        if (!PDFCtor) {
+            showToast('PDF Library Missing', 'The PDF library did not load. Check your internet connection and reload the page.', 'danger');
+            return;
+        }
 
         const btn = document.getElementById('idc-download-all-btn');
         const progress = document.getElementById('idc-progress');
@@ -4754,35 +4766,52 @@ if (certUploadInput) {
         if (btn) btn.disabled = true;
         if (progress) progress.style.display = 'flex';
 
+        const CARD_W_IN = 2.125, CARD_H_IN = 3.375;
+        const doc = new PDFCtor({ orientation: 'portrait', unit: 'in', format: [CARD_W_IN, CARD_H_IN], compress: true });
+        let pageCount = 0, failed = 0;
         const total = idcCurrentStudents.length * 2;
-        let done = 0, failed = 0;
+        let done = 0;
+
         for (const s of idcCurrentStudents) {
             const safeId = idcSafeId(s.regNo || s.id);
             for (const side of ['front', 'back']) {
-                const cardEl = idcCardElFor(safeId, side);
-                if (progressText) progressText.textContent = `Generating ${done + 1} of ${total}…`;
+                done++;
+                if (progressText) progressText.textContent = `Adding card ${done} of ${total} to PDF…`;
                 try {
-                    const blob = await idcCaptureCardBlob(cardEl);
-                    if (!blob) throw new Error('capture failed');
-                    idcTriggerDownload(blob, idcFilenameFor(s, side));
-                    done++;
-                    // Small gap between downloads so the browser doesn't treat
-                    // a burst of instant downloads as a pop-up-style spam block.
-                    await new Promise(r => setTimeout(r, 220));
+                    const canvas = await idcCaptureCardCanvas(idcCardElFor(safeId, side));
+                    if (!canvas) throw new Error('capture failed');
+                    // JPEG at high quality keeps the PDF a sensible size even for a whole school.
+                    const dataUrl = canvas.toDataURL('image/jpeg', 0.95);
+                    if (pageCount > 0) doc.addPage([CARD_W_IN, CARD_H_IN], 'portrait');
+                    doc.addImage(dataUrl, 'JPEG', 0, 0, CARD_W_IN, CARD_H_IN, undefined, 'FAST');
+                    pageCount++;
                 } catch (err) {
                     console.error('ID card capture failed for', safeId, side, err);
                     failed++;
                 }
+                await new Promise(r => setTimeout(r, 0)); // let the browser repaint the progress text
             }
+        }
+
+        if (pageCount > 0) {
+            if (progressText) progressText.textContent = 'Building PDF…';
+            await new Promise(r => setTimeout(r, 0));
+            const scope = (voActiveClass === ALL_STUDENTS_KEY)
+                ? 'All_Students'
+                : [voActiveClass, (voActiveSection && voActiveSection !== 'ALL') ? 'Section_' + voActiveSection : 'All_Sections'].join('_');
+            const safeScope = String(scope).replace(/[^a-z0-9]+/gi, '_').replace(/^_+|_+$/g, '');
+            doc.save(`ID_Cards_${safeScope}.pdf`);
         }
 
         if (progress) progress.style.display = 'none';
         if (btn) btn.disabled = false;
 
-        if (failed === 0) {
-            showToast('ID Cards Ready', `Downloaded ${done} ID card image${done === 1 ? '' : 's'} (front + back for ${idcCurrentStudents.length} student${idcCurrentStudents.length === 1 ? '' : 's'}).`, 'success');
+        if (pageCount === 0) {
+            showToast('PDF Failed', 'Could not generate any ID cards for the PDF.', 'danger');
+        } else if (failed === 0) {
+            showToast('PDF Ready', `Downloaded 1 PDF with ${pageCount} pages (front + back for ${idcCurrentStudents.length} student${idcCurrentStudents.length === 1 ? '' : 's'}).`, 'success');
         } else {
-            showToast('Partially Completed', `Downloaded ${done} image${done === 1 ? '' : 's'}; ${failed} failed.`, 'danger');
+            showToast('PDF Downloaded With Gaps', `${pageCount} pages saved; ${failed} card${failed === 1 ? '' : 's'} could not be generated.`, 'danger');
         }
     };
 
