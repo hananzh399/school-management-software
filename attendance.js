@@ -3144,18 +3144,89 @@ function initScanner() {
         lastResultTx.textContent = text;
     }
 
+    // ---- spoken feedback (woman's voice) -------------------------------
+    // Browsers don't expose a voice's gender, so we pick by well-known
+    // female voice names (Windows "Zira/Aria/Jenny", macOS/iOS "Samantha/
+    // Karen/Victoria", Chrome's "Google ... Female", etc.). If none is
+    // installed we fall back to the default voice with a higher pitch.
+    let femaleVoice = null;
+    const FEMALE_HINTS = ["zira", "aria", "jenny", "samantha", "karen", "victoria", "susan", "hazel",
+                          "tessa", "moira", "fiona", "serena", "allison", "ava", "female", "woman",
+                          "google uk english female", "google us english", "catherine", "heera"];
+    function pickFemaleVoice() {
+        if (!("speechSynthesis" in window)) return;
+        const voices = window.speechSynthesis.getVoices() || [];
+        const english = voices.filter(v => /^en(-|_|$)/i.test(v.lang));
+        const pool = english.length ? english : voices;
+        femaleVoice = pool.find(v => FEMALE_HINTS.some(h => v.name.toLowerCase().includes(h))) || null;
+    }
+    if ("speechSynthesis" in window) {
+        pickFemaleVoice();
+        window.speechSynthesis.addEventListener("voiceschanged", pickFemaleVoice);
+    }
+    function speak(text) {
+        if (!("speechSynthesis" in window)) return;
+        try {
+            window.speechSynthesis.cancel();           // never queue up stale phrases
+            if (!femaleVoice) pickFemaleVoice();
+            const u = new SpeechSynthesisUtterance(text);
+            if (femaleVoice) { u.voice = femaleVoice; u.lang = femaleVoice.lang; }
+            else { u.lang = "en-US"; }
+            u.pitch = femaleVoice ? 1.05 : 1.35;       // raise pitch when no female voice is installed
+            u.rate = 1;
+            u.volume = 1;
+            setTimeout(() => window.speechSynthesis.speak(u), 220); // let the beep finish first
+        } catch (err) { /* speech unavailable — the beep/flash still work */ }
+    }
+
+    // ---- finding the student for a scanned code -----------------------
+    // BUGFIX — "first scan works, later scans say 'Not a student ID'": the
+    // page-wide STUDENTS list is only loaded when a mode card is clicked,
+    // and can be empty or stale by the time a card is scanned (or come back
+    // empty after a hiccup). Looking a code up in that list alone made the
+    // result depend on whatever happened to be loaded. Now the scanner loads
+    // the list itself when it opens, and if a code isn't found it reloads
+    // the list once from the backend and tries again before giving up.
+    const normCode = v => String(v == null ? "" : v).trim().toLowerCase();
+    const matchStudent = (list, code) => list.find(s =>
+        normCode(s.regNo) === code || normCode(String(s.regNo).split("#")[0]) === code);
+    let lastListReload = 0;
+    async function reloadStudentList() {
+        lastListReload = Date.now();
+        try {
+            const fresh = _uniquifyKey(await loadRealStudents(), "regNo");
+            if (fresh.length) STUDENTS = fresh;
+        } catch (err) { console.error("Scanner: could not reload student list", err); }
+    }
+    async function findStudent(rawCode) {
+        const code = normCode(rawCode);
+        let s = matchStudent(STUDENTS, code);
+        if (s) return { student: s };
+        if (Date.now() - lastListReload > 2000) {
+            await reloadStudentList();
+            s = matchStudent(STUDENTS, code);
+            if (s) return { student: s };
+        }
+        return { student: null, listEmpty: STUDENTS.length === 0 };
+    }
+
     // ---- marking attendance -------------------------------------------
+    const FAIL_COOLDOWN_MS = 1800;   // shorter lock-out after a failed read, so "please try again" isn't spammed
     async function handleCode(rawCode) {
         const code = String(rawCode || "").trim();
         if (!code) return;
         const now = Date.now();
-        if (lastSeen[code] && now - lastSeen[code] < RESCAN_COOLDOWN_MS) return;
-        lastSeen[code] = now;
+        const key = code.toLowerCase();
+        if (lastSeen[key] && now - lastSeen[key] < RESCAN_COOLDOWN_MS) return; // same card still held up
+        lastSeen[key] = now;
 
-        const student = STUDENTS.find(s => String(s.regNo).toLowerCase() === code.toLowerCase());
+        const { student, listEmpty } = await findStudent(code);
         if (!student) {
-            beep(false); flash("error");
-            showResult(`Not a student ID: "${code.length > 40 ? code.slice(0, 40) + "…" : code}"`, "err");
+            lastSeen[key] = now - (RESCAN_COOLDOWN_MS - FAIL_COOLDOWN_MS);
+            beep(false); flash("error"); speak("Please try again");
+            showResult(listEmpty
+                ? "Couldn't load the student list — check your connection and try again."
+                : `Not a student ID: "${code.length > 40 ? code.slice(0, 40) + "…" : code}"`, "err");
             return;
         }
 
@@ -3182,7 +3253,7 @@ function initScanner() {
                 throw new Error(msg);
             }
 
-            beep(true); flash("success");
+            beep(true); flash("success"); speak("Thank you");
             showResult(`✓ ${student.name} (${student.class}${student.section ? "-" + student.section : ""}) marked present`, "ok");
             toast(`${student.name} marked present`, "success");
 
@@ -3197,8 +3268,8 @@ function initScanner() {
             }
         } catch (err) {
             console.error("Scanner: saving attendance failed", err);
-            delete lastSeen[code]; // let the person retry straight away
-            beep(false); flash("error");
+            delete lastSeen[key]; // let the person retry straight away
+            beep(false); flash("error"); speak("Please try again");
             showResult(`Could not save attendance for ${student.name}: ${err.message}`, "err");
         }
     }
@@ -3322,9 +3393,11 @@ function initScanner() {
         modal.classList.remove("hidden");
         modal.setAttribute("aria-hidden", "false");
         lastResult.classList.add("hidden");
+        if (!STUDENTS.length) reloadStudentList();   // don't depend on a mode card having been clicked first
         startScanner();
     }
     function closeModal() {
+        if ("speechSynthesis" in window) window.speechSynthesis.cancel();
         modal.classList.add("hidden");
         modal.setAttribute("aria-hidden", "true");
         stopScanner();
