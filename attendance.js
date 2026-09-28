@@ -3104,15 +3104,16 @@ function initScanner() {
     //   c2    = the centre 1920x1080 at native resolution
     //   small = the whole frame shrunk to 960 px wide (fast; best for near cards)
     // and each looks for a QR code ("q") or the Code 128 barcode ("b").
-    const PASS_SEQUENCE = ["c1q", "smallq", "c1q", "c1b", "c2q", "smallq", "smallb", "c1q", "c2b"];
+    const PASS_SEQUENCE = ["smallq", "c1q", "smallq", "c1q", "c1b", "smallq", "c1q", "c2q", "smallb"];
     const ZOOM_MAX_DIGITAL   = 4;     // top of the slider when the camera has no hardware zoom
-    const AUTO_ZOOM_IDLE_MS  = 1200;  // (hardware zoom only) nothing read for this long -> start stepping the zoom
-    const AUTO_ZOOM_STEP_MS  = 700;
-    const AUTO_ZOOM_LEVELS   = [1, 1.6, 2.4, 3.4];
-    const MANUAL_ZOOM_HOLD_MS = 10000; // after the person moves the slider, leave zoom alone this long
+    const ZOOM_STORE_KEY     = "softschool_scanner_zoom_v1";    // remembered zoom, per camera, until the person changes it
+    const FACING_STORE_KEY   = "softschool_scanner_facing_v1";  // remembered camera (rear / front)
 
     let stream = null;
-    let facingMode = "environment";   // rear camera is the natural choice for scanning cards
+    let facingMode = (function () {   // rear camera by default; remembers the last one the person chose
+        try { return localStorage.getItem("softschool_scanner_facing_v1") === "user" ? "user" : "environment"; }
+        catch (err) { return "environment"; }
+    })();
     let scanTimer = null;
     let scanning = false;             // true while the decode loop should keep running
     let frameCount = 0;
@@ -3122,7 +3123,6 @@ function initScanner() {
     let hwZoom = null;                // { min, max } raw camera zoom range, when the camera has real zoom
     let zoomFactor = 1;               // current zoom (1 = none) — hardware OR digital
     let zoomMaxFactor = ZOOM_MAX_DIGITAL;
-    let lastDetectAt = 0, lastZoomStepAt = 0, manualZoomUntil = 0, autoZoomIdx = 0;
     let nativeDetector = null;        // BarcodeDetector, when the browser has one that reads both formats
     let zxingReader = null;           // ZXing MultiFormatReader fallback (needed for Code 128 on most desktops)
     let audioCtx = null;
@@ -3173,32 +3173,40 @@ function initScanner() {
     let femaleVoice = null;
     const FEMALE_HINTS = ["zira", "aria", "jenny", "samantha", "karen", "victoria", "susan", "hazel",
                           "tessa", "moira", "fiona", "serena", "allison", "ava", "female", "woman",
-                          "google uk english female", "google us english", "catherine", "heera"];
+                          "catherine", "heera", "google uk english female", "google us english"];
     function pickFemaleVoice() {
         if (!("speechSynthesis" in window)) return;
         const voices = window.speechSynthesis.getVoices() || [];
         const english = voices.filter(v => /^en(-|_|$)/i.test(v.lang));
         const pool = english.length ? english : voices;
-        femaleVoice = pool.find(v => FEMALE_HINTS.some(h => v.name.toLowerCase().includes(h))) || null;
+        const females = pool.filter(v => FEMALE_HINTS.some(h => v.name.toLowerCase().includes(h)));
+        // Prefer voices installed ON the device: online voices (e.g. Chrome's
+        // "Google ..." ones) must fetch audio from the internet first, which is
+        // what made "Thank you" arrive a second or two late.
+        femaleVoice = females.find(v => v.localService) || females[0] || null;
     }
     if ("speechSynthesis" in window) {
         pickFemaleVoice();
         window.speechSynthesis.addEventListener("voiceschanged", pickFemaleVoice);
     }
-    function speak(text) {
+    function speak(text, silent) {
         if (!("speechSynthesis" in window)) return;
         try {
-            window.speechSynthesis.cancel();           // never queue up stale phrases
+            const synth = window.speechSynthesis;
+            if (synth.speaking || synth.pending) synth.cancel();   // never queue up stale phrases
             if (!femaleVoice) pickFemaleVoice();
             const u = new SpeechSynthesisUtterance(text);
             if (femaleVoice) { u.voice = femaleVoice; u.lang = femaleVoice.lang; }
             else { u.lang = "en-US"; }
             u.pitch = femaleVoice ? 1.05 : 1.35;       // raise pitch when no female voice is installed
-            u.rate = 1;
-            u.volume = 1;
-            setTimeout(() => window.speechSynthesis.speak(u), 120); // just after the beep starts
+            u.rate = 1.15;                             // a touch quicker so it finishes fast
+            u.volume = silent ? 0 : 1;
+            synth.speak(u);                            // immediately — no artificial delay
         } catch (err) { /* speech unavailable — the beep/flash still work */ }
     }
+    // Speech engines are slow on their FIRST use. Say something inaudible when
+    // the scanner opens so the real "Thank you" / "Please try again" is instant.
+    function warmUpSpeech() { speak(" ", true); }
 
     // ---- finding the student for a scanned code -----------------------
     // BUGFIX — "first scan works, later scans say 'Not a student ID'": the
@@ -3390,6 +3398,22 @@ function initScanner() {
     // which is why the earlier slider never showed up or did nothing — gets a
     // DIGITAL zoom: the picture is magnified on screen and the scanner
     // concentrates on that zoomed-in window at full camera resolution.
+    // The zoom is ONLY ever changed by the person (slider / mouse wheel). It is
+    // saved in this browser's localStorage per camera, so it survives closing the
+    // scanner, refreshing the page and restarting the device.
+    function loadSavedZoom() {
+        try {
+            const f = parseFloat(JSON.parse(localStorage.getItem(ZOOM_STORE_KEY) || "{}")[facingMode]);
+            return isFinite(f) && f >= 1 ? f : 1;
+        } catch (err) { return 1; }
+    }
+    function saveZoom() {
+        try {
+            const all = JSON.parse(localStorage.getItem(ZOOM_STORE_KEY) || "{}");
+            all[facingMode] = zoomFactor;
+            localStorage.setItem(ZOOM_STORE_KEY, JSON.stringify(all));
+        } catch (err) { /* storage unavailable — zoom just won't be remembered */ }
+    }
     function setZoom(f) {
         zoomFactor = Math.min(zoomMaxFactor, Math.max(1, f));
         if (hwZoom && track) {
@@ -3400,16 +3424,6 @@ function initScanner() {
         zoomSlider.value = zoomFactor;
         zoomVal.textContent = zoomFactor.toFixed(1) + "×";
     }
-    function autoZoomTick(now) {
-        // Hardware zoom only: nothing read for a while -> step the zoom so a
-        // card that's too far away comes into range by itself.
-        if (!hwZoom || now < manualZoomUntil) return;
-        if (now - lastDetectAt < AUTO_ZOOM_IDLE_MS || now - lastZoomStepAt < AUTO_ZOOM_STEP_MS) return;
-        lastZoomStepAt = now;
-        autoZoomIdx = (autoZoomIdx + 1) % AUTO_ZOOM_LEVELS.length;
-        setZoom(Math.min(AUTO_ZOOM_LEVELS[autoZoomIdx], zoomMaxFactor));
-    }
-
     // ---- continuous scan loop --------------------------------------------
     // One decode pass per NEW camera frame, back to back — no fixed delay.
     function scheduleNext() {
@@ -3427,12 +3441,8 @@ function initScanner() {
         lastVideoTime = video.currentTime;
         try {
             const text = await decodeCurrentFrame();
-            const now = Date.now();
             if (text) {
-                lastDetectAt = now;
                 handleCode(text).catch(err => console.error("Scanner: handle error", err)); // don't hold up the next frame
-            } else {
-                autoZoomTick(now);
             }
         } catch (err) {
             console.error("Scanner: decode error", err);
@@ -3475,8 +3485,7 @@ function initScanner() {
         }
         zoomSlider.min = 1; zoomSlider.max = zoomMaxFactor; zoomSlider.step = 0.1;
         zoomSlider.disabled = false;
-        autoZoomIdx = 0;
-        setZoom(1);
+        setZoom(loadSavedZoom());          // restore exactly where the person left it
     }
 
     async function startScanner() {
@@ -3495,7 +3504,7 @@ function initScanner() {
             // card is what lets a small code be read from further away. (The browser
             // hands back the closest mode the camera actually supports.)
             stream = await navigator.mediaDevices.getUserMedia({
-                video: { facingMode: { ideal: facingMode }, width: { ideal: 3840 }, height: { ideal: 2160 }, frameRate: { ideal: 30 } },
+                video: { facingMode: { ideal: facingMode }, width: { ideal: 1920 }, height: { ideal: 1080 }, frameRate: { ideal: 30 } },
                 audio: false
             });
             video.srcObject = stream;
@@ -3507,7 +3516,6 @@ function initScanner() {
             switchBtn.disabled = false;
             stopBtn.disabled = false;
             lastVideoTime = -1; frameCount = 0;
-            lastDetectAt = Date.now(); lastZoomStepAt = 0; manualZoomUntil = 0;
             scanning = true;
             scheduleNext();
         } catch (err) {
@@ -3519,6 +3527,7 @@ function initScanner() {
 
     function openModal() {
         ensureAudio();                         // created inside the click gesture so the beep is allowed to play
+        warmUpSpeech();
         modal.classList.remove("hidden");
         modal.setAttribute("aria-hidden", "false");
         lastResult.classList.add("hidden");
@@ -3533,15 +3542,15 @@ function initScanner() {
     }
 
     zoomSlider.addEventListener("input", () => {
-        manualZoomUntil = Date.now() + MANUAL_ZOOM_HOLD_MS;   // person is in control — pause auto zoom
         setZoom(parseFloat(zoomSlider.value));
+        saveZoom();                                            // stays put after a refresh / restart
     });
     // Mouse wheel over the picture zooms too.
     document.querySelector(".scanner-video-wrap").addEventListener("wheel", (e) => {
         if (!scanning) return;
         e.preventDefault();
-        manualZoomUntil = Date.now() + MANUAL_ZOOM_HOLD_MS;
         setZoom(zoomFactor + (e.deltaY < 0 ? 0.3 : -0.3));
+        saveZoom();
     }, { passive: false });
     openBtn.addEventListener("click", openModal);
     closeBtn.addEventListener("click", closeModal);
@@ -3549,6 +3558,7 @@ function initScanner() {
     stopBtn.addEventListener("click", () => stopScanner());
     switchBtn.addEventListener("click", () => {
         facingMode = facingMode === "environment" ? "user" : "environment";
+        try { localStorage.setItem("softschool_scanner_facing_v1", facingMode); } catch (err) {}
         startScanner();
     });
     document.addEventListener("keydown", (e) => {
