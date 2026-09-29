@@ -1168,6 +1168,26 @@ function deductSecurityMonth(staffId) {
 const SETTINGS_API_BASE = 'https://167-86-120-247.sslip.io/api/settings';
 let CLASS_CONFIGS_CACHE = [];
 
+// The school's contact details (address/phone) live on the same
+// SchoolSettings backend row as the class configs above — mirrors
+// manage-students.js's identical SCHOOL_INFO_CACHE, so the Staff ID Card
+// Generator's back side can stamp the school's real address/phone, the
+// same way student ID cards already do.
+let SCHOOL_INFO_CACHE = {};
+function getSchoolInfo() {
+    return (SCHOOL_INFO_CACHE && typeof SCHOOL_INFO_CACHE === 'object') ? SCHOOL_INFO_CACHE : {};
+}
+function getSchoolContactPhone() {
+    const info = getSchoolInfo();
+    const primary = (info.phone || '').trim();
+    const alt = (info.phoneAlt || '').trim();
+    if (primary && alt) return `${primary} / ${alt}`;
+    return primary || alt;
+}
+function getSchoolContactAddress() {
+    return (getSchoolInfo().address || '').trim();
+}
+
 /** Convert backend SchoolSettings.ClassFee shape into {name, sections:[]}. */
 function _classConfigsApiToLocal(apiClasses) {
     return (Array.isArray(apiClasses) ? apiClasses : []).map(c => ({
@@ -1183,6 +1203,7 @@ async function fetchClassConfigsFromServer() {
         if (!schoolId) return;
         const settings = await staffApiRequest('GET', `${SETTINGS_API_BASE}/${encodeURIComponent(schoolId)}`);
         CLASS_CONFIGS_CACHE = _classConfigsApiToLocal(settings && settings.classes);
+        SCHOOL_INFO_CACHE = (settings && typeof settings === 'object') ? settings : {};
     } catch (err) {
         console.warn('fetchClassConfigsFromServer: could not reach the server, keeping last known classes.', err.message);
     }
@@ -3508,3 +3529,663 @@ function resolveFreshStaffId(displayedId, allIds, joinedDateStr) {
     const taken = !!displayedId && allIds.includes(displayedId);
     return (displayedId && yearMatches && !taken) ? displayedId : generateStaffId(joinedDateStr);
 }
+
+/* ============================================================
+   STAFF ID CARD GENERATOR (blue theme)
+   Triggered by the "Generate ID Cards" button next to Add Staff/Add
+   Teacher. Same pattern, layout, and QR (front) / barcode (back)
+   placement as the Student ID Card Generator in Manage Students — just
+   themed blue (see the .sidc-* rules in manage-staff.css) and filled
+   with staff fields instead of student fields. Builds one printable ID
+   card per staff member in whichever list is currently open (Teaching
+   or Non-Teaching), at 638 x 1012 px (vertical CR80 card size @ 300
+   DPI), with options to download every card as one PDF or print them
+   on ready-to-cut sheets.
+   ============================================================ */
+
+const SIDC_CARD_PIXEL_WIDTH  = 638;  // 2.125in @ 300 DPI (vertical CR80 card)
+const SIDC_CARD_PIXEL_HEIGHT = 1012; // 3.375in @ 300 DPI
+const SIDC_CAPTURE_SCALE     = 3;    // render the ~300x476 on-screen card 3x, then resize to the exact target below
+
+// The list of staff the generator was last opened for, kept around so
+// Download PDF / Print All / a single card's download button don't need
+// to re-derive the Teaching/Non-Teaching filter after the modal is open.
+let sidcCurrentStaff = [];
+
+/** Resolve the staff currently shown in the open Teaching/Non-Teaching
+ *  directory — mirrors populateDirectory()'s own defensive bucket filter
+ *  (_looksNonTeachingMS) so the generator never mixes the two lists, and
+ *  ignores the directory's free-text search box, same as the student
+ *  version: the generator always produces cards for the WHOLE list. */
+function sidcGetStaffForCurrentCategory() {
+    const category = currentCategory || 'Teaching';
+    const rawList = staffData[category] || [];
+    const list = rawList.filter(s => {
+        const looksNT = _looksNonTeachingMS(s);
+        return category === 'Teaching' ? !looksNT : true;
+    });
+    return list.slice().sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+}
+
+/**
+ * Build a REAL, scannable Code 128 barcode as an inline SVG string from an
+ * ID string (the staff member's Staff/Teacher ID). Identical to the
+ * student card's barcode builder — see manage-students.js for the full
+ * explanation. Falls back to a decorative (non-scannable) bar pattern if
+ * JsBarcode failed to load or the text can't be encoded.
+ */
+function sidcBuildBarcodeSvg(text) {
+    const VIEW_H = 60, QUIET = 10;
+    const str = String(text || '').trim() || '0';
+
+    let binary = '';
+    try {
+        if (typeof JsBarcode !== 'undefined') {
+            const out = {};
+            JsBarcode(out, str, { format: 'CODE128' });
+            binary = out.encodings.map(e => e.data).join('');
+        }
+    } catch (err) {
+        console.error('Code 128 encoding failed for', str, err);
+    }
+
+    if (binary) {
+        let bars = '';
+        let i = 0;
+        while (i < binary.length) {
+            if (binary[i] === '1') {
+                let j = i;
+                while (j < binary.length && binary[j] === '1') j++;
+                bars += `<rect x="${QUIET + i}" y="0" width="${j - i}" height="${VIEW_H}" fill="#000000"/>`;
+                i = j;
+            } else {
+                i++;
+            }
+        }
+        const viewW = binary.length + QUIET * 2;
+        return `<svg viewBox="0 0 ${viewW} ${VIEW_H}" preserveAspectRatio="none" shape-rendering="crispEdges" xmlns="http://www.w3.org/2000/svg">${bars}</svg>`;
+    }
+
+    // Fallback: decorative only (not scannable).
+    const VIEW_W = 480;
+    let seed = 0;
+    for (let k = 0; k < str.length; k++) seed = (seed * 131 + str.charCodeAt(k) + 7) >>> 0;
+    const rand = () => { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 4294967296; };
+    let bars = '';
+    let x = 0;
+    while (x < VIEW_W) {
+        const w = 2 + Math.floor(rand() * 6);
+        if (rand() > 0.42) bars += `<rect x="${x}" y="0" width="${w}" height="${VIEW_H}" fill="#0f172a"/>`;
+        x += w;
+    }
+    return `<svg viewBox="0 0 ${VIEW_W} ${VIEW_H}" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">${bars}</svg>`;
+}
+
+/** Build the inner HTML for one ID card (front side) from a staff record. */
+function sidcBuildCardHtml(s, category, qrPlaceholderId) {
+    const esc = SSValidate.escapeHtml;
+
+    const schoolEl   = document.querySelector('.school-name');
+    const identity   = (typeof _getSchoolIdentity === 'function') ? _getSchoolIdentity() : {};
+    const schoolName = identity.name || (schoolEl ? schoolEl.textContent.trim() : 'ST. LAWRENCE INTERNATIONAL SCHOOL');
+    const logoUrl    = identity.logo || (typeof getSchoolLogoUrl === 'function' ? getSchoolLogoUrl() : '');
+
+    const photoSrc      = s.photo || '';
+    const displayId     = s.id || '—';
+    const designation   = category === 'Teaching' ? 'Teacher' : (s.job || 'Staff');
+    const contactNumber = s.phone || '—';
+    const address       = s.address || '—';
+
+    const logoInner = logoUrl
+        ? `<img src="${esc(logoUrl)}" alt="Logo">`
+        : `<i class="fas fa-graduation-cap"></i>`;
+    const photoInner = photoSrc
+        ? `<img src="${esc(photoSrc)}" alt="${esc(s.name)}" crossorigin="anonymous">`
+        : `<i class="fas fa-user"></i>`;
+
+    return `
+        <div class="sidc-card-header">
+            <div class="sidc-card-logo">${logoInner}</div>
+            <div class="sidc-card-header-text">
+                <div class="sidc-card-school-name">${esc(schoolName)}</div>
+                <div class="sidc-card-doc-label">Staff Identity Card</div>
+            </div>
+        </div>
+        <div class="sidc-card-body">
+            <div class="sidc-card-photo">${photoInner}</div>
+            <div class="sidc-card-info">
+                <div class="sidc-card-name">${esc(s.name || '—')}</div>
+                <span class="sidc-card-idbadge">ID: ${esc(displayId)}</span>
+                <div class="sidc-card-rows">
+                    <div class="sidc-card-row"><span class="sidc-label">Designation:</span><span class="sidc-value">${esc(designation)}</span></div>
+                    <div class="sidc-card-row"><span class="sidc-label">Department:</span><span class="sidc-value">${esc(category)}</span></div>
+                    <div class="sidc-card-row"><span class="sidc-label">CNIC:</span><span class="sidc-value">${esc(s.cnic || '—')}</span></div>
+                    <div class="sidc-card-row"><span class="sidc-label">Contact:</span><span class="sidc-value">${esc(contactNumber)}</span></div>
+                    <div class="sidc-card-row sidc-row-clamp"><span class="sidc-label">Address:</span><span class="sidc-value sidc-value-clamp">${esc(address)}</span></div>
+                </div>
+            </div>
+        </div>
+        <div class="sidc-card-barcode-wrap">
+            <div class="sidc-card-barcode-label">Scan for Attendance</div>
+            <div class="sidc-card-front-qr-box" id="${qrPlaceholderId}"><i class="fas fa-qrcode sidc-card-front-qr-fallback"></i></div>
+            <div class="sidc-card-barcode-text">${esc(displayId)}</div>
+        </div>
+    `;
+}
+
+/** Build the inner HTML for the BACK of one ID card — school contact
+ *  details plus a "for attendance" barcode along the bottom (the mirror
+ *  of the QR strip on the front). Identical layout to the student card's
+ *  back side. */
+function sidcBuildBackCardHtml(s) {
+    const esc = SSValidate.escapeHtml;
+
+    const schoolEl   = document.querySelector('.school-name');
+    const identity   = (typeof _getSchoolIdentity === 'function') ? _getSchoolIdentity() : {};
+    const schoolName = identity.name || (schoolEl ? schoolEl.textContent.trim() : 'ST. LAWRENCE INTERNATIONAL SCHOOL');
+    const logoUrl        = identity.logo || (typeof getSchoolLogoUrl === 'function' ? getSchoolLogoUrl() : '');
+    const schoolPhone    = getSchoolContactPhone() || 'Not set in Settings';
+    const schoolAddress  = getSchoolContactAddress() || 'Not set in Settings';
+    const displayId      = s.id || '—';
+
+    const logoInner = logoUrl
+        ? `<img src="${esc(logoUrl)}" alt="Logo">`
+        : `<i class="fas fa-graduation-cap"></i>`;
+
+    return `
+        <div class="sidc-card-header">
+            <div class="sidc-card-logo">${logoInner}</div>
+            <div class="sidc-card-header-text">
+                <div class="sidc-card-school-name">${esc(schoolName)}</div>
+                <div class="sidc-card-doc-label">School Contact &amp; Attendance</div>
+            </div>
+        </div>
+        <div class="sidc-card-back-body">
+            <div class="sidc-back-contact-col">
+                <div class="sidc-back-section-label">School Address</div>
+                <div class="sidc-back-line"><i class="fas fa-map-marker-alt"></i><span>${esc(schoolAddress)}</span></div>
+                <div class="sidc-back-section-label" style="margin-top:2px;">Contact Number</div>
+                <div class="sidc-back-line"><i class="fas fa-phone"></i><span>${esc(schoolPhone)}</span></div>
+                <div class="sidc-back-note">If found, please return this card to the school address above. This card remains the property of ${esc(schoolName)}.</div>
+            </div>
+        </div>
+        <div class="sidc-card-barcode-wrap">
+            <div class="sidc-card-barcode-label">Scan for Attendance</div>
+            ${sidcBuildBarcodeSvg(displayId)}
+            <div class="sidc-card-barcode-text">${esc(displayId)}</div>
+        </div>
+        <div class="sidc-software-brand">
+            <span class="sidc-software-logo">S</span>
+            <span>Powered by <strong>SoftSchool</strong></span>
+        </div>
+    `;
+}
+
+/** Sanitize a staff member's ID for safe use as a DOM id / attribute. */
+function sidcSafeId(staffId) {
+    return String(staffId).replace(/[^a-zA-Z0-9_-]/g, '_');
+}
+
+/** Populate the ID card grid for a given list of staff and show the overlay. */
+function sidcRenderGrid(staffList, category) {
+    const grid  = document.getElementById('sidc-cards-grid');
+    const empty = document.getElementById('sidc-empty-state');
+    if (!grid) return;
+
+    if (staffList.length === 0) {
+        grid.innerHTML = '';
+        if (empty) empty.style.display = 'block';
+        return;
+    }
+    if (empty) empty.style.display = 'none';
+
+    grid.innerHTML = staffList.map((s, idx) => {
+        const displayId = s.id || `row${idx}`;
+        const safeId    = sidcSafeId(displayId);
+        const safeName  = SSValidate.escapeHtml(`${s.name || 'Unnamed'} — ${category}`);
+        const qrId      = `sidc-qr-${safeId}`;
+        return `
+            <div class="sidc-pair" data-reg="${safeId}">
+                <div class="sidc-pair-header">
+                    <span class="sidc-pair-name" title="${safeName}">${safeName}</span>
+                    <button type="button" class="sidc-pair-download-btn" onclick="downloadStaffIdCardPair('${safeId}')">
+                        <i class="fas fa-download"></i> Both Sides
+                    </button>
+                </div>
+                <div class="sidc-pair-row">
+                    <div class="sidc-card-thumb" data-reg="${safeId}" data-side="front">
+                        <span class="sidc-side-tag">Front</span>
+                        <button type="button" class="sidc-card-thumb-download" title="Download front side" onclick="downloadSingleStaffIdCard('${safeId}','front')">
+                            <i class="fas fa-download"></i>
+                        </button>
+                        <div class="sidc-card" id="sidc-card-front-${safeId}">
+                            ${sidcBuildCardHtml(s, category, qrId)}
+                        </div>
+                    </div>
+                    <div class="sidc-card-thumb" data-reg="${safeId}" data-side="back">
+                        <span class="sidc-side-tag">Back</span>
+                        <button type="button" class="sidc-card-thumb-download" title="Download back side" onclick="downloadSingleStaffIdCard('${safeId}','back')">
+                            <i class="fas fa-download"></i>
+                        </button>
+                        <div class="sidc-card sidc-card-back" id="sidc-card-back-${safeId}">
+                            ${sidcBuildBackCardHtml(s)}
+                        </div>
+                    </div>
+                </div>
+            </div>`;
+    }).join('');
+
+    sidcInitQrCodes(staffList);
+}
+
+/**
+ * Draw the "for attendance" QR code into each FRONT card's placeholder.
+ * Runs after sidcRenderGrid() has inserted the markup into the DOM, since
+ * QRCode.js draws directly into a live element rather than returning a
+ * string. The QR simply encodes the staff member's ID — the same value an
+ * attendance scanner would look up — so it stays scannable and useful,
+ * not just decorative like the back's barcode.
+ */
+function sidcInitQrCodes(staffList) {
+    if (typeof QRCode === 'undefined') return; // library failed to load (e.g. offline) — CSS fallback icon stays visible
+    staffList.forEach(s => {
+        const displayId = s.id;
+        if (!displayId) return;
+        const el = document.getElementById(`sidc-qr-${sidcSafeId(displayId)}`);
+        if (!el) return;
+        el.innerHTML = ''; // clear the fallback icon before drawing
+        try {
+            new QRCode(el, {
+                text: String(displayId),
+                width: 240,
+                height: 240,
+                colorDark: '#1e293b',   // near-black navy: high contrast so it scans from further away
+                colorLight: '#ffffff',
+                correctLevel: QRCode.CorrectLevel.L   // lowest error correction = fewest modules = each module printed larger
+            });
+        } catch (err) {
+            console.error('QR generation failed for', displayId, err);
+            el.innerHTML = '<i class="fas fa-qrcode sidc-card-front-qr-fallback"></i>';
+        }
+    });
+}
+
+/** "Generate ID Cards" button next to Add Staff/Add Teacher. */
+window.openStaffIdCardGenerator = function() {
+    const category = currentCategory || 'Teaching';
+    sidcCurrentStaff = sidcGetStaffForCurrentCategory();
+
+    const label = document.getElementById('sidc-toolbar-label');
+    if (label) label.textContent = `Staff ID Cards — ${category} (${sidcCurrentStaff.length})`;
+
+    const downloadBtn = document.getElementById('sidc-download-all-btn');
+    const printBtn    = document.getElementById('sidc-print-all-btn');
+    const hasStaff    = sidcCurrentStaff.length > 0;
+    if (downloadBtn) downloadBtn.style.display = hasStaff ? '' : 'none';
+    if (printBtn)    printBtn.style.display    = hasStaff ? '' : 'none';
+
+    if (!hasStaff) {
+        showToast('No Staff', `There is no ${category.toLowerCase()} staff in this list to generate ID cards for.`, 'warning');
+    }
+
+    sidcRenderGrid(sidcCurrentStaff, category);
+
+    const overlay = document.getElementById('sidc-overlay');
+    if (overlay) overlay.classList.add('active');
+    document.body.style.overflow = 'hidden';
+};
+
+window.closeStaffIdCardGenerator = function() {
+    const overlay = document.getElementById('sidc-overlay');
+    if (overlay) overlay.classList.remove('active');
+    document.body.style.overflow = 'auto';
+};
+
+/**
+ * Capture one .sidc-card DOM node (rendered on-screen at ~300x476) and
+ * return a canvas at the exact print resolution (638 x 1012 px / vertical
+ * CR80 @ 300 DPI), regardless of how large the on-screen preview is.
+ * html2canvas renders at SIDC_CAPTURE_SCALE for crisp text/edges, then a
+ * plain <canvas> resize step stretches that render to the exact final
+ * pixel dimensions so every downloaded/printed card is pixel-identical
+ * in size.
+ */
+async function sidcCaptureCardCanvas(cardEl) {
+    if (!cardEl || typeof html2canvas === 'undefined') return null;
+    const rawCanvas = await html2canvas(cardEl, {
+        scale: SIDC_CAPTURE_SCALE,
+        backgroundColor: '#ffffff',
+        useCORS: true
+    });
+    const finalCanvas = document.createElement('canvas');
+    finalCanvas.width  = SIDC_CARD_PIXEL_WIDTH;
+    finalCanvas.height = SIDC_CARD_PIXEL_HEIGHT;
+    const ctx = finalCanvas.getContext('2d');
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(rawCanvas, 0, 0, SIDC_CARD_PIXEL_WIDTH, SIDC_CARD_PIXEL_HEIGHT);
+    return finalCanvas;
+}
+
+async function sidcCaptureCardBlob(cardEl) {
+    const canvas = await sidcCaptureCardCanvas(cardEl);
+    if (!canvas) return null;
+    return new Promise(res => canvas.toBlob(res, 'image/png'));
+}
+
+function sidcFilenameFor(s, side) {
+    const safeName = String(s.name || 'Staff').replace(/[^a-z0-9]+/gi, '_').replace(/^_+|_+$/g, '');
+    const safeId   = String(s.id || '').replace(/[^a-z0-9]+/gi, '_');
+    const sidePart = side === 'back' ? 'Back' : 'Front';
+    return `ID_Card_${sidePart}_${safeName}${safeId ? '_' + safeId : ''}.png`;
+}
+
+function sidcTriggerDownload(blob, filename) {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = filename;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 4000);
+}
+
+function sidcFindStaff(safeId) {
+    return sidcCurrentStaff.find(x => sidcSafeId(x.id) === safeId);
+}
+
+function sidcCardElFor(safeId, side) {
+    return document.getElementById(`sidc-card-${side}-${safeId}`);
+}
+
+/** Small per-card download button inside the grid — one side at a time. */
+window.downloadSingleStaffIdCard = async function(safeId, side) {
+    const s = sidcFindStaff(safeId);
+    const cardEl = sidcCardElFor(safeId, side);
+    if (!s || !cardEl) return;
+    try {
+        const blob = await sidcCaptureCardBlob(cardEl);
+        if (!blob) throw new Error('capture failed');
+        sidcTriggerDownload(blob, sidcFilenameFor(s, side));
+    } catch (err) {
+        console.error('Staff ID card capture failed', err);
+        showToast(`Could not generate the ${side} of the ID card for ${s.name || 'this staff member'}.`, 'error', 'Generation Failed');
+    }
+};
+
+/** "Both Sides" button on a single staff member's pair header. */
+window.downloadStaffIdCardPair = async function(safeId) {
+    const s = sidcFindStaff(safeId);
+    if (!s) return;
+    const frontEl = sidcCardElFor(safeId, 'front');
+    const backEl  = sidcCardElFor(safeId, 'back');
+    try {
+        const frontBlob = await sidcCaptureCardBlob(frontEl);
+        if (frontBlob) sidcTriggerDownload(frontBlob, sidcFilenameFor(s, 'front'));
+        await new Promise(r => setTimeout(r, 200));
+        const backBlob = await sidcCaptureCardBlob(backEl);
+        if (backBlob) sidcTriggerDownload(backBlob, sidcFilenameFor(s, 'back'));
+    } catch (err) {
+        console.error('Staff ID card capture failed', err);
+        showToast(`Could not generate the ID card for ${s.name || 'this staff member'}.`, 'error', 'Generation Failed');
+    }
+};
+
+/** Toolbar "Download PDF" — captures the front and back of every card in the
+ *  current list and saves them together as ONE PDF. Each page is exactly
+ *  one card (2.125in x 3.375in, vertical CR80) holding the 638x1012 px
+ *  image, front then back for each staff member, so the file can go
+ *  straight to a card printer or be printed on any printer at true size. */
+window.downloadAllStaffIdCards = async function() {
+    if (!sidcCurrentStaff.length) return;
+
+    const PDFCtor = window.jspdf && window.jspdf.jsPDF;
+    if (!PDFCtor) {
+        showToast('The PDF library did not load. Check your internet connection and reload the page.', 'error', 'PDF Library Missing');
+        return;
+    }
+
+    const btn = document.getElementById('sidc-download-all-btn');
+    const progress = document.getElementById('sidc-progress');
+    const progressText = document.getElementById('sidc-progress-text');
+    if (btn) btn.disabled = true;
+    if (progress) progress.style.display = 'flex';
+
+    const CARD_W_IN = 2.125, CARD_H_IN = 3.375;
+    const doc = new PDFCtor({ orientation: 'portrait', unit: 'in', format: [CARD_W_IN, CARD_H_IN], compress: true });
+    let pageCount = 0, failed = 0;
+    const total = sidcCurrentStaff.length * 2;
+    let done = 0;
+
+    for (const s of sidcCurrentStaff) {
+        const safeId = sidcSafeId(s.id);
+        for (const side of ['front', 'back']) {
+            done++;
+            if (progressText) progressText.textContent = `Adding card ${done} of ${total} to PDF…`;
+            try {
+                const canvas = await sidcCaptureCardCanvas(sidcCardElFor(safeId, side));
+                if (!canvas) throw new Error('capture failed');
+                const dataUrl = canvas.toDataURL('image/jpeg', 0.95);
+                if (pageCount > 0) doc.addPage([CARD_W_IN, CARD_H_IN], 'portrait');
+                doc.addImage(dataUrl, 'JPEG', 0, 0, CARD_W_IN, CARD_H_IN, undefined, 'FAST');
+                pageCount++;
+            } catch (err) {
+                console.error('Staff ID card capture failed for', safeId, side, err);
+                failed++;
+            }
+            await new Promise(r => setTimeout(r, 0)); // let the browser repaint the progress text
+        }
+    }
+
+    if (pageCount > 0) {
+        if (progressText) progressText.textContent = 'Building PDF…';
+        await new Promise(r => setTimeout(r, 0));
+        const category = currentCategory || 'Teaching';
+        const safeScope = String(category).replace(/[^a-z0-9]+/gi, '_').replace(/^_+|_+$/g, '');
+        doc.save(`Staff_ID_Cards_${safeScope}.pdf`);
+    }
+
+    if (progress) progress.style.display = 'none';
+    if (btn) btn.disabled = false;
+
+    if (pageCount === 0) {
+        showToast('Could not generate any ID cards for the PDF.', 'error', 'PDF Failed');
+    } else if (failed === 0) {
+        showToast(`Downloaded 1 PDF with ${pageCount} pages (front + back for ${sidcCurrentStaff.length} staff member${sidcCurrentStaff.length === 1 ? '' : 's'}).`, 'success', 'PDF Ready');
+    } else {
+        showToast(`${pageCount} pages saved; ${failed} card${failed === 1 ? '' : 's'} could not be generated.`, 'warning', 'PDF Downloaded With Gaps');
+    }
+};
+
+/** Toolbar "Print All" — opens the print window immediately with a loading
+ *  screen (so there's no blank/frozen-looking wait before anything
+ *  appears), then captures each staff member's front and back one at a
+ *  time, yielding back to the browser between each so the tab actually
+ *  repaints and the "Preparing X of Y" progress stays visibly live.
+ *  Groups staff onto pages (2 or 3 per page, per the "Per page"
+ *  selector), each page showing that staff member's front and back side
+ *  by side so a printed sheet can be cut straight into complete,
+ *  ready-to-use cards. Every card prints at its true physical size
+ *  (2.125in x 3.375in = 638x1012px @ 300 DPI, vertical CR80). */
+window.printAllStaffIdCards = async function() {
+    if (!sidcCurrentStaff.length) return;
+
+    const printWin = window.open('', '_blank', 'width=1000,height=800');
+    if (!printWin) {
+        showToast('Please allow pop-ups to print the ID cards.', 'error', 'Pop-up Blocked');
+        return;
+    }
+    printWin.document.write(`
+<!DOCTYPE html>
+<html>
+<head>
+<title>Staff ID Cards — Print</title>
+<style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-family: Arial, sans-serif;
+        color: #475569;
+        background: #f8fafc;
+    }
+    .sidc-loading { text-align: center; }
+    .sidc-loading-spinner {
+        width: 34px; height: 34px;
+        margin: 0 auto 14px;
+        border: 4px solid #dbeafe;
+        border-top-color: #2563eb;
+        border-radius: 50%;
+        animation: sidc-spin 0.8s linear infinite;
+    }
+    @keyframes sidc-spin { to { transform: rotate(360deg); } }
+    #sidc-loading-text { font-size: 14px; font-weight: 600; }
+</style>
+</head>
+<body>
+    <div class="sidc-loading">
+        <div class="sidc-loading-spinner"></div>
+        <div id="sidc-loading-text">Preparing your ID cards for printing…</div>
+    </div>
+</body>
+</html>`);
+    printWin.document.close();
+
+    // Give the browser an actual chance to paint that loading screen before
+    // the (CPU-heavy, single-threaded) card capturing below starts.
+    await new Promise(r => setTimeout(r, 60));
+
+    const btn = document.getElementById('sidc-print-all-btn');
+    const progress = document.getElementById('sidc-progress');
+    const progressText = document.getElementById('sidc-progress-text');
+    const perPageSelect = document.getElementById('sidc-print-per-page');
+    const perPage = Math.max(1, parseInt(perPageSelect && perPageSelect.value, 10) || 3);
+    if (btn) btn.disabled = true;
+    if (progress) progress.style.display = 'flex';
+
+    const total = sidcCurrentStaff.length * 2;
+    let done = 0;
+    const updateProgressLabel = () => {
+        const label = `Preparing ${done} of ${total}…`;
+        if (progressText) progressText.textContent = label;
+        try {
+            const loadingEl = printWin.document.getElementById('sidc-loading-text');
+            if (loadingEl) loadingEl.textContent = label;
+        } catch (err) { /* print window may already be mid-navigation; ignore */ }
+    };
+
+    const captureDataUrl = async (cardEl) => {
+        if (!cardEl) return null;
+        try {
+            const blob = await sidcCaptureCardBlob(cardEl);
+            if (!blob) return null;
+            return await new Promise(res => {
+                const reader = new FileReader();
+                reader.onload = () => res(reader.result);
+                reader.readAsDataURL(blob);
+            });
+        } catch (err) {
+            console.error(err);
+            return null;
+        }
+    };
+
+    const pairs = [];
+    for (const s of sidcCurrentStaff) {
+        const safeId = sidcSafeId(s.id);
+        const [front, back] = await Promise.all([
+            captureDataUrl(sidcCardElFor(safeId, 'front')),
+            captureDataUrl(sidcCardElFor(safeId, 'back'))
+        ]);
+        done += 2;
+        updateProgressLabel();
+        if (front || back) pairs.push({ front, back, name: s.name || 'Staff' });
+        await new Promise(r => setTimeout(r, 0)); // yield so the browser can repaint before the next card
+    }
+
+    if (progress) progress.style.display = 'none';
+    if (btn) btn.disabled = false;
+
+    if (pairs.length === 0) {
+        showToast('Could not generate any ID cards to print.', 'error', 'Print Failed');
+        try { printWin.close(); } catch (err) { /* ignore */ }
+        return;
+    }
+
+    const pages = [];
+    for (let i = 0; i < pairs.length; i += perPage) pages.push(pairs.slice(i, i + perPage));
+
+    const cardImg = (src, label) => src
+        ? `<img class="sidc-print-card" src="${src}" alt="${label}">`
+        : `<div class="sidc-print-card sidc-print-card-missing">${label} unavailable</div>`;
+
+    const pagesHtml = pages.map((group, pageIdx) => {
+        const rows = group.map(p => `${cardImg(p.front, 'Front')}${cardImg(p.back, 'Back')}`).join('');
+        const isLast = pageIdx === pages.length - 1;
+        return `
+<div class="sidc-print-page${isLast ? '' : ' sidc-print-page-break'}">
+    <div class="sidc-print-page-label">Front &amp; Back — ${group.map(p => SSValidate.escapeHtml(p.name)).join(', ')}</div>
+    <div class="sidc-print-grid">${rows}</div>
+</div>`;
+    }).join('');
+
+    printWin.document.open();
+    printWin.document.write(`
+<!DOCTYPE html>
+<html>
+<head>
+<title>Staff ID Cards — Print</title>
+<style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    @page { size: A4; margin: 6mm; }
+    body { background: #fff; }
+    .sidc-print-page { padding-top: 2mm; }
+    .sidc-print-page-break { break-after: page; page-break-after: always; }
+    .sidc-print-page-label {
+        font-family: Arial, sans-serif;
+        font-size: 10px;
+        font-weight: 700;
+        color: #94a3b8;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        margin-bottom: 3mm;
+    }
+    .sidc-print-grid {
+        display: grid;
+        grid-template-columns: repeat(2, 2.125in);
+        grid-auto-rows: 3.375in;
+        column-gap: 10mm;
+        row-gap: 6mm;
+        justify-content: center;
+    }
+    .sidc-print-card {
+        width: 2.125in;
+        height: 3.375in;
+        object-fit: contain;
+        border: 1px dashed #cbd5e1;
+    }
+    .sidc-print-card-missing {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-family: Arial, sans-serif;
+        font-size: 11px;
+        color: #94a3b8;
+        border: 1px dashed #cbd5e1;
+    }
+    @media print {
+        .sidc-print-card, .sidc-print-card-missing { border-color: #e2e8f0; }
+    }
+</style>
+</head>
+<body>
+${pagesHtml}
+    <script>
+        window.onload = function() {
+            setTimeout(function() { window.focus(); window.print(); }, 300);
+        };
+    <\/script>
+</body>
+</html>`);
+    printWin.document.close();
+};

@@ -3123,3 +3123,695 @@ body {
         page-break-inside: avoid;
     }
 }
+
+
+/* ============================================================
+   STAFF ID CARD GENERATOR (blue theme) — same layout/pattern as the
+   Student ID Card Generator in Manage Students, recolored blue and
+   filled with staff fields. See manage-staff.js for the matching JS
+   module (all function/element names prefixed "sidc" for Staff ID Card).
+   ============================================================ */
+
+.sidc-generate-btn {
+    margin-left: 10px;
+}
+
+.sidc-generate-btn {
+    margin-left: auto;
+}
+
+/* ============================================
+   STUDENT ID CARD GENERATOR
+   Full-screen overlay (same visual language as the certificate/photo
+   viewers) that renders one printable ID card per student and lets the
+   admin download every card as a 1012 x 638 px PNG (CR80 card size at
+   300 DPI) or send them straight to a printable, cut-ready sheet.
+   ============================================ */
+.sidc-overlay {
+    display: none;
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    background: rgba(0, 0, 0, 0.88);
+    backdrop-filter: blur(8px);
+    z-index: 6500; /* above the view-only modal, same family as cert/photo viewers */
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    box-sizing: border-box;
+}
+
+.sidc-overlay.active {
+    display: flex;
+}
+
+.sidc-panel {
+    width: 100%;
+    max-width: 1180px;
+    height: 100%;
+    max-height: 860px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-md, 14px);
+    box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.sidc-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 16px 22px;
+    border-bottom: 1px solid var(--border-subtle);
+    flex-shrink: 0;
+    flex-wrap: wrap;
+}
+
+.sidc-toolbar-title {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.sidc-toolbar-title i {
+    color: var(--accent-primary-light, #60a5fa);
+}
+
+.sidc-toolbar-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.sidc-per-page-label {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-muted);
+    white-space: nowrap;
+}
+
+.sidc-per-page-select {
+    padding: 6px 10px;
+    border-radius: 8px;
+    border: 1px solid var(--border-subtle);
+    background: var(--bg-primary, #1a1a1a);
+    color: var(--text-primary);
+    font-size: 12.5px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.sidc-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 24px;
+}
+
+.sidc-progress {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    justify-content: center;
+    padding: 14px;
+    margin-bottom: 18px;
+    background: rgba(59, 130, 246, 0.1);
+    border: 1px solid rgba(59, 130, 246, 0.25);
+    border-radius: var(--radius-sm, 8px);
+    color: var(--accent-primary-light, #60a5fa);
+    font-weight: 600;
+    font-size: 14px;
+}
+
+.sidc-empty-state {
+    text-align: center;
+    padding: 60px 20px;
+    color: var(--text-muted);
+}
+
+.sidc-empty-state i {
+    font-size: 2.2rem;
+    display: block;
+    margin-bottom: 12px;
+    opacity: 0.4;
+}
+
+.sidc-cards-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 26px;
+    justify-content: flex-start;
+}
+
+/* One student = one "pair" block: a shared name/class header, plus the
+   front and back card thumbnails side by side underneath. */
+.sidc-pair {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.sidc-pair-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+.sidc-pair-name {
+    font-size: 12.5px;
+    font-weight: 700;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 300px;
+}
+
+.sidc-pair-download-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    border-radius: 20px;
+    border: 1px solid rgba(37,99,235,0.35);
+    background: rgba(37,99,235,0.1);
+    color: #3b82f6;
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+    flex-shrink: 0;
+    transition: background 0.15s ease;
+}
+
+.sidc-pair-download-btn:hover {
+    background: rgba(37,99,235,0.2);
+}
+
+.sidc-pair-row {
+    display: flex;
+    gap: 14px;
+}
+
+/* Thumbnail wrapper — fixed on-screen size; the actual card node inside is
+   captured at full resolution via html2canvas + a canvas resize step, so
+   what's rendered here only needs to LOOK right, not BE 638x1012 in the DOM.
+   Sized to comfortably fit the content with legible text, without the card
+   reading as unnaturally tall. */
+.sidc-card-thumb {
+    position: relative;
+    width: 300px;
+    height: 476px;
+    border-radius: 16px;
+    overflow: hidden;
+    box-shadow: 0 10px 26px rgba(0,0,0,0.4);
+    background: #fff;
+    flex-shrink: 0;
+}
+
+.sidc-side-tag {
+    position: absolute;
+    top: 8px;
+    left: 8px;
+    z-index: 3;
+    padding: 2px 8px;
+    border-radius: 20px;
+    background: rgba(15, 23, 42, 0.6);
+    color: #fff;
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}
+
+.sidc-card-thumb-download {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    z-index: 3;
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    border: none;
+    background: rgba(15, 23, 42, 0.65);
+    color: #fff;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 13px;
+    opacity: 0;
+    transition: opacity 0.15s ease, background 0.15s ease;
+}
+
+.sidc-card-thumb:hover .sidc-card-thumb-download {
+    opacity: 1;
+}
+
+.sidc-card-thumb-download:hover {
+    background: var(--accent-primary, #3b82f6);
+}
+
+/* ---- ID card design — vertical (portrait) layout, professional green
+   brand theme. On-screen size: 300x476 — a standard, compact portrait ID
+   card proportion (matches the 638x1012 / 2.125"x3.375" vertical CR80
+   card printed at 300 DPI) sized so the text and photo read clearly
+   without the card looking stretched. Layout, top to bottom, centered:
+     1. Header band     — logo + school name, centered
+     2. Photo           — centered, framed
+     3. Name/ID/details — centered heading, left-aligned detail rows
+     4. Attendance strip — QR (front) / barcode (back), with a clear
+                            margin above it
+*/
+:root {
+    --sidc-blue-1: #1e3a8a;
+    --sidc-blue-2: #2563eb;
+    --sidc-blue-3: #1d4ed8;
+    --sidc-blue-tint: rgba(37, 99, 235, 0.1);
+}
+
+.sidc-card {
+    width: 300px;
+    height: 476px;
+    position: relative;
+    background: #ffffff;
+    color: #0f172a;
+    font-family: 'Inter', Arial, sans-serif;
+    display: flex;
+    flex-direction: column;
+    box-sizing: border-box;
+    border: 1px solid #dbeafe;
+    overflow: hidden; /* safety net: nothing can bleed past the card's own box */
+}
+
+/* Slim decorative bar along the very bottom edge — a tidy finishing touch
+   common on professionally printed vertical ID cards. Purely cosmetic. */
+.sidc-card::after {
+    content: "";
+    position: absolute;
+    left: 0; right: 0; bottom: 0;
+    height: 6px;
+    background: linear-gradient(90deg, var(--sidc-blue-2), var(--sidc-blue-1), var(--sidc-blue-2));
+    z-index: 2;
+}
+
+.sidc-card-header {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: 3px;
+    padding: 12px 14px 9px;
+    background: linear-gradient(160deg, var(--sidc-blue-1), var(--sidc-blue-3) 55%, var(--sidc-blue-2));
+    color: #fff;
+    flex-shrink: 0;
+    overflow: hidden;
+}
+
+/* Faint diagonal watermark stripes across the header for a bit of texture,
+   like a security-print accent — subtle, not decorative overload. */
+.sidc-card-header::after {
+    content: "";
+    position: absolute;
+    top: -80%; right: -30%;
+    width: 90px;
+    height: 260%;
+    background: rgba(255,255,255,0.07);
+    transform: rotate(18deg);
+}
+
+.sidc-card-header::before {
+    content: "";
+    position: absolute;
+    top: -80%; left: -40%;
+    width: 60px;
+    height: 260%;
+    background: rgba(255,255,255,0.05);
+    transform: rotate(18deg);
+}
+
+.sidc-card-logo {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.94);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    color: var(--sidc-blue-1);
+    flex-shrink: 0;
+    overflow: hidden;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.2), 0 0 0 1.5px rgba(255,255,255,0.6);
+    position: relative;
+    z-index: 1;
+    margin-bottom: 3px;
+}
+
+.sidc-card-logo img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.sidc-card-header-text {
+    min-width: 0;
+    max-width: 100%;
+    position: relative;
+    z-index: 1;
+}
+
+.sidc-card-school-name {
+    font-size: 12px;
+    font-weight: 800;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    line-height: 1.25;
+    max-width: 100%;
+    overflow-wrap: break-word;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden; /* bounds the header's height even for an unusually long school name */
+}
+
+.sidc-card-doc-label {
+    font-size: 7.6px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    opacity: 0.9;
+    color: #dbeafe;
+    margin-top: 2px;
+}
+
+.sidc-card-body {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+    padding: 12px 16px 0;
+    min-height: 0;
+    overflow: hidden; /* safety net so nothing here can bleed into the attendance strip below */
+}
+
+.sidc-card-photo {
+    width: 80px;
+    height: 90px;
+    border-radius: 8px;
+    border: 3px solid var(--sidc-blue-2);
+    background: #eff6ff center/cover no-repeat;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #93c5fd;
+    font-size: 28px;
+    flex-shrink: 0;
+    overflow: hidden;
+    box-shadow: 0 3px 10px rgba(30,58,138,0.18);
+}
+
+.sidc-card-photo img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.sidc-card-info {
+    width: 100%;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+    margin-top: 6px;
+}
+
+.sidc-card-name {
+    font-size: 15px;
+    font-weight: 800;
+    color: var(--sidc-blue-1);
+    line-height: 1.2;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+    text-align: center;
+}
+
+.sidc-card-rows {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    margin-top: 5px;
+    text-align: left;
+}
+
+.sidc-card-row {
+    display: flex;
+    align-items: baseline;
+    gap: 5px;
+    font-size: 9.5px;
+    color: #334155;
+    line-height: 1.35;
+}
+
+.sidc-card-row.sidc-row-clamp {
+    align-items: flex-start;
+}
+
+.sidc-card-row .sidc-label {
+    font-weight: 700;
+    color: var(--sidc-blue-3);
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    flex-shrink: 0;
+    min-width: 52px;
+}
+
+.sidc-card-row .sidc-value {
+    color: #0f172a;
+    font-weight: 600;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    flex: 1;
+    min-width: 0;
+}
+
+.sidc-card-row .sidc-value.sidc-value-clamp {
+    white-space: normal;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.sidc-card-idbadge {
+    display: inline-block;
+    margin: 2px 0 0;
+    padding: 2px 10px;
+    border-radius: 20px;
+    background: var(--sidc-blue-tint);
+    color: var(--sidc-blue-3);
+    font-size: 9.4px;
+    font-weight: 800;
+    letter-spacing: 0.03em;
+    width: fit-content;
+    border: 1px solid rgba(37,99,235,0.25);
+}
+
+/* ---- Bottom "for attendance" strip, with a clear margin above it so it
+   reads as a deliberate, separate section rather than crowding the
+   details above. Inset with left/right margins so it never touches the
+   card edges. The FRONT card shows a centered QR code here; the BACK
+   card shows the barcode in the same style of strip, so both sides carry
+   one attendance code each, clearly labelled. ---- */
+.sidc-card-barcode-wrap {
+    flex-shrink: 0;
+    margin: 8px 18px 10px;
+    padding-top: 7px;
+    border-top: 1px dashed #bfdbfe;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+}
+
+.sidc-card-barcode-label {
+    font-size: 7.6px;
+    font-weight: 800;
+    color: var(--sidc-blue-3);
+    text-transform: uppercase;
+    letter-spacing: 0.09em;
+    margin-bottom: 3px;
+}
+
+.sidc-card-barcode-wrap svg {
+    display: block;
+    width: 100%;
+    height: 26px;
+}
+
+.sidc-card-barcode-text {
+    font-size: 8.2px;
+    font-weight: 700;
+    letter-spacing: 0.15em;
+    color: #475569;
+    font-family: 'Space Grotesk', 'Inter', monospace;
+    margin-top: 2px;
+}
+
+/* Centered QR box used inside the FRONT card's attendance strip. */
+.sidc-card-front-qr-box {
+    width: 78px;
+    height: 78px;
+    padding: 6px; /* white quiet zone — scanners need this margin to lock on */
+    background: #ffffff;
+    border: 2px solid var(--sidc-blue-2);
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    flex-shrink: 0;
+    box-shadow: 0 2px 6px rgba(30,58,138,0.12);
+}
+
+.sidc-card-front-qr-box canvas,
+.sidc-card-front-qr-box img {
+    width: 100% !important;
+    height: 100% !important;
+    image-rendering: pixelated;
+}
+
+.sidc-card-front-qr-fallback {
+    color: #93c5fd;
+    font-size: 22px;
+}
+
+/* ============================================================
+   ID CARD — BACK SIDE
+   Reuses the .sidc-card shell (border + bottom accent bar) via the
+   shared "idc-card" class: school contact details fill the body, and
+   the same attendance strip as the front carries the barcode here
+   instead of the QR code.
+   ============================================================ */
+.sidc-card-back-body {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    padding: 14px 16px 0;
+    min-height: 0;
+    gap: 8px;
+    overflow: hidden; /* safety net so nothing here can bleed into the attendance strip below */
+}
+
+.sidc-back-contact-col {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+}
+
+.sidc-back-section-label {
+    font-size: 8.4px;
+    font-weight: 800;
+    color: var(--sidc-blue-3);
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    margin-bottom: 1px;
+}
+
+.sidc-back-line {
+    display: flex;
+    align-items: flex-start;
+    gap: 7px;
+    font-size: 9.4px;
+    color: #334155;
+    line-height: 1.4;
+}
+
+.sidc-back-line i {
+    color: var(--sidc-blue-2);
+    font-size: 10px;
+    margin-top: 1px;
+    flex-shrink: 0;
+    width: 12px;
+    text-align: center;
+}
+
+.sidc-back-line span {
+    flex: 1;
+    min-width: 0;
+    font-weight: 600;
+}
+
+.sidc-back-note {
+    margin-top: 10px;
+    font-size: 7.8px;
+    font-style: italic;
+    color: #64748b;
+    line-height: 1.35;
+    border-top: 1px dashed #dbeafe;
+    padding-top: 6px;
+}
+
+/* Small software-brand credit shown at the very bottom of the BACK card
+   only — separate from the school's own logo/name in the header above. */
+.sidc-software-brand {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    padding: 4px 0 9px;
+    font-size: 7.6px;
+    font-weight: 600;
+    color: #94a3b8;
+    letter-spacing: 0.01em;
+}
+
+.sidc-software-logo {
+    width: 12px;
+    height: 12px;
+    border-radius: 4px;
+    background: linear-gradient(135deg, var(--sidc-blue-2), var(--sidc-blue-1));
+    color: #fff;
+    font-size: 7.5px;
+    font-weight: 800;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.sidc-software-brand strong {
+    color: var(--sidc-blue-3);
+    font-weight: 800;
+}
+
+@media (max-width: 640px) {
+    .sidc-toolbar { padding: 12px 14px; }
+    .sidc-toolbar-title { font-size: 14px; }
+    .sidc-toolbar-btn span,
+    .sidc-toolbar-actions .cert-viewer-btn span { display: none; }
+    .sidc-body { padding: 14px; }
+    .sidc-cards-grid { gap: 24px; justify-content: center; }
+    .sidc-pair-row { flex-direction: column; align-items: center; }
+    .sidc-pair-name { max-width: 202px; }
+}

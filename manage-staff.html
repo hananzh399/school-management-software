@@ -14,6 +14,9 @@
     <script src="input-validation.js"></script>
 <script src="access-control.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
 
 </head>
 <body>
@@ -188,6 +191,9 @@
                 <button id="add-staff-btn" class="btn btn-primary" onclick="openAddForm()">
                     <i class="fas fa-plus"></i> Add Staff
                 </button>
+                <button id="generate-staff-idcards-btn" class="btn btn-primary sidc-generate-btn" onclick="openStaffIdCardGenerator()" title="Generate printable ID cards for every staff member in this list">
+                    <i class="fas fa-id-card"></i> Generate ID Cards
+                </button>
             </div>
 
             <div class="table-container">
@@ -350,6 +356,50 @@
             <span id="staff-limit-badge-text"></span>
             <span id="staff-limit-badge-sub" class="staff-limit-sub"></span>
         </span>
+    </div>
+
+    <!-- STAFF ID CARD GENERATOR — opened from the "Generate ID Cards" button
+         next to Add Staff/Add Teacher. Renders one printable ID card per
+         staff member currently in the open Teaching/Non-Teaching list, at
+         638 x 1012 px (vertical CR80 card size @ 300 DPI) — same pattern,
+         layout and QR/barcode placement as the Student ID Card Generator,
+         just in the staff blue theme. -->
+    <div id="sidc-overlay" class="sidc-overlay" onclick="if(event.target===this) closeStaffIdCardGenerator()">
+        <div class="sidc-panel">
+            <div class="sidc-toolbar">
+                <span class="sidc-toolbar-title"><i class="fas fa-id-card"></i> <span id="sidc-toolbar-label">Staff ID Cards</span></span>
+                <div class="sidc-toolbar-actions">
+                    <button type="button" class="cert-viewer-btn cert-viewer-btn-primary" id="sidc-download-all-btn" onclick="downloadAllStaffIdCards()">
+                        <i class="fas fa-file-pdf"></i> <span>Download PDF</span>
+                    </button>
+                    <label class="sidc-per-page-label" for="sidc-print-per-page">
+                        <span>Per page</span>
+                        <select id="sidc-print-per-page" class="sidc-per-page-select">
+                            <option value="2">2 staff</option>
+                            <option value="3" selected>3 staff</option>
+                        </select>
+                    </label>
+                    <button type="button" class="cert-viewer-btn" id="sidc-print-all-btn" onclick="printAllStaffIdCards()">
+                        <i class="fas fa-print"></i> <span>Print All</span>
+                    </button>
+                    <button type="button" class="cert-viewer-btn cert-viewer-close" onclick="closeStaffIdCardGenerator()" aria-label="Close ID card generator">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="sidc-body">
+                <div id="sidc-progress" class="sidc-progress" style="display:none;">
+                    <i class="fas fa-spinner fa-spin"></i> <span id="sidc-progress-text">Generating…</span>
+                </div>
+                <div id="sidc-empty-state" class="sidc-empty-state" style="display:none;">
+                    <i class="fas fa-id-card"></i>
+                    <p>No staff found in this list.</p>
+                </div>
+                <div id="sidc-cards-grid" class="sidc-cards-grid">
+                    <!-- populated by JS: one .sidc-card-thumb pair per staff member -->
+                </div>
+            </div>
+        </div>
     </div>
 
     <!-- TOAST NOTIFICATIONS — used for the "staff limit reached" alert
