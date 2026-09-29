@@ -1390,6 +1390,13 @@ body {
     margin-bottom: 20px;
 }
 
+.table-controls-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-shrink: 0;
+}
+
 .search-box {
     position: relative;
     width: 100%;
@@ -3132,12 +3139,41 @@ body {
    module (all function/element names prefixed "sidc" for Staff ID Card).
    ============================================================ */
 
-.sidc-generate-btn {
-    margin-left: 10px;
+/* Base toolbar button chrome (Download PDF / Print All / Close) — this
+   page has no certificate/photo viewer of its own to inherit these from,
+   unlike manage-students.css, so they're defined here directly. */
+.cert-viewer-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 16px;
+    border-radius: var(--radius-sm, 8px);
+    border: 1px solid var(--border-subtle, rgba(255,255,255,0.2));
+    background: rgba(255,255,255,0.08);
+    color: var(--text-primary, #fff);
+    font-family: inherit;
+    font-weight: 600;
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.2s ease;
 }
 
-.sidc-generate-btn {
-    margin-left: auto;
+.cert-viewer-btn:hover {
+    background: rgba(255,255,255,0.18);
+}
+
+.cert-viewer-btn-primary {
+    background: var(--accent-primary, #3b82f6);
+    border-color: var(--accent-primary, #3b82f6);
+    color: #fff;
+}
+
+.cert-viewer-btn-primary:hover {
+    filter: brightness(1.1);
+}
+
+.cert-viewer-close {
+    padding: 10px 14px;
 }
 
 /* ============================================
