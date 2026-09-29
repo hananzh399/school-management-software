@@ -1014,7 +1014,7 @@ function renderStaff() {
                 <td>
                     <div class="done-cell">
                         ${isFromDB ? 
-                            `<span class="done-badge done-present" title="Recorded by biometric device"><i class="fas fa-fingerprint"></i> Biometric Marked</span>` : 
+                            `<span class="done-badge done-present" title="Recorded by biometric device or ID-card scanner"><i class="fas fa-fingerprint"></i> ${entry.checkOut ? "Checked Out" : "Checked In"}</span>` : 
                             `<span class="done-badge ${statusClass}"><i class="fas fa-check-circle"></i> Done · ${statusLabel}</span>`
                         }
                         <button class="edit-btn" data-edit-staff="${s.id}"><i class="fas fa-pen"></i> Edit</button>
@@ -3070,10 +3070,11 @@ function initPeriodSwitchers() {
    Replaces the old plain "Camera" (photo-only) tool. Opens the device
    camera in a scanner-style view (viewfinder + a green line sweeping
    top -> bottom on a loop) and continuously looks for a QR code or a
-   Code 128 barcode. Every student ID card generated in Manage Students
-   carries the student's Reg./ID number in BOTH its front QR code and
-   its back barcode, so scanning either side identifies the student.
-   On a successful scan the student is marked PRESENT for today, saved
+   Code 128 barcode. Every student ID card (Manage Students) carries the
+   Reg./ID number, and every staff ID card (Manage Staff) carries the
+   Staff ID, in BOTH its front QR code and its back barcode, so scanning
+   either side of either card type identifies the person.
+   On a successful scan the student OR staff member is marked PRESENT for today, saved
    straight to the database (the backend upserts per member/date/school,
    so re-scanning never creates duplicates), and a beep confirms it.
    ============================================================ */
@@ -3139,8 +3140,9 @@ function initScanner() {
         if (!audioCtx) return;
         try {
             const t0 = audioCtx.currentTime;
-            // success = short two-note "beep-beep" (high); failure = one low buzz
-            const notes = ok ? [[988, 0, 0.11], [1319, 0.13, 0.13]] : [[220, 0, 0.28]];
+            // success = short two-note "beep-beep" (high); already-marked ("info") = two soft ticks; failure = one low buzz
+            const notes = ok === "info" ? [[784, 0, 0.09], [784, 0.13, 0.09]]      // already marked = two soft mid-pitch ticks
+                        : ok ? [[988, 0, 0.11], [1319, 0.13, 0.13]] : [[220, 0, 0.28]];
             notes.forEach(([freq, offset, dur]) => {
                 const osc = audioCtx.createOscillator();
                 const gain = audioCtx.createGain();
@@ -3160,8 +3162,8 @@ function initScanner() {
         setTimeout(() => flashEl.classList.remove("show"), 650);
     }
     function showResult(text, kind) {
-        lastResult.classList.remove("hidden", "scanner-last-result--ok", "scanner-last-result--err");
-        lastResult.classList.add(kind === "ok" ? "scanner-last-result--ok" : "scanner-last-result--err");
+        lastResult.classList.remove("hidden", "scanner-last-result--ok", "scanner-last-result--err", "scanner-last-result--info");
+        lastResult.classList.add(kind === "ok" ? "scanner-last-result--ok" : kind === "info" ? "scanner-last-result--info" : "scanner-last-result--err");
         lastResultTx.textContent = text;
     }
 
@@ -3208,39 +3210,71 @@ function initScanner() {
     // the scanner opens so the real "Thank you" / "Please try again" is instant.
     function warmUpSpeech() { speak(" ", true); }
 
-    // ---- finding the student for a scanned code -----------------------
-    // BUGFIX — "first scan works, later scans say 'Not a student ID'": the
-    // page-wide STUDENTS list is only loaded when a mode card is clicked,
-    // and can be empty or stale by the time a card is scanned (or come back
-    // empty after a hiccup). Looking a code up in that list alone made the
-    // result depend on whatever happened to be loaded. Now the scanner loads
-    // the list itself when it opens, and if a code isn't found it reloads
-    // the list once from the backend and tries again before giving up.
+    // ---- finding the person (student OR staff) for a scanned code ------
+    // Student ID cards encode the Reg. No. and staff ID cards encode the
+    // Staff ID (front QR + back Code 128 barcode on both), so ONE scanner
+    // handles both: the scanned value is looked up in the student list and
+    // the staff list.
+    // The lists are loaded when the scanner opens, and if a code isn't found
+    // they are reloaded once from the backend before giving up, so the result
+    // never depends on which page section happened to be opened first.
     const normCode = v => String(v == null ? "" : v).trim().toLowerCase();
     const matchStudent = (list, code) => list.find(s =>
         normCode(s.regNo) === code || normCode(String(s.regNo).split("#")[0]) === code);
+    const matchStaff = (list, code) => list.find(s =>
+        normCode(s.id) === code || normCode(String(s.id).split("#")[0]) === code);
     let lastListReload = 0;
-    async function reloadStudentList() {
+    async function reloadLists() {
         lastListReload = Date.now();
         try {
-            const fresh = _uniquifyKey(await loadRealStudents(), "regNo");
-            if (fresh.length) STUDENTS = fresh;
-        } catch (err) { console.error("Scanner: could not reload student list", err); }
+            const [students, staff] = await Promise.all([loadRealStudents(), loadRealStaff()]);
+            const freshStudents = _uniquifyKey(students, "regNo");
+            const freshStaff    = _uniquifyKey(staff, "id");
+            if (freshStudents.length) STUDENTS = freshStudents;
+            if (freshStaff.length)    STAFF    = freshStaff;
+        } catch (err) { console.error("Scanner: could not reload student/staff lists", err); }
     }
-    async function findStudent(rawCode) {
+    function lookupMember(code) {
+        const student = matchStudent(STUDENTS, code);
+        const staff   = matchStaff(STAFF, code);
+        if (student && staff) return { type: "ambiguous", student, staff };
+        if (student) return { type: "student", student };
+        if (staff)   return { type: "staff", staff };
+        return null;
+    }
+    async function findMember(rawCode) {
         const code = normCode(rawCode);
-        let s = matchStudent(STUDENTS, code);
-        if (s) return { student: s };
+        let hit = lookupMember(code);
+        if (hit) return hit;
         if (Date.now() - lastListReload > 2000) {
-            await reloadStudentList();
-            s = matchStudent(STUDENTS, code);
-            if (s) return { student: s };
+            await reloadLists();
+            hit = lookupMember(code);
+            if (hit) return hit;
         }
-        return { student: null, listEmpty: STUDENTS.length === 0 };
+        return { type: null, listEmpty: STUDENTS.length === 0 && STAFF.length === 0 };
     }
 
     // ---- marking attendance -------------------------------------------
     const FAIL_COOLDOWN_MS = 1800;   // shorter lock-out after a failed read, so "please try again" isn't spammed
+
+    function failScan(key, now, message) {
+        lastSeen[key] = now - (RESCAN_COOLDOWN_MS - FAIL_COOLDOWN_MS);
+        beep(false); flash("error"); speak("Please try again");
+        showResult(message, "err");
+    }
+
+    async function postAttendance(record) {
+        const res = await fetch(`${ATTENDANCE_API_BASE}/save`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify([record])
+        });
+        if (!res.ok) {
+            const msg = (await res.text().catch(() => "")) || `HTTP ${res.status}`;
+            throw new Error(msg);
+        }
+    }
+
     async function handleCode(rawCode) {
         const code = String(rawCode || "").trim();
         if (!code) return;
@@ -3249,16 +3283,24 @@ function initScanner() {
         if (lastSeen[key] && now - lastSeen[key] < RESCAN_COOLDOWN_MS) return; // same card still held up
         lastSeen[key] = now;
 
-        const { student, listEmpty } = await findStudent(code);
-        if (!student) {
-            lastSeen[key] = now - (RESCAN_COOLDOWN_MS - FAIL_COOLDOWN_MS);
-            beep(false); flash("error"); speak("Please try again");
-            showResult(listEmpty
-                ? "Couldn't load the student list — check your connection and try again."
-                : `Not a student ID: "${code.length > 40 ? code.slice(0, 40) + "…" : code}"`, "err");
+        const hit = await findMember(code);
+        const shown = code.length > 40 ? code.slice(0, 40) + "…" : code;
+
+        if (hit.type === "ambiguous") {
+            failScan(key, now, `"${shown}" matches both a student and a staff member — please mark this one manually.`);
             return;
         }
+        if (!hit.type) {
+            failScan(key, now, hit.listEmpty
+                ? "Couldn't load the student/staff lists — check your connection and try again."
+                : `Not a student or staff ID: "${shown}"`);
+            return;
+        }
+        if (hit.type === "staff") await markStaffPresent(hit.staff, key);
+        else                      await markStudentPresent(hit.student, key);
+    }
 
+    async function markStudentPresent(student, key) {
         const record = {
             schoolId: getCurrentSchoolId(),
             memberId: student.regNo,
@@ -3270,25 +3312,17 @@ function initScanner() {
             status: "present",
             reason: ""
         };
+        const label = `${student.name} (${student.class}${student.section ? "-" + student.section : ""})`;
 
         // INSTANT feedback: the moment the card is recognised, beep / flash /
         // speak — don't wait for the server round-trip. If the save then
         // fails, the failure is announced right after.
         beep(true); flash("success"); speak("Thank you");
-        showResult(`✓ ${student.name} (${student.class}${student.section ? "-" + student.section : ""}) — saving…`, "ok");
+        showResult(`✓ ${label} — saving…`, "ok");
 
         try {
-            const res = await fetch(`${ATTENDANCE_API_BASE}/save`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify([record])
-            });
-            if (!res.ok) {
-                const msg = (await res.text().catch(() => "")) || `HTTP ${res.status}`;
-                throw new Error(msg);
-            }
-
-            showResult(`✓ ${student.name} (${student.class}${student.section ? "-" + student.section : ""}) marked present`, "ok");
+            await postAttendance(record);
+            showResult(`✓ ${label} marked present`, "ok");
             toast(`${student.name} marked present`, "success");
 
             // Keep any on-screen sheet / cache in step with what was just saved.
@@ -3301,10 +3335,143 @@ function initScanner() {
                 renderTable();
             }
         } catch (err) {
-            console.error("Scanner: saving attendance failed", err);
+            console.error("Scanner: saving student attendance failed", err);
             delete lastSeen[key]; // let the person retry straight away
             beep(false); flash("error"); speak("Please try again");
             showResult(`Could not save attendance for ${student.name}: ${err.message}`, "err");
+        }
+    }
+
+    // ---- staff check-in / check-out ------------------------------------
+    // First scan of the day  -> CHECK-IN  (green, "Thank you")
+    // Scan within 2 minutes  -> "already marked" (blue, "Already marked")
+    // Scan after 2 minutes   -> CHECK-OUT (green, "Thank you")
+    // Any scan after that    -> "already marked" (blue) for the rest of the day
+    const CHECKOUT_MIN_GAP_MS = 2 * 60 * 1000;
+    const checkInAt = {};   // staffId -> Date.now() of a check-in made by THIS scanner session (exact timing)
+
+    const pad2 = n => String(n).padStart(2, "0");
+    const hhmmss = d => `${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}`;
+    function clockLabel(t) {                     // "HH:mm[:ss]" -> "9:05 AM"
+        const m = String(t || "").match(/^(\d{1,2}):(\d{2})/);
+        if (!m) return "";
+        let h = parseInt(m[1], 10);
+        const ap = h >= 12 ? "PM" : "AM";
+        h = h % 12 || 12;
+        return `${h}:${m[2]} ${ap}`;
+    }
+    function secondsOfDay(t) {
+        const m = String(t || "").match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?/);
+        return m ? (+m[1]) * 3600 + (+m[2]) * 60 + (+(m[3] || 0)) : null;
+    }
+    // Milliseconds since this staff member checked in (0 if it can't be worked out).
+    function msSinceCheckIn(staffId, checkIn) {
+        if (checkInAt[staffId]) return Date.now() - checkInAt[staffId];
+        const then = secondsOfDay(checkIn);
+        if (then == null) return 0;
+        const n = new Date();
+        const nowSec = n.getHours() * 3600 + n.getMinutes() * 60 + n.getSeconds();
+        return Math.max(0, (nowSec - then) * 1000);
+    }
+    function fmtRemaining(ms) {
+        const sec = Math.max(1, Math.ceil(ms / 1000));
+        return `${Math.floor(sec / 60)}:${pad2(sec % 60)}`;
+    }
+
+    // Today's saved record for one staff member, straight from the database, so a
+    // biometric punch or a scan on another device is respected. Returns the record,
+    // null (no record today), or undefined (server unreachable -> caller uses the cache).
+    async function fetchStaffToday(staffId) {
+        const ctrl = (typeof AbortController !== "undefined") ? new AbortController() : null;
+        const timer = ctrl ? setTimeout(() => ctrl.abort(), 2000) : null;
+        try {
+            const url = `${ATTENDANCE_API_BASE}/staff?date=${encodeURIComponent(todayKey())}&schoolId=${encodeURIComponent(getCurrentSchoolId())}`;
+            const res = await fetch(url, ctrl ? { signal: ctrl.signal } : undefined);
+            if (!res.ok) return undefined;
+            const logs = await res.json();
+            if (!Array.isArray(logs)) return undefined;
+            const base = String(staffId).split("#")[0];
+            return logs.find(l => l && (l.memberId === staffId || l.memberId === base)) || null;
+        } catch (err) {
+            return undefined;
+        } finally {
+            if (timer) clearTimeout(timer);
+        }
+    }
+
+    function alreadyMarked(message) {
+        beep("info"); flash("info"); speak("Already marked");
+        showResult(message, "info");
+    }
+
+    async function markStaffPresent(staff, key) {
+        const label = `${staff.name} (Staff${staff.role ? " · " + staff.role : ""})`;
+
+        let rec = await fetchStaffToday(staff.id);
+        if (rec === undefined) rec = (todayStaffAttendanceCache && todayStaffAttendanceCache[staff.id]) || null;
+        const prevIn  = rec && rec.checkIn  ? rec.checkIn  : null;
+        const prevOut = rec && rec.checkOut ? rec.checkOut : null;
+
+        // --- already checked out: nothing more to record today ---
+        if (prevIn && prevOut) {
+            alreadyMarked(`ℹ ${label} — already checked out at ${clockLabel(prevOut)}. Attendance is complete for today.`);
+            return;
+        }
+        // --- checked in less than 2 minutes ago: too soon to check out ---
+        if (prevIn) {
+            const since = msSinceCheckIn(staff.id, prevIn);
+            if (since < CHECKOUT_MIN_GAP_MS) {
+                alreadyMarked(`ℹ ${label} — already checked in at ${clockLabel(prevIn)}. Check-out opens in ${fmtRemaining(CHECKOUT_MIN_GAP_MS - since)}.`);
+                return;
+            }
+        }
+
+        // --- otherwise: this scan is a check-in (no check-in yet) or a check-out ---
+        const isCheckOut = !!prevIn;
+        const stamp = hhmmss(new Date());
+        const checkIn  = isCheckOut ? prevIn : stamp;
+        const checkOut = isCheckOut ? stamp : null;
+
+        const record = {
+            schoolId: getCurrentSchoolId(),
+            memberId: staff.id,
+            memberName: staff.name,
+            memberType: "STAFF",
+            role: staff.role,
+            date: todayKey(),
+            status: "present",
+            reason: "",
+            checkIn: checkIn
+        };
+        if (checkOut) record.checkOut = checkOut;   // always resend checkIn on check-out so it isn't wiped
+
+        const verb = isCheckOut ? "checked out" : "checked in";
+        beep(true); flash("success"); speak("Thank you");
+        showResult(`✓ ${label} — saving…`, "ok");
+
+        try {
+            await postAttendance(record);
+            if (!isCheckOut) checkInAt[staff.id] = Date.now();
+            showResult(`✓ ${label} ${verb} at ${clockLabel(stamp)}`, "ok");
+            toast(`${staff.name} ${verb}`, "success");
+
+            // Keep the caches / on-screen staff sheet in step with what was just saved.
+            // isFromDB:true locks the row and stops the manual Save button from
+            // re-sending it (which would overwrite the times).
+            const entry = { status: "present", reason: "", checkIn, checkOut, isFromDB: true };
+            if (!todayStaffAttendanceCache) todayStaffAttendanceCache = {};
+            todayStaffAttendanceCache[staff.id] = { ...entry };
+            state.staffAttendance[staff.id] = { ...entry };
+            state.savedStaffKeys.add(staff.id);
+            state.staffEditMode.delete(staff.id);
+            const staffStage = document.getElementById("stage-staff");
+            if (staffStage && !staffStage.classList.contains("hidden")) renderStaff();
+            renderAttendanceStats();
+        } catch (err) {
+            console.error("Scanner: saving staff attendance failed", err);
+            delete lastSeen[key]; // let the person retry straight away
+            beep(false); flash("error"); speak("Please try again");
+            showResult(`Could not save attendance for ${staff.name}: ${err.message}`, "err");
         }
     }
 
@@ -3531,7 +3698,7 @@ function initScanner() {
         modal.classList.remove("hidden");
         modal.setAttribute("aria-hidden", "false");
         lastResult.classList.add("hidden");
-        if (!STUDENTS.length) reloadStudentList();   // don't depend on a mode card having been clicked first
+        if (!STUDENTS.length || !STAFF.length) reloadLists();   // don't depend on a mode card having been clicked first
         startScanner();
     }
     function closeModal() {

@@ -80,7 +80,7 @@
             </div>
             <div class="header-right">
                 <div class="header-date" id="header-date"></div>
-                <button id="open-scanner-btn" class="scanner-btn" aria-label="Open Scanner" title="Scan student ID cards">
+                <button id="open-scanner-btn" class="scanner-btn" aria-label="Open Scanner" title="Scan student &amp; staff ID cards">
                     <i class="fas fa-qrcode"></i>
                     <span class="scanner-btn__label">Scanner</span>
                 </button>
@@ -671,7 +671,7 @@
             </div>
         </div>
 
-        <!-- SCANNER MODAL (QR / barcode attendance) -->
+        <!-- SCANNER MODAL (QR / barcode attendance — student &amp; staff ID cards) -->
         <div id="scanner-modal" class="report-modal hidden" aria-hidden="true">
             <div class="report-modal__backdrop" id="scanner-backdrop"></div>
             <div class="report-modal__panel scanner-panel" role="dialog" aria-modal="true" aria-labelledby="scanner-modal-title">
@@ -696,7 +696,7 @@
                         </div>
                         <div id="scanner-flash" class="scanner-flash"></div>
                     </div>
-                    <p class="scanner-hint"><i class="fas fa-id-card"></i> Hold a student ID card (front QR code or back barcode) in front of the camera — it scans instantly, from near or far. Use the zoom slider for distant cards.</p>
+                    <p class="scanner-hint"><i class="fas fa-id-card"></i> Hold a student or staff ID card (front QR code or back barcode) in front of the camera — it scans instantly, from near or far. Use the zoom slider for distant cards. Staff: first scan = check-in, scan again after 2 minutes = check-out.</p>
                     <div id="scanner-last-result" class="scanner-last-result hidden">
                         <span id="scanner-last-result-text"></span>
                     </div>

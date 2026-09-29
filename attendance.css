@@ -1079,6 +1079,7 @@ body {
 .scanner-flash.show { opacity: 1; }
 .scanner-flash--success { background: rgba(34,197,94,0.35); box-shadow: inset 0 0 0 5px #22c55e; }
 .scanner-flash--error   { background: rgba(244,63,94,0.30); box-shadow: inset 0 0 0 5px #f43f5e; }
+.scanner-flash--info    { background: rgba(59,130,246,0.32); box-shadow: inset 0 0 0 5px #3b82f6; }
 
 .scanner-hint {
     margin: 0;
@@ -1096,6 +1097,7 @@ body {
 }
 .scanner-last-result--ok  { background: rgba(16,185,129,0.14); color: var(--emerald); border: 1px solid rgba(16,185,129,0.35); }
 .scanner-last-result--err { background: rgba(244,63,94,0.12);  color: var(--rose);    border: 1px solid rgba(244,63,94,0.35); }
+.scanner-last-result--info { background: rgba(59,130,246,0.14); color: var(--blue); border: 1px solid rgba(59,130,246,0.38); }
 
 .scanner-zoom {
     display: flex;
