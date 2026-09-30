@@ -4591,6 +4591,8 @@ if (certUploadInput) {
         }).join('');
 
         idcInitQrCodes(students);
+        // Auto-align every student photo so the face is centred & fully visible.
+        if (window.IdPhotoAlign) IdPhotoAlign.applyToCards(grid);
     }
 
     /**
@@ -4673,6 +4675,7 @@ if (certUploadInput) {
      */
     async function idcCaptureCardCanvas(cardEl) {
         if (!cardEl || typeof html2canvas === 'undefined') return null;
+        if (window.IdPhotoAlign) await IdPhotoAlign.ready(); // make sure photos are face-aligned before capture
         const rawCanvas = await html2canvas(cardEl, {
             scale: IDC_CAPTURE_SCALE,
             backgroundColor: '#ffffff',

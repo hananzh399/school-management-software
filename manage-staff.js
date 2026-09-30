@@ -3776,6 +3776,8 @@ function sidcRenderGrid(staffList, category) {
     }).join('');
 
     sidcInitQrCodes(staffList);
+    // Auto-align every staff photo so the face is centred & fully visible.
+    if (window.IdPhotoAlign) IdPhotoAlign.applyToCards(grid);
 }
 
 /**
@@ -3852,6 +3854,7 @@ window.closeStaffIdCardGenerator = function() {
  */
 async function sidcCaptureCardCanvas(cardEl) {
     if (!cardEl || typeof html2canvas === 'undefined') return null;
+    if (window.IdPhotoAlign) await IdPhotoAlign.ready(); // make sure photos are face-aligned before capture
     const rawCanvas = await html2canvas(cardEl, {
         scale: SIDC_CAPTURE_SCALE,
         backgroundColor: '#ffffff',
