@@ -1178,14 +1178,32 @@ function getSchoolInfo() {
     return (SCHOOL_INFO_CACHE && typeof SCHOOL_INFO_CACHE === 'object') ? SCHOOL_INFO_CACHE : {};
 }
 function getSchoolContactPhone() {
-    const info = getSchoolInfo();
-    const primary = (info.phone || '').trim();
-    const alt = (info.phoneAlt || '').trim();
-    if (primary && alt) return `${primary} / ${alt}`;
+    const info    = getSchoolInfo();
+    // The server row (and the Settings page) names these schoolPhone / schoolPhoneAlt;
+    // older code paths used phone / phoneAlt — accept either so nothing shows "Not set".
+    const primary = String(info.schoolPhone    || info.phone    || '').trim();
+    const alt     = String(info.schoolPhoneAlt || info.phoneAlt || '').trim();
+    if (primary && alt && primary !== alt) return `${primary} / ${alt}`;
     return primary || alt;
 }
 function getSchoolContactAddress() {
-    return (getSchoolInfo().address || '').trim();
+    const info = getSchoolInfo();
+    return String(info.schoolAddress || info.address || '').trim();
+}
+
+/**
+ * Make sure the school's contact details are loaded BEFORE an ID card / certificate
+ * is drawn. If the cache is empty (page just opened, or the first fetch was slow /
+ * failed), fetch the Settings row now. Safe to call repeatedly; waits at most ~6s.
+ */
+async function ensureSchoolInfoLoaded() {
+    if (getSchoolContactPhone() && getSchoolContactAddress()) return;
+    try {
+        await Promise.race([
+            fetchClassConfigsFromServer(),
+            new Promise(r => setTimeout(r, 6000))
+        ]);
+    } catch (e) { /* keep whatever we have */ }
 }
 
 /** Convert backend SchoolSettings.ClassFee shape into {name, sections:[]}. */
@@ -2925,8 +2943,8 @@ function _getSchoolIdentity() {
     return { 
         name: name || document.querySelector('.school-name')?.textContent?.trim() || 'ST. LAWRENCE INTERNATIONAL SCHOOL', 
         logo: logo || '', 
-        address: contact.address, 
-        phone: contact.phone 
+        address: contact.address || getSchoolContactAddress(), 
+        phone: contact.phone || getSchoolContactPhone() 
     };
 }
 
@@ -3640,7 +3658,7 @@ function sidcBuildCardHtml(s, category, qrPlaceholderId) {
         ? `<img src="${esc(logoUrl)}" alt="Logo">`
         : `<i class="fas fa-graduation-cap"></i>`;
     const photoInner = photoSrc
-        ? `<img src="${esc(photoSrc)}" alt="${esc(s.name)}" crossorigin="anonymous">`
+        ? `<img data-photo-src="${esc(photoSrc)}" alt="${esc(s.name)}" crossorigin="anonymous" decoding="async">`
         : `<i class="fas fa-user"></i>`;
 
     return `
@@ -3775,9 +3793,52 @@ function sidcRenderGrid(staffList, category) {
             </div>`;
     }).join('');
 
-    sidcInitQrCodes(staffList);
-    // Auto-align every staff photo so the face is centred & fully visible.
-    if (window.IdPhotoAlign) IdPhotoAlign.applyToCards(grid);
+    // Everything heavy is LAZY (only cards near the screen get their QR + photo),
+    // so opening the grid is instant and scrolling never freezes.
+    sidcSetupLazyPrepare(grid);
+}
+
+let sidcPairObserver = null;
+
+function sidcSetupLazyPrepare(grid) {
+    if (sidcPairObserver) { sidcPairObserver.disconnect(); sidcPairObserver = null; }
+
+    if (window.IdPhotoAlign) IdPhotoAlign.applyToCards(grid); // photos: lazy + queued inside the module
+    else grid.querySelectorAll('img[data-photo-src]').forEach(im => { im.src = im.getAttribute('data-photo-src'); });
+
+    const pairs = grid.querySelectorAll('.sidc-pair');
+    if (!('IntersectionObserver' in window)) {
+        let i = 0;
+        (function step() {
+            const end = Math.min(pairs.length, i + 4);
+            for (; i < end; i++) sidcPrepareQrForPair(pairs[i]);
+            if (i < pairs.length) setTimeout(step, 30);
+        })();
+        return;
+    }
+    sidcPairObserver = new IntersectionObserver(entries => {
+        entries.forEach(e => {
+            if (!e.isIntersecting) return;
+            sidcPairObserver.unobserve(e.target);
+            sidcPrepareQrForPair(e.target);
+        });
+    }, { root: (window.IdPhotoAlign ? IdPhotoAlign.scrollParent(pairs[0]) : null), rootMargin: '600px 0px' });
+    pairs.forEach(p => sidcPairObserver.observe(p));
+}
+
+function sidcPrepareQrForPair(pairEl) {
+    if (!pairEl || pairEl.dataset.qr === '1') return;
+    pairEl.dataset.qr = '1';
+    const st = sidcFindStaff(pairEl.dataset.reg);
+    if (st) sidcInitQrCodes([st]);
+}
+
+/** Make sure ONE card is fully ready (QR drawn + photo aligned) before it is captured. */
+async function sidcPrepareCard(cardEl) {
+    const pair = cardEl && cardEl.closest ? cardEl.closest('.sidc-pair') : null;
+    if (!pair) return;
+    sidcPrepareQrForPair(pair);
+    if (window.IdPhotoAlign) await IdPhotoAlign.ensure(pair, 40000);
 }
 
 /**
@@ -3813,7 +3874,8 @@ function sidcInitQrCodes(staffList) {
 }
 
 /** "Generate ID Cards" button next to Add Staff/Add Teacher. */
-window.openStaffIdCardGenerator = function() {
+window.openStaffIdCardGenerator = async function() {
+    await ensureSchoolInfoLoaded(); // school phone/address must be loaded before the back of the card is drawn
     const category = currentCategory || 'Teaching';
     sidcCurrentStaff = sidcGetStaffForCurrentCategory();
 
@@ -3854,7 +3916,7 @@ window.closeStaffIdCardGenerator = function() {
  */
 async function sidcCaptureCardCanvas(cardEl) {
     if (!cardEl || typeof html2canvas === 'undefined') return null;
-    if (window.IdPhotoAlign) await IdPhotoAlign.ready(); // make sure photos are face-aligned before capture
+    await sidcPrepareCard(cardEl); // QR + aligned photo ready (cards off-screen are prepared on demand)
     const rawCanvas = await html2canvas(cardEl, {
         scale: SIDC_CAPTURE_SCALE,
         backgroundColor: '#ffffff',

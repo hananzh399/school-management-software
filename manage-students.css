@@ -5325,3 +5325,13 @@ select option {
     .archive-seg-group { align-self: stretch; justify-content: center; }
     .archive-search { max-width: 100%; }
 }
+
+/* ---- Performance: smooth scrolling with many cards (mobile especially) ---- */
+.idc-overlay { backdrop-filter: none; -webkit-backdrop-filter: none; }   /* full-screen blur is very costly on phones */
+.idc-cards-grid { -webkit-overflow-scrolling: touch; }
+.idc-card-thumb { contain: layout paint; }
+.idc-card-photo img { background: transparent; }
+.idc-card-photo img:not([src]) { visibility: hidden; }      /* box shows its placeholder until the photo arrives */
+
+/* Photo box shows the studio-blue background while the photo is being prepared. */
+.idc-card-photo:has(img) { background: linear-gradient(160deg, #2f80d9 0%, #1650a8 100%); }

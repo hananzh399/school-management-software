@@ -57,23 +57,69 @@
         blueBackground: true,            // replace the photo background with blue
         enhance: true,                   // auto-enhance the photo
         backgroundTop: '#2f80d9',        // studio-blue gradient (light centre-top …)
-        backgroundBottom: '#1650a8'      // … to deeper blue at the edges
+        backgroundBottom: '#1650a8',     // … to deeper blue at the edges
+        useMediaPipe: 'auto'             // 'auto' = only on capable desktops; true = always; false = never
     };
 
-    var cache = new Map();          // src -> Promise<dataURL>
+    var cache = new Map();          // src -> aligned dataURL (successful results only)
+    var inflight = new Map();       // src -> Promise (de-duplicates simultaneous requests)
     var pending = new Set();        // in-flight promises (for ready())
     var nativeDetector = null, nativeTried = false;
     var mpDetectorPromise = null, mpVisionPromise = null, mpSegmenterPromise = null;
 
-    /* ---------- image loading ---------- */
-    function loadImage(src) {
+    /* ---------- image loading (timeout + retries + CORS fallback) ---------- */
+    var IS_SMALL_DEVICE = (function () {
+        try {
+            var c = navigator.connection || {};
+            return /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent || '') || c.saveData === true ||
+                   (navigator.deviceMemory && navigator.deviceMemory <= 4) ||
+                   (navigator.hardwareConcurrency && navigator.hardwareConcurrency <= 4);
+        } catch (e) { return true; }
+    })();
+
+    function loadOnce(src, cors, timeoutMs) {
         return new Promise(function (resolve, reject) {
-            var img = new Image();
-            if (!/^data:|^blob:/i.test(src)) img.crossOrigin = 'anonymous';
-            img.onload = function () { resolve(img); };
-            img.onerror = function () { reject(new Error('image load failed')); };
+            var img = new Image(), done = false;
+            var timer = setTimeout(function () { if (!done) { done = true; img.src = ''; reject(new Error('timeout')); } }, timeoutMs);
+            if (cors) img.crossOrigin = 'anonymous';
+            img.decoding = 'async';
+            img.onload = function () {
+                if (done) return;
+                var fin = function () { if (done) return; done = true; clearTimeout(timer); resolve(img); };
+                if (img.decode) img.decode().then(fin, fin); else fin();   // decode big photos off the UI thread
+            };
+            img.onerror = function () { if (done) return; done = true; clearTimeout(timer); reject(new Error('image load failed')); };
             img.src = src;
         });
+    }
+
+    function bust(url, n) { return url + (url.indexOf('?') >= 0 ? '&' : '?') + '_cb=' + Date.now() + n; }
+
+    async function loadImage(src) {
+        var isData = /^data:|^blob:/i.test(src), lastErr;
+        for (var attempt = 0; attempt < 3; attempt++) {
+            try {
+                // Retries use a fresh URL: a copy of the photo cached earlier WITHOUT CORS headers
+                // (e.g. by a normal <img> elsewhere on the site) would otherwise make every retry fail.
+                var url = (isData || attempt === 0) ? src : bust(src, attempt);
+                return { img: await loadOnce(url, !isData, 20000), tainted: false };
+            }
+            catch (e) { lastErr = e; await sleep(300 * (attempt + 1)); }
+        }
+        // Last resort: load WITHOUT CORS just so the photo is at least shown (can't be processed then).
+        if (!isData) { try { return { img: await loadOnce(src, false, 20000), tainted: true }; } catch (e) { lastErr = e; } }
+        throw lastErr || new Error('image load failed');
+    }
+
+    function sleep(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+    function yieldToUI() { return new Promise(function (r) { setTimeout(r, 0); }); }
+
+    // Big phone photos (12MP+) are slow/memory-hungry: make a ≤640px working copy for detection.
+    function makeWorkCanvas(img, maxSide) {
+        var iw = img.naturalWidth, ih = img.naturalHeight, k = Math.min(1, maxSide / Math.max(iw, ih));
+        var c = document.createElement('canvas'); c.width = Math.max(1, Math.round(iw * k)); c.height = Math.max(1, Math.round(ih * k));
+        c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+        return { canvas: c, k: k };
     }
 
     /* ---------- tier 1: native FaceDetector ---------- */
@@ -91,6 +137,7 @@
 
     /* ---------- tier 2: MediaPipe (lazy, optional) ---------- */
     function getVision() {
+        if (options.useMediaPipe === false || (options.useMediaPipe === 'auto' && IS_SMALL_DEVICE)) return Promise.resolve(null); // phones: skip the heavy download, use built-in methods
         if (mpVisionPromise) return mpVisionPromise;
         mpVisionPromise = (async function () {
             var work = (async function () {
@@ -98,7 +145,7 @@
                 var fileset = await vision.FilesetResolver.forVisionTasks(MP_WASM);
                 return { vision: vision, fileset: fileset };
             })();
-            var timeout = new Promise(function (_, rej) { setTimeout(function () { rej(new Error('timeout')); }, 12000); });
+            var timeout = new Promise(function (_, rej) { setTimeout(function () { rej(new Error('timeout')); }, 6000); });
             return Promise.race([work, timeout]);
         })().catch(function () { return null; }); // offline / blocked → fall through to built-in methods
         return mpVisionPromise;
@@ -145,7 +192,7 @@
 
     /* ---------- tier 3: skin-tone blob finder (no libraries) ---------- */
     function detectSkin(img) {
-        var iw = img.naturalWidth, ih = img.naturalHeight;
+        var iw = img.naturalWidth || img.width, ih = img.naturalHeight || img.height;
         var scale = 96 / Math.max(iw, ih);
         var w = Math.max(8, Math.round(iw * scale)), h = Math.max(8, Math.round(ih * scale));
         var c = document.createElement('canvas'); c.width = w; c.height = h;
@@ -441,18 +488,23 @@
 
     /* ---------- main: align one image ---------- */
     async function doFrame(src) {
-        var img = await loadImage(src);
+        var loaded = await loadImage(src), img = loaded.img;
         var iw = img.naturalWidth, ih = img.naturalHeight;
-        if (!iw || !ih) return src;
+        if (!iw || !ih) return { url: src, ok: false };
+        if (loaded.tainted) return { url: src, ok: false };   // cross-origin without CORS: can't read pixels → show as-is, retry later
 
-        var face = await detectNative(img);
-        if (!face) face = await detectMediaPipe(img);
-        if (!face) face = detectSkin(img);
+        var work = makeWorkCanvas(img, 640), face = null;
+        await yieldToUI();
+        var f = await detectNative(work.canvas);
+        if (!f) f = await detectMediaPipe(work.canvas);
+        if (!f) f = detectSkin(work.canvas);
+        if (f) face = { x: f.x / work.k, y: f.y / work.k, w: f.w / work.k, h: f.h / work.k };
+        await yieldToUI();
 
         var crop = computeCrop(iw, ih, face);
         var canvas = document.createElement('canvas');
         canvas.width = OUT_W; canvas.height = OUT_H;
-        var ctx = canvas.getContext('2d');
+        var ctx = canvas.getContext('2d', { willReadFrequently: true });
         ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, OUT_W, OUT_H);
         ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
         ctx.drawImage(img, crop.x, crop.y, crop.w, crop.h, 0, 0, OUT_W, OUT_H);
@@ -460,45 +512,125 @@
             ? { x: (face.x + face.w / 2 - crop.x) * OUT_W / crop.w, y: (face.y + face.h / 2 - crop.y) * OUT_H / crop.h }
             : { x: OUT_W / 2, y: OUT_H * FACE_CENTER_Y };
         await postProcess(canvas, faceCenter);
-        try { return canvas.toDataURL('image/jpeg', 0.92); } catch (e) { return src; }
+        try { return { url: canvas.toDataURL('image/jpeg', 0.9), ok: true }; } catch (e) { return { url: src, ok: false }; }
     }
 
-    function frame(src) {
-        if (!src) return Promise.resolve(src);
-        if (cache.has(src)) return cache.get(src);
-        var p = doFrame(src).catch(function () { return src; }); // any failure → keep original photo
-        cache.set(src, p);
+    // Only SUCCESSFUL results are remembered. A failed/unprocessed photo is never cached,
+    // so the next attempt (automatic retry or re-opening the cards) tries again from scratch.
+    function frameEx(src) {
+        if (!src) return Promise.resolve({ url: src, ok: false });
+        if (cache.has(src)) return Promise.resolve({ url: cache.get(src), ok: true });
+        if (inflight.has(src)) return inflight.get(src);
+        var p = doFrame(src).catch(function () { return { url: src, ok: false }; }).then(function (r) {
+            inflight.delete(src);
+            if (r.ok) cache.set(src, r.url);
+            return r;
+        });
+        inflight.set(src, p);
+        return p;
+    }
+    function frame(src) { return frameEx(src).then(function (r) { return r.url; }); }
+
+    /* ---------- job queue: few at a time, never blocks scrolling ---------- */
+    var MAX_PARALLEL = IS_SMALL_DEVICE ? 2 : 4, running = 0, waiting = [];
+    function enqueue(job, priority) {
+        return new Promise(function (resolve) {
+            var item = { job: job, resolve: resolve };
+            if (priority) waiting.unshift(item); else waiting.push(item);
+            pump();
+        });
+    }
+    function pump() {
+        while (running < MAX_PARALLEL && waiting.length) {
+            var it = waiting.shift(); running++;
+            (function (item) {
+                Promise.resolve().then(item.job).catch(function () {}).then(function () {
+                    running--; item.resolve(); setTimeout(pump, 16); // small gap = UI stays responsive
+                });
+            })(it);
+        }
+    }
+
+    function showFallback(im) { // never leave an empty box: show the original photo if processing fails
+        var raw = im.getAttribute('data-photo-src');
+        if (raw && !im.getAttribute('src')) im.src = raw;
+    }
+
+    // Load ONE card photo: fetch (with retries) → align/blue-bg/enhance → show. Idempotent.
+    // If the card is scrolled out of view before its turn comes, the job is dropped (and
+    // re-requested when it scrolls back). If processing fails, it is retried automatically
+    // a few times (the original photo is only shown as a last resort).
+    function loadPhoto(im, priority) {
+        if (im._idPhotoPromise) return im._idPhotoPromise;
+        var raw = im.getAttribute('data-photo-src') || im.getAttribute('src');
+        if (!raw) return Promise.resolve();
+        if (priority) im._force = true;
+        var p = enqueue(function () {
+            if (!im._want && !im._force) { im._skipped = true; return; }    // no longer on screen
+            return frameEx(raw).then(function (r) {
+                if (!im.isConnected) return;
+                im._ok = r.ok;
+                return new Promise(function (res) {
+                    var t = setTimeout(res, 8000);
+                    im.onload = function () { clearTimeout(t); res(); };
+                    im.onerror = function () { clearTimeout(t); if (r.url !== raw) im.src = raw; res(); };
+                    if (r.ok) im.dataset.aligned = '1';
+                    // Failed processing: don't flash the raw photo yet — only show it on the final attempt.
+                    if (r.ok || (im._tries || 0) >= 2) im.src = r.url || raw;
+                    else res();
+                });
+            });
+        }, true).then(function () {
+            if (im._skipped) { im._skipped = false; im._idPhotoPromise = null; return; }
+            if (im._ok === false && (im._tries || 0) < 2 && im.isConnected) {   // self-heal: try again shortly
+                im._tries = (im._tries || 0) + 1;
+                im._idPhotoPromise = null;
+                return sleep(1200 * im._tries).then(function () { return loadPhoto(im, true); });
+            }
+            showFallback(im);
+        });
+        im._idPhotoPromise = p;
         return p;
     }
 
-    /* ---------- apply to rendered ID cards ---------- */
+    // Prepare the photos inside a card / pair element. `wait` = resolve only when done (with a time cap).
+    function ensure(el, timeoutMs) {
+        if (!el) return Promise.resolve();
+        var imgs = el.querySelectorAll('.idc-card-photo img, .sidc-card-photo img');
+        var all = Promise.all(Array.prototype.map.call(imgs, function (im) { return loadPhoto(im, true); }));
+        var cap = new Promise(function (r) { setTimeout(r, timeoutMs || 40000); });
+        return Promise.race([all, cap]);
+    }
+
+    function scrollParent(el) {
+        for (var n = el && el.parentElement; n && n !== document.body; n = n.parentElement) {
+            var oy = getComputedStyle(n).overflowY;
+            if ((oy === 'auto' || oy === 'scroll') && n.scrollHeight > n.clientHeight + 1) return n;
+        }
+        return null; // page itself scrolls
+    }
+
+    // Lazy: photos start loading only when their card is near the viewport.
     function applyToCards(root) {
         root = root || document;
         var imgs = root.querySelectorAll('.idc-card-photo img, .sidc-card-photo img');
-        var jobs = Array.prototype.map.call(imgs, function (im) {
-            if (im.dataset.aligned === '1') return Promise.resolve();
-            var src = im.getAttribute('src');
-            if (!src) return Promise.resolve();
-            return frame(src).then(function (out) {
-                if (!im.isConnected) return;
-                im.dataset.aligned = '1';
-                if (out && out !== src) {
-                    return new Promise(function (res) {
-                        im.onload = im.onerror = function () { res(); };
-                        im.src = out;
-                    });
-                }
+        if (!('IntersectionObserver' in global)) {                 // very old browsers: just go through the queue
+            Array.prototype.forEach.call(imgs, function (im) { loadPhoto(im, true); });
+            return Promise.resolve();
+        }
+        var io = new IntersectionObserver(function (entries) {
+            entries.forEach(function (e) {
+                var im = e.target;
+                if (im.dataset.aligned === '1' && im.getAttribute('src')) { io.unobserve(im); return; }
+                im._want = e.isIntersecting;
+                if (e.isIntersecting) loadPhoto(im);
             });
-        });
-        var all = Promise.all(jobs);
-        pending.add(all);
-        all.then(function () { pending.delete(all); }, function () { pending.delete(all); });
-        return all;
+        }, { root: scrollParent(imgs[0]), rootMargin: '300px 0px' });
+        Array.prototype.forEach.call(imgs, function (im) { if (!im._idPhotoPromise) io.observe(im); else if (im.dataset.aligned !== '1') io.observe(im); });
+        return Promise.resolve();
     }
 
-    function ready() {
-        return Promise.all(Array.from(pending)).then(function () {});
-    }
+    function ready() { return Promise.resolve(); } // kept for compatibility; capture uses ensure(card)
 
-    global.IdPhotoAlign = { options: options, frame: frame, applyToCards: applyToCards, ready: ready, _detectSkin: detectSkin, _flood: alphaFromFloodFill, _computeCrop: computeCrop };
+    global.IdPhotoAlign = { scrollParent: scrollParent, options: options, frame: frame, applyToCards: applyToCards, ensure: ensure, loadPhoto: loadPhoto, ready: ready, _detectSkin: detectSkin, _flood: alphaFromFloodFill, _computeCrop: computeCrop };
 })(window);

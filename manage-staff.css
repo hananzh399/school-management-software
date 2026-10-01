@@ -3859,3 +3859,14 @@ body {
     .sidc-pair-row { flex-direction: column; align-items: center; }
     .sidc-pair-name { max-width: 202px; }
 }
+
+
+/* ---- Performance: smooth scrolling with many cards (mobile especially) ---- */
+.sidc-overlay { backdrop-filter: none; -webkit-backdrop-filter: none; }   /* full-screen blur is very costly on phones */
+.sidc-cards-grid { -webkit-overflow-scrolling: touch; }
+.sidc-card-thumb { contain: layout paint; }
+.sidc-card-photo img { background: transparent; }
+.sidc-card-photo img:not([src]) { visibility: hidden; }      /* box shows its placeholder until the photo arrives */
+
+/* Photo box shows the studio-blue background while the photo is being prepared. */
+.sidc-card-photo:has(img) { background: linear-gradient(160deg, #2f80d9 0%, #1650a8 100%); }

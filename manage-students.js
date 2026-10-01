@@ -481,9 +481,11 @@ function getSchoolInfo() {
  */
 function getSchoolContactPhone() {
     const info    = getSchoolInfo();
-    const primary = (info.phone    || '').trim();
-    const alt     = (info.phoneAlt || '').trim();
-    if (primary && alt) return `${primary} / ${alt}`;
+    // The server row (and the Settings page) names these schoolPhone / schoolPhoneAlt;
+    // older code paths used phone / phoneAlt — accept either so nothing shows "Not set".
+    const primary = String(info.schoolPhone    || info.phone    || '').trim();
+    const alt     = String(info.schoolPhoneAlt || info.phoneAlt || '').trim();
+    if (primary && alt && primary !== alt) return `${primary} / ${alt}`;
     return primary || alt;
 }
 
@@ -494,7 +496,23 @@ function getSchoolContactPhone() {
  * address always appears, without this page ever letting anyone change it.
  */
 function getSchoolContactAddress() {
-    return (getSchoolInfo().address || '').trim();
+    const info = getSchoolInfo();
+    return String(info.schoolAddress || info.address || '').trim();
+}
+
+/**
+ * Make sure the school's contact details are loaded BEFORE an ID card / certificate
+ * is drawn. If the cache is empty (page just opened, or the first fetch was slow /
+ * failed), fetch the Settings row now. Safe to call repeatedly; waits at most ~6s.
+ */
+async function ensureSchoolInfoLoaded() {
+    if (getSchoolContactPhone() && getSchoolContactAddress()) return;
+    try {
+        await Promise.race([
+            fetchClassConfigsFromServer(),
+            new Promise(r => setTimeout(r, 6000))
+        ]);
+    } catch (e) { /* keep whatever we have */ }
 }
 
 /** Escape a string for safe use inside a RegExp (prefix may contain odd chars). */
@@ -871,8 +889,15 @@ document.addEventListener('DOMContentLoaded', () => {
             const address = getSchoolContactAddress();
             const telEl   = document.getElementById(`${prefix}-school-tel`);
             const addrEl  = document.getElementById(`${prefix}-school-address`);
-            if (telEl)  telEl.textContent  = phone   || 'Not set in Settings';
-            if (addrEl) addrEl.textContent = address || 'Not set in Settings';
+            if (telEl)  telEl.textContent  = phone   || 'Loading…';
+            if (addrEl) addrEl.textContent = address || 'Loading…';
+            // Not in the cache yet? Fetch it now and fill it in (only then say "Not set").
+            if (!phone || !address) {
+                ensureSchoolInfoLoaded().then(() => {
+                    if (telEl)  telEl.textContent  = getSchoolContactPhone()   || 'Not set in Settings';
+                    if (addrEl) addrEl.textContent = getSchoolContactAddress() || 'Not set in Settings';
+                });
+            }
         }
 
         modal.style.display = 'block';
@@ -4457,7 +4482,7 @@ if (certUploadInput) {
             ? `<img src="${esc(logoUrl)}" alt="Logo">`
             : `<i class="fas fa-graduation-cap"></i>`;
         const photoInner = photoSrc
-            ? `<img src="${esc(photoSrc)}" alt="${esc(s.fullName)}" crossorigin="anonymous">`
+            ? `<img data-photo-src="${esc(photoSrc)}" alt="${esc(s.fullName)}" crossorigin="anonymous" decoding="async">`
             : `<i class="fas fa-user"></i>`;
 
         return `
@@ -4590,9 +4615,54 @@ if (certUploadInput) {
                 </div>`;
         }).join('');
 
-        idcInitQrCodes(students);
-        // Auto-align every student photo so the face is centred & fully visible.
-        if (window.IdPhotoAlign) IdPhotoAlign.applyToCards(grid);
+        // Everything heavy is now LAZY (only cards near the screen get their QR + photo),
+        // so opening the grid is instant and scrolling never freezes, even with hundreds of students.
+        idcSetupLazyPrepare(grid, students);
+    }
+
+    let idcPairObserver = null;
+
+    /** Draw the QR + load the photo only for cards near the viewport. */
+    function idcSetupLazyPrepare(grid, students) {
+        if (idcPairObserver) { idcPairObserver.disconnect(); idcPairObserver = null; }
+
+        if (window.IdPhotoAlign) IdPhotoAlign.applyToCards(grid); // photos: lazy + queued inside the module
+        else grid.querySelectorAll('img[data-photo-src]').forEach(im => { im.src = im.getAttribute('data-photo-src'); });
+
+        const pairs = grid.querySelectorAll('.idc-pair');
+        if (!('IntersectionObserver' in window)) {
+            // Old browser: fill QR codes a few at a time so the page stays responsive.
+            let i = 0;
+            (function step() {
+                const end = Math.min(pairs.length, i + 4);
+                for (; i < end; i++) idcPrepareQrForPair(pairs[i]);
+                if (i < pairs.length) setTimeout(step, 30);
+            })();
+            return;
+        }
+        idcPairObserver = new IntersectionObserver(entries => {
+            entries.forEach(e => {
+                if (!e.isIntersecting) return;
+                idcPairObserver.unobserve(e.target);
+                idcPrepareQrForPair(e.target);
+            });
+        }, { root: (window.IdPhotoAlign ? IdPhotoAlign.scrollParent(pairs[0]) : null), rootMargin: '600px 0px' });
+        pairs.forEach(p => idcPairObserver.observe(p));
+    }
+
+    function idcPrepareQrForPair(pairEl) {
+        if (!pairEl || pairEl.dataset.qr === '1') return;
+        pairEl.dataset.qr = '1';
+        const st = idcFindStudent(pairEl.dataset.reg);
+        if (st) idcInitQrCodes([st]);
+    }
+
+    /** Make sure ONE card is fully ready (QR drawn + photo aligned) before it is captured. */
+    async function idcPrepareCard(cardEl) {
+        const pair = cardEl && cardEl.closest ? cardEl.closest('.idc-pair') : null;
+        if (!pair) return;
+        idcPrepareQrForPair(pair);
+        if (window.IdPhotoAlign) await IdPhotoAlign.ensure(pair, 40000);
     }
 
     /**
@@ -4628,7 +4698,8 @@ if (certUploadInput) {
     }
 
     /** "Generate ID Cards" button on the View Database table stage. */
-    window.voOpenIdCardGenerator = function() {
+    window.voOpenIdCardGenerator = async function() {
+        await ensureSchoolInfoLoaded(); // school phone/address must be loaded before the back of the card is drawn
         idcCurrentStudents = idcGetStudentsForCurrentVoScope();
 
         const label = document.getElementById('idc-toolbar-label');
@@ -4675,7 +4746,7 @@ if (certUploadInput) {
      */
     async function idcCaptureCardCanvas(cardEl) {
         if (!cardEl || typeof html2canvas === 'undefined') return null;
-        if (window.IdPhotoAlign) await IdPhotoAlign.ready(); // make sure photos are face-aligned before capture
+        await idcPrepareCard(cardEl); // QR + aligned photo ready (cards off-screen are prepared on demand)
         const rawCanvas = await html2canvas(cardEl, {
             scale: IDC_CAPTURE_SCALE,
             backgroundColor: '#ffffff',
