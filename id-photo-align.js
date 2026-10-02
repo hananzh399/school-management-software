@@ -46,7 +46,7 @@
 
     // Feature switches / look. Change at runtime, e.g. IdPhotoAlign.options.blueBackground = false;
     var options = {
-        blueBackground: true,            // replace the photo background with blue
+        blueBackground: false,           // OFF: photos keep their own background (set true to swap to blue again)
         enhance: true,                   // auto-enhance the photo
         backgroundTop: '#2f80d9',        // studio-blue gradient (lighter centre-top …)
         backgroundBottom: '#1650a8',     // … to deeper blue at the edges

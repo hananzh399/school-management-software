@@ -5333,5 +5333,5 @@ select option {
 .idc-card-photo img { background: transparent; }
 .idc-card-photo img:not([src]) { visibility: hidden; }      /* box shows its placeholder until the photo arrives */
 
-/* Photo box shows the studio-blue background while the photo is being prepared. */
-.idc-card-photo:has(img) { background: linear-gradient(160deg, #2f80d9 0%, #1650a8 100%); }
+/* Neutral placeholder while the photo is being prepared. */
+.idc-card-photo:has(img) { background: #eef2f7; }
