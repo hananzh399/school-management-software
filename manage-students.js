@@ -4627,7 +4627,7 @@ if (certUploadInput) {
         if (idcPairObserver) { idcPairObserver.disconnect(); idcPairObserver = null; }
 
         if (window.IdPhotoAlign) IdPhotoAlign.applyToCards(grid); // photos: lazy + queued inside the module
-        else grid.querySelectorAll('img[data-photo-src]').forEach(im => { im.src = im.getAttribute('data-photo-src'); });
+        else grid.querySelectorAll('img[data-photo-src]').forEach(im => { im.onerror = () => { const i = document.createElement('i'); i.className = 'fas fa-user'; im.replaceWith(i); }; im.src = im.getAttribute('data-photo-src'); });
 
         const pairs = grid.querySelectorAll('.idc-pair');
         if (!('IntersectionObserver' in window)) {
@@ -4662,7 +4662,7 @@ if (certUploadInput) {
         const pair = cardEl && cardEl.closest ? cardEl.closest('.idc-pair') : null;
         if (!pair) return;
         idcPrepareQrForPair(pair);
-        if (window.IdPhotoAlign) await IdPhotoAlign.ensure(pair, 40000);
+        if (window.IdPhotoAlign) await IdPhotoAlign.ensure(pair, 10000);
     }
 
     /**
@@ -4744,13 +4744,19 @@ if (certUploadInput) {
      * resize step stretches that render to the exact final pixel dimensions
      * so every downloaded/printed card is pixel-identical in size.
      */
+    
     async function idcCaptureCardCanvas(cardEl) {
         if (!cardEl || typeof html2canvas === 'undefined') return null;
         await idcPrepareCard(cardEl); // QR + aligned photo ready (cards off-screen are prepared on demand)
         const rawCanvas = await html2canvas(cardEl, {
             scale: IDC_CAPTURE_SCALE,
             backgroundColor: '#ffffff',
-            useCORS: true
+            useCORS: true,
+            logging: false,
+            imageTimeout: 8000,
+            // html2canvas copies the whole page before drawing; with hundreds of cards that copy took seconds per
+            // download. Skip every element that is not this card (or its parent/child) — identical image, ~50x faster.
+            ignoreElements: (n) => { if (!document.body.contains(n)) return false; return !(n === cardEl || cardEl.contains(n) || n.contains(cardEl)); }
         });
         const finalCanvas = document.createElement('canvas');
         finalCanvas.width  = IDC_CARD_PIXEL_WIDTH;

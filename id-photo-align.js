@@ -637,7 +637,10 @@
 
     /* ---------- main: align one image ---------- */
     async function doFrame(src) {
-        var loaded = await loadImage(src), img = loaded.img;
+        var loaded;
+        try { loaded = await loadImage(src); }
+        catch (e) { return { url: src, ok: false, loadFailed: true }; }     // file missing / unreachable after all retries
+        var img = loaded.img;
         var iw = img.naturalWidth, ih = img.naturalHeight;
         if (!iw || !ih) return { url: src, ok: false };
         if (loaded.tainted) return { url: src, ok: false };   // cross-origin without CORS: can't read pixels → show as-is, retry later
@@ -735,6 +738,17 @@
     // If the card is scrolled out of view before its turn comes, the job is dropped (and
     // re-requested when it scrolls back). If processing fails, it is retried automatically
     // a few times (the original photo is only shown as a last resort).
+    // A photo that cannot be loaded at all (deleted file, 404…) must look like "no photo uploaded":
+    // swap the broken <img> for the same profile icon the cards use when there is no photo.
+    function replaceWithIcon(im) {
+        try {
+            if (!im.parentNode) return;
+            var icon = document.createElement('i');
+            icon.className = 'fas fa-user';
+            im.parentNode.replaceChild(icon, im);
+        } catch (e) {}
+    }
+
     function loadPhoto(im, priority) {
         if (im._idPhotoPromise) return im._idPhotoPromise;
         var raw = im.getAttribute('data-photo-src') || im.getAttribute('src');
@@ -744,11 +758,17 @@
             if (!im._want && !im._force) { im._skipped = true; return; }    // no longer on screen
             return frameEx(raw).then(function (r) {
                 if (!im.isConnected) return;
+                if (r.loadFailed) { im._broken = true; replaceWithIcon(im); return; }
                 im._ok = r.ok;
                 return new Promise(function (res) {
                     var t = setTimeout(res, 8000);
                     im.onload = function () { clearTimeout(t); res(); };
-                    im.onerror = function () { clearTimeout(t); if (r.url !== raw) im.src = raw; res(); };
+                    im.onerror = function () {
+                        clearTimeout(t);
+                        if (r.url !== raw && im.getAttribute('src') !== raw) im.src = raw;   // processed copy failed → try the original
+                        else { im._broken = true; replaceWithIcon(im); }                     // original is broken too → profile icon
+                        res();
+                    };
                     if (r.ok) im.dataset.aligned = '1';
                     // Failed processing: don't flash the raw photo yet — only show it on the final attempt.
                     if (r.ok || (im._tries || 0) >= 2) im.src = r.url || raw;
@@ -756,6 +776,7 @@
                 });
             });
         }, true).then(function () {
+            if (im._broken) return;
             if (im._skipped) { im._skipped = false; im._idPhotoPromise = null; return; }
             if (im._ok === false && (im._tries || 0) < 2 && im.isConnected) {   // self-heal: try again shortly
                 im._tries = (im._tries || 0) + 1;
@@ -769,12 +790,19 @@
     }
 
     // Prepare the photos inside a card / pair element. `wait` = resolve only when done (with a time cap).
+    // Used right before a card is captured for download/print. Photos that are already on the card
+    // are used immediately (no waiting); only photos still being prepared are waited for — and only
+    // for a short time, so a slow network can never make the download look frozen.
     function ensure(el, timeoutMs) {
         if (!el) return Promise.resolve();
-        var imgs = el.querySelectorAll('.idc-card-photo img, .sidc-card-photo img');
-        var all = Promise.all(Array.prototype.map.call(imgs, function (im) { return loadPhoto(im, true); }));
-        var cap = new Promise(function (r) { setTimeout(r, timeoutMs || 40000); });
-        return Promise.race([all, cap]);
+        var imgs = Array.prototype.slice.call(el.querySelectorAll('.idc-card-photo img, .sidc-card-photo img'));
+        var need = imgs.filter(function (im) { return !(im.getAttribute('src') && im.complete && im.naturalWidth > 0); });
+        if (!need.length) return Promise.resolve();
+        var all = Promise.all(need.map(function (im) { return loadPhoto(im, true); }));
+        var cap = new Promise(function (r) { setTimeout(r, timeoutMs || 10000); });
+        return Promise.race([all, cap]).then(function () {
+            need.forEach(function (im) { if (im.isConnected && !im.getAttribute('src')) showFallback(im); });   // never capture an empty box
+        });
     }
 
     function scrollParent(el) {
