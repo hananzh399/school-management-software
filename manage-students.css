@@ -5335,3 +5335,419 @@ select option {
 
 /* Neutral placeholder while the photo is being prepared. */
 .idc-card-photo:has(img) { background: #eef2f7; }
+
+
+/* ============================================================================
+   ██████  MOBILE / RESPONSIVE OVERHAUL  (appended — keep this block LAST)  ██████
+   ----------------------------------------------------------------------------
+   What this fixes on phones / small tablets:
+   • Header: long school name pushed the theme toggle off-screen.
+   • Stats row: forced 85–90vw width + single tall column.
+   • Modals (admission, directory, update, profile, SLC, character, ID cards)
+     used 32px paddings, 3vh margins and 70vh caps — wasted space and cramped
+     content. They now behave like full-screen sheets, with the form's
+     Cancel / Submit bar pinned to the bottom.
+   • Toolbars: search bars had min-width 240px, nowrap badges and buttons
+     overflowed or overlapped each other.
+   • Profile modal footer had 4 big buttons eating the screen.
+   • Certificate previews are fixed-size "paper" designs — they now scroll
+     sideways at their real size instead of squashing and overlapping.
+   • Toast overlapped the blinking subscription badge at bottom-right.
+   Everything is inside `@media screen` so printing is untouched.
+   ============================================================================ */
+
+/* ---------------------------------------------------------------------------
+   TABLET & BELOW (≤ 768px)
+   --------------------------------------------------------------------------- */
+@media screen and (max-width: 768px) {
+
+    html { -webkit-text-size-adjust: 100%; }
+
+    /* iOS zooms the whole page when a field under 16px is focused */
+    .main-content input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+    .main-content select,
+    .main-content textarea,
+    .modal-overlay input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+    .modal-overlay select,
+    .modal-overlay textarea,
+    .slc-search-input,
+    .slc-mini-input,
+    .archive-filter-group select,
+    .idc-per-page-select,
+    .sidebar-search input {
+        font-size: 16px !important;
+    }
+
+    /* ---------- Sidebar: never wider than the screen ---------- */
+    .sidebar { width: min(var(--sidebar-width), 86vw); }
+
+    /* ---------- Decorative glow: heavy blur = janky scrolling on phones ---------- */
+    .glow-spot { width: 240px; height: 240px; filter: blur(80px); animation: none; }
+
+    /* ---------- Header ---------- */
+    .main-header { gap: 10px; padding: 14px 0; margin-bottom: 18px; }
+    .header-left { gap: 10px; min-width: 0; flex: 1 1 auto; }
+    .school-branding { min-width: 0; }
+    .school-name {
+        font-size: 13px;
+        letter-spacing: 0.3px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .header-right { flex-shrink: 0; }
+    .theme-toggle { margin-left: 0; }
+    .menu-toggle { padding: 9px 11px; flex-shrink: 0; }
+
+    /* ---------- Page titles ---------- */
+    .page-title { font-size: 20px; }
+    .page-description { font-size: 13px; }
+    .page-title-section { margin-bottom: 20px; }
+    .page-title-section.align-left { margin-bottom: 20px !important; }
+
+    /* ---------- Stats overview ---------- */
+    .stats-overview-section { margin-bottom: 20px; }
+    .stats-overview-grid {
+        width: 100%;
+        max-width: none;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 10px;
+    }
+    .stat-card {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 8px;
+        padding: 12px;
+    }
+    .stat-card:hover { transform: none; }
+    .stat-title { font-size: 0.6rem; line-height: 1.25; }
+    .stat-details h2 { font-size: 1.15rem; }
+
+    .plan-limit-banner { font-size: 0.8rem; padding: 11px 13px; gap: 10px; align-items: flex-start; }
+
+    /* ---------- Management cards ---------- */
+    .management-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        max-width: none;
+        width: 100%;
+        gap: 14px;
+        margin-top: 16px;
+    }
+    .manage-card { padding: 22px 18px 20px; }
+    .manage-card:hover { transform: none; }
+    .m-icon-wrapper { margin-bottom: 14px; width: 44px; height: 44px; }
+    /* hover-only arrow never shows on touch — keep it visible so cards read as tappable */
+    .manage-card::after { opacity: 0.55; transform: none; bottom: 16px; right: 16px; }
+    /* plan-lock tooltip: keep inside the screen */
+    [data-feature].feature-locked::after,
+    [data-feature].feature-locked-limit::after {
+        white-space: normal;
+        width: max-content;
+        max-width: 200px;
+        text-align: center;
+    }
+
+    /* ---------- Inline "page" views (Certificates / Data IO / Archive) ---------- */
+    .cert-page-view { padding-bottom: 32px; }
+    .cert-page-header { padding-bottom: 12px; margin-bottom: 14px; }
+    .cert-page-title { font-size: 19px; }
+    .cert-page-title-wrap i { font-size: 19px; }
+    .cert-page-grid { max-width: none; gap: 14px; }
+    .data-io-status { margin-top: 18px; padding: 14px 16px; font-size: 13px; }
+
+    /* ---------- Section-card grids inside modals / archive ---------- */
+    .msc-classes-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+        padding: 2px 0 6px;
+    }
+    .msc-class-card { padding: 16px 14px; }
+    .msc-class-card:hover { transform: none; }
+    .msc-class-card .class-name { font-size: 14.5px; }
+    .msc-print-btn { top: 10px; right: 10px; width: 32px; height: 32px; }
+    .msc-incharge-header { flex-wrap: wrap; padding: 9px 12px; font-size: 12.5px; }
+
+    /* Stage header: Back / title / action */
+    .msc-stage-header { gap: 10px; }
+    .msc-stage-title { font-size: 14.5px; flex: 1 1 auto; min-width: 0; }
+    .idc-generate-btn { margin-left: 0; flex: 1 1 100%; justify-content: center; }
+
+    /* ---------- Toolbar rows above tables ---------- */
+    .upd-section-teacher-row { gap: 10px; padding: 6px 0 10px; }
+    .upd-class-incharge-top {
+        white-space: normal;
+        flex: 1 1 100%;
+        flex-wrap: wrap;
+        padding: 8px 12px;
+        font-size: 0.8rem;
+    }
+    .upd-teacher-badge { white-space: normal; margin-left: 0; flex: 1 1 100%; }
+    .upd-action-btns { flex: 1 1 100%; }
+    .upd-action-btns .btn-secondary { flex: 1; justify-content: center; }
+    .btn-sm-upd { padding: 9px 12px !important; font-size: 0.8rem !important; }
+
+    .upd-search-row { gap: 10px; padding: 10px 0; }
+    .upd-search-bar,
+    .search-box-wrapper.upd-search-bar {
+        flex: 1 1 100%;
+        min-width: 0;
+        max-width: none;
+    }
+    .upd-search-row > .btn-secondary { flex: 1 1 100%; justify-content: center; }
+    .upd-search-hint { white-space: normal; font-size: 0.72rem; flex: 1 1 100%; }
+    #promote-actions-bar { flex: 1 1 100%; }
+    #promote-actions-bar > * { flex: 1; justify-content: center; }
+
+    /* ---------- Tables: scroll sideways inside their own card ---------- */
+    .data-table-wrapper {
+        -webkit-overflow-scrolling: touch;
+        max-width: 100%;
+        border-radius: 12px;
+    }
+    .student-table { min-width: 680px; }
+    .student-table th { padding: 11px 12px; font-size: 0.68rem; white-space: nowrap; }
+    .student-table td { padding: 11px 12px; font-size: 0.84rem; }
+    .btn-icon { width: 38px; height: 38px; }
+    .action-btn-group { gap: 8px; }
+
+    /* ---------- Archive center ---------- */
+    .archive-subsection { padding: 14px; margin-bottom: 16px; border-radius: 12px; }
+    .archive-subsection-header { gap: 12px; margin-bottom: 12px; }
+    .archive-filter-bar { gap: 10px; }
+    .archive-filter-group { flex: 1 1 calc(50% - 10px); min-width: 0; }
+    .archive-seg-group { flex: 1 1 100%; height: 40px; }
+    .archive-seg-btn { flex: 1; }
+
+    /* ======================= MODALS → full-screen sheets ======================= */
+    .modal-container,
+    .modal-container.wider,
+    .modal-container.narrow,
+    .modal-container.profile-modal-wide,
+    .slc-modal-container,
+    .cert-modal-container {
+        width: 100%;
+        max-width: none;
+        margin: 0;
+        border-radius: 0;
+        border-left: none;
+        border-right: none;
+        height: 100vh;
+        height: 100dvh;
+        max-height: 100vh;
+        max-height: 100dvh;
+        animation: none;
+    }
+    .modal-header { padding: 14px 16px; gap: 10px; }
+    .modal-header h3 { font-size: 15px; min-width: 0; gap: 8px; }
+    .close-modal-btn { width: 38px; height: 38px; flex-shrink: 0; }
+    .close-modal-btn:hover { transform: none; }
+    .modal-body-scroll { padding: 16px; }
+    #view-modal .modal-body-scroll { max-height: none; }
+    .modal-sticky-footer {
+        padding: 12px 16px;
+        padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+        gap: 10px;
+        flex-wrap: wrap;
+    }
+    .modal-sticky-footer > .btn-ghost,
+    .modal-sticky-footer > .btn-primary-submit { flex: 1 1 auto; justify-content: center; }
+
+    /* ---------- Admission / edit form ---------- */
+    .form-input-grid { grid-template-columns: minmax(0, 1fr); gap: 16px; }
+    .form-input-group { min-width: 0; }
+    .form-input-group input,
+    .form-input-group select { width: 100%; min-width: 0; max-width: 100%; }
+    .form-section-label { margin: 20px 0 14px; padding: 10px 14px; font-size: 0.74rem; letter-spacing: 0.6px; }
+    .form-divider { margin: 18px 0; }
+    .image-upload-wrapper { margin-bottom: 22px; }
+    .image-preview-circle { width: 112px; height: 112px; }
+    .form-radio-option { min-width: 0; flex: 1 1 100%; }
+    .certificate-upload-zone { padding: 20px 14px; }
+    #annual-fund-panel { padding: 14px !important; }
+
+    /* Pin Cancel / Finalize Admission to the bottom of the form.
+       (Form padding is moved onto its children so `bottom:0` is unambiguous.) */
+    #student-admission-form { padding: 16px 0 0; position: relative; }
+    #student-admission-form > *:not(.modal-sticky-footer) { margin-left: 16px; margin-right: 16px; }
+    #student-admission-form > .modal-sticky-footer {
+        position: sticky;
+        bottom: 0;
+        z-index: 5;
+        margin: 16px 0 0;
+        box-shadow: 0 -6px 16px rgba(0, 0, 0, 0.12);
+    }
+
+    /* ---------- Profile modal ---------- */
+    .profile-card-header { padding: 26px 16px 22px; }
+    .profile-avatar-ring { width: 92px; height: 92px; margin-bottom: 12px; }
+    .profile-name-title { font-size: 1.2rem; margin-bottom: 10px; }
+    .profile-section-title { padding: 9px 14px; font-size: 0.7rem; letter-spacing: 1px; }
+    .profile-details-grid { padding: 14px 12px; gap: 8px; grid-template-columns: 1fr; }
+    .full-width-detail { grid-column: span 1; }
+    .detail-item { padding: 11px 13px; }
+    .detail-item span { word-break: break-word; }
+    .cert-pdf-card { padding: 14px; gap: 12px; }
+    /* footer: header × already closes the modal, so drop the redundant Close
+       button and lay the 3 actions out compactly */
+    .profile-modal-footer { padding: 10px 12px !important; padding-bottom: calc(10px + env(safe-area-inset-bottom, 0px)) !important; }
+    .profile-close-action { display: none; }
+    .profile-action-btns {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 8px;
+        width: 100%;
+    }
+    .profile-action-btns > button {
+        justify-content: center;
+        padding: 10px 8px;
+        font-size: 13px;
+        white-space: normal;
+        text-align: center;
+        line-height: 1.2;
+    }
+    .profile-action-btns > .btn-print-admission { grid-column: 1 / -1; }
+
+    /* ---------- Certificate modals (SLC / Character) ---------- */
+    .slc-modal-header-inner { padding: 12px 14px; gap: 10px; }
+    .slc-modal-title-group { gap: 10px; min-width: 0; }
+    .slc-modal-icon { width: 38px; height: 38px; font-size: 16px; border-radius: 10px; }
+    .slc-modal-title { font-size: 15px; }
+    .slc-modal-subtitle { display: none; }
+    .slc-close-btn { flex-shrink: 0; }
+    .slc-modal-body { padding: 14px; }
+    .slc-controls-panel { padding: 14px; margin-bottom: 16px; border-radius: 12px; }
+    .slc-controls-row { gap: 12px; margin-bottom: 12px; }
+    .slc-search-group,
+    .slc-conduct-group { flex: 1 1 100%; min-width: 0; }
+    .slc-mini-field { flex: 1 1 calc(50% - 6px); min-width: 0; }
+    .slc-mini-wide { flex: 1 1 100%; }
+    .slc-gen-btn { width: 100%; justify-content: center; height: 44px; }
+    .slc-empty-state { padding: 36px 12px; }
+    .slc-modal-footer .btn-ghost,
+    .slc-modal-footer .btn-primary-submit { flex: 1 1 calc(50% - 10px); justify-content: center; }
+    .slc-modal-footer #slc-print-btn,
+    .slc-modal-footer #char-print-btn { flex-basis: 100%; }
+
+    /* The certificates are fixed-size "paper" designs. Keep them at their real
+       size and let the preview scroll sideways instead of crushing the layout. */
+    .slc-preview-wrap { -webkit-overflow-scrolling: touch; padding-bottom: 12px; }
+    .slc-preview-wrap::before {
+        content: "\2194  Swipe sideways to see the full certificate";
+        display: block;
+        position: sticky;
+        left: 0;
+        width: max-content;
+        max-width: calc(100vw - 56px);
+        margin: 0 0 8px;
+        font-size: 11px;
+        font-weight: 600;
+        color: var(--text-muted);
+    }
+    #slc-preview .slc-cert-outer.slc-landscape {
+        width: 860px;
+        min-width: 860px;
+        max-width: none;
+        margin: 0;
+    }
+    .char-cert-outer { flex-shrink: 0; margin: 0; }
+
+    /* ---------- Image / certificate viewers ---------- */
+    .cert-viewer-toolbar { padding: 12px 14px; }
+
+    /* ---------- ID card generator → full screen ---------- */
+    .idc-overlay { padding: 0; }
+    .idc-panel { max-width: none; max-height: none; height: 100vh; height: 100dvh; border-radius: 0; border: none; }
+    .idc-toolbar { padding: 10px 14px; gap: 10px; }
+    .idc-toolbar-title { font-size: 14px; min-width: 0; }
+    .idc-toolbar-actions { gap: 8px; margin-left: auto; }
+    .idc-body { padding: 14px; overflow-x: auto; }
+    .idc-cards-grid { justify-content: center; gap: 22px; }
+
+    /* ---------- Dialogs (sibling match / print prompt) ---------- */
+    #sibling-dialog-overlay,
+    #admission-print-dialog-overlay { padding: 12px; }
+    .sibling-dialog-box,
+    .admission-print-dialog-box {
+        width: 100%;
+        padding: 26px 18px 20px;
+        max-height: 92vh;
+        max-height: 92dvh;
+        overflow-y: auto;
+    }
+    .sibling-dialog-icon,
+    .admission-print-dialog-icon { width: 58px; height: 58px; font-size: 1.5rem; margin-bottom: 14px; }
+    .sibling-dialog-title,
+    .admission-print-dialog-title { font-size: 1.12rem; }
+    .sibling-match-card { padding: 12px 14px; font-size: 0.92rem; flex-wrap: wrap; }
+    .sibling-dialog-question { margin-bottom: 18px; padding: 0; }
+
+    /* ---------- Toasts: top of the screen so they never cover the
+       subscription badge or the sticky form footer ---------- */
+    .toast-notification {
+        top: calc(12px + env(safe-area-inset-top, 0px));
+        bottom: auto;
+        left: 12px;
+        right: 12px;
+        min-width: 0;
+        max-width: none;
+        padding: 13px 16px;
+        transform: translateY(-16px);
+    }
+
+    /* Subscription expiry badge: full-width pill at the bottom */
+    .subscription-expiry-badge {
+        left: 12px;
+        right: 12px;
+        bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+        max-width: none;
+        justify-content: center;
+        text-align: center;
+        border-radius: 14px;
+    }
+}
+
+/* ---------------------------------------------------------------------------
+   PHONES (≤ 480px)
+   --------------------------------------------------------------------------- */
+@media screen and (max-width: 480px) {
+
+    .header-date { display: none; }
+    .page-title { font-size: 18px; }
+
+    /* stats: "Total" full width, Male / Female side by side */
+    .stats-overview-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .stat-card:first-child { grid-column: 1 / -1; }
+    .stat-card { flex-direction: row; align-items: center; gap: 12px; padding: 12px 14px; }
+    .stat-title { font-size: 0.64rem; }
+
+    /* hub cards: one per row, icon beside text for a compact list */
+    .management-grid { grid-template-columns: minmax(0, 1fr); gap: 12px; }
+    .manage-card { padding: 18px 16px; }
+    .m-icon-wrapper { margin-bottom: 12px; }
+    .cert-page-grid { grid-template-columns: minmax(0, 1fr); }
+
+    .modal-body-scroll { padding: 14px; }
+    .profile-action-btns { gap: 6px; }
+
+    .archive-filter-group { flex: 1 1 100%; }
+
+    .slc-mini-field { flex: 1 1 100%; }
+    .slc-modal-footer .btn-ghost,
+    .slc-modal-footer .btn-primary-submit { flex-basis: 100%; }
+
+    .form-section-label { font-size: 0.7rem; }
+    .hrk-id-badge { font-size: 0.82rem; padding: 5px 14px; }
+
+    .idc-toolbar-title #idc-toolbar-label { max-width: 40vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+}
+
+/* ---------------------------------------------------------------------------
+   VERY SMALL PHONES (≤ 360px)
+   --------------------------------------------------------------------------- */
+@media screen and (max-width: 360px) {
+    .msc-classes-grid { grid-template-columns: minmax(0, 1fr); }
+    .profile-action-btns { grid-template-columns: minmax(0, 1fr); }
+    .school-name { font-size: 12px; }
+    .stats-overview-grid { gap: 8px; }
+}
+/* ============================ END MOBILE BLOCK ============================= */
