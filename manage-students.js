@@ -7051,8 +7051,10 @@ function charFillFromStudent(s) {
     const rawFrom = s.admissionDate || s.dateOfAdmission || '';
     const rawTo   = s.leavingDate || s.dateOfLeaving || '';
 
-    if (rawFrom && fromInput) fromInput.value = rawFrom;
-    if (rawTo && toInput)     toInput.value   = rawTo;
+    // "Studied To" = the date the student left. If no leaving date is recorded, it is the day the
+    // certificate is generated (today). Always set both fields so a previous student's dates never linger.
+    if (fromInput) fromInput.value = rawFrom ? String(rawFrom).slice(0, 10) : '';
+    if (toInput)   toInput.value   = rawTo   ? String(rawTo).slice(0, 10)   : charTodayISO();
 
     const fromDisplay = (fromInput && fromInput.value) ? new Date(fromInput.value).toLocaleDateString('en-PK', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
     const toDisplay   = (toInput && toInput.value)     ? new Date(toInput.value).toLocaleDateString('en-PK', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
@@ -7116,8 +7118,15 @@ function charUpdateDates() {
     const fromInput = document.getElementById('char-from-date-input');
     const toInput   = document.getElementById('char-to-date-input');
     window.__charFromDisplay = (fromInput && fromInput.value) ? new Date(fromInput.value).toLocaleDateString('en-PK', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
+    if (toInput && !toInput.value) toInput.value = charTodayISO();   // no leaving date → certificate date (today)
     window.__charToDisplay   = (toInput && toInput.value)     ? new Date(toInput.value).toLocaleDateString('en-PK', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
     charRenderParagraph();
+}
+
+/* Today's date as YYYY-MM-DD in the device's LOCAL time (toISOString would give the previous day after midnight in Pakistan) */
+function charTodayISO() {
+    const d = new Date();
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
 }
 
 /* Capture Character Certificate as an image blob using html2canvas */
