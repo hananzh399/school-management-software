@@ -4627,6 +4627,10 @@ if (certUploadInput) {
         if (idcPairObserver) { idcPairObserver.disconnect(); idcPairObserver = null; }
 
         if (window.IdPhotoAlign) IdPhotoAlign.applyToCards(grid); // photos: lazy + queued inside the module
+
+        // Fit long names on one line (now, and again once fonts have loaded).
+        requestAnimationFrame(() => idcFitNames(grid));
+        if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => idcFitNames(grid));
         else grid.querySelectorAll('img[data-photo-src]').forEach(im => { im.onerror = () => { const i = document.createElement('i'); i.className = 'fas fa-user'; im.replaceWith(i); }; im.src = im.getAttribute('data-photo-src'); });
 
         const pairs = grid.querySelectorAll('.idc-pair');
@@ -4653,15 +4657,41 @@ if (certUploadInput) {
     function idcPrepareQrForPair(pairEl) {
         if (!pairEl || pairEl.dataset.qr === '1') return;
         pairEl.dataset.qr = '1';
+        idcFitNames(pairEl);
         const st = idcFindStudent(pairEl.dataset.reg);
         if (st) idcInitQrCodes([st]);
     }
 
     /** Make sure ONE card is fully ready (QR drawn + photo aligned) before it is captured. */
+
+    /**
+     * Long names: shrink the font (down to a floor) until the whole name fits on ONE line,
+     * instead of being cut off with "…". Short names keep the normal size.
+     */
+    function idcFitName(el) {
+        if (!el) return;
+        el.style.fontSize = '';                                  // start from the normal size
+        const boxW = el.clientWidth;
+        if (!boxW) return;                                       // not laid out yet (hidden) — will be retried
+        if (el.scrollWidth <= boxW) return;                      // already fits
+        const MIN = 7.5;
+        const base = parseFloat(getComputedStyle(el).fontSize) || 15;
+        let size = Math.max(MIN, Math.floor(base * (boxW / el.scrollWidth) * 2) / 2);
+        el.style.fontSize = size + 'px';
+        while (el.scrollWidth > el.clientWidth && size > MIN) { // fine-tune for rounding
+            size -= 0.5;
+            el.style.fontSize = size + 'px';
+        }
+    }
+    function idcFitNames(root) {
+        (root || document).querySelectorAll('.idc-card-name').forEach(idcFitName);
+    }
+    
     async function idcPrepareCard(cardEl) {
         const pair = cardEl && cardEl.closest ? cardEl.closest('.idc-pair') : null;
         if (!pair) return;
         idcPrepareQrForPair(pair);
+        idcFitNames(pair);                      // long names → smaller font, one line
         if (window.IdPhotoAlign) await IdPhotoAlign.ensure(pair, 10000);
     }
 
