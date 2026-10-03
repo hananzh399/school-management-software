@@ -7674,3 +7674,638 @@ input[type="date"]::-webkit-calendar-picker-indicator {
     color: var(--text-secondary);
     white-space: nowrap;
 }
+
+/* ============================================================================
+   ██████  MOBILE / RESPONSIVE OVERHAUL  (appended — keep this block LAST)  ██████
+   ----------------------------------------------------------------------------
+   Why this block exists / what it fixes:
+   • Back / "View Records" buttons were absolutely positioned and sat on top of
+     page titles and stat cards on narrow screens.
+   • Flex rules like `flex: 1 1 320px` on search boxes turned into a 320px TALL
+     box once the toolbar switched to a column layout (pushing/overlapping
+     everything below it).
+   • Several desktop rules use !important (stats header, custom-fee toolbar), so
+     the old media queries could never override them.
+   • Stat cards, modals (voucher / pay-fee / salary / edit voucher), tables,
+     fines forms, expense form and the full-screen fine-record page had fixed
+     paddings & widths that don't fit a phone.
+   Everything is wrapped in `@media screen` so PRINTING of vouchers is untouched.
+   ============================================================================ */
+
+/* ---------------------------------------------------------------------------
+   TABLET & BELOW  (≤ 768px)
+   --------------------------------------------------------------------------- */
+@media screen and (max-width: 768px) {
+
+    /* ---------- Global safety ---------- */
+    .main-content { min-width: 0; }
+    img { max-width: 100%; height: auto; }
+
+    /* iOS zooms the page when focusing inputs under 16px — avoid that */
+    .main-content input:not([type="checkbox"]):not([type="radio"]),
+    .main-content select,
+    .main-content textarea,
+    .voucher-modal-overlay input:not([type="checkbox"]):not([type="radio"]),
+    .voucher-modal-overlay select,
+    .voucher-modal-overlay textarea,
+    .salary-breakdown-overlay input,
+    #fine-full-record-page input {
+        font-size: 16px !important;
+    }
+
+    /* ---------- Top header (logo/school name/date/theme) ---------- */
+    .main-header { gap: 8px; }
+    .header-left { min-width: 0; flex: 1 1 auto; }
+    .school-branding { min-width: 0; }
+    .school-branding .school-name {
+        font-size: 0.95rem;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        max-width: 100%;
+    }
+    .header-right { flex-shrink: 0; gap: 8px; }
+
+    /* ---------- Page titles ---------- */
+    .page-title { font-size: 20px; }
+    .page-description { font-size: 0.85rem; }
+
+    /* ---------- Sub-page header: Back button no longer floats over title ---------- */
+    .sub-title-section {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        margin-bottom: 16px;
+    }
+    .sub-title-section .back-btn,
+    .back-btn {
+        position: static;
+        align-self: flex-start;
+        margin: 0 0 12px;
+        padding: 8px 14px;
+        font-size: 13px;
+    }
+    .left-title-section .page-title { padding-left: 0; }
+    .left-title-section .title-divider { margin-left: 0; }
+
+    /* Back + "View Records" share the first row; title/description below */
+    .header-with-action {
+        display: flex;
+        flex-direction: row;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+    }
+    .header-with-action .back-btn,
+    .header-with-action .header-action-btn {
+        position: static;
+        margin: 0 0 12px;
+        align-self: center;
+    }
+    .header-with-action .back-btn { order: 1; }
+    .header-with-action .header-action-btn { order: 2; padding: 8px 14px; font-size: 0.8rem; }
+    .header-with-action .page-title,
+    .header-with-action .page-description {
+        order: 3;
+        flex: 1 1 100%;
+        text-align: center;
+    }
+    .header-with-action .title-divider { order: 4; margin-left: auto; margin-right: auto; }
+
+    /* ---------- Hub cards (Student Fees / Fines / Salaries / Expenses) ---------- */
+    .finance-cards-container {
+        grid-template-columns: minmax(0, 1fr);
+        gap: 14px;
+        margin-top: 16px;
+    }
+    #page-main .finance-cards-container { margin-top: 18px; }
+    .finance-card { padding: 22px 20px 20px; }
+    .finance-card:hover { transform: none; }
+    .icon-wrapper { margin-bottom: 14px; width: 44px; height: 44px; }
+    /* hover-only arrow never appears on touch; show it so cards feel tappable */
+    .finance-card::after { opacity: 0.55; transform: none; bottom: 18px; right: 18px; }
+    .finance-cards-container.sub-cards { flex-direction: column; flex-wrap: nowrap; }
+    .finance-cards-container.sub-cards .finance-card {
+        flex: 1 1 auto;
+        width: 100%;
+        min-width: 0;
+        max-width: none;
+    }
+
+    /* ---------- Class selector cards ---------- */
+    .class-card-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 12px;
+    }
+    .class-selector-card { padding: 20px 10px; border-radius: 14px; }
+    .class-selector-card:hover { transform: none; }
+    .class-selector-card .c-icon { width: 42px; height: 42px; margin-bottom: 8px; }
+    .class-selector-card h4 { font-size: 0.9rem; }
+
+    /* ---------- Student Fees global toolbar + buttons ---------- */
+    .fee-global-toolbar {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 14px;
+        margin: 4px 0 18px;
+    }
+    .fee-toolbar-heading { white-space: normal; font-size: 1rem; }
+    .fee-global-actions {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+        width: 100%;
+    }
+    .fee-global-actions .btn-global-action:first-child { grid-column: 1 / -1; }
+    .btn-global-action {
+        white-space: normal;
+        text-align: center;
+        justify-content: center;
+        padding: 11px 10px;
+        font-size: 0.8rem;
+        line-height: 1.25;
+        min-height: 44px;
+    }
+    .class-level-title-row .btn-global-action { width: 100%; }
+
+    /* ---------- STAT / PRICING CARDS ---------- */
+    /* Turn the (sticky, single-line, horizontally-scrolling) rows into a tidy
+       2-column grid that is NOT sticky — sticky bars eat too much of a phone screen */
+    .fee-stats-header,
+    #class-fee-stats-row,
+    .stats-header-section {
+        position: static !important;
+        border-bottom: none !important;
+        background: transparent !important;
+    }
+    .fee-stats-header { padding: 0; margin-bottom: 14px; }
+
+    .stats-header-section {
+        display: flex !important;
+        flex-direction: column !important;
+        align-items: stretch !important;
+        justify-content: flex-start !important;
+        padding: 0 !important;
+        margin: 0 0 14px !important;
+    }
+    .stats-header-section .back-btn,
+    .fee-stats-header .back-btn {
+        position: static !important;
+        transform: none !important;
+        align-self: flex-start;
+        margin: 0 0 12px !important;
+    }
+
+    .fee-stats-row,
+    .fee-stats-row-compact,
+    .stats-header-section .fee-stats-row-compact,
+    #class-fee-stats-row {
+        display: grid !important;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px !important;
+        overflow: visible;
+        width: 100%;
+        margin: 0 0 14px !important;
+        padding: 0 !important;
+    }
+    .fee-stats-header .fee-stats-row { padding-top: 0 !important; margin-bottom: 0 !important; }
+    #class-fee-stats-row { margin-top: 4px !important; }
+
+    /* odd last card (e.g. 3 cards, or a single card) spans the full row */
+    .fee-stats-row > .fee-stat-card:last-child:nth-child(odd),
+    .fee-stats-row-compact > .fee-stat-card:last-child:nth-child(odd) {
+        grid-column: 1 / -1;
+    }
+
+    .fee-stat-card,
+    .fee-stats-row-compact .fee-stat-card {
+        min-width: 0;
+        padding: 10px 12px;
+        gap: 10px;
+        flex: none;
+    }
+    .fee-stat-info { min-width: 0; }
+    .fee-stat-label {
+        font-size: 0.62rem;
+        line-height: 1.2;
+        white-space: normal;
+    }
+    .fee-stat-value {
+        font-size: 0.95rem;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    /* ---------- Toolbars: search boxes, filters ---------- */
+    .fee-table-toolbar,
+    .cfr-table-toolbar,
+    .fd-toolbar {
+        flex-direction: column !important;
+        flex-wrap: nowrap !important;
+        align-items: stretch !important;
+        gap: 10px !important;
+    }
+    /* IMPORTANT: neutralise `flex: 1 1 320px` — in a column it means 320px TALL */
+    .fee-table-toolbar .fee-search-wrap,
+    .cfr-table-toolbar .fee-search-wrap,
+    .fd-toolbar .fee-search-wrap,
+    .fee-search-wrap {
+        flex: 0 0 auto !important;
+        width: 100% !important;
+        max-width: none !important;
+        min-width: 0 !important;
+    }
+    .cfr-table-toolbar .cfr-filter-select,
+    .cfr-table-toolbar select,
+    .cfr-table-toolbar .cf-input {
+        width: 100% !important;
+        max-width: none !important;
+        min-width: 0 !important;
+    }
+    .fd-month-wrap { flex: 0 0 auto; width: 100%; }
+    .fd-month-wrap select { width: 100%; min-width: 0; }
+    .fd-refresh-btn { margin-left: 0; width: 100%; }
+    .fee-search-count { text-align: right; }
+    .sticky-toolbar,
+    .cfr-sticky-table { position: static !important; }
+
+    /* ---------- Tables: scroll sideways inside their own card ---------- */
+    .table-container,
+    .fee-table-wrapper,
+    .data-table-wrapper,
+    .cf-detail-table-wrap,
+    .ledger-container {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        max-width: 100%;
+    }
+    .finance-table { min-width: 560px; font-size: 13px; }
+    .finance-table th { padding: 11px 12px; font-size: 11px; white-space: nowrap; }
+    .finance-table td { padding: 11px 12px; }
+    #page-salary-records .finance-table,
+    #page-fee-defaulter .finance-table { min-width: 1000px; }
+    #page-fine-records .finance-table { min-width: 640px; }
+    .fee-students-table { min-width: 620px; }
+    .fee-students-table thead th,
+    .fee-students-table tbody td { padding: 11px 12px; }
+    .bonus-table { min-width: 560px; font-size: 13px; }
+    .bonus-table th, .bonus-table td { padding: 11px 12px; }
+    .bonus-table td:nth-child(4) { max-width: 160px; }
+    .fee-actions-cell { flex-wrap: nowrap; }
+
+    /* Salary table toolbar (search + current month) */
+    .table-toolbar { padding: 14px; gap: 12px; }
+    .table-toolbar-search { min-width: 0; flex: 0 0 auto; width: 100%; }
+    .table-toolbar-filter { min-width: 0; width: 100%; }
+
+    /* ---------- Forms (fines, bonus, custom fee) ---------- */
+    .form-page-container { padding: 18px 16px; max-width: 100%; }
+    .form-group { margin-bottom: 16px; }
+    .modal-actions { gap: 10px; }
+    .modal-actions .btn { flex: 1; padding: 11px 14px; }
+    .cascade-select-grid { grid-template-columns: 1fr; gap: 4px; }
+    .fines-top-switch { margin-bottom: 14px; }
+    .fines-top-tab { flex: 1; justify-content: center; padding: 10px 12px; font-size: 0.88rem; }
+    .staff-category-toggle { flex-wrap: wrap; }
+    .category-btn { min-width: 0; }
+    .records-filter-bar { gap: 10px; max-width: none; }
+    .records-search { flex: 1 1 100%; min-width: 0; max-width: none; }
+    .records-filter-bar select { flex: 1 1 100%; min-width: 0; }
+    .records-category-toggle { max-width: none; width: 100%; }
+    .staff-members-list,
+    .fine-results-list { max-height: 220px; }
+    .staff-member-item { padding: 10px 12px; gap: 8px; }
+    .staff-member-name { font-size: 14px; }
+
+    /* ---------- Expense hub ---------- */
+    .expense-hub-layout,
+    .expense-hub-layout-full { padding: 0 0 24px; }
+    /* beats `.expense-hub-layout-full .expense-hub-form-card { padding: 40px 48px }` */
+    .expense-hub-layout-full .expense-hub-form-card,
+    .expense-hub-form-card { padding: 20px 16px; }
+    .expense-hub-layout-full .expense-hub-fields {
+        grid-template-columns: 1fr;
+        gap: 18px;
+    }
+    .expense-hub-form-header { gap: 12px; margin-bottom: 20px; }
+    .expense-hub-actions { flex-direction: column-reverse; }
+    .expense-hub-actions .btn { width: 100%; justify-content: center; }
+    .expense-chip-clear { margin-left: 0; }
+    .expense-records-toolbar { flex-direction: column; align-items: stretch; }
+    .expense-view-switcher { width: 100%; }
+    .expense-view-switcher .seg-btn { flex: 1; text-align: center; }
+    .expense-daily-filter-row { flex-wrap: wrap; }
+    .expense-daily-filter-row input[type="date"] { flex: 1; min-width: 0; }
+
+    /* ---------- Salary pages ---------- */
+    .salary-update-notice { align-items: flex-start; font-size: 0.78rem; }
+    .salary-table-actions { justify-content: stretch; }
+    .salary-table-actions .btn-salary-view-records,
+    .salary-table-actions .btn-salary-bonus { flex: 1; justify-content: center; }
+
+    .salary-records-controls,
+    .sr-controls-row {
+        flex-direction: column;
+        align-items: stretch !important;
+        gap: 10px;
+    }
+    .sr-category-badge { align-self: flex-start; }
+    .sr-search-wrap { flex: 0 0 auto; min-width: 0; width: 100%; }
+    .salary-records-month-filter { flex-direction: column; align-items: stretch; gap: 6px; }
+    #sr-month-select { min-width: 0; width: 100%; }
+    .sr-status-filter-wrap { min-width: 0; width: 100%; }
+    .sr-status-filter-wrap select { width: 100%; }
+
+    .bonus-records-toolbar { flex-direction: column; align-items: stretch; gap: 10px; }
+    .bonus-records-category-chip { align-self: flex-start; }
+    .bonus-search-wrap { flex: 0 0 auto; width: 100%; max-width: none !important; }
+
+    /* ---------- Salary breakdown overlay ---------- */
+    .salary-breakdown-panel.salary-breakdown-overlay {
+        width: calc(100vw - 20px);
+        max-height: 92vh;
+        max-height: 92dvh;
+        padding: 18px 14px 16px;
+        border-radius: 16px;
+    }
+    .sbp-teacher-name { font-size: 1.05rem; }
+    .sbp-formula-box { padding: 14px 12px; margin-bottom: 16px; }
+    .sbp-formula-text { font-size: 0.85rem; line-height: 1.6; }
+    .sbp-cards-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+    .sbp-c-grand {
+        grid-column: 1 / -1;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 4px;
+        padding: 14px 16px;
+    }
+    .sbp-c-grand input { text-align: left; font-size: 1.3rem; }
+    .sbp-card { padding: 10px 12px; }
+    .sbp-card label { font-size: 0.62rem; flex-wrap: wrap; }
+    .sbp-card input { font-size: 0.92rem; }
+    .sbp-advance-input-row { flex-wrap: wrap; }
+    .sbp-advance-input-row input { flex: 1 1 100%; }
+    .sbp-advance-input-row .sbp-btn { flex: 1 1 100%; justify-content: center; }
+    .sbp-actions { flex-direction: column-reverse; }
+    .sbp-actions .sbp-btn { width: 100%; justify-content: center; padding: 12px 16px; }
+
+    /* ---------- Custom fee ---------- */
+    .cf-right-panel { padding: 16px; min-height: 0; }
+    .cf-form-grid { gap: 14px; }
+    .cf-detail-header { flex-direction: column; align-items: stretch; }
+    .cf-detail-actions .btn-tiny { flex: 1; justify-content: center; }
+    .cf-detail-toolbar { flex-direction: column; align-items: stretch; }
+    .cf-detail-toolbar .cf-panel-select { width: 100% !important; min-width: 0 !important; }
+    .cf-stats-row { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+    .cf-stat-card { padding: 8px 8px; }
+    .cf-stat-card strong { font-size: 0.8rem; }
+    .cf-stat-label { font-size: 0.6rem; flex-wrap: wrap; }
+
+    /* Custom fee RECORDS (inline styles in HTML need !important) */
+    #cfr-summary-view,
+    #cfr-detail-view { max-width: 100% !important; }
+    .cfr-header-text-group { margin-left: 0 !important; width: 100%; }
+    .cfr-detail-top-nav {
+        flex-direction: column !important;
+        align-items: stretch !important;
+        gap: 10px !important;
+    }
+    .cfr-detail-top-nav .btn-ghost { align-self: flex-start; }
+    .cfr-detail-top-nav .cfr-footer-summary-bar {
+        flex: none !important;
+        justify-content: space-between !important;
+        width: 100%;
+        gap: 8px 14px;
+        padding: 10px 12px;
+        font-size: 0.8rem;
+    }
+    .cfr-summary-card { padding: 14px 14px; }
+    .cfr-card-left { gap: 12px; }
+    .cfr-card-title { font-size: 1rem; }
+    .cfr-card-right { flex-wrap: wrap; gap: 8px; justify-content: flex-start; }
+    .cfr-stat-pill { min-width: 64px; padding: 6px 10px; }
+    .cfr-detail-banner { padding: 14px; }
+    .cfr-banner-actions { width: 100%; }
+    .cfr-banner-actions > * { flex: 1; justify-content: center; }
+    .cfr-fee-header { padding: 12px 14px; }
+
+    /* ---------- Toasts ---------- */
+    .finance-toast-container { left: 12px; right: 12px; bottom: 12px; }
+    .finance-toast { max-width: none; width: 100%; }
+    .fee-success-toast,
+    .share-toast {
+        white-space: normal;
+        text-align: center;
+        max-width: calc(100vw - 32px);
+        border-radius: 16px;
+        padding: 12px 18px;
+    }
+
+    /* ======================= MODALS ======================= */
+    .voucher-modal-overlay { padding: 8px; align-items: center; }
+    .voucher-modal-box {
+        width: 100%;
+        max-height: 94vh;
+        max-height: 94dvh;
+        border-radius: 14px;
+    }
+    .voucher-modal-header { padding: 12px 14px; gap: 10px; }
+    .voucher-modal-header h3 { font-size: 0.95rem; }
+    .voucher-modal-scroll { padding: 14px; }
+    .voucher-modal-actions { width: 100%; gap: 8px; }
+    .voucher-modal-actions > * {
+        flex: 1 1 calc(50% - 8px);
+        justify-content: center;
+        padding: 10px 12px !important;
+        font-size: 0.8rem !important;
+    }
+
+    /* Pay-fee (afm) modal */
+    .afm-box { width: 100% !important; max-width: none !important; }
+    .afm-scroll { padding: 14px 12px !important; }
+    .afm-header-left { gap: 10px; min-width: 0; }
+    .afm-header-icon { width: 38px; height: 38px; font-size: 1rem; }
+    .afm-header h3 { font-size: 0.98rem; }
+    .afm-pay-header { flex-direction: column; align-items: flex-start; padding: 12px 14px; }
+    .afm-pay-header-stats { gap: 14px 20px; width: 100%; }
+    .afm-arrears-alert { flex-wrap: wrap; padding: 12px 14px; gap: 10px; }
+    .afm-arrears-text { min-width: 0; flex: 1 1 140px; }
+    .afm-two-col { grid-template-columns: 1fr; gap: 14px; }
+    .afm-right-panel { position: static; padding: 16px; }
+    .afm-left-panel { padding: 16px; }
+    .afm-paybill-grid { grid-template-columns: 1fr; }
+    .afm-inline-field { max-width: none; }
+    /* The shrunk voucher preview used % negative margins that don't suit narrow
+       widths — show it at natural size inside its own scrollable box instead */
+    .afm-voucher-shrink {
+        transform: none;
+        width: 100%;
+        margin-bottom: 0;
+    }
+    .afm-voucher-panel { max-height: 300px; overflow: auto !important; }
+    .afm-confirm-btn { padding: 14px; font-size: 0.95rem; }
+    .afm-grand-total strong { font-size: 1rem; }
+
+    /* Edit voucher (iev) modal */
+    .iev-box { width: 100%; }
+    .iev-header { padding: 14px; }
+    .iev-header-icon { width: 38px; height: 38px; font-size: 16px; }
+    .iev-header h3 { font-size: 16px; }
+    .iev-scroll { padding: 14px; }
+    .iev-meta-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); padding: 12px; }
+    .iev-footer { padding: 12px 14px; }
+    .iev-footer > * { flex: 1; justify-content: center; }
+    .iev-table tfoot,
+    .iev-table tfoot tr { display: block; }
+    .iev-table tfoot tr {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 4px 10px;
+        padding: 6px 4px;
+    }
+    .iev-table tfoot td { display: block; padding: 4px 6px !important; border: none !important; }
+    .iev-table tfoot td:empty { display: none; }
+    .iev-add-row-btn { width: 100%; justify-content: center; }
+    .iev-note-section { padding: 12px; }
+
+    /* Print vouchers / generate-preview modals */
+    .pv-option-btn { padding: 14px 12px; gap: 12px; }
+    .pv-sibling-toggle { padding: 12px; }
+    .vp-summary-grid { grid-template-columns: 1fr; }
+    .progress-modal-inner { padding: 28px 20px; }
+
+    /* ======================= VOUCHER SHEET (on-screen only) ======================= */
+    .voucher-sheet { padding: 12px; gap: 14px; border-radius: 12px; }
+    .voucher-copy { padding: 18px 12px 14px; }
+    .voucher-copy-tag { right: 12px; font-size: 0.66rem; padding: 5px 12px; }
+    .voucher-header { gap: 10px; }
+    .voucher-school-info { gap: 10px; min-width: 0; }
+    .voucher-logo { width: 40px; height: 40px; font-size: 1.1rem; border-radius: 10px; }
+    .voucher-school-info h2 { font-size: 0.92rem; }
+    .v-photo { width: 52px; height: 52px; }
+    .voucher-meta-row { grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); padding: 10px; }
+    .voucher-student-grid { grid-template-columns: 1fr; gap: 8px; }
+    .voucher-fee-table th,
+    .voucher-fee-table td { padding: 8px 6px; font-size: 0.78rem; }
+    .voucher-footer { flex-direction: column; align-items: stretch; gap: 14px; }
+    .voucher-note,
+    .voucher-note-custom { max-width: 100%; }
+    .voucher-signature { align-items: flex-end; }
+    .sig-line { width: 120px; }
+    .voucher-child-header { flex-wrap: wrap; }
+    .paid-stamp-overlay {
+        font-size: 2.6rem;
+        border-width: 5px;
+        padding: 8px 20px;
+        letter-spacing: 4px;
+    }
+
+    /* ======================= FULL-SCREEN FINE RECORD PAGE ======================= */
+    #fine-full-record-page {
+        padding: 12px;
+        height: 100vh;
+        height: 100dvh;
+        overflow-y: auto;
+        overflow-x: hidden;
+    }
+    .portfolio-navbar {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 12px;
+        margin-bottom: 14px;
+        padding: 0;
+    }
+    .portfolio-exit-btn { align-self: flex-start; padding: 9px 16px; }
+    .portfolio-toolbar {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 10px;
+        padding: 12px;
+        border-radius: 16px;
+    }
+    .portfolio-search-box { width: 100%; }
+    .portfolio-search-box input { width: 100% !important; }
+    .segemented-control { flex-wrap: wrap; justify-content: center; }
+    .portfolio-toolbar .segemented-control .seg-btn { flex: 1 1 auto; padding: 8px 10px; }
+    .portfolio-banner {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 16px;
+        padding: 18px 16px;
+        border-radius: 18px;
+        margin-bottom: 16px;
+    }
+    .portfolio-student-info h1 { font-size: 1.5rem; letter-spacing: -0.5px; }
+    .portfolio-meta { flex-wrap: wrap; gap: 6px 14px; font-size: 0.85rem; }
+    .portfolio-stats { flex-wrap: wrap; width: 100%; gap: 10px; }
+    .stat-pill { flex: 1 1 calc(50% - 10px); padding: 10px 12px; border-radius: 14px; }
+    .stat-pill span { font-size: 1.1rem; }
+    /* page scrolls as a whole; the ledger scrolls sideways */
+    .ledger-container { flex: none; min-height: 220px; border-radius: 16px; overflow: auto; }
+    .ledger-table { min-width: 640px; }
+    .ledger-table th,
+    .ledger-table td { padding: 12px 14px; }
+}
+
+/* ---------------------------------------------------------------------------
+   PHONES  (≤ 480px)
+   --------------------------------------------------------------------------- */
+@media screen and (max-width: 480px) {
+
+    .header-date { display: none; }
+    .page-title { font-size: 18px; }
+
+    /* Stat cards: stack icon above text so long amounts have room */
+    .fee-stat-card,
+    .fee-stats-row-compact .fee-stat-card { padding: 10px; gap: 8px; }
+    .fee-stat-icon,
+    .fee-stats-row-compact .fee-stat-icon { width: 28px; height: 28px; font-size: 12px; }
+    .fee-stat-value { font-size: 0.88rem; }
+
+    .finance-card { padding: 18px 16px 18px; }
+    .card-title { font-size: 14.5px; }
+
+    .class-card-grid { gap: 10px; }
+
+    /* Full-width stacked action buttons in global toolbar */
+    .fee-global-actions { grid-template-columns: 1fr; }
+
+    /* Voucher modal buttons: one per row */
+    .voucher-modal-actions > * { flex: 1 1 100%; }
+
+    /* Salary breakdown / custom-fee stat rows stack */
+    .cf-stats-row { grid-template-columns: 1fr; }
+    .cf-stat-card { flex-direction: row; align-items: center; justify-content: space-between; }
+    .cf-stat-card strong { font-size: 0.9rem; }
+
+    .iev-meta-grid { grid-template-columns: 1fr; }
+
+    .stat-pill { flex: 1 1 100%; }
+    .portfolio-student-info h1 { font-size: 1.3rem; }
+
+    .expense-hub-form-card { padding: 18px 14px; }
+    .expense-quick-chips { gap: 6px; }
+    .expense-chip { padding: 6px 10px; font-size: 0.74rem; }
+
+    .afm-pay-header-name { font-size: 15px; }
+    .afm-pay-header-stats strong { font-size: 14px; }
+
+    .voucher-meta-row { grid-template-columns: 1fr 1fr; }
+    .voucher-header { flex-wrap: wrap; }
+}
+
+/* ---------------------------------------------------------------------------
+   VERY SMALL PHONES  (≤ 360px)
+   --------------------------------------------------------------------------- */
+@media screen and (max-width: 360px) {
+    .fee-stats-row,
+    .fee-stats-row-compact,
+    .stats-header-section .fee-stats-row-compact,
+    #class-fee-stats-row { grid-template-columns: minmax(0, 1fr); }
+    .sbp-cards-grid { grid-template-columns: minmax(0, 1fr); }
+    .class-card-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+    .class-selector-card { padding: 16px 6px; }
+}
+/* ============================ END MOBILE BLOCK ============================= */
