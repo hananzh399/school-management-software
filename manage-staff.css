@@ -4182,3 +4182,150 @@ body { min-height: 100vh; min-height: 100dvh; }
 @media print {
     .glow-spot, .sidebar, .sidebar-overlay { display: none !important; }
 }
+
+
+/* ============================================================================
+   RESPONSIVE FIXES — profile view + staff list avatars
+   (The original mobile profile rules sat ABOVE the base profile rules in this
+   file, so the base rules always won on phones. Re-declared here, last.)
+   ============================================================================ */
+
+/* --- Profile card: clip anything inside to the rounded card --- */
+.profile-card { overflow: hidden; }
+.profile-name, .profile-id { overflow-wrap: anywhere; }
+.detail-item { min-width: 0; }
+.detail-value { overflow-wrap: anywhere; }
+
+@media (max-width: 768px) {
+    .profile-banner { height: 92px; }
+
+    /* Avatar centered on the banner's bottom edge, always inside the card */
+    .profile-avatar {
+        width: 84px;
+        height: 84px;
+        top: 50px;
+        left: 50%;
+        right: auto;
+        transform: translateX(-50%);
+        border-width: 4px;
+    }
+    #profile-initials { font-size: 28px; }
+
+    .profile-header-info {
+        margin-top: 50px;
+        padding: 0 18px;
+        text-align: center;
+    }
+    .profile-name { font-size: clamp(18px, 5vw, 22px); }
+    .profile-id { font-size: 12.5px; }
+
+    .profile-details-grid {
+        grid-template-columns: 1fr 1fr;      /* two compact columns on large phones */
+        gap: 16px 14px;
+        padding: 20px 18px;
+    }
+    .profile-actions {
+        padding: 18px 18px 0;
+        justify-content: center;
+    }
+    .security-block { padding: 16px 14px; }
+}
+
+@media (max-width: 480px) {
+    .profile-banner { height: 78px; }
+    .profile-avatar { width: 72px; height: 72px; top: 42px; }
+    #profile-initials { font-size: 24px; }
+    .profile-header-info { margin-top: 44px; padding: 0 14px; }
+
+    /* single column on phones so long values never get squeezed */
+    .profile-details-grid {
+        grid-template-columns: 1fr;
+        gap: 14px;
+        padding: 18px 16px;
+    }
+    .detail-label { font-size: 11px; }
+    .detail-value { font-size: 14px; }
+    .profile-actions { flex-direction: column; padding: 16px 16px 0; }
+    .profile-actions .btn { width: 100%; }
+    .security-stats-grid { grid-template-columns: 1fr 1fr; gap: 10px; }
+}
+
+/* --- Staff list avatar: cleaner circle, better aligned --- */
+.row-avatar,
+.row-avatar-fallback {
+    width: 36px;
+    height: 36px;
+    min-width: 36px;
+    margin-right: 10px;
+    vertical-align: middle;
+    flex-shrink: 0;
+    line-height: 1;
+}
+.row-avatar { object-fit: cover; object-position: center top; }
+
+@media (max-width: 768px) {
+    /* Each staff card: avatar + name become the card header, ID/details below */
+    .staff-table tbody tr { display: flex; flex-direction: column; padding: 4px 16px 8px; }
+
+    .staff-table td.td-bold {
+        order: -1;                         /* name row first */
+        justify-content: flex-start;       /* avatar + name together on the left */
+        text-align: left;
+        gap: 0;
+        padding: 14px 0 12px;
+        font-size: 16px;
+        border-bottom: 1px solid var(--border-subtle);
+        min-width: 0;
+        overflow-wrap: anywhere;
+    }
+    .staff-table td.td-bold::before { display: none; }   /* no "Teacher Name" label next to the avatar */
+
+    .row-avatar,
+    .row-avatar-fallback {
+        width: 44px;
+        height: 44px;
+        min-width: 44px;
+        margin-right: 12px;
+        font-size: 14px;
+    }
+}
+
+
+/* ============================================================================
+   FIX: Add/Edit Staff form scrolling
+   The <form> sits between the modal and its body/footer, so it must be part of
+   the flex chain. Without this the body had no height limit and could not scroll.
+   ============================================================================ */
+#form-modal .form-modal-content {
+    display: flex !important;
+    flex-direction: column !important;
+    overflow: hidden !important;
+    max-height: calc(100vh - 32px) !important;
+    max-height: calc(100dvh - 32px) !important;
+}
+#form-modal .form-modal-content > form {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    min-height: 0;          /* lets the body shrink and scroll */
+    overflow: hidden;
+}
+#form-modal .form-modal-header { flex: 0 0 auto; }
+#form-modal .form-modal-body {
+    flex: 1 1 auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    overflow-y: auto !important;
+    overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+    touch-action: pan-y;
+}
+#form-modal .form-modal-footer { flex: 0 0 auto; }
+
+@media (max-width: 480px) {
+    #form-modal .form-modal-content {
+        max-height: 94vh !important;
+        max-height: 94dvh !important;
+    }
+}
