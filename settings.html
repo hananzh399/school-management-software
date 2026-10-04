@@ -64,7 +64,6 @@
       </button>
       <div class="header-title">
         <h1>System Configuration</h1>
-        <p>Manage school info, classes, fees, fines &amp; pay variables</p>
       </div>
     </div>
     <div class="header-actions">
@@ -106,7 +105,7 @@
         <div class="section-header">
           <div class="section-header-info">
             <h2><i class="fas fa-school"></i> School &amp; Contact Details</h2>
-            <p>This information is used wherever the school's identity is printed — certificates, ID cards, student lists, fee vouchers and reports.</p>
+            <p>Printed on certificates, ID cards and vouchers.</p>
           </div>
         </div>
 
@@ -115,50 +114,50 @@
           <div class="var-item" style="max-width:100%;">
             <label>School Name</label>
             <input type="text" id="school-name" class="var-input" placeholder="e.g. SoftSchool Academy">
-            <div class="var-hint">Printed as the main heading on certificates, vouchers and student lists.</div>
+            <div class="var-hint">Main heading on documents.</div>
           </div>
 
           <div class="var-item" style="max-width:100%;">
             <label>School Address</label>
             <textarea id="school-address" class="var-input" rows="3" placeholder="Street, area, city, postal code"></textarea>
-            <div class="var-hint">Full postal address shown on official documents.</div>
+            <div class="var-hint">Shown on documents.</div>
           </div>
 
           <div class="school-info-grid">
             <div class="var-item">
               <label>Contact Phone</label>
               <input type="tel" id="school-phone" class="var-input" placeholder="e.g. 041-1234567">
-              <div class="var-hint">Primary phone number for parents and visitors.</div>
+              <div class="var-hint">Primary contact number.</div>
             </div>
 
             <div class="var-item">
               <label>Alternate / WhatsApp Number</label>
               <input type="tel" id="school-phone-alt" class="var-input" placeholder="Optional">
-              <div class="var-hint">Shown alongside the primary number where space allows.</div>
+              <div class="var-hint">Optional second number.</div>
             </div>
 
             <div class="var-item">
               <label>Email Address</label>
               <input type="email" id="school-email" class="var-input" placeholder="e.g. info@softschool.edu.pk">
-              <div class="var-hint">Used for official correspondence and document footers.</div>
+              <div class="var-hint">Used on official documents.</div>
             </div>
 
             <div class="var-item">
               <label>Website</label>
               <input type="text" id="school-website" class="var-input" placeholder="Optional, e.g. www.softschool.edu.pk">
-              <div class="var-hint">Shown on certificates and prospectuses if provided.</div>
+              <div class="var-hint">Optional.</div>
             </div>
 
             <div class="var-item">
               <label>Principal / Head Name</label>
               <input type="text" id="school-principal" class="var-input" placeholder="Optional">
-              <div class="var-hint">Used for the signatory line on certificates.</div>
+              <div class="var-hint">Signatory on certificates.</div>
             </div>
 
             <div class="var-item">
               <label>Registration / EMIS No.</label>
               <input type="text" id="school-reg-no" class="var-input" placeholder="Optional">
-              <div class="var-hint">Official registration number, if your board requires one.</div>
+              <div class="var-hint">If required by your board.</div>
             </div>
           </div>
 
@@ -172,7 +171,7 @@
         <div class="section-header">
           <div class="section-header-info">
             <h2><i class="fas fa-university"></i> Class Fee Structure</h2>
-            <p>Set monthly tuition and annual funds for each class. Existing students update automatically. A voucher already generated for this month keeps its saved amount; the new fee starts with the next voucher.</p>
+            <p>Monthly tuition and annual fund per class.</p>
           </div>
           <button class="btn-primary" onclick="addClassCard()">
             <i class="fas fa-plus"></i> Add Class
@@ -190,14 +189,14 @@
         <div class="section-header">
           <div class="section-header-info">
             <h2><i class="fas fa-hourglass-half"></i> Late Fee Fine</h2>
-            <p>Set the fine charged when a student pays their monthly fee after the deadline.</p>
+            <p>Fine for fees paid after the deadline.</p>
           </div>
         </div>
 
         <div class="latefee-toggle-bar">
           <div>
             <div class="toggle-label">Late Fee Enabled</div>
-            <div class="toggle-sub">When off, no fine is applied no matter how late a payment is.</div>
+            <div class="toggle-sub">Off = no late fine.</div>
           </div>
           <label class="toggle-switch">
             <input type="checkbox" id="latefee-enabled" checked onchange="toggleLateFee()">
@@ -219,7 +218,7 @@
                 <input type="number" id="latefee-deadline-day" class="var-input" value="10" min="1" max="28">
                 <span class="input-suffix">of every month</span>
               </div>
-              <div class="var-hint">Fees paid on or before this day each month are on time.</div>
+              <div class="var-hint">Day of month.</div>
             </div>
 
             <div class="var-item">
@@ -228,7 +227,7 @@
                 <option value="fixed">Fixed Rs amount</option>
                 <option value="percent">Percentage of monthly fee</option>
               </select>
-              <div class="var-hint">How the late fine is calculated once the deadline passes.</div>
+              <div class="var-hint">Flat or percentage.</div>
             </div>
 
             <div class="var-item">
@@ -237,7 +236,7 @@
                 <span class="input-prefix" id="latefee-amount-prefix">Rs</span>
                 <input type="number" id="latefee-amount" class="var-input" style="padding-left:28px;" value="200" min="0">
               </div>
-              <div class="var-hint">E.g. Rs 200 flat, or 5% of that month's tuition fee.</div>
+              <div class="var-hint">E.g. Rs 200 or 5%.</div>
             </div>
 
             <div class="var-item">
@@ -246,7 +245,7 @@
                 <input type="number" id="latefee-grace" class="var-input" value="0" min="0" max="15">
                 <span class="input-suffix">extra day(s) before fine starts</span>
               </div>
-              <div class="var-hint">Optional buffer added on top of the deadline above.</div>
+              <div class="var-hint">Extra days after deadline.</div>
             </div>
 
           </div>
@@ -269,7 +268,7 @@
         <div class="section-header">
           <div class="section-header-info">
             <h2><i class="fas fa-sliders-h"></i> Global Pay Variables</h2>
-            <p>These values are shared across all teacher pay calculations and apply automatically unless overridden per teacher.</p>
+            <p>Applied to all teacher pay unless overridden.</p>
           </div>
         </div>
         <div class="variables-panel">
@@ -280,7 +279,7 @@
               <option value="percent">Percentage of salary per day</option>
               <option value="fixed">Fixed Rs amount per day</option>
             </select>
-            <div class="var-hint">Applied globally unless overridden per teacher.</div>
+            <div class="var-hint">Global default.</div>
           </div>
 
           <div class="var-item">
@@ -289,7 +288,7 @@
               <span class="input-prefix" id="var-penalty-prefix">%</span>
               <input type="number" id="var-penalty-value" class="var-input" style="padding-left:28px;" value="3" min="0">
             </div>
-            <div class="var-hint">E.g. 3% per day absent, or Rs 500 flat per day.</div>
+            <div class="var-hint">E.g. 3% or Rs 500 per day.</div>
           </div>
 
           <div class="var-item">
@@ -298,7 +297,7 @@
               <span class="input-prefix">Rs</span>
               <input type="number" id="var-bonus" class="var-input" style="padding-left:28px;" value="1000" min="0">
             </div>
-            <div class="var-hint">Bonus paid when a teacher has zero absences in a month.</div>
+            <div class="var-hint">For zero absences.</div>
           </div>
 
         </div>
@@ -312,7 +311,7 @@
         <div class="section-header">
           <div class="section-header-info">
             <h2><i class="fas fa-clock"></i> Attendance Timing Control</h2>
-            <p>Configure the automatic save times. The first time auto-saves staff attendance, and the second time auto-saves student attendance — each fires only if that attendance page is open on the Attendance screen at the time.</p>
+            <p>Daily auto-save times for attendance.</p>
           </div>
         </div>
 
@@ -337,7 +336,7 @@
               <input type="checkbox" id="autosave1-enabled" checked>
               <span>Enabled</span>
             </label>
-            <div class="var-hint">Staff attendance will auto-save daily at this time (only if the Staff Attendance page is open).</div>
+            <div class="var-hint">Staff attendance auto-save.</div>
           </div>
 
           <!-- SECOND AUTO SAVE -->
@@ -360,7 +359,7 @@
               <input type="checkbox" id="autosave2-enabled" checked>
               <span>Enabled</span>
             </label>
-            <div class="var-hint">Student attendance will auto-save daily at this time (only if a class attendance sheet is open).</div>
+            <div class="var-hint">Student attendance auto-save.</div>
           </div>
         </div>
 
@@ -377,7 +376,7 @@
 
   <!-- SAVE BAR -->
   <div class="save-bar">
-    <p><i class="fas fa-info-circle"></i> All changes are applied immediately to student admission forms.</p>
+    <p><i class="fas fa-info-circle"></i> Changes apply immediately.</p>
     <div style="display:flex;gap:10px;">
       <button class="btn-outline" onclick="resetSettings()"><i class="fas fa-undo"></i> Reset</button>
       <button class="btn-primary" onclick="saveAll()"><i class="fas fa-save"></i> Save All</button>
@@ -391,7 +390,7 @@
   <div class="modal-box">
     <div class="modal-icon"><i class="fas fa-trash-alt"></i></div>
     <h3 id="modal-title">Delete this class?</h3>
-    <p id="modal-body">This will permanently remove the class and its fee configuration. Existing student records are not deleted, but they will no longer receive a class fee from Settings.</p>
+    <p id="modal-body">This permanently removes the class and its fee setup. Student records are kept.</p>
     <div class="modal-actions">
       <button class="btn-cancel" onclick="closeModal()">Cancel</button>
       <button class="btn-danger" id="modal-confirm-btn">Delete</button>
