@@ -5668,6 +5668,18 @@ ${pagesHtml}
                 if (s.annualFundEnabled === 'on' || s.annualFundEnabled === true) {
                     s.annualFundAmount = getAnnualFundForClass(destClass);
                 }
+                // Tuition is now carried by standardFee alone. A leftover
+                // "Tuition Fee" row in the student's Other Fees list (the old
+                // class's amount) would show up as a second, stale Tuition Fee
+                // box on the profile, so drop tuition rows — every other
+                // other-fee row (lab fee, etc.) is left untouched.
+                try {
+                    const rows = JSON.parse(s.otherFeesData || '[]');
+                    if (Array.isArray(rows)) {
+                        const kept = rows.filter(r => !/tuition/i.test(String((r && r.description) || '')));
+                        if (kept.length !== rows.length) s.otherFeesData = JSON.stringify(kept);
+                    }
+                } catch (e) { /* unparseable other-fees data — leave as is */ }
                 feesUpdatedCount++;
             }
         });
