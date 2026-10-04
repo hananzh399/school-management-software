@@ -3870,3 +3870,315 @@ body {
 
 /* Neutral placeholder while the photo is being prepared. */
 .sidc-card-photo:has(img) { background: #eef2f7; }
+
+
+/* ============================================================================
+   RESPONSIVE LAYER — fits phones, tablets, laptops and large monitors
+   Appended last so it refines everything above. Breakpoints:
+     ≥1440 large desktop · ≤1024 tablet · ≤768 large phone · ≤480 phone · ≤360 small phone
+   ============================================================================ */
+
+/* ---------- Foundation ---------- */
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+img, svg, video, canvas { max-width: 100%; }
+body { min-height: 100vh; min-height: 100dvh; }
+
+.main-content {
+    width: 100%;
+    max-width: 1440px;
+    margin-left: auto;
+    margin-right: auto;
+    padding-left: clamp(14px, 3.2vw, 40px);
+    padding-right: clamp(14px, 3.2vw, 40px);
+    padding-bottom: calc(40px + env(safe-area-inset-bottom, 0px));
+}
+
+/* Fluid type */
+.page-title    { font-size: clamp(20px, 3.2vw, 28px); }
+.page-description { font-size: clamp(13px, 1.7vw, 15px); padding: 0 8px; }
+.view-title    { font-size: clamp(16px, 2.4vw, 22px); }
+.card-title    { font-size: clamp(17px, 2.2vw, 20px); }
+.counter-number{ font-size: clamp(28px, 4vw, 36px); }
+
+/* Sidebar: never wider than the screen, uses dynamic viewport height */
+.sidebar {
+    width: min(var(--sidebar-width), 86vw);
+    height: 100vh;
+    height: 100dvh;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+.sidebar-nav { -webkit-overflow-scrolling: touch; }
+
+/* Header */
+.main-header { gap: 12px; flex-wrap: nowrap; }
+.header-left { min-width: 0; flex: 1 1 auto; }
+.school-branding { min-width: 0; }
+.school-name {
+    font-size: clamp(11px, 1.9vw, 18px);
+    line-height: 1.25;
+    overflow-wrap: anywhere;
+}
+.header-right { flex-shrink: 0; }
+.menu-toggle { flex-shrink: 0; min-width: 42px; min-height: 42px; align-items: center; justify-content: center; }
+
+/* Cards grid is fluid instead of fixed 2 columns */
+.staff-cards-container {
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr));
+    gap: clamp(16px, 3vw, 32px);
+}
+.staff-card { padding: clamp(26px, 4vw, 44px) clamp(18px, 3vw, 36px) clamp(22px, 3vw, 36px); }
+.card-description { max-width: 100%; }
+
+/* Summary bar wraps neatly */
+.summary-bar { flex-wrap: wrap; gap: 12px clamp(16px, 4vw, 40px); padding: 16px clamp(14px, 3vw, 32px); }
+
+/* Table scrolls instead of breaking the page */
+.table-container { -webkit-overflow-scrolling: touch; max-width: 100%; }
+.staff-table { min-width: 640px; }
+.staff-table td, .staff-table th { overflow-wrap: anywhere; }
+.staff-table .td-bold { white-space: nowrap; }
+
+/* Directory toolbar */
+.table-controls { flex-wrap: wrap; gap: 12px; }
+.search-box { flex: 1 1 240px; }
+
+/* Buttons */
+.btn { white-space: nowrap; justify-content: center; }
+.profile-actions { flex-wrap: wrap; }
+
+/* Modals never exceed the screen */
+.modal-overlay { padding: clamp(8px, 2vw, 20px); -webkit-overflow-scrolling: touch; }
+.modal-content { max-width: min(400px, 100%); }
+.form-modal-content,
+.agreement-modal-content,
+.certificate-modal-content { max-width: min(100%, var(--modal-max, 620px)); }
+.agreement-modal-content { --modal-max: 720px; }
+.certificate-modal-content { --modal-max: 900px; }
+
+/* Form modal: let flexbox size the scroll area (works with mobile browser bars) */
+#form-modal .form-modal-content { max-height: calc(100vh - 32px) !important; max-height: calc(100dvh - 32px) !important; }
+#form-modal .form-modal-body    { max-height: none !important; overscroll-behavior: contain; }
+.form-modal-footer { padding-bottom: calc(18px + env(safe-area-inset-bottom, 0px)); }
+.form-group input, .form-group select, .form-group textarea { width: 100%; min-width: 0; }
+.cnic-input { letter-spacing: 1px; }
+
+/* Touch devices: comfortable tap targets, no sticky hover, no iOS focus-zoom */
+@media (hover: none) {
+    .staff-card:hover { transform: none; }
+    .btn-primary:hover, .btn-deduct-month:hover { transform: none; }
+    .sidc-card-thumb-download { opacity: 1; }
+}
+@media (pointer: coarse) {
+    .btn, .back-btn, .nav-link, .cert-viewer-btn, .agreement-close-btn { min-height: 44px; }
+    .close-btn { width: 44px; height: 44px; }
+    .form-group input, .form-group select,
+    .search-box input, .sidebar-search input,
+    .certificate-options input, .certificate-options select,
+    .incharge-select-row select, .class-assign-row select { font-size: 16px; min-height: 44px; }
+}
+
+/* ---------- ≥1440: large monitors ---------- */
+@media (min-width: 1440px) {
+    .directory-view { max-width: 1280px; }
+    .staff-cards-container { max-width: 1000px; }
+}
+
+/* ---------- ≤1024: tablets / small laptops ---------- */
+@media (max-width: 1024px) {
+    .main-header { margin-bottom: 28px; }
+    .staff-table th, .staff-table td { padding: 13px 14px; }
+    .profile-header-info, .profile-details-grid, .profile-actions { padding-left: 28px; padding-right: 28px; }
+    .profile-avatar { left: 28px; }
+    .sidc-panel { max-height: 100%; }
+}
+
+/* ---------- ≤768: large phones / portrait tablets ---------- */
+@media (max-width: 768px) {
+    .main-header { padding: 14px 0; margin-bottom: 22px; }
+    .header-date { display: none; }
+    .page-title-section { margin-top: 0; }
+
+    .view-header { gap: 10px; }
+    .view-title { flex: 1 1 100%; }
+
+    /* Toolbar: search full width, action buttons share a row */
+    .table-controls { flex-direction: column; align-items: stretch; }
+    .search-box { max-width: 100%; flex: 1 1 auto; }
+    .table-controls-actions { width: 100%; flex-wrap: wrap; }
+    .table-controls-actions .btn { flex: 1 1 160px; }
+    #add-staff-btn { width: auto; }
+
+    /* TABLE → CARDS: every staff row becomes a labelled card (no sideways scrolling) */
+    .table-container { background: transparent; border: 0; box-shadow: none; overflow: visible; border-radius: 0; }
+    .staff-table, .staff-table tbody { display: block; min-width: 0; width: 100%; }
+    .staff-table thead { display: none; }
+    .staff-table tbody tr {
+        display: block;
+        margin-bottom: 14px;
+        padding: 6px 16px;
+        background: var(--bg-card);
+        border: 1px solid var(--border-subtle);
+        border-radius: var(--radius-md);
+        box-shadow: var(--shadow-card);
+    }
+    .staff-table tbody tr:active { background: var(--accent-teaching-glow); }
+    .staff-table td {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 14px;
+        padding: 10px 0;
+        font-size: 13.5px;
+        text-align: right;
+        border-bottom: 1px dashed var(--border-subtle);
+    }
+    .staff-table td:last-child { border-bottom: 0; }
+    .staff-table td:empty { display: none; }
+    .staff-table td::before {
+        content: attr(data-label);
+        flex-shrink: 0;
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.5px;
+        text-transform: uppercase;
+        color: var(--text-muted);
+        text-align: left;
+    }
+    .staff-table td.td-bold { white-space: normal; }
+
+    /* Profile */
+    .profile-card { padding-bottom: 20px; }
+    .profile-actions .btn { flex: 1 1 140px; }
+
+    /* Modals become near-full-width sheets */
+    .modal-content { margin: 0 auto; width: 100%; }
+    .form-modal-header, .form-modal-body, .form-modal-footer { padding-left: 18px; padding-right: 18px; }
+    .agreement-modal-body { min-height: 220px; max-height: 60vh; max-height: 60dvh; padding: 10px; }
+    .agreement-pdf-frame { height: 55vh; height: 55dvh; }
+    .certificate-options { padding: 12px 16px; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); }
+
+    /* Certificate preview scales to the screen (replaces the single fixed scale) */
+    .certificate-page { transform: scale(0.78); transform-origin: top center; margin-bottom: -247px; }
+
+    /* ID-card generator */
+    .sidc-overlay { padding: 10px; }
+    .sidc-toolbar-actions { width: 100%; }
+}
+
+/* ---------- ≤700 / ≤560 / ≤440 / ≤360: certificate scale steps ---------- */
+@media (max-width: 700px) { .certificate-page { transform: scale(0.62); margin-bottom: -427px; } }
+@media (max-width: 560px) { .certificate-page { transform: scale(0.48); margin-bottom: -584px; } }
+@media (max-width: 440px) { .certificate-page { transform: scale(0.38); margin-bottom: -696px; } }
+@media (max-width: 360px) { .certificate-page { transform: scale(0.32); margin-bottom: -764px; } }
+
+/* ---------- ≤640 ---------- */
+@media (max-width: 640px) {
+    .form-grid { grid-template-columns: 1fr; }
+    .incharge-select-row { grid-template-columns: 1fr; }
+    .class-assign-row { grid-template-columns: 1fr; }
+    .security-stats-grid { grid-template-columns: 1fr 1fr; }
+
+    /* Full-screen ID-card generator */
+    .sidc-overlay { padding: 0; }
+    .sidc-panel { max-height: none; border-radius: 0; border: 0; }
+    .sidc-toolbar-actions { justify-content: flex-start; }
+    .sidc-toolbar-actions .cert-viewer-btn { flex: 1 1 auto; justify-content: center; }
+    .sidc-toolbar-actions .cert-viewer-close { flex: 0 0 auto; }
+    .sidc-per-page-label { flex: 1 1 auto; justify-content: space-between; }
+}
+
+/* ---------- ≤480: phones ---------- */
+@media (max-width: 480px) {
+    .sidebar { width: 86vw; }
+    .brand-name { font-size: 17px; }
+    .main-header { margin-bottom: 16px; }
+    .theme-toggle { margin-left: 8px; }
+
+    .staff-cards-container { gap: 14px; margin-bottom: 28px; }
+    .card-counter { padding: 10px 18px; margin-bottom: 20px; }
+    .card-description { margin-bottom: 20px; font-size: 12.5px; }
+    .card-action { padding: 9px 20px; font-size: 13px; }
+
+    .summary-bar { flex-direction: row; justify-content: center; gap: 10px 18px; }
+    .summary-item { font-size: 13px; }
+
+    .back-btn { width: 100%; justify-content: center; }
+    .table-controls-actions .btn { flex: 1 1 100%; }
+
+    .profile-banner { height: 76px; }
+    .profile-actions { flex-direction: column; }
+    .profile-actions .btn { width: 100%; flex: 0 0 auto; }
+    .detail-value { overflow-wrap: anywhere; }
+
+    .security-block { padding: 16px 14px; }
+    .security-header { flex-wrap: wrap; }
+
+    /* Confirm modal & dialogs: stack buttons */
+    .modal-content { padding: 22px 16px; }
+    .modal-actions { flex-direction: column-reverse; }
+    .modal-actions .btn { width: 100%; }
+
+    /* Form modal: full-height bottom sheet */
+    #form-modal.modal-overlay { padding: 0 !important; align-items: flex-end !important; }
+    #form-modal .form-modal-content {
+        width: 100% !important;
+        max-width: 100% !important;
+        max-height: 94vh !important;
+        max-height: 94dvh !important;
+        border-radius: 20px 20px 0 0;
+        margin: 0 !important;
+    }
+    .form-modal-body { padding-top: 14px; padding-bottom: 14px; }
+    .form-modal-footer { flex-direction: column-reverse; }
+    .form-modal-footer .btn { width: 100%; }
+    .photo-upload-group { flex-direction: column; align-items: flex-start; }
+    .guardian-toggle { flex-wrap: wrap; }
+
+    /* Agreement / certificate action bars */
+    .agreement-modal-footer { padding: 12px 14px calc(12px + env(safe-area-inset-bottom, 0px)); }
+    .agreement-modal-footer .btn { flex: 1 1 calc(50% - 10px); }
+
+    /* Fixed warning badges become compact full-width strips */
+    .subscription-expiry-badge,
+    .staff-limit-badge {
+        left: 12px; right: 12px; max-width: none;
+        bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+        border-radius: 14px;
+    }
+    .staff-limit-badge.has-expiry-sibling { bottom: calc(66px + env(safe-area-inset-bottom, 0px)); }
+
+    /* ID-card thumbs: one centered card at a time */
+    .sidc-body { padding: 12px; }
+    .sidc-cards-grid { justify-content: center; }
+    .sidc-pair-row { align-items: center; }
+}
+
+/* ---------- ≤360: small phones ---------- */
+@media (max-width: 360px) {
+    .school-name { font-size: 10.5px; letter-spacing: 0.3px; }
+    .brand-logo { width: 32px; height: 32px; }
+    .page-title { font-size: 19px; }
+    .staff-table tbody tr { padding: 4px 12px; }
+    .staff-table td { font-size: 13px; }
+    .sidc-body { padding: 10px; }
+    .sidc-toolbar { padding: 10px 12px; }
+}
+
+/* ---------- Short landscape phones ---------- */
+@media (max-height: 520px) and (orientation: landscape) {
+    .modal-overlay { padding: 6px; }
+    #form-modal .form-modal-content { max-height: calc(100dvh - 12px) !important; }
+    .agreement-modal-body { max-height: 45vh; min-height: 140px; }
+    .main-header { margin-bottom: 14px; }
+}
+
+/* ---------- Respect reduced-motion preference ---------- */
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }
+    .staff-card { opacity: 1; transform: none; }
+}
+
+/* ---------- Print: keep the page chrome out of the way ---------- */
+@media print {
+    .glow-spot, .sidebar, .sidebar-overlay { display: none !important; }
+}

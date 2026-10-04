@@ -1847,6 +1847,10 @@ function populateDirectory(category, filterText = '') {
                 <td>${esc(s.endTime || '')}</td>
             `;
         }
+        // RESPONSIVE: tag each cell with its column header so the CSS can
+        // turn rows into labelled cards on phones (see manage-staff.css).
+        const _labels = Array.from(thead.querySelectorAll('th')).map(th => th.textContent.trim());
+        Array.from(tr.children).forEach((td, i) => { if (_labels[i]) td.setAttribute('data-label', _labels[i]); });
         tbody.appendChild(tr);
     });
 }
