@@ -168,6 +168,16 @@
                     <p class="card-description">Browse and search the entire roster.</p>
                 </div>
 
+                <!-- Card: Bulk Transfer -->
+                <div class="manage-card update-card" id="card-bulk-transfer" onclick="openModal('bulk-transfer-modal')">
+                    <div class="card-glow"></div>
+                    <div class="m-icon-wrapper update-icon">
+                        <i class="fas fa-right-left"></i>
+                    </div>
+                    <h3 class="card-title">Bulk Transfer</h3>
+                    <p class="card-description">Move many students to another class or section.</p>
+                </div>
+
                 <!-- Card: Archive -->
                 <div class="manage-card archive-card" id="card-archive" onclick="openArchivePage()">
                     <div class="card-glow"></div>
@@ -804,6 +814,83 @@
                             <tbody id="vo-student-tbody">
                                 <!-- Populated by JS -->
                             </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- BULK TRANSFER MODAL (class -> section -> students, then move selected students) -->
+    <div id="bulk-transfer-modal" class="modal-overlay">
+        <div class="modal-container wider">
+            <div class="modal-header">
+                <h3><i class="fas fa-right-left"></i> Bulk Transfer</h3>
+                <button class="close-modal-btn" onclick="closeModal('bulk-transfer-modal')">&times;</button>
+            </div>
+            <div class="modal-body modal-body-scroll">
+
+                <!-- STAGE 1: CLASS CARDS -->
+                <div id="btf-stage-classes" class="msc-stage">
+                    <div id="btf-classes-grid" class="classes-grid msc-classes-grid"></div>
+                </div>
+
+                <!-- STAGE 2: SECTION CARDS -->
+                <div id="btf-stage-sections" class="msc-stage hidden">
+                    <div class="msc-stage-header">
+                        <button class="btn-ghost msc-back-btn" onclick="btfBackToClasses()"><i class="fas fa-arrow-left"></i> Back to Classes</button>
+                        <h4 id="btf-sections-title" class="msc-stage-title"></h4>
+                    </div>
+                    <div id="btf-sections-grid" class="classes-grid msc-classes-grid"></div>
+                </div>
+
+                <!-- STAGE 3: STUDENTS + TRANSFER -->
+                <div id="btf-stage-table" class="msc-stage hidden">
+                    <div class="msc-stage-header">
+                        <button class="btn-ghost msc-back-btn" onclick="btfBackToSections()"><i class="fas fa-arrow-left"></i> Back</button>
+                        <h4 id="btf-table-context-title" class="msc-stage-title"></h4>
+                    </div>
+
+                    <!-- SEARCH + GENDER FILTER -->
+                    <div class="upd-search-row">
+                        <div class="search-box-wrapper upd-search-bar">
+                            <i class="fas fa-search"></i>
+                            <input type="text" id="btf-search-name" placeholder="Search by name, ID or guardian… (use ~ for Name~Father)" oninput="btfRenderTable()">
+                        </div>
+                        <div class="archive-seg-group" id="btf-gender-seg" style="align-self:auto;">
+                            <button type="button" class="archive-seg-btn active" data-val="ALL" onclick="btfSetGender('ALL')">All</button>
+                            <button type="button" class="archive-seg-btn" data-val="Male" onclick="btfSetGender('Male')"><i class="fas fa-mars"></i> Boys</button>
+                            <button type="button" class="archive-seg-btn" data-val="Female" onclick="btfSetGender('Female')"><i class="fas fa-venus"></i> Girls</button>
+                        </div>
+                    </div>
+
+                    <!-- TRANSFER BAR -->
+                    <div class="btf-transfer-bar">
+                        <div class="btf-selected-count"><i class="fas fa-check-square"></i> <span id="btf-selected-count">0</span> selected</div>
+                        <div class="btf-dest">
+                            <label for="btf-dest-class">Transfer to</label>
+                            <select id="btf-dest-class" onchange="btfPopulateDestSections()"></select>
+                            <select id="btf-dest-section"></select>
+                            <button type="button" class="btn-primary-submit" onclick="btfConfirmTransfer()"><i class="fas fa-right-left"></i> Transfer</button>
+                        </div>
+                    </div>
+
+                    <!-- STUDENT TABLE -->
+                    <div class="data-table-wrapper">
+                        <table class="student-table">
+                            <thead>
+                                <tr>
+                                    <th><input type="checkbox" id="btf-select-all" onchange="btfToggleAll(this.checked)" title="Select all shown students" style="width:18px;height:18px;"></th>
+                                    <th>#</th>
+                                    <th>Student ID</th>
+                                    <th>Roll No.</th>
+                                    <th>Name</th>
+                                    <th>Guardian / Father</th>
+                                    <th>Class</th>
+                                    <th>Gender</th>
+                                </tr>
+                            </thead>
+                            <tbody id="btf-student-tbody"></tbody>
                         </table>
                     </div>
                 </div>

@@ -864,6 +864,8 @@ document.addEventListener('DOMContentLoaded', () => {
             updShowStage('classes');
         }
 
+        if (modalId === 'bulk-transfer-modal' && window.btfReset) window.btfReset();
+
         if (modalId === 'view-only-modal') {
             if (window.voResetPromoteMode) window.voResetPromoteMode();
             const searchEl = document.getElementById('vo-search-name');
@@ -5333,6 +5335,336 @@ ${pagesHtml}
             togglePromoteMode();
             if (typeof renderViewOnlyTable === 'function') renderViewOnlyTable();
         }
+        updateDashboardStats();
+    };
+
+    // ── BULK TRANSFER ────────────────────────────────────────────────────────
+    // Pick class -> section (same flow as Manage Records), filter by gender /
+    // search, tick students, then move them to another class + section.
+    let btfActiveClass   = null;
+    let btfActiveSection = null;
+    let btfGender        = 'ALL';
+    const btfSelected    = new Set();
+
+    function btfShowStage(stage) {
+        ['classes', 'sections', 'table'].forEach(n => {
+            const el = document.getElementById('btf-stage-' + n);
+            if (el) el.classList.toggle('hidden', n !== stage);
+        });
+    }
+
+    function btfRenderClassCards() {
+        const grid = document.getElementById('btf-classes-grid');
+        if (!grid) return;
+        const esc = SSValidate.escapeHtml;
+        const configs = getClassConfigs();
+        const db = getActiveDatabase();
+
+        let html = `
+            <div class="msc-class-card msc-class-card--all" data-class="${ALL_STUDENTS_KEY}">
+                <div class="class-name"><i class="fas fa-users"></i> All Students</div>
+                <div class="class-meta">Every class &amp; section</div>
+                <div class="class-count"><i class="fas fa-user-graduate"></i> ${db.length} students</div>
+            </div>`;
+        if (configs.length === 0) {
+            html += `<div style="grid-column:1/-1;text-align:center;padding:32px 12px;color:var(--text-muted);">No classes configured yet. Add classes in <a href="settings.html" style="color:var(--accent-primary);">Admin Settings</a>.</div>`;
+        } else {
+            configs.forEach(c => {
+                const count = db.filter(s => s.studentClass === c.name).length;
+                const secs  = (Array.isArray(c.sections) && c.sections.length) ? c.sections.join(', ') : 'No sections configured';
+                html += `
+                    <div class="msc-class-card" data-class="${esc(c.name)}">
+                        <div class="class-name">${esc(c.name)}</div>
+                        <div class="class-meta">Sections: ${esc(secs)}</div>
+                        <div class="class-count"><i class="fas fa-users"></i> ${count} students</div>
+                    </div>`;
+            });
+        }
+        grid.innerHTML = html;
+        grid.querySelectorAll('.msc-class-card').forEach(card => {
+            card.addEventListener('click', () => btfOpenClass(card.dataset.class));
+        });
+    }
+
+    function btfRenderSectionCards() {
+        const grid = document.getElementById('btf-sections-grid');
+        const titleEl = document.getElementById('btf-sections-title');
+        if (titleEl) titleEl.textContent = btfActiveClass;
+        if (!grid) return;
+        const esc = SSValidate.escapeHtml;
+        const cfg = getClassConfigMap()[btfActiveClass];
+        const sections = (cfg && Array.isArray(cfg.sections)) ? cfg.sections : [];
+        const classStudents = getActiveDatabase().filter(s => s.studentClass === btfActiveClass);
+
+        let html = `
+            <div class="msc-class-card msc-class-card--all" data-section="ALL">
+                <div class="class-name"><i class="fas fa-layer-group"></i> All Sections</div>
+                <div class="class-meta">All ${classStudents.length} students</div>
+                <div class="class-count"><i class="fas fa-users"></i> ${classStudents.length} students</div>
+            </div>`;
+        if (sections.length === 0) {
+            html += `<div style="grid-column:1/-1;text-align:center;padding:24px 12px;color:var(--text-muted);">No sections configured for this class in <a href="settings.html" style="color:var(--accent-primary);">Admin Settings</a>.</div>`;
+        } else {
+            sections.forEach(sec => {
+                const cnt = classStudents.filter(s => s.section === sec).length;
+                html += `
+                    <div class="msc-class-card" data-section="${esc(sec)}">
+                        <div class="class-name">Section ${esc(sec)}</div>
+                        <div class="class-count"><i class="fas fa-users"></i> ${cnt} students</div>
+                    </div>`;
+            });
+        }
+        grid.innerHTML = html;
+        grid.querySelectorAll('.msc-class-card').forEach(card => {
+            card.addEventListener('click', () => btfOpenSection(card.dataset.section));
+        });
+    }
+
+    window.btfReset = function() {
+        btfActiveClass = null;
+        btfActiveSection = null;
+        btfGender = 'ALL';
+        btfSelected.clear();
+        const srch = document.getElementById('btf-search-name');
+        if (srch) srch.value = '';
+        btfSyncGenderButtons();
+        btfRenderClassCards();
+        btfShowStage('classes');
+    };
+
+    function btfSyncGenderButtons() {
+        document.querySelectorAll('#btf-gender-seg .archive-seg-btn').forEach(b => {
+            b.classList.toggle('active', b.dataset.val === btfGender);
+        });
+    }
+
+    function btfOpenClass(className) {
+        btfActiveClass = className;
+        btfActiveSection = null;
+        if (className === ALL_STUDENTS_KEY) {
+            btfEnterTable('All Students');
+            return;
+        }
+        btfRenderSectionCards();
+        btfShowStage('sections');
+    }
+
+    function btfOpenSection(section) {
+        btfActiveSection = section;
+        btfEnterTable(section === 'ALL'
+            ? `${btfActiveClass} — All Sections`
+            : `${btfActiveClass} — Section ${section}`);
+    }
+
+    function btfEnterTable(title) {
+        btfSelected.clear();
+        btfGender = 'ALL';
+        btfSyncGenderButtons();
+        const srch = document.getElementById('btf-search-name');
+        if (srch) srch.value = '';
+        const t = document.getElementById('btf-table-context-title');
+        if (t) t.textContent = title;
+        btfPopulateDestClasses();
+        btfShowStage('table');
+        btfRenderTable();
+    }
+
+    window.btfBackToClasses = function() {
+        btfActiveClass = null;
+        btfActiveSection = null;
+        btfSelected.clear();
+        btfRenderClassCards();
+        btfShowStage('classes');
+    };
+
+    window.btfBackToSections = function() {
+        btfSelected.clear();
+        if (btfActiveClass === ALL_STUDENTS_KEY) { window.btfBackToClasses(); return; }
+        btfActiveSection = null;
+        btfRenderSectionCards();
+        btfShowStage('sections');
+    };
+
+    window.btfSetGender = function(val) {
+        btfGender = val;
+        btfSyncGenderButtons();
+        btfRenderTable();
+    };
+
+    /** Students currently listed (class/section scope + gender + search) */
+    function btfVisibleStudents() {
+        let list = getActiveDatabase();
+        if (btfActiveClass && btfActiveClass !== ALL_STUDENTS_KEY) {
+            list = list.filter(s => s.studentClass === btfActiveClass);
+            if (btfActiveSection && btfActiveSection !== 'ALL') {
+                list = list.filter(s => s.section === btfActiveSection);
+            }
+        }
+        if (btfGender !== 'ALL') list = list.filter(s => s.gender === btfGender);
+        const q = (document.getElementById('btf-search-name')?.value || '').toLowerCase().trim();
+        if (q) list = list.filter(s => studentMatchesSearch(s, q));
+        return list;
+    }
+
+    window.btfRenderTable = function() {
+        const tbody = document.getElementById('btf-student-tbody');
+        if (!tbody) return;
+        const esc = SSValidate.escapeHtml;
+        const list = btfVisibleStudents();
+
+        if (list.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;padding:30px;color:var(--text-muted);">No matching students found.</td></tr>`;
+        } else {
+            tbody.innerHTML = list.map((s, i) => `
+                <tr>
+                    <td><input type="checkbox" class="btf-checkbox" data-regno="${esc(String(s.regNo))}" ${btfSelected.has(s.regNo) ? 'checked' : ''} style="width:18px;height:18px;"></td>
+                    <td class="msc-sr-cell">${i + 1}</td>
+                    <td><span class="hrk-id-badge">${esc(s.regNo || s.id || '')}</span></td>
+                    <td>${esc(s.rollNo || '—')}</td>
+                    <td><strong>${esc(s.fullName || s.studentName || s.name || '')}</strong></td>
+                    <td>${esc(s.guardianName || s.fatherName || '—')}</td>
+                    <td><span class="class-chip">${esc((s.studentClass || '—') + (s.section ? ' - ' + s.section : ''))}</span></td>
+                    <td>${esc(s.gender || '—')}</td>
+                </tr>`).join('');
+            tbody.querySelectorAll('.btf-checkbox').forEach(cb => {
+                cb.addEventListener('change', () => {
+                    if (cb.checked) btfSelected.add(cb.dataset.regno);
+                    else btfSelected.delete(cb.dataset.regno);
+                    btfUpdateSelectionUI();
+                });
+            });
+        }
+        btfUpdateSelectionUI();
+    };
+
+    function btfUpdateSelectionUI() {
+        const countEl = document.getElementById('btf-selected-count');
+        if (countEl) countEl.textContent = btfSelected.size;
+        const all = document.getElementById('btf-select-all');
+        if (all) {
+            const visible = btfVisibleStudents();
+            all.checked = visible.length > 0 && visible.every(s => btfSelected.has(s.regNo));
+        }
+    }
+
+    window.btfToggleAll = function(checked) {
+        btfVisibleStudents().forEach(s => {
+            if (checked) btfSelected.add(s.regNo);
+            else btfSelected.delete(s.regNo);
+        });
+        btfRenderTable();
+    };
+
+    function btfPopulateDestClasses() {
+        const sel = document.getElementById('btf-dest-class');
+        if (!sel) return;
+        const esc = SSValidate.escapeHtml;
+        sel.innerHTML = '<option value="">Select class…</option>' +
+            getClassConfigs().map(c => `<option value="${esc(c.name)}">${esc(c.name)}</option>`).join('');
+        btfPopulateDestSections();
+    }
+
+    window.btfPopulateDestSections = function() {
+        const cls = document.getElementById('btf-dest-class')?.value;
+        const sel = document.getElementById('btf-dest-section');
+        if (!sel) return;
+        const esc = SSValidate.escapeHtml;
+        const cfg = cls ? getClassConfigMap()[cls] : null;
+        const sections = (cfg && Array.isArray(cfg.sections)) ? cfg.sections : [];
+        if (!cls) {
+            sel.innerHTML = '<option value="">Section…</option>';
+        } else if (sections.length === 0) {
+            sel.innerHTML = '<option value="">No sections</option>';
+        } else {
+            sel.innerHTML = '<option value="">Select section…</option>' +
+                sections.map(x => `<option value="${esc(x)}">Section ${esc(x)}</option>`).join('');
+        }
+    };
+
+    window.btfConfirmTransfer = async function() {
+        const destClass = document.getElementById('btf-dest-class')?.value || '';
+        const destSection = document.getElementById('btf-dest-section')?.value || '';
+        const cfg = destClass ? getClassConfigMap()[destClass] : null;
+        const hasSections = !!(cfg && Array.isArray(cfg.sections) && cfg.sections.length);
+
+        if (btfSelected.size === 0) {
+            showToast('No Students Selected', 'Tick at least one student to transfer.', 'warning');
+            return;
+        }
+        if (!destClass) {
+            showToast('Choose Destination', 'Select the class to transfer the students to.', 'warning');
+            return;
+        }
+        if (hasSections && !destSection) {
+            showToast('Choose Section', 'Select the destination section.', 'warning');
+            return;
+        }
+
+        const db = getDatabase();
+        const targetSection = hasSections ? destSection : '';
+        const toMove = db.filter(s =>
+            btfSelected.has(s.regNo) && (!s.status || s.status === 'active') &&
+            !(s.studentClass === destClass && (s.section || '') === targetSection)
+        );
+        const skipped = btfSelected.size - toMove.length;
+
+        if (toMove.length === 0) {
+            showToast('Nothing to Transfer', 'All selected students are already in that class and section.', 'warning');
+            return;
+        }
+
+        const label = targetSection ? `${destClass} — Section ${targetSection}` : destClass;
+        const ok = await ssConfirm(
+            `Transfer ${toMove.length} student(s) to ${label}?` +
+            (skipped ? ` (${skipped} already there will be skipped.)` : ''),
+            { title: 'Bulk Transfer', confirmLabel: 'Transfer', danger: false }
+        );
+        if (!ok) return;
+
+        // Roll numbers: students changing CLASS get the next free roll number in
+        // the new class (counted up locally so a batch never duplicates);
+        // students only changing SECTION keep their roll number.
+        let maxRoll = 0;
+        db.forEach(s => {
+            if ((!s.status || s.status === 'active') && s.studentClass === destClass) {
+                const r = parseInt(s.rollNo, 10);
+                if (!isNaN(r)) maxRoll = Math.max(maxRoll, r);
+            }
+        });
+
+        toMove.forEach(s => {
+            if (s.studentClass !== destClass) {
+                maxRoll += 1;
+                s.rollNo = String(maxRoll);
+            }
+            s.studentClass = destClass;
+            s.section = targetSection;
+        });
+
+        saveDatabase(db);
+
+        let failed = 0;
+        for (const s of toMove) {
+            try {
+                const saved = await apiSaveStudent(s);
+                if (saved) normalizeSiblingFieldsFromServer(saved);
+            } catch (err) {
+                failed++;
+                console.error('Backend sync failed (bulk transfer) for', s.regNo, err);
+            }
+        }
+
+        showToast(
+            'Transfer Complete',
+            `${toMove.length} student(s) moved to ${label}.` +
+            (failed ? ` ${failed} record(s) could not be saved to the server — check your connection, they may revert.` : ''),
+            failed ? 'danger' : 'success'
+        );
+
+        btfSelected.clear();
+        btfRenderTable();
+        if (typeof renderViewOnlyTable === 'function') renderViewOnlyTable();
+        if (typeof renderStudentTable === 'function') renderStudentTable();
         updateDashboardStats();
     };
 
