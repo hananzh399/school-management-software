@@ -8309,3 +8309,35 @@ input[type="date"]::-webkit-calendar-picker-indicator {
     .class-selector-card { padding: 16px 6px; }
 }
 /* ============================ END MOBILE BLOCK ============================= */
+
+
+/* ============================================================================
+   FINAL OVERRIDE — stat card rows sit directly on the page (no separate block)
+   ----------------------------------------------------------------------------
+   The earlier "sticky pricing row" rules gave every stat header a flat solid
+   background and a bottom divider line, so on desktop the cards looked like
+   they lived in their own dark strip, different from the rest of the page.
+   Phones already turned that off (see the max-width media block above). This
+   applies the same treatment at every screen size: no sticky bar, no solid
+   background, no divider, so the cards blend into the page like every other
+   screen. Covers: Manage Student Fees (main + inside a class), Fee Defaulter,
+   and Custom Fee Records.
+   ============================================================================ */
+.fee-stats-header,
+#class-fee-stats-row,
+.stats-header-section,
+[data-theme="dark"] .fee-stats-header,
+[data-theme="dark"] #class-fee-stats-row,
+[data-theme="dark"] .stats-header-section {
+    position: static !important;
+    background: transparent !important;
+    border-bottom: none !important;
+    box-shadow: none !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+}
+/* .stats-header-section must stay a positioning context for its back button */
+.stats-header-section,
+[data-theme="dark"] .stats-header-section {
+    position: relative !important;
+}
