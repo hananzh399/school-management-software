@@ -1068,8 +1068,7 @@ function getAllStudentsForFinanceTotals() {
  * calendar date is.
  */
 function getCurrentFeeMonthLabel() {
-    const [year, month] = getCurrentFeeMonthKey().split('-').map(Number);
-    return new Date(year, (month || 1) - 1, 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+    return feeMonthDisplayLabel(getCurrentFeeMonthKey());
 }
 // Students are owned by the Student Management page, but this file does
 // edit them in a few places (marking fees paid, applying discounts, etc.),
@@ -1400,7 +1399,7 @@ function getFineRecordsMonthOptions() {
     for (let i = 0; i < 6; i++) {
         const d = new Date(anchorYear, (anchorMonth - 1) - i, 1);
         const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-        const label = d.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+        const label = feeMonthDisplayLabel(key);
         opts.push({ key, label });
     }
     return opts;
@@ -3456,7 +3455,7 @@ function computeFeeBreakdown(s) {
     // its numbers actually belong to, even if the calendar has moved on and
     // the admin hasn't pressed "Move to Next Month" yet.
     const [feeYear, feeMonth] = getCurrentFeeMonthKey().split('-').map(Number);
-    const monthLabel = new Date(feeYear, (feeMonth || 1) - 1, 1).toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
+    const monthLabel = feeMonthDisplayLabel(getCurrentFeeMonthKey(), 'en-GB');
     const regNo = s.regNo || s.id;
 
     /*
@@ -4289,9 +4288,51 @@ function getFeeMonthOverride() {
 }
 
 function setFeeMonthOverride(monthKey) {
+    const existing = getGeneratedVouchers().find(r => r.key === FEE_MONTH_STATE_KEY);
     const list = getGeneratedVouchers().filter(r => r.key !== FEE_MONTH_STATE_KEY);
-    list.push({ key: FEE_MONTH_STATE_KEY, activeMonthKey: monthKey, updatedAt: new Date().toISOString() });
+    const marker = { key: FEE_MONTH_STATE_KEY, activeMonthKey: monthKey, updatedAt: new Date().toISOString() };
+    // Keep this school's label setting when the month moves.
+    if (existing && existing.labelOffsetMonths) marker.labelOffsetMonths = existing.labelOffsetMonths;
+    list.push(marker);
     saveGeneratedVouchers(list);
+}
+
+/**
+ * DISPLAY-ONLY month naming. Some schools generate a month's vouchers at the
+ * end of the PREVIOUS month and collect them during the next one (bills made
+ * at the end of September are the "October" bills). Their data is filed under
+ * the month the vouchers were generated in (2026-09), but they want screens
+ * and printed vouchers to say October.
+ *
+ * labelOffsetMonths (stored on the same per-school marker record, default 0)
+ * shifts only the NAME shown to people. Nothing stored or calculated changes:
+ * month keys, arrears, due dates, Defaulters and payments all still use the
+ * real key. Schools that never set it are unaffected.
+ */
+function getFeeMonthLabelOffset() {
+    const marker = getGeneratedVouchers().find(r => r.key === FEE_MONTH_STATE_KEY);
+    const n = marker ? parseInt(marker.labelOffsetMonths, 10) : 0;
+    return Number.isFinite(n) ? n : 0;
+}
+
+function setFeeMonthLabelOffset(months) {
+    if (!_generatedVouchersLoaded) { console.warn('Vouchers not loaded yet - try again in a moment.'); return; }
+    const n = parseInt(months, 10) || 0;
+    const existing = getGeneratedVouchers().find(r => r.key === FEE_MONTH_STATE_KEY);
+    const list = getGeneratedVouchers().filter(r => r.key !== FEE_MONTH_STATE_KEY);
+    const marker = existing
+        ? Object.assign({}, existing)
+        : { key: FEE_MONTH_STATE_KEY, activeMonthKey: getCurrentFeeMonthKey(), updatedAt: new Date().toISOString() };
+    if (n) marker.labelOffsetMonths = n; else delete marker.labelOffsetMonths;
+    list.push(marker);
+    saveGeneratedVouchers(list);
+}
+
+/** Name shown for a fee month key, after applying the school's label offset. */
+function feeMonthDisplayLabel(monthKey, locale, monthStyle) {
+    const [y, m] = String(monthKey).split('-').map(Number);
+    const d = new Date(y, (m || 1) - 1 + getFeeMonthLabelOffset(), 1);
+    return d.toLocaleDateString(locale || 'en-US', { month: monthStyle || 'long', year: 'numeric' });
 }
 
 /**
@@ -4334,8 +4375,7 @@ function _nextMonthKeyAfter(monthKey) {
 }
 
 function _monthKeyLabel(monthKey) {
-    const [y, m] = monthKey.split('-').map(Number);
-    return new Date(y, (m || 1) - 1, 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+    return feeMonthDisplayLabel(monthKey);
 }
 
 /**
@@ -7746,7 +7786,7 @@ function _populateFdMonthDropdown() {
     for (let i = 0; i < 12; i++) {
         const d = new Date(curYear, (curMonth - 1) - i, 1);
         const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
-        const lbl = d.toLocaleDateString('en-US', { month:'long', year:'numeric' });
+        const lbl = feeMonthDisplayLabel(key);
         opts.push(`<option value="${key}">${lbl}</option>`);
     }
     sel.innerHTML = opts.join('');
@@ -8003,7 +8043,7 @@ function _computePendingMonths(student) {
         // _isMonthDue() below; there is no day-of-month gate.
         if (admissionKey && key < admissionKey) continue;
         if (!_isMonthDue(key)) continue;
-        const lbl = d.toLocaleDateString('en-US', { month:'short', year:'numeric' });
+        const lbl = feeMonthDisplayLabel(key, 'en-US', 'short');
 
         // BUGFIX — "arrears of past months not working properly" / "a
         // dropped defaulter's old debt keeps compounding every month
