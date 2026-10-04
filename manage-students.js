@@ -3414,7 +3414,7 @@ if (certUploadInput) {
      *   - one class, all sections → call with (className, null) or (className, 'ALL')
      *   - one class + one specific section → call with (className, sectionLetter)
      * Triggered from the small print buttons on the class/section selector
-     * cards in the View Database / Update Record modals.
+     * cards in the Manage Records / Update Record modals.
      */
     function buildStudentListReport(filterClass, filterSection) {
         const esc = escapeHtmlForPrint;
@@ -4349,7 +4349,7 @@ if (certUploadInput) {
                 <td style="text-align:center;">
                     <div class="action-btn-group">
                         <button class="btn-icon view" onclick="viewFullProfile('${safeRegNoAttr}')" title="View Profile"><i class="fas fa-eye"></i></button>
-                        <button class="btn-icon print-record" onclick="printStudentRecordForStudent('${safeRegNoAttr}')" title="Print Student Record"><i class="fas fa-print"></i></button>
+                        <button class="btn-icon more-actions" type="button" onclick="toggleStudentActionMenu(event, '${safeRegNoAttr}')" title="More actions" aria-haspopup="true" aria-expanded="false"><i class="fas fa-ellipsis-vertical"></i></button>
                     </div>
                 </td>
             </tr>`;
@@ -4367,8 +4367,8 @@ if (certUploadInput) {
     // another tab/device) already happens via refreshClassUI(), called from
     // the backend poll tick in pollClassConfigs() — see startLiveSync().
 
-    // ── STUDENT ID CARD GENERATOR (View Database) ────────────────────────────
-    // Triggered by the "Generate ID Cards" button on the View Database
+    // ── STUDENT ID CARD GENERATOR (Manage Records) ────────────────────────────
+    // Triggered by the "Generate ID Cards" button on the Manage Records
     // student-table stage. Builds one printable ID card per student in
     // whichever scope is currently selected there — a single section, a
     // whole class (all sections), or the whole school ("All Students") —
@@ -4385,7 +4385,7 @@ if (certUploadInput) {
     // to re-derive the class/section filter after the modal is open.
     let idcCurrentStudents = [];
 
-    /** Resolve the same "class/section/all" filter the View Database table stage is
+    /** Resolve the same "class/section/all" filter the Manage Records table stage is
      *  currently showing, ignoring its free-text search box — the generator always
      *  produces cards for the WHOLE selected group, not just a filtered-down search. */
     function idcGetStudentsForCurrentVoScope() {
@@ -4727,7 +4727,7 @@ if (certUploadInput) {
         });
     }
 
-    /** "Generate ID Cards" button on the View Database table stage. */
+    /** "Generate ID Cards" button on the Manage Records table stage. */
     window.voOpenIdCardGenerator = async function() {
         await ensureSchoolInfoLoaded(); // school phone/address must be loaded before the back of the card is drawn
         idcCurrentStudents = idcGetStudentsForCurrentVoScope();
@@ -5710,6 +5710,98 @@ ${pagesHtml}
         }
     };
 
+    // ── STUDENT ROW ACTION MENU (three-dot menu in Manage Records) ───────────
+    // One shared floating menu appended to <body> so it is never clipped by the
+    // scrolling table wrapper. Actions: Update Record, View Record Form,
+    // View Admission Form, Deactivate (same flow as deleteRecord()).
+    let ssActionMenuEl = null;
+    let ssActionMenuBtn = null;
+
+    function closeStudentActionMenu() {
+        if (ssActionMenuEl) ssActionMenuEl.classList.remove('open');
+        if (ssActionMenuBtn) {
+            ssActionMenuBtn.classList.remove('menu-open');
+            ssActionMenuBtn.setAttribute('aria-expanded', 'false');
+        }
+        ssActionMenuBtn = null;
+    }
+
+    function ensureStudentActionMenu() {
+        if (ssActionMenuEl) return ssActionMenuEl;
+        const el = document.createElement('div');
+        el.id = 'student-action-menu';
+        el.className = 'student-action-menu';
+        el.setAttribute('role', 'menu');
+        el.innerHTML = `
+            <button type="button" class="sam-item sam-update" role="menuitem" data-action="update"><i class="fas fa-user-pen"></i><span>Update Record</span></button>
+            <button type="button" class="sam-item sam-record" role="menuitem" data-action="record"><i class="fas fa-address-card"></i><span>View Record Form</span></button>
+            <button type="button" class="sam-item sam-admission" role="menuitem" data-action="admission"><i class="fas fa-file-signature"></i><span>View Admission Form</span></button>
+            <div class="sam-divider"></div>
+            <button type="button" class="sam-item sam-danger" role="menuitem" data-action="deactivate"><i class="fas fa-user-slash"></i><span>Deactivate</span></button>`;
+        el.addEventListener('click', function(e) {
+            const item = e.target.closest('.sam-item');
+            if (!item) return;
+            const regNo = el.dataset.regNo;
+            const action = item.dataset.action;
+            closeStudentActionMenu();
+            if (!regNo) return;
+            if (action === 'update') {
+                window.editStudentInfo(regNo);
+                // The admission/edit modal sits earlier in the DOM than the
+                // directory modal, so lift it above while editing from here.
+                const m = document.getElementById('student-modal');
+                if (m) m.style.zIndex = '5500';
+            } else if (action === 'record') {
+                window.viewFullProfile(regNo);
+            } else if (action === 'admission') {
+                window.printAdmissionFormForStudent(regNo);
+            } else if (action === 'deactivate') {
+                window.deleteRecord(regNo);
+            }
+        });
+        document.body.appendChild(el);
+
+        document.addEventListener('click', function(e) {
+            if (!ssActionMenuEl || !ssActionMenuEl.classList.contains('open')) return;
+            if (e.target.closest('#student-action-menu') || e.target.closest('.btn-icon.more-actions')) return;
+            closeStudentActionMenu();
+        });
+        document.addEventListener('keydown', function(e) { if (e.key === 'Escape') closeStudentActionMenu(); });
+        window.addEventListener('resize', closeStudentActionMenu);
+        document.addEventListener('scroll', closeStudentActionMenu, true);
+
+        ssActionMenuEl = el;
+        return el;
+    }
+
+    window.toggleStudentActionMenu = function(event, regNo) {
+        event.stopPropagation();
+        const btn = event.currentTarget;
+        const menu = ensureStudentActionMenu();
+        if (ssActionMenuBtn === btn && menu.classList.contains('open')) {
+            closeStudentActionMenu();
+            return;
+        }
+        closeStudentActionMenu();
+        menu.dataset.regNo = regNo;
+        ssActionMenuBtn = btn;
+        btn.classList.add('menu-open');
+        btn.setAttribute('aria-expanded', 'true');
+
+        // Position: below the button, right-aligned; flip up / clamp if needed.
+        menu.style.visibility = 'hidden';
+        menu.classList.add('open');
+        const r  = btn.getBoundingClientRect();
+        const mw = menu.offsetWidth, mh = menu.offsetHeight;
+        let left = r.right - mw;
+        let top  = r.bottom + 6;
+        if (top + mh > window.innerHeight - 8) top = Math.max(8, r.top - mh - 6);
+        left = Math.min(Math.max(8, left), window.innerWidth - mw - 8);
+        menu.style.left = left + 'px';
+        menu.style.top  = top + 'px';
+        menu.style.visibility = '';
+    };
+
     // ── 10. FULL PROFILE VIEW ────────────────────────────────────────────────
 
     /**
@@ -6084,7 +6176,7 @@ ${pagesHtml}
 
     // ── STUDENT PHOTO FULL-SIZE VIEWER ───────────────────────────────────────
     //
-    // Lets the user click a student's photo — in the "View Database" profile
+    // Lets the user click a student's photo — in the "Manage Records" profile
     // card (profile-avatar-ring) or the Update Record / admission edit form
     // (student-img-preview) — and see it enlarged in a full-screen overlay.
     // Kept as its own overlay/id pair (photo-viewer-*) rather than reusing

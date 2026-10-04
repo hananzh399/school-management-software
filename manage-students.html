@@ -158,13 +158,13 @@
                     <p class="card-description">Register a new student with full details.</p>
                 </div>
 
-                <!-- Card: View Database -->
+                <!-- Card: Manage Records -->
                 <div class="manage-card viewdb-card" id="card-view-db" onclick="openModal('view-only-modal')">
                     <div class="card-glow"></div>
                     <div class="m-icon-wrapper viewdb-icon">
                         <i class="fas fa-database"></i>
                     </div>
-                    <h3 class="card-title">View Database</h3>
+                    <h3 class="card-title">Manage Records</h3>
                     <p class="card-description">Browse and search the entire roster.</p>
                 </div>
 
@@ -724,7 +724,7 @@
     <div id="view-only-modal" class="modal-overlay">
         <div class="modal-container wider">
             <div class="modal-header">
-                <h3><i class="fas fa-users"></i> Student Directory</h3>
+                <h3><i class="fas fa-users"></i> Manage Records</h3>
                 <button class="close-modal-btn" onclick="closeModal('view-only-modal')">&times;</button>
             </div>
             <div class="modal-body modal-body-scroll">
@@ -1290,7 +1290,7 @@
     </div>
 
     <!-- STUDENT PHOTO FULL-SIZE VIEWER — opened by clicking a student's photo
-         in the "View Database" profile card or the Update Record edit form. -->
+         in the "Manage Records" profile card or the Update Record edit form. -->
     <div id="photo-viewer-overlay" class="photo-viewer-overlay" onclick="if(event.target===this) closePhotoViewer()">
         <div class="cert-viewer-toolbar">
             <span class="cert-viewer-filename" id="photo-viewer-filename"><i class="fas fa-image"></i> Student Photo</span>
@@ -1306,7 +1306,7 @@
     </div>
 
     <!-- STUDENT ID CARD GENERATOR — opened from the "Generate ID Cards" button
-         on the View Database student-table stage. Renders one printable ID
+         on the Manage Records student-table stage. Renders one printable ID
          card per student currently in view (whichever class/section/"All
          Students" scope is selected) at 638 x 1012 px (vertical CR80 card size @ 300
          DPI), with options to download every card as a PNG or print them all
