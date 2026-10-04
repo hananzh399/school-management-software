@@ -8,6 +8,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
 <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
 <link rel="stylesheet" href="settings.css">
+<script>(function(){const s=localStorage.getItem('eduflow-theme');document.documentElement.setAttribute('data-theme',(s==='light'||s==='dark')?s:'dark');})()</script>
 <style>
   .timing-subtitle{font-weight:500;font-size:0.8em;color:var(--text-muted,#8a8f98);}
 </style>
@@ -69,8 +70,10 @@
     <div class="header-actions">
       <span class="badge-saved" id="saved-badge"><i class="fas fa-check-circle"></i> Saved</span>
       <!-- Dark mode toggle -->
-      <button id="theme-toggle-btn" class="theme-toggle-btn" title="Toggle dark mode" onclick="toggleDarkMode()">
-        <i class="fas fa-moon" id="theme-icon"></i>
+      <button id="theme-toggle" class="theme-toggle" aria-label="Toggle theme" title="Toggle theme" onclick="toggleDarkMode()">
+        <i class="fas fa-moon" id="theme-icon-moon"></i>
+        <i class="fas fa-sun" id="theme-icon-sun"></i>
+        <div class="toggle-slider"></div>
       </button>
       <div class="admin-avatar">AD</div>
     </div>
@@ -404,12 +407,5 @@
 
 <script src="shared-data.js"></script>
 <script src="settings.js"></script>
-<script>
-  // Dark mode init (runs before the page paints to avoid a flash)
-  (function() {
-    const saved = localStorage.getItem('eduflow-theme');
-    if (saved === 'dark') document.documentElement.setAttribute('data-theme', 'dark');
-  })();
-</script>
 </body>
 </html>

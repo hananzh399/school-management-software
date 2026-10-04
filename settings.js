@@ -175,32 +175,15 @@ async function loadSettingsFromServer() {
 // ═══════════════════════════════════════════════
 function toggleDarkMode() {
   const html = document.documentElement;
-  const isDark = html.getAttribute('data-theme') === 'dark';
-  if (isDark) {
-    html.removeAttribute('data-theme');
-    localStorage.setItem('eduflow-theme', 'light');
-  } else {
-    html.setAttribute('data-theme', 'dark');
-    localStorage.setItem('eduflow-theme', 'dark');
-  }
-  updateThemeIcon();
+  const next = html.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+  html.setAttribute('data-theme', next);
+  localStorage.setItem('eduflow-theme', next);
 }
 
-function updateThemeIcon() {
-  const icon = document.getElementById('theme-icon');
-  if (!icon) return;
-  const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
-  icon.className = isDark ? 'fas fa-sun' : 'fas fa-moon';
-}
-
+// Same behaviour as Finance/Staff/Students: dark unless "light" was saved.
 function initDarkMode() {
   const saved = localStorage.getItem('eduflow-theme');
-  if (saved === 'dark') {
-    document.documentElement.setAttribute('data-theme', 'dark');
-  } else {
-    document.documentElement.removeAttribute('data-theme');
-  }
-  updateThemeIcon();
+  document.documentElement.setAttribute('data-theme', saved === 'light' ? 'light' : 'dark');
 }
 
 // ═══════════════════════════════════════════════

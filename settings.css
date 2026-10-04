@@ -1,62 +1,47 @@
 /* ═══════════════════════════════════════════════
-   EduFlow Pro — Admin Settings CS
+   EduFlow Pro — Admin Settings CSS
    Light + Dark mode with CSS variables
    ═══════════════════════════════════════════════ */
 
-/* ── LIGHT (default) ────────────────────────────── */
+/* ═══════════════════════════════════════════════
+   THEME TOKENS — identical palette to manage-finance /
+   manage-staff / manage-students (dark is the default).
+   The legacy Settings variable names below are kept as
+   aliases so every rule in this file keeps working.
+   ═══════════════════════════════════════════════ */
 :root {
-  /* Primary accent: blue (matches manage-students) */
-  --accent: #2563eb;
-  --accent-light: #eff6ff;
-  --accent-dark: #1d4ed8;
-  --accent-mid: #dbeafe;
-  --accent-glow: rgba(37,99,235,0.15);
+  color-scheme: dark;
 
-  /* Kept for legacy use within this file */
-  --green: #2563eb;
-  --green-light: #eff6ff;
-  --green-dark: #1d4ed8;
-  --green-mid: #dbeafe;
+  /* Shared palette (same values as manage-staff.css) */
+  --bg-primary: #0b1120;
+  --bg-secondary: #111a2e;
+  --bg-card: rgba(255, 255, 255, 0.04);
+  --bg-sidebar: rgba(13, 20, 40, 0.92);
+  --bg-input: rgba(255, 255, 255, 0.05);
+  --bg-hover: rgba(255, 255, 255, 0.05);
 
-  --blue: #3b82f6;
-  --blue-light: #eff6ff;
-  --orange: #f59e0b;
-  --orange-light: #fffbeb;
-  --red: #ef4444;
-  --red-light: #fef2f2;
-  --purple: #8b5cf6;
-  --purple-light: #f5f3ff;
+  --text-primary: #e8ecf4;
+  --text-secondary: #8892a8;
+  --text-faint: #556178;
 
-  /* Themeable tokens */
-  --sidebar-bg: #ffffff;
-  --sidebar-border: rgba(17,24,39,0.08);
-  --sidebar-text: rgba(17,24,39,0.55);
-  --sidebar-text-strong: rgba(17,24,39,0.88);
-  --sidebar-label: rgba(17,24,39,0.35);
-  --sidebar-hover-bg: rgba(17,24,39,0.045);
-  --sidebar-close: rgba(17,24,39,0.4);
-  --sidebar-width: 250px;
-  --text-main: #111827;
-  --text-muted: #6b7280;
-  --text-light: #9ca3af;
-  --border: #e5e7eb;
-  --bg: #f8fafc;
-  --bg-secondary: #f1f5f9;
-  --card: #ffffff;
-  --card-shadow: 0 1px 4px rgba(0,0,0,0.06);
-  --radius: 10px;
-  --radius-sm: 6px;
-  --input-bg: #ffffff;
-  --input-border: #e5e7eb;
-  --header-bg: #ffffff;
-  --save-bar-bg: #ffffff;
-  --tab-bg: #ffffff;
-  --section-header-border: #f3f4f6;
-}
+  --accent-teaching: #3b82f6;
+  --accent-teaching-light: #60a5fa;
+  --accent-teaching-glow: rgba(59, 130, 246, 0.25);
+  --accent-nonteaching: #a855f7;
+  --accent-nonteaching-glow: rgba(168, 85, 247, 0.25);
 
-/* ── DARK MODE — matches manage-students.css palette ── */
-[data-theme="dark"] {
-  --accent: #3b82f6;
+  --border-subtle: rgba(255, 255, 255, 0.06);
+  --border-hover: rgba(255, 255, 255, 0.12);
+
+  --radius-lg: 24px;
+  --radius-md: 16px;
+  --radius-sm: 12px;
+  --shadow-card: 0 8px 32px rgba(0, 0, 0, 0.3);
+  --transition: 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+  --sidebar-width: 260px;
+
+  /* Accent (blue, same as Students/Finance teaching accent) */
+  --accent: var(--accent-teaching);
   --accent-light: rgba(59,130,246,0.12);
   --accent-dark: #2563eb;
   --accent-mid: rgba(59,130,246,0.2);
@@ -67,31 +52,82 @@
   --green-dark: #60a5fa;
   --green-mid: rgba(59,130,246,0.2);
 
-  --sidebar-bg: rgba(13,20,40,0.92);
-  --sidebar-border: rgba(255,255,255,0.07);
-  --sidebar-text: rgba(255,255,255,0.55);
-  --sidebar-text-strong: #ffffff;
-  --sidebar-label: rgba(255,255,255,0.3);
-  --sidebar-hover-bg: rgba(255,255,255,0.05);
-  --sidebar-close: rgba(255,255,255,0.4);
-  --text-main: #e8ecf4;
-  --text-muted: #8892a8;
-  --text-light: #556178;
-  --border: rgba(255,255,255,0.06);
-  --bg: #0b1120;
-  --bg-secondary: #111a2e;
-  --card: #111a2e;
-  --card-shadow: 0 8px 32px rgba(0,0,0,0.3);
-  --input-bg: #0b1120;
-  --input-border: rgba(255,255,255,0.08);
-  --header-bg: #111a2e;
-  --save-bar-bg: #111a2e;
-  --tab-bg: #111a2e;
-  --section-header-border: rgba(255,255,255,0.06);
+  --blue: #3b82f6;
   --blue-light: rgba(59,130,246,0.12);
+  --orange: #f59e0b;
   --orange-light: rgba(245,158,11,0.12);
+  --red: #ef4444;
   --red-light: rgba(239,68,68,0.12);
+  --purple: #8b5cf6;
   --purple-light: rgba(139,92,246,0.12);
+
+  /* Settings aliases -> shared palette */
+  --sidebar-bg: var(--bg-sidebar);
+  --sidebar-border: var(--border-subtle);
+  --sidebar-text: var(--text-secondary);
+  --sidebar-text-strong: var(--text-primary);
+  --sidebar-label: var(--text-faint);
+  --sidebar-hover-bg: rgba(255,255,255,0.04);
+  --sidebar-close: var(--text-secondary);
+  --text-main: var(--text-primary);
+  --text-muted: var(--text-secondary);
+  --text-light: var(--text-faint);
+  --border: var(--border-subtle);
+  --bg: var(--bg-primary);
+  --card: var(--bg-card);
+  --card-shadow: none;
+  --radius: var(--radius-md);
+  --input-bg: var(--bg-input);
+  --input-border: var(--border-subtle);
+  --header-bg: rgba(11,17,32,0.85);
+  --save-bar-bg: var(--bg-secondary);
+  --tab-bg: var(--bg-card);
+  --section-header-border: var(--border-subtle);
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+
+  --bg-primary: #f8fafc;
+  --bg-secondary: #ffffff;
+  --bg-card: rgba(255, 255, 255, 0.85);
+  --bg-sidebar: rgba(255, 255, 255, 0.95);
+  --bg-input: #ffffff;
+  --bg-hover: rgba(0, 0, 0, 0.04);
+
+  --text-primary: #0f172a;
+  --text-secondary: #475569;
+  --text-faint: #64748b;
+
+  --accent-teaching: #2563eb;
+  --accent-teaching-light: #3b82f6;
+  --accent-teaching-glow: rgba(37, 99, 235, 0.15);
+  --accent-nonteaching: #9333ea;
+  --accent-nonteaching-glow: rgba(147, 51, 234, 0.15);
+
+  --border-subtle: rgba(0, 0, 0, 0.08);
+  --border-hover: rgba(0, 0, 0, 0.15);
+  --shadow-card: 0 10px 30px rgba(0, 0, 0, 0.05);
+
+  --accent-light: #eff6ff;
+  --accent-dark: #1d4ed8;
+  --accent-mid: #dbeafe;
+  --accent-glow: rgba(37,99,235,0.15);
+
+  --green: #2563eb;
+  --green-light: #eff6ff;
+  --green-dark: #1d4ed8;
+  --green-mid: #dbeafe;
+
+  --blue: #3b82f6;
+  --blue-light: #eff6ff;
+  --orange-light: #fffbeb;
+  --red-light: #fef2f2;
+  --purple-light: #f5f3ff;
+
+  --sidebar-hover-bg: rgba(0,0,0,0.03);
+  --header-bg: rgba(248,250,252,0.85);
+  --input-border: rgba(0,0,0,0.1);
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -102,6 +138,35 @@ body {
   display: flex;
   min-height: 100vh;
   transition: background 0.3s, color 0.3s;
+  overflow-x: hidden;
+}
+html { scroll-behavior: smooth; }
+
+/* Decorative glow spots — same as .glow-spot in Finance/Staff/Students */
+body::before, body::after {
+  content: '';
+  position: fixed;
+  border-radius: 50%;
+  filter: blur(120px);
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0.5;
+}
+body::before {
+  width: 400px; height: 400px;
+  background: var(--accent-teaching-glow);
+  top: -100px; right: 10%;
+  animation: glowFloat 8s ease-in-out infinite alternate;
+}
+body::after {
+  width: 350px; height: 350px;
+  background: var(--accent-nonteaching-glow);
+  bottom: -80px; left: 30%;
+  animation: glowFloat 10s ease-in-out infinite alternate-reverse;
+}
+@keyframes glowFloat {
+  0%   { transform: translate(0, 0) scale(1); }
+  100% { transform: translate(30px, -20px) scale(1.15); }
 }
 
 /* ── SIDEBAR OVERLAY ─────────────────────────── */
@@ -128,6 +193,9 @@ body {
   z-index: 100;
   transform: translateX(-100%);
   transition: transform 0.28s cubic-bezier(0.4,0,0.2,1);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-right: 1px solid var(--border-subtle);
 }
 .sidebar.open { transform: translateX(0); }
 
@@ -229,8 +297,8 @@ body {
   padding: 10px;
   border-top: 1px solid var(--sidebar-border);
 }
-.logout-btn { color: var(--sidebar-close) !important; }
-.logout-btn:hover { color: #f87171 !important; background: rgba(239,68,68,0.1) !important; }
+.logout-btn { color: #ef4444 !important; }
+.logout-btn:hover { color: #ef4444 !important; background: rgba(239,68,68,0.08) !important; }
 
 /* ── MAIN CONTENT ────────────────────────── */
 .main-content {
@@ -239,6 +307,9 @@ body {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
+  position: relative;
+  z-index: 1;
+  min-width: 0;
 }
 
 /* ── TOP HEADER ──────────────────────────── */
@@ -254,41 +325,77 @@ body {
   top: 0;
   z-index: 50;
   gap: 12px;
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
   transition: background 0.3s, border-color 0.3s;
 }
 .header-left { display: flex; align-items: center; gap: 14px; }
 .menu-toggle-btn {
   background: none;
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-subtle);
   border-radius: var(--radius-sm);
-  width: 36px; height: 36px;
+  min-width: 42px; min-height: 42px;
   display: flex; align-items: center; justify-content: center;
-  font-size: 15px;
-  color: var(--text-muted);
+  font-size: 18px;
+  color: var(--text-primary);
   cursor: pointer;
-  transition: all 0.15s;
+  transition: all var(--transition);
   flex-shrink: 0;
 }
-.menu-toggle-btn:hover { background: var(--bg); color: var(--text-main); border-color: var(--accent); }
+.menu-toggle-btn:hover { background: var(--bg-hover); }
 .header-title h1 { font-size: 18px; font-weight: 700; color: var(--text-main); }
 .header-title p { font-size: 12.5px; color: var(--text-muted); margin-top: 1px; }
 .header-actions { display: flex; align-items: center; gap: 12px; }
 
-/* Theme toggle button */
-.theme-toggle-btn {
-  width: 36px; height: 36px;
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--border);
-  background: none;
+/* Theme toggle — identical to .theme-toggle in manage-staff.css / Finance.
+   Scoped to #theme-toggle because .toggle-slider is also used by the
+   Late-Fee on/off switch further down in this file. */
+.theme-toggle {
+  position: relative;
+  width: 60px;
+  height: 32px;
+  border-radius: 30px;
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-card);
   cursor: pointer;
-  display: flex; align-items: center; justify-content: center;
-  font-size: 15px;
-  color: var(--text-muted);
-  transition: all 0.15s;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 6px;
+  margin-left: 4px;
   flex-shrink: 0;
+  transition: border-color var(--transition);
 }
-.theme-toggle-btn:hover { background: var(--bg); color: var(--text-main); border-color: var(--accent); }
-[data-theme="dark"] .theme-toggle-btn { color: #f59e0b; border-color: rgba(245,158,11,0.3); }
+.theme-toggle:hover { border-color: var(--border-hover); }
+.theme-toggle i {
+  font-size: 13px;
+  z-index: 2;
+  transition: color var(--transition);
+}
+.theme-toggle #theme-icon-moon { color: #e2e8f0; transform: translateX(2px); }
+.theme-toggle #theme-icon-sun  { color: #475569; transform: translateX(-2px); }
+.theme-toggle .toggle-slider {
+  position: absolute;
+  inset: auto;
+  top: 3px;
+  left: 4px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #1e293b;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+  z-index: 1;
+  cursor: default;
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.theme-toggle .toggle-slider:before { content: none; }
+:root[data-theme="light"] .theme-toggle .toggle-slider {
+  transform: translateX(28px);
+  background: white;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+:root[data-theme="light"] .theme-toggle #theme-icon-moon { color: #cbd5e1; }
+:root[data-theme="light"] .theme-toggle #theme-icon-sun  { color: #f59e0b; }
 
 .badge-saved {
   display: none;
@@ -353,6 +460,8 @@ body {
   overflow: hidden;
   margin-bottom: 20px;
   box-shadow: var(--card-shadow);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
   transition: background 0.3s, border-color 0.3s;
 }
 .section-header {
@@ -1073,6 +1182,13 @@ textarea.var-input { resize: vertical; min-height: 70px; font-family: 'Inter', s
   transition: opacity 0.15s;
 }
 .btn-danger:hover { opacity: 0.85; }
+
+/* ── Shared-theme refinements ─────────────────── */
+.modal-box { background: var(--bg-secondary); }
+select option { background: var(--bg-secondary); color: var(--text-primary); }
+.save-bar { backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); }
+.btn-primary { box-shadow: 0 4px 12px rgba(59,130,246,0.3); }
+.btn-primary:hover { box-shadow: 0 6px 16px rgba(59,130,246,0.4); transform: translateY(-1px); }
 
 /* ── TOAST ───────────────────────────────── */
 .toast {
