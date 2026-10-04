@@ -4309,3 +4309,51 @@ function normalizeBiometricPath(raw) {
         },
     };
 })();
+
+
+/* ============================================================================
+   RESPONSIVE HELPER — labels table cells so phones can show them as cards.
+   Reads each table's <thead> and tags every <td> with data-label (+ a role
+   class for the name / status / # cells). Re-runs whenever a table body is
+   re-rendered, so it needs no changes to the existing render functions.
+   ============================================================================ */
+(function () {
+    function labelTable(table) {
+        if (!table || table.classList.contains('monthly-table')) return;
+        var ths = table.querySelectorAll('thead th');
+        if (!ths.length) return;
+        var labels = Array.prototype.map.call(ths, function (th) { return th.textContent.trim(); });
+        table.querySelectorAll('tbody tr').forEach(function (tr) {
+            if (tr.getAttribute('data-labelled') === String(tr.children.length) && tr.__lblDone) return;
+            Array.prototype.forEach.call(tr.children, function (td, i) {
+                if (td.tagName !== 'TD' || td.hasAttribute('colspan')) return;
+                var label = labels[i] || '';
+                td.setAttribute('data-label', label);
+                td.classList.toggle('td-num',    label === '#');
+                td.classList.toggle('td-name',   label === 'Name');
+                td.classList.toggle('td-status', i === labels.length - 1 && /status/i.test(label) && !!td.querySelector('.status-cell, .done-cell'));
+            });
+            tr.__lblDone = true;
+            tr.setAttribute('data-labelled', String(tr.children.length));
+        });
+    }
+
+    function labelAll() {
+        document.querySelectorAll('.attendance-table:not(.monthly-table)').forEach(labelTable);
+    }
+
+    function init() {
+        labelAll();
+        var obs = new MutationObserver(function () {
+            // batch to one pass per frame
+            if (init._raf) return;
+            init._raf = requestAnimationFrame(function () { init._raf = 0; labelAll(); });
+        });
+        document.querySelectorAll('.attendance-table:not(.monthly-table) tbody').forEach(function (tb) {
+            obs.observe(tb, { childList: true });
+        });
+    }
+
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
+    else init();
+})();

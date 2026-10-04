@@ -1240,3 +1240,306 @@ body {
     box-shadow: 0 4px 14px var(--emerald-glow);
 }
 .biometric-save:hover { transform: translateY(-1px); box-shadow: 0 6px 18px var(--emerald-glow); }
+
+/* ============================================================================
+   RESPONSIVE LAYER — phones, tablets, laptops, large monitors
+   Appended LAST so it wins over every earlier rule (and over inline styles
+   where marked !important). Breakpoints: ≥1440 · ≤1024 · ≤760 · ≤560 · ≤380
+   ============================================================================ */
+
+/* ---------- Foundation ---------- */
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+img, svg, video, canvas { max-width: 100%; }
+body { min-height: 100vh; min-height: 100dvh; }
+
+.main-content {
+    width: 100%;
+    max-width: 1440px;
+    margin-left: auto;
+    margin-right: auto;
+    padding-left: clamp(14px, 3.2vw, 40px);
+    padding-right: clamp(14px, 3.2vw, 40px);
+    padding-bottom: calc(48px + env(safe-area-inset-bottom, 0px));
+}
+
+/* Fluid type */
+.page-title    { font-size: clamp(19px, 3vw, 24px); }
+.stage-title   { font-size: clamp(17px, 2.6vw, 22px); }
+.section-heading { font-size: clamp(17px, 2.4vw, 20px); }
+
+/* Sidebar fits any screen */
+.sidebar { width: min(var(--sidebar-width), 86vw); height: 100vh; height: 100dvh; padding-bottom: env(safe-area-inset-bottom, 0px); }
+.sidebar-nav { -webkit-overflow-scrolling: touch; }
+
+/* Header */
+.main-header { flex-wrap: nowrap; gap: 10px; }
+.header-left { flex: 1 1 auto; min-width: 0; }
+.school-branding { min-width: 0; }
+.school-branding .school-name { font-size: clamp(11px, 1.9vw, 18px); line-height: 1.25; overflow-wrap: anywhere; }
+.header-right { flex-shrink: 0; gap: clamp(6px, 1.5vw, 12px); }
+.menu-toggle { flex-shrink: 0; min-width: 42px; min-height: 42px; align-items: center; justify-content: center; }
+
+/* Stats strip + KPI cards + choice cards flow fluidly */
+.attn-stats-grid { grid-template-columns: repeat(auto-fit, minmax(min(100%, 160px), 1fr)); }
+.kpi-grid        { grid-template-columns: repeat(auto-fit, minmax(min(100%, 170px), 1fr)); }
+.classes-grid    { grid-template-columns: repeat(auto-fill, minmax(min(100%, 230px), 1fr)); gap: clamp(12px, 2vw, 20px); }
+.choice-grid .choice-card { min-width: min(280px, 100%); }
+.attn-stat-label { white-space: normal; }
+
+/* Stage header wraps cleanly */
+.stage-header { gap: 12px; margin-bottom: 20px; }
+.stage-title { min-width: 0; overflow-wrap: anywhere; }
+
+/* Toolbar */
+.toolbar { gap: 10px; }
+.search-wrap { min-width: min(240px, 100%); }
+.section-select { min-width: min(180px, 100%); }
+.section-dropdown { max-width: 100vw; }
+.month-nav { flex-wrap: wrap; }
+
+/* Tables always scroll inside their card, never the page */
+.table-card { max-width: 100%; }
+.table-scroll { -webkit-overflow-scrolling: touch; max-width: 100%; }
+.attendance-table td, .attendance-table th { overflow-wrap: anywhere; }
+
+/* Monthly grid: sticky columns need a solid colour or the days scroll "through" them */
+.monthly-table tbody td.col-id,
+.monthly-table tbody td.col-name,
+.monthly-table tbody td.col-guardian { background: var(--bg-secondary); }
+
+/* Modals never exceed the screen */
+.report-modal { padding: clamp(8px, 2vw, 20px); }
+.report-modal__panel { max-height: 92vh; max-height: 92dvh; }
+.report-scope, .report-result, .biometric-body, .scanner-body { -webkit-overflow-scrolling: touch; overscroll-behavior: contain; }
+.scanner-panel { width: min(560px, 100%) !important; max-width: 560px !important; }
+.biometric-panel { width: min(620px, 100%); max-width: 620px; }
+.scanner-video-wrap { max-height: min(62vh, 460px); max-height: min(62dvh, 460px); }
+
+/* Touch: bigger targets, no sticky hover, no iOS focus-zoom */
+@media (hover: none) {
+    .attn-stat-card:hover, .choice-card:hover, .class-card:hover, .kpi-card:hover,
+    .scope-btn:hover, .save-btn:hover, .back-btn:hover { transform: none; }
+}
+@media (pointer: coarse) {
+    .bulk-btn, .filter-btn, .back-btn, .view-attendance-btn, .report-action,
+    .period-btn, .cam-ctrl-btn, .section-trigger, .edit-btn, .biometric-video-btn,
+    .biometric-cancel, .biometric-save, .biometric-browse-btn { min-height: 44px; }
+    .status-btn { min-height: 40px; }
+    .report-modal__close, .close-btn { width: 44px; height: 44px; }
+    .search-wrap input, .sidebar-search input, .leave-reason input, .biometric-input { font-size: 16px; }
+}
+
+/* ---------- ≥1440: big monitors ---------- */
+@media (min-width: 1440px) {
+    .classes-grid { grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
+}
+
+/* ---------- ≤1024: tablets ---------- */
+@media (max-width: 1024px) {
+    .main-header { margin-bottom: 26px; }
+    .attendance-table { min-width: 640px; }
+    .attendance-table thead th, .attendance-table tbody td { padding: 12px 12px; }
+    .record-profile { flex-wrap: wrap; }
+    .record-tags { margin-left: 0; width: 100%; }
+}
+
+/* ---------- ≤760: phones & small tablets ---------- */
+@media (max-width: 760px) {
+    .main-header { padding: 14px 0; margin-bottom: 20px; }
+    .page-title-section { margin-top: 0; }
+
+    /* Live stats: tidy 2×2 */
+    .attn-stats-grid { grid-template-columns: 1fr 1fr; gap: 10px; }
+    .attn-stat-card { padding: 12px; gap: 10px; }
+    .attn-stat-icon { width: 34px; height: 34px; font-size: 14px; }
+    .attn-stat-value { font-size: 18px; }
+
+    /* Stage header: Back + title on one line, action button full width below */
+    .stage-header { align-items: center; }
+    .view-attendance-btn { margin-left: 0; width: 100%; justify-content: center; order: 3; }
+
+    /* Toolbars stack */
+    .toolbar { flex-direction: column; align-items: stretch; margin-bottom: 14px; }
+    .search-wrap { min-width: 0; width: 100%; flex: none; }
+    .section-select { width: 100%; min-width: 0; }
+    .bulk-actions, .quick-filters { width: 100%; }
+    .bulk-btn, .filter-btn { flex: 1 1 auto; text-align: center; justify-content: center; }
+    .biometric-btn { flex: 1 1 100%; }
+
+    /* inline-styled helpers in the View / Monthly toolbars */
+    .view-actions { margin-left: 0 !important; width: 100%; }
+    .view-actions .bulk-btn { flex: 1; justify-content: center; }
+    .month-nav { width: 100%; justify-content: space-between; gap: 8px !important; }
+    #month-label, #staff-month-label { min-width: 0 !important; flex: 1 1 auto; font-size: 0.9rem; }
+    #open-report-btn, #open-staff-report-btn, #staff-monthly-print-btn, #staff-monthly-share-btn,
+    #open-student-report-btn, #open-staff-individual-report-btn {
+        margin-left: 0 !important; flex: 1 1 100%; width: 100%;
+        justify-content: center; white-space: normal !important;
+    }
+    .view-period-toolbar > div[style*="margin-left:auto"] { margin-left: 0 !important; width: 100%; }
+    .period-switcher { width: 100%; }
+    .period-btn { flex: 1; justify-content: center; }
+
+    /* ===== ATTENDANCE TABLES → CARDS ===== */
+    .attendance-table:not(.monthly-table), .attendance-table:not(.monthly-table) tbody { display: block; min-width: 0; width: 100%; }
+    .attendance-table:not(.monthly-table) thead { display: none; }
+    .table-card:has(.attendance-table:not(.monthly-table)) { background: transparent; border: 0; box-shadow: none; padding: 0; }
+    .table-card:has(.attendance-table:not(.monthly-table)) .table-scroll { overflow: visible; }
+
+    .attendance-table:not(.monthly-table) tbody tr {
+        display: flex; flex-direction: column;
+        margin-bottom: 12px; padding: 4px 14px 12px;
+        background: var(--bg-card);
+        border: 1px solid var(--border-subtle);
+        border-radius: var(--radius-md);
+        box-shadow: var(--shadow-card);
+    }
+    .attendance-table:not(.monthly-table) tbody tr.row-done { border-left: 3px solid var(--emerald); }
+    .attendance-table:not(.monthly-table) tbody td {
+        display: flex; align-items: center; justify-content: space-between; gap: 12px;
+        padding: 9px 0; font-size: 13.5px; text-align: right;
+        border-bottom: 1px dashed var(--border-subtle);
+        min-width: 0;
+    }
+    .attendance-table:not(.monthly-table) tbody td:empty { display: none; }
+    .attendance-table:not(.monthly-table) tbody td::before {
+        content: attr(data-label);
+        flex-shrink: 0; text-align: left;
+        font-size: 11px; font-weight: 700; letter-spacing: .5px;
+        text-transform: uppercase; color: var(--text-muted);
+    }
+    /* "#" column hidden – the card itself is the row */
+    .attendance-table:not(.monthly-table) tbody td.td-num { display: none; }
+
+    /* Name = card header */
+    .attendance-table:not(.monthly-table) tbody td.td-name {
+        order: -1; display: block; text-align: left;
+        font-size: 16px; font-weight: 700;
+        padding: 12px 0 10px; border-bottom: 1px solid var(--border-subtle);
+    }
+    .attendance-table:not(.monthly-table) tbody td.td-name::before { display: none; }
+    .attendance-table:not(.monthly-table) .leave-reason { margin-top: 10px; font-weight: 400; }
+    .attendance-table:not(.monthly-table) .done-reason { display: block; margin-top: 3px; }
+
+    /* Status buttons: full-width row, three equal tap targets with labels */
+    .attendance-table:not(.monthly-table) tbody td.td-status {
+        display: block; border-bottom: 0; padding: 12px 0 0;
+    }
+    .attendance-table:not(.monthly-table) tbody td.td-status::before { display: none; }
+    .td-status .status-cell {
+        display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;
+    }
+    .td-status .status-btn { justify-content: center; padding: 10px 6px; min-height: 44px; font-size: 13px; }
+    .td-status .status-btn span { display: inline !important; }
+    .td-status .done-cell { justify-content: space-between; }
+    .td-status .done-badge { flex: 1 1 auto; justify-content: center; }
+
+    /* View-Attendance summary rows (Present / Absent / Leave counts) stay compact */
+    .attendance-table:not(.monthly-table) tbody td .badge { font-size: 11px; }
+
+    /* ===== Monthly grid: narrower sticky columns so days stay visible ===== */
+    .monthly-table .col-id { min-width: 52px; width: 52px; }
+    .monthly-table .col-name { left: 52px; min-width: 120px; max-width: 140px; white-space: normal; }
+    .monthly-table .col-guardian { position: static; left: auto; min-width: 110px; }
+    .monthly-table thead th.col-guardian { position: static; }
+
+    /* Single-record page */
+    .record-profile { padding: 16px; gap: 12px; }
+    .record-avatar { width: 48px; height: 48px; }
+    .record-tags { margin-left: 0; width: 100%; }
+    .record-tag { flex: 1 1 calc(50% - 8px); }
+
+    /* Save bar stays reachable while scrolling a long class list */
+    .save-bar {
+        position: sticky; bottom: calc(8px + env(safe-area-inset-bottom, 0px)); z-index: 30;
+        flex-direction: column; align-items: stretch; gap: 10px;
+        padding: 12px 14px; margin-top: 16px;
+        backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+        background: var(--bg-secondary);
+        box-shadow: 0 -6px 24px rgba(2,6,23,.35);
+    }
+    .save-bar .summary { justify-content: center; }
+    .save-btn { width: 100%; justify-content: center; }
+    .toast { bottom: calc(96px + env(safe-area-inset-bottom, 0px)); max-width: calc(100vw - 24px); }
+
+    /* Autosave strip */
+    .autosave-strip { align-items: flex-start; font-size: .8rem; }
+}
+
+/* ---------- ≤560: phones ---------- */
+@media (max-width: 560px) {
+    .tilde-hint { display: none; }
+
+    /* Mode / class cards */
+    .choice-card { padding: 22px 20px 20px; }
+    .choice-icon { margin-bottom: 14px; }
+    .classes-grid { grid-template-columns: 1fr 1fr; gap: 10px; }
+    .class-card { padding: 18px 14px; min-height: 104px; }
+    .class-card .class-name { font-size: 16px; }
+
+    /* KPI cards 2-up */
+    .kpi-grid { grid-template-columns: 1fr 1fr; gap: 10px; }
+    .kpi-card { padding: 12px; gap: 10px; }
+    .kpi-icon { width: 38px; height: 38px; font-size: 15px; }
+    .kpi-value { font-size: 18px; }
+
+    /* History list rows: date + status on top, reason below */
+    .history-row--head { display: none; }
+    .history-row { grid-template-columns: 1fr auto; gap: 6px 12px; padding: 12px 14px; }
+    .history-reason { grid-column: 1 / -1; order: 3; }
+    .history-status { padding: 5px 14px; }
+
+    /* Modals → bottom sheets */
+    .report-modal { padding: 0; align-items: flex-end; }
+    .report-modal__panel { width: 100% !important; max-width: 100% !important; max-height: 94vh; max-height: 94dvh; border-radius: 20px 20px 0 0; }
+    .report-modal__head { padding: 14px 16px; }
+    .report-scope { padding: 18px 16px calc(18px + env(safe-area-inset-bottom, 0px)); }
+    .report-scope__btns { grid-template-columns: 1fr; gap: 10px; }
+    .scope-btn { flex-direction: row; align-items: center; gap: 14px; padding: 14px 16px; flex-wrap: wrap; }
+    .scope-btn__title { flex: 1 1 auto; }
+    .scope-btn__sub { flex: 1 1 100%; margin-left: 54px; margin-top: -8px; }
+    .report-result { padding: 12px 12px calc(14px + env(safe-area-inset-bottom, 0px)); }
+    .report-stats { grid-template-columns: 1fr 1fr; }
+    .report-stat { padding-left: 52px; }
+    .report-meta { grid-template-columns: 1fr 1fr; }
+    .report-actions { flex-direction: column-reverse; }
+    .report-action { width: 100%; justify-content: center; }
+
+    /* Scanner */
+    .scanner-body { padding: 14px 14px calc(14px + env(safe-area-inset-bottom, 0px)); gap: 10px; }
+    .scanner-hint { font-size: .76rem; }
+    .camera-controls .cam-ctrl-btn { flex: 1 1 calc(50% - 8px); justify-content: center; }
+
+    /* Biometric */
+    .biometric-body { padding: 16px 16px 0; }
+    .biometric-input-row { flex-direction: column; }
+    .biometric-browse-btn { justify-content: center; min-height: 44px; }
+    .biometric-actions-row { flex-direction: column; align-items: stretch; }
+    .biometric-video-btn { justify-content: center; }
+    .biometric-footer { margin: 4px -16px 0; padding: 12px 16px calc(14px + env(safe-area-inset-bottom, 0px)); }
+    .biometric-footer button { flex: 1; justify-content: center; }
+}
+
+/* ---------- ≤380: very small phones ---------- */
+@media (max-width: 380px) {
+    .school-branding .school-name { font-size: 10.5px; letter-spacing: .2px; }
+    .theme-toggle { transform: scale(.9); transform-origin: right center; }
+    .scanner-btn { padding: 8px 11px; }
+    .classes-grid { grid-template-columns: 1fr; }
+    .attn-stat-meta .attn-stat-label { font-size: 10.5px; }
+    .td-status .status-btn { font-size: 12px; padding: 10px 2px; gap: 4px; }
+    .report-stats, .report-meta { grid-template-columns: 1fr; }
+}
+
+/* ---------- Short landscape phones ---------- */
+@media (max-height: 520px) and (orientation: landscape) {
+    .report-modal { padding: 6px; align-items: center; }
+    .report-modal__panel { max-height: 98vh; max-height: 98dvh; border-radius: var(--radius-md); }
+    .scanner-video-wrap { max-height: 52vh; max-height: 52dvh; }
+    .main-header { margin-bottom: 14px; }
+}
+
+/* ---------- Respect reduced-motion ---------- */
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }
+}
