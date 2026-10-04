@@ -771,6 +771,11 @@
                                 <i class="fas fa-external-link-alt"></i>
                             </a>
                         </div>
+                        <div class="upd-action-btns">
+                            <button onclick="toggleVoPromoteMode()" id="vo-promote-all-btn" class="btn-secondary btn-sm-upd">
+                                <i class="fas fa-graduation-cap"></i> Promote
+                            </button>
+                        </div>
                     </div>
 
                     <!-- SEARCH BAR -->
@@ -783,6 +788,10 @@
                         <button id="vo-orphan-filter-btn" class="btn-secondary btn-sm-upd" onclick="toggleVoOrphanFilter()" aria-pressed="false" title="Show only students with orphan status">
         <i class="fas fa-child"></i> Show Orphans Only
     </button>
+                        <div id="vo-promote-actions-bar" style="display:none; align-items:center; gap:10px;">
+                            <button onclick="toggleVoPromoteMode()" class="btn-ghost"><i class="fas fa-times"></i> Cancel</button>
+                            <button onclick="confirmPromotion('vo')" class="btn-primary-submit"><i class="fas fa-check"></i> Confirm</button>
+                        </div>
                     </div>
 
                     <!-- STUDENT TABLE -->
@@ -790,6 +799,7 @@
                         <table class="student-table">
                             <thead>
                                 <tr>
+                                    <th id="vo-promote-checkbox-header" style="display:none;"><i class="fas fa-check-square"></i></th>
                                     <th>#</th>
                                     <th>Student ID</th>
                                     <th>Roll No.</th>
@@ -797,6 +807,7 @@
                                     <th>Guardian / Father</th>
                                     <th id="vo-class-col-header">Section</th>
                                     <th>Gender</th>
+                                    <th id="vo-promote-status-header" style="display:none;">Promotion</th>
                                     <th class="text-center">View</th>
                                 </tr>
                             </thead>

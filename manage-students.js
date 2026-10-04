@@ -865,6 +865,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         if (modalId === 'view-only-modal') {
+            if (window.voResetPromoteMode) window.voResetPromoteMode();
             const searchEl = document.getElementById('vo-search-name');
             if (searchEl) searchEl.value = '';
             // Always re-open on the class-cards stage
@@ -4240,6 +4241,7 @@ if (certUploadInput) {
 
     /** Back button: table -> sections (or straight to classes if we came from "All Students") */
     window.voBackToSections = function() {
+        if (window.voResetPromoteMode) window.voResetPromoteMode();
         if (voActiveClass === ALL_STUDENTS_KEY) { window.voBackToClasses(); return; }
         voActiveSection = null;
         voRenderSectionCards();
@@ -4248,6 +4250,7 @@ if (certUploadInput) {
 
     /** Back button: sections -> classes */
     window.voBackToClasses = function() {
+    if (window.voResetPromoteMode) window.voResetPromoteMode();
     voActiveClass = null;
     voActiveSection = null;
     voOrphanFilterActive = false; // Reset filter
@@ -4295,12 +4298,14 @@ if (certUploadInput) {
         filtered = filtered.filter(s => studentMatchesSearch(s, qName));
     }
 
+    const voPromoteMode = document.body.classList.contains('vo-promote-mode-active');
+
     // Handle Empty State
     if (filtered.length === 0) {
         const emptyMsg = voOrphanFilterActive
             ? '<i class="fas fa-child" style="font-size:22px;display:block;margin-bottom:10px;opacity:0.6;"></i>No orphan records found.'
             : 'No matching records found.';
-        tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;padding:50px;color:#94a3b8;">${emptyMsg}</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="${voPromoteMode ? 10 : 8}" style="text-align:center;padding:50px;color:#94a3b8;">${emptyMsg}</td></tr>`;
         return;
     }
 
@@ -4333,8 +4338,20 @@ if (certUploadInput) {
         const safeGender       = SSValidate.escapeHtml(s.gender);
         const safeRegNoAttr    = String(s.regNo || '').replace(/['"\\]/g, '');
 
+        // Promote mode (same behaviour as Update Records): every listed
+        // student starts ticked, plus a Promoted / Not Promoted badge.
+        const voCheckboxCell = voPromoteMode
+            ? `<td><input type="checkbox" class="vo-promote-checkbox" data-regno="${safeRegNoAttr}" checked style="width:18px;height:18px;"></td>`
+            : '';
+        const voStatusCell = voPromoteMode
+            ? `<td>${s.promoted
+                    ? '<span class="promotion-status-badge promoted"><i class="fas fa-check-circle"></i> Promoted</span>'
+                    : '<span class="promotion-status-badge pending"><i class="fas fa-hourglass-half"></i> Not Promoted</span>'}</td>`
+            : '';
+
         tbody.innerHTML += `
             <tr class="${s.orphanStatus === 'Orphan' ? 'orphan-highlight' : ''}">
+                ${voCheckboxCell}
                 <td class="msc-sr-cell">${idx + 1}</td>
                 <td><span class="hrk-id-badge">${safeDisplayId}</span></td>
                 <td>${safeRollNo}</td>
@@ -4346,6 +4363,7 @@ if (certUploadInput) {
                 <td>${safeGuardianName}</td>
                 <td><span class="class-chip">${safeClassSection}</span></td>
                 <td>${safeGender}</td>
+                ${voStatusCell}
                 <td style="text-align:center;">
                     <div class="action-btn-group">
                         <button class="btn-icon view" onclick="viewFullProfile('${safeRegNoAttr}')" title="View Profile"><i class="fas fa-eye"></i></button>
@@ -5181,8 +5199,35 @@ ${pagesHtml}
         renderStudentTable();
     };
 
-    window.confirmPromotion = async function() {
-        const checkboxes = document.querySelectorAll('.promote-checkbox');
+    // ── PROMOTE MODE for Manage Records (mirrors Update Records) ─────────────
+    function voApplyPromoteUI(active) {
+        const set = (id, show, display) => {
+            const el = document.getElementById(id);
+            if (el) el.style.display = show ? display : 'none';
+        };
+        set('vo-promote-checkbox-header', active, '');
+        set('vo-promote-status-header', active, '');
+        set('vo-promote-actions-bar', active, 'flex');
+        const btn = document.getElementById('vo-promote-all-btn');
+        if (btn) btn.style.display = active ? 'none' : '';
+    }
+
+    window.toggleVoPromoteMode = function() {
+        const active = document.body.classList.toggle('vo-promote-mode-active');
+        voApplyPromoteUI(active);
+        if (typeof renderViewOnlyTable === 'function') renderViewOnlyTable();
+    };
+
+    // Silently leave promote mode (used when navigating away / reopening).
+    window.voResetPromoteMode = function() {
+        document.body.classList.remove('vo-promote-mode-active');
+        voApplyPromoteUI(false);
+    };
+
+    // scope: undefined/'upd' = Update Records table, 'vo' = Manage Records table
+    window.confirmPromotion = async function(scope) {
+        const isVo = scope === 'vo';
+        const checkboxes = document.querySelectorAll(isVo ? '.vo-promote-checkbox' : '.promote-checkbox');
         const selectedRegNos = Array.from(checkboxes)
             .filter(cb => cb.checked)
             .map(cb => cb.dataset.regno);
@@ -5281,7 +5326,13 @@ ${pagesHtml}
             failedCount > 0 ? "danger" : "success"
         );
 
-        togglePromoteMode();
+        if (isVo) {
+            toggleVoPromoteMode();
+            if (typeof renderStudentTable === 'function') renderStudentTable();
+        } else {
+            togglePromoteMode();
+            if (typeof renderViewOnlyTable === 'function') renderViewOnlyTable();
+        }
         updateDashboardStats();
     };
 
@@ -5752,7 +5803,9 @@ ${pagesHtml}
                 const m = document.getElementById('student-modal');
                 if (m) m.style.zIndex = '5500';
             } else if (action === 'record') {
-                window.viewFullProfile(regNo);
+                // Opens the printable "Complete Student Record" page
+                // (Print / Share on WhatsApp / Close toolbar).
+                window.printStudentRecordForStudent(regNo);
             } else if (action === 'admission') {
                 window.printAdmissionFormForStudent(regNo);
             } else if (action === 'deactivate') {
