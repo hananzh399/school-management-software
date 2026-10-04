@@ -181,6 +181,12 @@ function toggleDarkMode() {
 }
 
 // Same behaviour as Finance/Staff/Students: dark unless "light" was saved.
+// Same format as the Finance header date (e.g. "Sun, Oct 4, 2026")
+function initDate() {
+  const el = document.getElementById('header-date');
+  if (el) el.textContent = new Date().toLocaleDateString('en-US', { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' });
+}
+
 function initDarkMode() {
   const saved = localStorage.getItem('eduflow-theme');
   document.documentElement.setAttribute('data-theme', saved === 'light' ? 'light' : 'dark');
@@ -247,6 +253,7 @@ function injectAbsenceBadge(card, salary, penaltyType, penaltyValue, staffId) {
 // ═══════════════════════════════════════════════
 document.addEventListener('DOMContentLoaded', async () => {
   initDarkMode();
+  initDate();
 
   // Fetch the settings row from the backend first, then render every tab
   // from that (mirrored into localStorage as a cache along the way).

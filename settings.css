@@ -409,14 +409,17 @@ body::after {
   gap: 4px;
 }
 .badge-saved.show { display: flex; }
-.admin-avatar {
-  width: 34px; height: 34px;
-  background: linear-gradient(135deg, #3b82f6, #8b5cf6);
-  border-radius: 50%;
-  display: flex; align-items: center; justify-content: center;
-  font-size: 12px; font-weight: 700; color: #fff;
-  flex-shrink: 0;
+.header-date {
+  font-size: 13px;
+  color: var(--text-secondary);
+  font-weight: 500;
+  padding: 8px 16px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  white-space: nowrap;
 }
+@media (max-width: 600px) { .header-date { display: none; } }
 
 /* ── BODY ────────────────────────────────── */
 .page-body { padding: 28px 32px 48px; }
