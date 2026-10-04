@@ -5621,6 +5621,20 @@ ${pagesHtml}
         );
         if (!ok) return;
 
+        // Fee question — only relevant for students whose CLASS changes (a
+        // section-only move keeps the same class standard fee).
+        const classChangers = toMove.filter(st => st.studentClass !== destClass);
+        let updateFees = false;
+        if (classChangers.length > 0) {
+            const stdFee = getStandardFeeForClass(destClass);
+            updateFees = await ssConfirm(
+                `Update fees for ${classChangers.length} student(s) moving to ${destClass}?\n\n` +
+                `Their standard tuition fee will be set to the ${destClass} standard fee (Rs. ${stdFee.toLocaleString()}). ` +
+                `Each student's existing discounts (tuition, transport, sibling) stay applied, and the net payable is recalculated.`,
+                { title: 'Update Fees?', confirmLabel: 'Yes, update fees', cancelLabel: 'No, keep current fees', danger: false }
+            );
+        }
+
         // Roll numbers: students changing CLASS get the next free roll number in
         // the new class (counted up locally so a batch never duplicates);
         // students only changing SECTION keep their roll number.
@@ -5632,13 +5646,30 @@ ${pagesHtml}
             }
         });
 
+        let feesUpdatedCount = 0;
         toMove.forEach(s => {
-            if (s.studentClass !== destClass) {
+            const classChanged = s.studentClass !== destClass;
+            if (classChanged) {
                 maxRoll += 1;
                 s.rollNo = String(maxRoll);
             }
             s.studentClass = destClass;
             s.section = targetSection;
+
+            if (updateFees && classChanged) {
+                // Same maths as the admission/edit form's performFinancialAudit():
+                // net = (standard + admission + transport) - (tuition + transport + sibling discounts)
+                const num = v => parseFloat(v) || 0;
+                s.standardFee = getStandardFeeForClass(destClass);
+                const net = (num(s.standardFee) + num(s.admissionFee) + num(s.transportFee))
+                          - (num(s.tuitionDiscount) + num(s.transportDiscount) + num(s.siblingDiscount));
+                s.netPayable = Math.max(0, net).toFixed(0);
+                // Annual fund is also set per class in Settings.
+                if (s.annualFundEnabled === 'on' || s.annualFundEnabled === true) {
+                    s.annualFundAmount = getAnnualFundForClass(destClass);
+                }
+                feesUpdatedCount++;
+            }
         });
 
         saveDatabase(db);
@@ -5657,6 +5688,7 @@ ${pagesHtml}
         showToast(
             'Transfer Complete',
             `${toMove.length} student(s) moved to ${label}.` +
+            (feesUpdatedCount ? ` Fees updated for ${feesUpdatedCount} student(s) (discounts kept).` : '') +
             (failed ? ` ${failed} record(s) could not be saved to the server — check your connection, they may revert.` : ''),
             failed ? 'danger' : 'success'
         );
