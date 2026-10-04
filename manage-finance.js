@@ -327,6 +327,9 @@ let _staffAdvancesCache = [];
 // not own salaryHistory, so paid/pending status must come from this cache.
 let _salaryRecordsCache = [];
 let _generatedVouchersCache = [];
+// True once the vouchers list (which also holds the active fee-month marker)
+// has been successfully fetched from the backend at least once.
+let _generatedVouchersLoaded = false;
 // BUGFIX — "refresh the page and Collected resets to 0 / Pending goes up
 // by the same amount": updateFeeStatsHeader(), updateClassFeeStats(), and
 // _computeRealtimePendingTotal() used to compute "Collected" by summing
@@ -555,7 +558,11 @@ let _generatedVouchersSaveInFlight = 0;
 async function refreshGeneratedVouchersCache() {
     if (_generatedVouchersSaveInFlight > 0) return; // don't clobber cache mid-save
     const data = await _backendGet(API_BASE, ENDPOINTS.vouchers);
-    if (Array.isArray(data)) _generatedVouchersCache = data;
+    if (Array.isArray(data)) {
+        _generatedVouchersCache = data;
+        _generatedVouchersLoaded = true;
+        ensureFeeMonthInitialized();
+    }
 }
 
 async function refreshStudentFeeStatusCache() {
@@ -739,6 +746,11 @@ async function refreshAllFinanceCaches() {
     // stale one held over from the previous poll 10s ago), but every cache
     // builder *within this single poll* still only triggers one network call.
     _settingsFetchPromise = null;
+    // The active fee month lives inside the vouchers list, so the fee-status
+    // fetch (which asks the backend for "this month") has to wait for it —
+    // otherwise it would ask for the calendar month before the stored month
+    // has arrived.
+    const vouchersLoaded = refreshGeneratedVouchersCache();
     await Promise.all([
         refreshStudentsCache(),
         refreshClassConfigsCache(),
@@ -749,8 +761,8 @@ async function refreshAllFinanceCaches() {
         refreshExpensesCache(),
         refreshStaffAdvancesCache(),
         refreshSalaryRecordsCache(),
-        refreshGeneratedVouchersCache(),
-        refreshStudentFeeStatusCache(),
+        vouchersLoaded,
+        vouchersLoaded.then(() => refreshStudentFeeStatusCache()),
         refreshStaffCache(),
     ]);
 }
@@ -785,6 +797,9 @@ async function refreshFinanceCachesPhase1() {
 }
 
 async function refreshFinanceCachesPhase2() {
+    // See refreshAllFinanceCaches(): fee-status must wait for the vouchers
+    // list because the active fee month is stored in it.
+    const vouchersLoaded = refreshGeneratedVouchersCache();
     await Promise.all([
         refreshStudentsCache(),
         refreshCustomFeesCache(),
@@ -793,8 +808,8 @@ async function refreshFinanceCachesPhase2() {
         refreshExpensesCache(),
         refreshStaffAdvancesCache(),
         refreshSalaryRecordsCache(),
-        refreshGeneratedVouchersCache(),
-        refreshStudentFeeStatusCache(),
+        vouchersLoaded,
+        vouchersLoaded.then(() => refreshStudentFeeStatusCache()),
         refreshStaffCache(),
     ]);
 }
@@ -1047,11 +1062,10 @@ function getAllStudentsForFinanceTotals() {
 /**
  * The fee-voucher billing month, spelled out for display (e.g. "September
  * 2026"). Unlike `new Date().toLocaleDateString(...)`, this is derived
- * from getCurrentFeeMonthKey() — so from the 27th onward, once the billing
- * cycle has already rolled over to next month, the label shown next to the
- * Collected/Pending/Generated figures (and on printed vouchers) matches
- * the month those figures actually belong to instead of lagging behind by
- * one month.
+ * from getCurrentFeeMonthKey() — so the label shown next to the
+ * Collected/Pending/Generated figures (and on printed vouchers) always
+ * matches the stored billing month those figures belong to, whatever the
+ * calendar date is.
  */
 function getCurrentFeeMonthLabel() {
     const [year, month] = getCurrentFeeMonthKey().split('-').map(Number);
@@ -1380,9 +1394,11 @@ let selectedFineRecordsMonthKey = null;
  */
 function getFineRecordsMonthOptions() {
     const opts = [];
-    const now = new Date();
+    // Anchor on the active fee month (not the calendar): student fines are
+    // filed under the fee month, so the viewer has to open on that same month.
+    const [anchorYear, anchorMonth] = getCurrentFeeMonthKey().split('-').map(Number);
     for (let i = 0; i < 6; i++) {
-        const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+        const d = new Date(anchorYear, (anchorMonth - 1) - i, 1);
         const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
         const label = d.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
         opts.push({ key, label });
@@ -1515,7 +1531,7 @@ async function fetchAllFineRecordsForMonth(monthKey) {
 
 async function renderStudentFinesTable() {
     const tbody = document.getElementById('student-fines-tbody');
-    const monthKey = selectedFineRecordsMonthKey || getCurrentMonthKey();
+    const monthKey = selectedFineRecordsMonthKey || getCurrentFeeMonthKey();
     studentFinesMonthKey = monthKey;
 
     if(!tbody) return;
@@ -1561,7 +1577,7 @@ function renderStudentFinesRows(fines) {
         return;
     }
 
-    const monthKey = studentFinesMonthKey || getCurrentMonthKey();
+    const monthKey = studentFinesMonthKey || getCurrentFeeMonthKey();
 
     tbody.innerHTML = fines.map(f => {
         // Use our smart reason processor
@@ -3434,14 +3450,11 @@ function getCurrentStudentBackendFine(student) {
 
 function computeFeeBreakdown(s) {
     const today = new Date();
-    // BUGFIX — "voucher shows the wrong month after the 27th": this used to
-    // label every row with the raw calendar month (`today`), but the fee
-    // ledger itself (arrears roll-over, fine lookup, netPayable, etc., all
-    // through getCurrentFeeMonthKey()) already rolls over to NEXT month
-    // from the 27th onward — letting admins generate next month's vouchers
-    // early. That mismatch showed e.g. "August 2026" printed on a voucher
-    // whose numbers were actually September's. Derive the label from the
-    // same fee-month key everything else here already uses.
+    // The month label on the voucher comes from the same stored fee-month key
+    // the rest of the ledger uses (arrears roll-over, fine lookup, netPayable),
+    // never from the raw calendar date — so a voucher always prints the month
+    // its numbers actually belong to, even if the calendar has moved on and
+    // the admin hasn't pressed "Move to Next Month" yet.
     const [feeYear, feeMonth] = getCurrentFeeMonthKey().split('-').map(Number);
     const monthLabel = new Date(feeYear, (feeMonth || 1) - 1, 1).toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
     const regNo = s.regNo || s.id;
@@ -3572,52 +3585,20 @@ function computeFeeBreakdown(s) {
     const vs = getVoucherSettings();
     const lateFeeSurcharge = vs.lateFineEnabled ? (vs.lateFineFixedAmount > 0 ? vs.lateFineFixedAmount : Math.round(voucherTotal * (vs.lateFinePercent / 100))) : 0;
 
-    // BUGFIX — "due date wrong after the 27th rollover": these used to be
-    // built from `today.getMonth() + 1` — i.e. always "the month after
-    // whatever month it happens to be right now". That's only correct
-    // before the 27th (when feeMonth === today's month). From the 27th
-    // onward, getCurrentFeeMonthKey() has already rolled the BILLING month
-    // itself one month forward, so the due date needs to roll forward with
-    // it too — otherwise a voucher generated on/after the 27th for NEXT
-    // month printed a due date that was one month too early, which also
-    // fed straight into the late-fee/overdue check below firing too soon.
-    // `feeMonth` (1-indexed, from getCurrentFeeMonthKey()) used directly as
-    // a 0-indexed JS Date month is exactly "the calendar month right after
-    // the fee month" — e.g. a September (feeMonth=9) voucher's due date
-    // correctly lands in October (JS month index 9).
+    // Due date: the configured due day, in the calendar month right AFTER the
+    // fee month. `feeMonth` is 1-indexed here and is used directly as a
+    // 0-indexed JS month, which is exactly "the next month" (a September
+    // voucher, feeMonth=9, lands in October, index 9). It follows the stored
+    // fee month, not today's date, so it is unaffected by when the admin
+    // presses "Move to Next Month".
     const dueDate = new Date(feeYear, feeMonth, vs.dueDayOfMonth);
     const graceExpiryDate = new Date(feeYear, feeMonth, vs.expiryDayOfMonth);
 
-    // BUGFIX — "late fee never actually charges once the fee cycle is
-    // pushed ahead of the real calendar": graceExpiryDate above is built
-    // from the FEE-billing month (feeYear/feeMonth), not the real calendar.
-    // A school that has clicked "Move to Next Month" ahead of real time
-    // (e.g. billing month is already January 2027 while the real date is
-    // still September 2026 — exactly what "Move to Next Month" is built to
-    // let a school do) ends up with graceExpiryDate sitting in the future
-    // relative to `today` FOREVER, no matter how overdue a bill really is —
-    // `today` can never catch up to a date that's defined in terms of a
-    // billing month that itself keeps getting pushed further ahead.
-    // Fix: ALSO treat a bill as overdue once enough real days have actually
-    // elapsed since its voucher was generated — a plain backstop that
-    // doesn't care what the billing-month label says. The threshold
-    // (30 + graceDays) approximates "one full month, plus the configured
-    // grace" — i.e. about how long the calendar-based rule above already
-    // takes to fire for a school whose fee month tracks the real calendar
-    // (voucher generated on/near the 1st, due on/near the 10th of the
-    // FOLLOWING month ≈ 30-40 real days later). So for a normally-paced
-    // school this real-time check essentially never fires any earlier than
-    // the calendar check already would — nothing changes for them — it
-    // only closes the gap for a school whose billing month has outrun the
-    // real calendar, where the calendar check alone can never fire at all.
-    const generatedAt = generatedVoucher && generatedVoucher.generatedAt
-        ? new Date(generatedVoucher.generatedAt)
-        : null;
-    const realDaysSinceGenerated = generatedAt
-        ? Math.floor((today.getTime() - generatedAt.getTime()) / 86400000)
-        : -1; // no voucher yet at all — can't be overdue on a bill that hasn't been issued
-    const isPastDueByElapsedTime = vs.lateFineEnabled
-        && realDaysSinceGenerated >= (30 + vs.graceDays);
+    // Overdue is decided ONLY by comparing today with this voucher's own grace
+    // expiry date above. There is no separate "30 days after generation"
+    // rule: that rule ran on its own clock, independent of the due date and
+    // of the fee month, so bills could turn overdue (and pick up the late
+    // fee) at a moment that matched neither.
 
     // BUGFIX — "late fee fine not working / fees after due date don't
     // work": lateFeeSurcharge was always fully computed, but only ever
@@ -3634,7 +3615,7 @@ function computeFeeBreakdown(s) {
     // voucherTotal (which stays the pre-fine base, still shown on its own
     // line on the printed voucher).
     const isPastDue = vs.lateFineEnabled
-        && (today.getTime() > graceExpiryDate.getTime() || isPastDueByElapsedTime);
+        && today.getTime() > graceExpiryDate.getTime();
     const payableNow = isPastDue ? (voucherTotal + lateFeeSurcharge) : voucherTotal;
 
     return {
@@ -3729,7 +3710,7 @@ async function ensureStudentPhotoLoaded(student) {
 function buildVoucherHTML(s) {
     const today = new Date();
     const dateStr = today.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
-    const challanNo = `CH-${s.id}-${today.getFullYear()}${String(today.getMonth() + 1).padStart(2, '0')}`;
+    const challanNo = `CH-${s.id}-${getCurrentFeeMonthKey().replace('-', '')}`;
     const photoSrc = financePhotoUrl(s);
     const f = computeFeeBreakdown(s);
 
@@ -4256,10 +4237,10 @@ function getCurrentMonthKey() {
  * Fee-voucher billing cycle key. Unlike getCurrentMonthKey() (plain calendar
  * month, used by fines/salaries/expenses), the fee voucher module's "current
  * month" can be manually pushed ahead of the real calendar month — see
- * "MOVE TO NEXT MONTH" below. There is no automatic date-based rollover
- * (e.g. a fixed day such as the 27th) any more: the billing month only ever
- * advances when an admin explicitly clicks "Move to Next Month", and it
- * otherwise just tracks the real calendar month like everything else.
+ * "MOVE TO NEXT MONTH" below. There is no date-based rollover of any kind
+ * (no 27th, no 30th, no 1st-of-the-month): the billing month only ever
+ * advances when an admin explicitly clicks "Move to Next Month", whatever
+ * the calendar date is.
  */
 function getCurrentCalendarMonthKey() {
     const now = new Date();
@@ -4267,15 +4248,18 @@ function getCurrentCalendarMonthKey() {
 }
 
 function getCurrentFeeMonthKey() {
-    const calendarKey = getCurrentCalendarMonthKey();
-    const override = getFeeMonthOverride();
-    // The manual override can only ever push the billing month AHEAD of the
-    // real calendar month (an admin generating next month's vouchers early).
-    // It's never used to pull the billing month backward — once the real
-    // calendar catches up to (or passes) the override, the calendar wins
-    // again automatically, so this can't be used to accidentally re-open a
-    // month that's already passed.
-    return (override && override > calendarKey) ? override : calendarKey;
+    // The stored billing month is the ONLY source of truth. It changes when
+    // (and only when) an admin presses "Move to Next Month" — on any date,
+    // early or late. The real calendar never moves it: if the date passes
+    // the 1st of the next month and nobody has pressed the button, the fee
+    // module stays on the same month, so vouchers that are still open do
+    // not silently turn into past-month defaulters.
+    //
+    // The calendar month is only a fallback for a school that has no stored
+    // month yet (brand-new data, or the vouchers list hasn't loaded). The
+    // first successful load persists it — see ensureFeeMonthInitialized().
+    const stored = getFeeMonthOverride();
+    return (stored && /^\d{4}-\d{2}$/.test(stored)) ? stored : getCurrentCalendarMonthKey();
 }
 
 /* ============================================================================
@@ -4283,7 +4267,8 @@ function getCurrentFeeMonthKey() {
    ----------------------------------------------------------------------------
    Replaces the old fixed "resets automatically on the 27th" behaviour. The
    billing month for vouchers now only ever changes when an admin explicitly
-   clicks "Move to Next Month" in the Student Fees toolbar. That override is
+   clicks "Move to Next Month" in the Student Fees toolbar — on any date. The
+   real calendar can never move it (not on the 27th, 30th or 1st). That value is
    persisted as a single marker record inside the SAME backend-synced
    `/vouchers` list every other voucher record already lives in (see
    getGeneratedVouchers()/saveGeneratedVouchers() above) — there is no
@@ -4309,6 +4294,37 @@ function setFeeMonthOverride(monthKey) {
     saveGeneratedVouchers(list);
 }
 
+/**
+ * First-run persistence of the active billing month. A school that has never
+ * pressed "Move to Next Month" has no stored month, so getCurrentFeeMonthKey()
+ * would fall back to the calendar and drift forward on the 1st. This writes
+ * the marker once so the month is locked from then on.
+ *
+ * Safety: only runs after the vouchers list was successfully loaded from the
+ * backend (_generatedVouchersLoaded). saveGeneratedVouchers() PUTs the whole
+ * list, so writing from an empty/failed-to-load cache would wipe every
+ * voucher on the server.
+ *
+ * updatedAt is set to the 1st of that calendar month (not "now") because
+ * _currentBillingPeriodStart() uses it as the start of the "Collected this
+ * period" window; using "now" would hide payments already taken this month.
+ */
+function ensureFeeMonthInitialized() {
+    if (!_generatedVouchersLoaded) return;
+    if (_generatedVouchersSaveInFlight > 0) return;
+    if (getFeeMonthOverride()) return;
+    const calendarKey = getCurrentCalendarMonthKey();
+    const [y, m] = calendarKey.split('-').map(Number);
+    const list = getGeneratedVouchers().slice();
+    list.push({
+        key: FEE_MONTH_STATE_KEY,
+        activeMonthKey: calendarKey,
+        updatedAt: new Date(y, m - 1, 1).toISOString(),
+        autoInitialized: true
+    });
+    saveGeneratedVouchers(list);
+}
+
 function _nextMonthKeyAfter(monthKey) {
     const [y, m] = monthKey.split('-').map(Number);
     let year = y, month = m; // month is 1-indexed here
@@ -4323,7 +4339,8 @@ function _monthKeyLabel(monthKey) {
 }
 
 /**
- * "Move to Next Month" — the button that replaces the old 27th auto-reset.
+ * "Move to Next Month" — the ONLY thing that changes the fee month. Works on
+ * any date; no day-of-month rule is involved.
  * Doesn't delete or touch a single existing voucher: every paid and pending
  * voucher generated so far stays exactly where it is, filed under its own
  * month, forever viewable/printable from voucher history. All this does is
@@ -4363,6 +4380,9 @@ async function resetFeesForNextMonth() {
     if (!ok) return;
 
     setFeeMonthOverride(nextKey);
+    // Pull the new month's paid/pending figures straight away so the header
+    // and class cards don't show the previous month's numbers.
+    try { await refreshStudentFeeStatusCache(); } catch (e) { /* best-effort */ }
     showFinanceToast(`Fee cycle moved to ${nextLabel}. You can now generate next month's vouchers.`, 'success');
     renderClassCardGrid();
     updateFeeStatsHeader();
@@ -4607,10 +4627,9 @@ async function saveSimpleStudentFeePayment() {
     }
 
     const monthKey = getCurrentFeeMonthKey();
-    // BUGFIX — see computeFeeBreakdown() above: label the payment with the
-    // fee-billing month (monthKey), not the raw calendar month, so a
-    // payment recorded on/after the 27th (already logged against NEXT
-    // month's monthKey) shows the matching month name in payment history.
+    // Label the payment with the fee-billing month (monthKey), not the raw
+    // calendar month, so the month name in payment history always matches the
+    // month the payment was filed under.
     const monthLabel = getCurrentFeeMonthLabel();
 
     // BUGFIX — "Pay Bill doesn't work / stays View & Pay after paying":
@@ -6868,7 +6887,7 @@ function buildFamilyVoucherHTML(studentsGroup) {
     const dateStr = today.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
     const guardianName = studentsGroup[0].guardianName || 'Guardian';
     const famTag = (guardianName || 'FAM').replace(/[^a-zA-Z0-9]/g, '').toUpperCase().slice(0, 6) || 'FAM';
-    const challanNo = `FV-${famTag}-${today.getFullYear()}${String(today.getMonth() + 1).padStart(2, '0')}`;
+    const challanNo = `FV-${famTag}-${getCurrentFeeMonthKey().replace('-', '')}`;
 
     const breakdowns = studentsGroup.map(s => ({ student: s, f: computeFeeBreakdown(s) }));
     const dueDateStr = breakdowns[0].f.dueDateStr;
@@ -7091,20 +7110,11 @@ window.printStudentVoucher = printStudentVoucher;
 /* ── Helpers ─────────────────────────────────────────────── */
 function _escHtml(s) { return typeof escapeHtml === 'function' ? escapeHtml(s) : String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 function _escAttr(s) { return typeof escapeForAttr === 'function' ? escapeForAttr(s) : String(s).replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/"/g,'&quot;'); }
-// BUGFIX — "Defaulters still on the 27-date logic / doesn't renew when we
-// Move to Next Month": this used to resolve "the current month" via
-// getCurrentMonthKey() — the plain calendar month — which has nothing to do
-// with the fee-voucher billing cycle. The rest of Manage Finance (voucher
-// generation, computeFeeBreakdown, the header stats) abandoned the fixed
-// "resets on the 27th" behaviour a while ago in favour of an explicit
-// "Move to Next Month" admin action (see getCurrentFeeMonthKey()'s own
-// docs) — but Fee Defaulters was never updated to match, so it kept
-// checking the raw calendar date against a hardcoded 27, completely
-// disconnected from the billing cycle the rest of the page already uses.
-// That's why clicking "Move to Next Month" never "renewed" anything here.
-// Routing through getCurrentFeeMonthKey() makes Defaulters follow the
-// exact same billing month as everywhere else, and roll over at the exact
-// same moment (the admin's explicit action, or the calendar catching up).
+// Fee Defaulters resolves "the current month" through getCurrentFeeMonthKey(),
+// the same stored billing month the rest of Manage Finance uses. It changes
+// only when an admin presses "Move to Next Month" (any date) — never because
+// the calendar rolled over. So unpaid vouchers of the active month stay in the
+// active month, and only become past-month arrears when the admin moves on.
 function _monthKey() { return typeof getCurrentFeeMonthKey === 'function' ? getCurrentFeeMonthKey() : new Date().toISOString().slice(0,7); }
 function _isBillable(s) { return typeof isStudentBillable === 'function' ? isStudentBillable(s) : true; }
 
@@ -7989,7 +7999,8 @@ function _computePendingMonths(student) {
         const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
         // FEATURE — never count a month before the student was admitted
         // (fixes new schools/students showing months of fake back-dated
-        // pending fees), and never count the current month until the 27th.
+        // pending fees). Months after the active billing month are skipped by
+        // _isMonthDue() below; there is no day-of-month gate.
         if (admissionKey && key < admissionKey) continue;
         if (!_isMonthDue(key)) continue;
         const lbl = d.toLocaleDateString('en-US', { month:'short', year:'numeric' });

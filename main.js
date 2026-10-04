@@ -300,15 +300,11 @@ function _dashboardMonthKey(date = new Date()) {
     return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
 }
 
-// BUGFIX — "dashboard shows Rs. 0 for every finance field from the 27th on":
-// this used to roll the fee month forward to NEXT month whenever the day was
-// >= 27. Manage Finance dropped that rule (billing month is now the real
-// calendar month, and only moves ahead when an admin clicks "Move to Next
-// Month"), so from the 27th the dashboard was asking the backend for a month
-// that has no vouchers yet (e.g. 2026-10 on Sep 28) and every card read 0.
-// This helper is now a plain calendar-month lookup, used for mapping a DATE
-// (e.g. an admission date) to its month. The live "current fee month" is
-// resolved by _dashboardResolveCurrentFeeMonth() below.
+// The dashboard's "current fee month" is NOT derived from today's date. It is
+// the stored billing month that Manage Finance changes only when an admin
+// presses "Move to Next Month" (see _dashboardResolveCurrentFeeMonth() below).
+// This helper is a plain calendar-month lookup, used only for mapping a DATE
+// (e.g. an admission date) to its month.
 function _dashboardFeeMonthKey(date = new Date()) {
     return _dashboardMonthKey(new Date(date));
 }
@@ -317,16 +313,16 @@ function _dashboardFeeMonthKey(date = new Date()) {
 // (manage-finance.js): a row inside the backend /vouchers list.
 const DASHBOARD_FEE_MONTH_STATE_KEY = '__FEE_MONTH_STATE__';
 
-// Mirrors manage-finance.js getCurrentFeeMonthKey(): the calendar month,
-// unless an admin has pushed the billing month AHEAD via "Move to Next
-// Month" (the override can never pull it backward).
+// Mirrors manage-finance.js getCurrentFeeMonthKey(): the stored billing month
+// is authoritative. The calendar is only a fallback when no month has been
+// stored yet (or the request fails), and it never overrides a stored month.
 async function _dashboardResolveCurrentFeeMonth() {
     const calendarKey = _dashboardMonthKey(new Date());
     try {
         const vouchers = _dashboardArray(await _dashboardGet('/api/finance/vouchers', []), ['items']);
         const marker = vouchers.find(r => r && r.key === DASHBOARD_FEE_MONTH_STATE_KEY);
-        const override = marker && marker.activeMonthKey ? String(marker.activeMonthKey) : null;
-        return (override && override > calendarKey) ? override : calendarKey;
+        const stored = marker && marker.activeMonthKey ? String(marker.activeMonthKey) : null;
+        return (stored && /^\d{4}-\d{2}$/.test(stored)) ? stored : calendarKey;
     } catch (e) {
         return calendarKey;
     }

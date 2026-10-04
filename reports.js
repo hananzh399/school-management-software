@@ -530,13 +530,13 @@ async function loadReportsDataFromBackend() {
     // cards must show the exact same figures as the Dashboard's Total
     // Revenue and Total Net Expenses boxes, not an independently-rounded
     // approximation. This mirrors main.js's calculateFinancials()/
-    // _dashboardSnapshot() formula (and its 27th-of-the-month "fee month"
-    // rollover) exactly, using the same raw records and the same
+    // _dashboardSnapshot() formula (and its stored "fee month") exactly,
+    // using the same raw records and the same
     // per-student fine-details endpoint, so the two pages can never drift
     // apart. See _computeExactDashboardTotals() below.
     const staffForTotals = _reportsStaffArray(staffData);
-    const feeMonthKey = _rdFeeMonthKey();
-    const prevFeeMonthKey = _rdFeeMonthKey(new Date(
+    const feeMonthKey = await _rdResolveFeeMonthKey();
+    const prevFeeMonthKey = _reportsMonthKey(new Date(
         Number(feeMonthKey.slice(0, 4)), Number(feeMonthKey.slice(5, 7)) - 2, 1
     ));
     const rawFinanceData = {
@@ -568,13 +568,22 @@ async function loadReportsDataFromBackend() {
    with the Dashboard's "Total Revenue" / "Total Net Expenses" boxes.
    ============================================ */
 
-// Mirrors _dashboardFeeMonthKey(): the "current" fee month rolls over to
-// next calendar month once the 27th is reached (parents get until the
-// 27th to pay before that month is treated as due).
-function _rdFeeMonthKey(date = new Date()) {
-    const d = new Date(date);
-    if (d.getDate() >= 27) d.setMonth(d.getMonth() + 1);
-    return _reportsMonthKey(d);
+// Mirrors main.js _dashboardResolveCurrentFeeMonth(): the "current" fee month
+// is the stored billing month Manage Finance keeps in the /vouchers list
+// (changed only by the "Move to Next Month" button). There is no day-of-month
+// rule; the calendar month is only a fallback when nothing is stored yet or
+// the request fails.
+async function _rdResolveFeeMonthKey() {
+    const calendarKey = _reportsMonthKey(new Date());
+    try {
+        const data = await _reportsGet('/api/finance/vouchers', []);
+        const list = Array.isArray(data) ? data : _reportsArray(data && data.items);
+        const marker = list.find(r => r && r.key === '__FEE_MONTH_STATE__');
+        const stored = marker && marker.activeMonthKey ? String(marker.activeMonthKey) : null;
+        return (stored && /^\d{4}-\d{2}$/.test(stored)) ? stored : calendarKey;
+    } catch (e) {
+        return calendarKey;
+    }
 }
 
 function _rdPaidFine(fine) {
