@@ -1101,12 +1101,12 @@ function handleTeacherLoginIndex(e) {
   btn.disabled = true;
   btn.style.opacity = "0.8";
 
-  setTimeout(() => {
+  setTimeout(async () => {
     btn.textContent = origText;
     btn.disabled = false;
     btn.style.opacity = "";
 
-    const result = window.SoftSchoolTeacher.authenticateTeacher(idInput.value, passInput.value);
+    const result = await window.SoftSchoolTeacher.authenticateTeacher(idInput.value, passInput.value);
 
     if (!result.ok) {
       passInput.classList.add("error");
@@ -1114,10 +1114,12 @@ function handleTeacherLoginIndex(e) {
         card.classList.add("shake");
         card.addEventListener("animationend", () => card.classList.remove("shake"), { once: true });
       }
-      if (result.reason === "not_found") {
+      if (result.reason === "error" && !result.message) {
+        showToast("Can't reach the server. Check your connection.", "error");
+      } else if (result.reason === "not_found") {
         showToast("No teacher found with that ID. Check with your admin.", "error");
       } else {
-        showToast("Incorrect password. Please try again.", "error");
+        showToast(result.message || "Incorrect Teacher ID or password.", "error");
       }
       return;
     }

@@ -1505,6 +1505,7 @@ function renderFormFields(category) {
             </div>`;
         grid.innerHTML += createInput('f-salary', 'Salary', 'number');
         grid.innerHTML += createInput('f-joined', 'Date Joined', 'date');
+        grid.innerHTML += createInput('f-portal-password', 'Teacher Portal Password (blank = unchanged)', 'password', false);
         grid.innerHTML += `
             <div class="form-group full-width">
                 <label for="f-cnic">CNIC (Pakistani 13-digit)</label>
@@ -2530,6 +2531,9 @@ const STAFF_FORM_SCHEMA = {
 function handleFormSubmit(e) {
     e.preventDefault();
 
+    const _pw = ((document.getElementById('f-portal-password') || {}).value || '').trim();
+    if (_pw && _pw.length < 6) { alert('Teacher portal password must be at least 6 characters.'); return; }
+
     const guardianInput = document.getElementById('f-guardian-name');
 
     // SECURITY: validate the free-typed fields before they're merged
@@ -2626,9 +2630,14 @@ function handleFormSubmit(e) {
     // if this fails, syncStaffWithBackend() will reconcile on next load.
     const savedId = isEditMode ? currentProfileId : newData.id;
     const finalRecord = staffData[currentCategory].find(s => s.id === savedId);
+    const portalPw = ((document.getElementById('f-portal-password') || {}).value || '').trim();
     if (finalRecord && getCurrentSchoolId()) {
-        apiSaveStaff(finalRecord).catch(err =>
-            console.warn('apiSaveStaff failed, change kept in-memory only until next sync:', err.message));
+        apiSaveStaff(finalRecord)
+            .then(() => portalPw && staffApiRequest('POST',
+                `${STAFF_API_BASE}/${encodeURIComponent(savedId)}/password?schoolId=${encodeURIComponent(getCurrentSchoolId())}`,
+                { password: portalPw }))
+            .catch(err =>
+                console.warn('apiSaveStaff failed, change kept in-memory only until next sync:', err.message));
     }
 
     populateDirectory(currentCategory);
