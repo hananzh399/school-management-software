@@ -1582,21 +1582,29 @@ function renderQuickLinks(students) {
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
     const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
 
-    const addedThisMonth = students.filter(s => {
-        const d = pickDate(s, ['admissionDate', 'dateOfAdmission', 'joiningDate', 'enrollmentDate', 'dateAdded', 'createdAt']);
-        return d && d >= monthStart && d <= monthEnd;
-    }).length;
-    setText('ql-students-added-count', addedThisMonth);
+    const ADDED_KEYS = ['admissionDate', 'dateOfAdmission', 'joiningDate', 'enrollmentDate', 'dateAdded', 'createdAt'];
+    const DROPPED_KEYS = ['dropDate', 'droppedDate', 'droppedAt', 'dateDropped', 'dropDateTime', 'leftDate', 'deactivatedAt', 'statusChangedAt', 'statusUpdatedAt', 'updatedAt'];
+
+    // Keep the actual students (not just a count) so the cards can open a list.
+    const addedList = students
+        .map(s => ({ s, d: pickDate(s, ADDED_KEYS) }))
+        .filter(x => x.d && x.d >= monthStart && x.d <= monthEnd)
+        .sort((a, b) => b.d - a.d);
+    setText('ql-students-added-count', addedList.length);
 
     // Must read the FULL roster — `students` is active-only, so dropped
     // students were never in it and this always showed 0.
     const fullRoster = Array.isArray(_reportsDataCache.allStudents) ? _reportsDataCache.allStudents : students;
-    const droppedThisMonth = fullRoster.filter(s => {
-        if (!isDroppedStudent(s)) return false;
-        const d = pickDate(s, ['dropDate', 'droppedDate', 'droppedAt', 'dateDropped', 'dropDateTime', 'leftDate', 'deactivatedAt', 'statusChangedAt', 'statusUpdatedAt', 'updatedAt']);
-        return d ? (d >= monthStart && d <= monthEnd) : false; // no date on record: can't prove it was this month
-    }).length;
-    setText('ql-students-dropped-count', droppedThisMonth);
+    const droppedList = fullRoster
+        .filter(isDroppedStudent)
+        .map(s => ({ s, d: pickDate(s, DROPPED_KEYS) }))
+        .filter(x => x.d && x.d >= monthStart && x.d <= monthEnd) // no date on record: can't prove it was this month
+        .sort((a, b) => b.d - a.d);
+    setText('ql-students-dropped-count', droppedList.length);
+
+    _reportsQuickLists.added = addedList;
+    _reportsQuickLists.dropped = droppedList;
+    _refreshStudentModalIfOpen();
 
     // FEATURE — was using the same stale calculation as the old "Top
     // Pending Fees" bug (raw fee minus lifetime payments, no discounts),
@@ -1613,6 +1621,258 @@ function renderQuickLinks(students) {
     }).length;
     setText('ql-pending-count', pendingCount);
 }
+
+
+/* ============================================
+   STUDENTS ADDED / DROPPED THIS MONTH — DETAIL MODAL
+   Clicking either quick-link card opens a list of exactly
+   those students; clicking a student shows their full record.
+   ============================================ */
+const _reportsQuickLists = { added: [], dropped: [] };
+let _stuModalState = { kind: null, view: 'list', selected: null, query: '' };
+
+const STU_FIELDS = [
+    ['Reg. No', ['regNo', 'registrationNo', 'rollNo', 'id']],
+    ['Class', ['className', 'class', 'grade', 'classId']],
+    ['Section', ['section']],
+    ['Gender', ['gender']],
+    ['Date of Birth', ['dob', 'dateOfBirth']],
+    ['Father / Guardian', ['fatherName', 'guardianName', 'parentName']],
+    ['Phone', ['phone', 'contact', 'contactNo', 'mobile', 'parentPhone', 'guardianPhone']],
+    ['Email', ['email']],
+    ['Address', ['address']],
+    ['Monthly Fee', ['monthlyFee', 'fee', 'feeAmount']],
+    ['Admission Date', ['admissionDate', 'dateOfAdmission', 'joiningDate', 'enrollmentDate', 'dateAdded', 'createdAt']],
+    ['Status', ['status', 'enrollmentStatus']],
+    ['Dropped On', ['dropDate', 'droppedDate', 'droppedAt', 'dateDropped', 'leftDate', 'deactivatedAt']],
+    ['Drop Reason', ['dropReason', 'reason', 'leavingReason']]
+];
+const STU_HIDDEN_KEYS = /^(_id|__v|password|token|photo|image|avatar|picture|profile.*|school.*|updatedAt|statusChangedAt|statusUpdatedAt)$/i;
+
+function _stuName(s) {
+    return String(s.name || s.studentName || s.fullName ||
+        [s.firstName, s.lastName].filter(Boolean).join(' ') || 'Unnamed student');
+}
+function _stuInitials(name) {
+    return name.split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0].toUpperCase()).join('') || '?';
+}
+function _stuFmtDate(d) {
+    return d ? d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
+}
+function _stuFmtValue(key, v) {
+    if (v === null || v === undefined || v === '') return '';
+    if (typeof v === 'object') return '';
+    const str = String(v);
+    if (/date|dob|At$/i.test(key)) {
+        const d = new Date(v);
+        if (!isNaN(d)) return _stuFmtDate(d);
+    }
+    return str;
+}
+function _stuPick(s, keys) {
+    for (const k of keys) {
+        const out = _stuFmtValue(k, s[k]);
+        if (out) return { key: k, value: out };
+    }
+    return null;
+}
+function _stuPhoto(s) {
+    const p = s.photo || s.image || s.avatar || s.picture || s.profilePic || s.profilePhoto;
+    return (typeof p === 'string' && /^(data:image|https?:\/\/|\/)/.test(p)) ? p : '';
+}
+function _stuPrettyKey(k) {
+    return k.replace(/([a-z0-9])([A-Z])/g, '$1 $2').replace(/[_-]+/g, ' ')
+        .replace(/^./, c => c.toUpperCase());
+}
+
+function _ensureStudentModal() {
+    let overlay = document.getElementById('stu-modal-overlay');
+    if (overlay) return overlay;
+    overlay = document.createElement('div');
+    overlay.id = 'stu-modal-overlay';
+    overlay.className = 'sl-overlay';
+    overlay.innerHTML = `
+        <div class="sl-modal" role="dialog" aria-modal="true" aria-labelledby="sl-title">
+            <div class="sl-head">
+                <button type="button" class="sl-back" id="sl-back" aria-label="Back to list"><i class="fas fa-arrow-left"></i></button>
+                <div class="sl-head-text">
+                    <h3 id="sl-title"></h3>
+                    <p id="sl-sub"></p>
+                </div>
+                <button type="button" class="sl-close" id="sl-close" aria-label="Close"><i class="fas fa-xmark"></i></button>
+            </div>
+            <div class="sl-body" id="sl-body"></div>
+            <div class="sl-foot">
+                <a href="manage-students.html" class="sl-manage"><i class="fas fa-up-right-from-square"></i> Open Manage Students</a>
+            </div>
+        </div>`;
+    document.body.appendChild(overlay);
+
+    overlay.addEventListener('click', e => { if (e.target === overlay) closeStudentModal(); });
+    overlay.querySelector('#sl-close').addEventListener('click', closeStudentModal);
+    overlay.querySelector('#sl-back').addEventListener('click', () => {
+        _stuModalState.view = 'list';
+        _stuModalState.selected = null;
+        _renderStudentModal();
+    });
+    overlay.querySelector('#sl-body').addEventListener('click', e => {
+        const row = e.target.closest('[data-stu-idx]');
+        if (!row) return;
+        _stuModalState.selected = Number(row.getAttribute('data-stu-idx'));
+        _stuModalState.view = 'detail';
+        _renderStudentModal();
+    });
+    overlay.querySelector('#sl-body').addEventListener('input', e => {
+        if (e.target.id !== 'sl-search') return;
+        _stuModalState.query = e.target.value;
+        _renderStudentModal('search');
+    });
+    document.addEventListener('keydown', e => {
+        if (e.key !== 'Escape' || !overlay.classList.contains('open')) return;
+        if (_stuModalState.view === 'detail') overlay.querySelector('#sl-back').click();
+        else closeStudentModal();
+    });
+    return overlay;
+}
+
+function openStudentModal(kind) {
+    const overlay = _ensureStudentModal();
+    _stuModalState = { kind, view: 'list', selected: null, query: '' };
+    _renderStudentModal();
+    overlay.classList.add('open');
+    document.body.classList.add('sl-no-scroll');
+}
+
+function closeStudentModal() {
+    const overlay = document.getElementById('stu-modal-overlay');
+    if (overlay) overlay.classList.remove('open');
+    document.body.classList.remove('sl-no-scroll');
+}
+
+function _refreshStudentModalIfOpen() {
+    const overlay = document.getElementById('stu-modal-overlay');
+    if (!overlay || !overlay.classList.contains('open')) return;
+    // Background refresh: keep the list current; drop a stale detail view.
+    const list = _reportsQuickLists[_stuModalState.kind] || [];
+    if (_stuModalState.view === 'detail' && !list[_stuModalState.selected]) {
+        _stuModalState.view = 'list';
+        _stuModalState.selected = null;
+    }
+    const typing = document.activeElement && document.activeElement.id === 'sl-search';
+    if (!typing) _renderStudentModal();
+}
+
+function _renderStudentModal(keepSearchFocus) {
+    const overlay = _ensureStudentModal();
+    const { kind, view, selected, query } = _stuModalState;
+    const list = _reportsQuickLists[kind] || [];
+    const isAdded = kind === 'added';
+    const monthName = new Date().toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
+    const title = isAdded ? 'Students Added This Month' : 'Students Dropped This Month';
+    const dateLabel = isAdded ? 'Admitted' : 'Dropped';
+
+    const titleEl = overlay.querySelector('#sl-title');
+    const subEl = overlay.querySelector('#sl-sub');
+    const backBtn = overlay.querySelector('#sl-back');
+    const body = overlay.querySelector('#sl-body');
+
+    if (view === 'detail' && list[selected]) {
+        const { s, d } = list[selected];
+        const name = _stuName(s);
+        titleEl.textContent = name;
+        subEl.textContent = `${title} · ${monthName}`;
+        backBtn.style.display = 'inline-flex';
+
+        const used = new Set();
+        const rows = [];
+        STU_FIELDS.forEach(([label, keys]) => {
+            const hit = _stuPick(s, keys);
+            keys.forEach(k => used.add(k));
+            if (hit) rows.push([label, hit.value]);
+        });
+        // Anything else the record carries (simple values only)
+        Object.keys(s).forEach(k => {
+            if (used.has(k) || STU_HIDDEN_KEYS.test(k)) return;
+            if (['name', 'studentName', 'fullName', 'firstName', 'lastName'].includes(k)) return;
+            const val = _stuFmtValue(k, s[k]);
+            if (val && val.length <= 300) rows.push([_stuPrettyKey(k), val]);
+        });
+
+        const photo = _stuPhoto(s);
+        const avatar = photo
+            ? `<img class="sl-avatar sl-avatar-lg" src="${escapeHtml(photo)}" alt="">`
+            : `<div class="sl-avatar sl-avatar-lg ${isAdded ? 'sl-av-added' : 'sl-av-dropped'}">${escapeHtml(_stuInitials(name))}</div>`;
+
+        body.innerHTML = `
+            <div class="sl-detail-top">
+                ${avatar}
+                <div>
+                    <div class="sl-detail-name">${escapeHtml(name)}</div>
+                    <span class="sl-chip ${isAdded ? 'sl-chip-added' : 'sl-chip-dropped'}">${dateLabel} ${escapeHtml(_stuFmtDate(d))}</span>
+                </div>
+            </div>
+            <dl class="sl-detail-grid">
+                ${rows.map(([k, v]) => `<div class="sl-detail-item"><dt>${escapeHtml(k)}</dt><dd>${escapeHtml(v)}</dd></div>`).join('')}
+            </dl>`;
+        return;
+    }
+
+    // ---- LIST VIEW ----
+    titleEl.textContent = title;
+    subEl.textContent = `${monthName} · ${list.length} student${list.length === 1 ? '' : 's'}`;
+    backBtn.style.display = 'none';
+
+    const q = query.trim().toLowerCase();
+    const items = list
+        .map((x, idx) => ({ ...x, idx }))
+        .filter(x => !q || [_stuName(x.s), x.s.regNo, x.s.className, x.s.class, x.s.fatherName, x.s.phone]
+            .some(v => String(v || '').toLowerCase().includes(q)));
+
+    const rowsHtml = items.map(({ s, d, idx }) => {
+        const name = _stuName(s);
+        const photo = _stuPhoto(s);
+        const cls = _stuPick(s, ['className', 'class', 'grade']);
+        const reg = _stuPick(s, ['regNo', 'registrationNo', 'rollNo', 'id']);
+        const meta = [reg && `Reg# ${reg.value}`, cls && `Class ${cls.value}`].filter(Boolean).join(' · ');
+        const avatar = photo
+            ? `<img class="sl-avatar" src="${escapeHtml(photo)}" alt="">`
+            : `<div class="sl-avatar ${isAdded ? 'sl-av-added' : 'sl-av-dropped'}">${escapeHtml(_stuInitials(name))}</div>`;
+        return `
+            <button type="button" class="sl-row" data-stu-idx="${idx}">
+                ${avatar}
+                <span class="sl-row-info">
+                    <strong>${escapeHtml(name)}</strong>
+                    <span>${escapeHtml(meta || '—')}</span>
+                </span>
+                <span class="sl-row-date">${escapeHtml(_stuFmtDate(d))}</span>
+                <i class="fas fa-chevron-right sl-row-arrow"></i>
+            </button>`;
+    }).join('');
+
+    const emptyMsg = list.length
+        ? 'No students match your search.'
+        : (isAdded ? 'No students were added this month.' : 'No students were dropped this month.');
+
+    body.innerHTML = `
+        ${list.length > 3 ? `<div class="sl-search"><i class="fas fa-magnifying-glass"></i><input id="sl-search" type="search" placeholder="Search name, reg no, class…" value="${escapeHtml(query)}" autocomplete="off"></div>` : ''}
+        <div class="sl-list">${rowsHtml || `<div class="sl-empty">${emptyMsg}</div>`}</div>`;
+
+    if (keepSearchFocus) {
+        const input = body.querySelector('#sl-search');
+        if (input && keepSearchFocus === 'search') {
+            input.focus();
+            input.setSelectionRange(query.length, query.length);
+        }
+    }
+}
+
+// Cards open the modal instead of navigating away.
+document.addEventListener('click', e => {
+    const card = e.target.closest('[data-student-list]');
+    if (!card) return;
+    e.preventDefault();
+    openStudentModal(card.getAttribute('data-student-list'));
+});
 
 /* ============================================
    RECENT TRANSACTIONS TABLE
