@@ -1343,8 +1343,8 @@ body { min-height: 100vh; min-height: 100dvh; }
     .record-tags { margin-left: 0; width: 100%; }
 }
 
-/* ---------- ≤760: phones & small tablets ---------- */
-@media (max-width: 760px) {
+/* ---------- ≤860: phones & portrait tablets (cards layout) ---------- */
+@media (max-width: 860px) {
     .main-header { padding: 14px 0; margin-bottom: 20px; }
     .page-title-section { margin-top: 0; }
 
@@ -1542,4 +1542,92 @@ body { min-height: 100vh; min-height: 100dvh; }
 /* ---------- Respect reduced-motion ---------- */
 @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }
+}
+
+
+/* ============================================================================
+   RESPONSIVE — ROUND 2 (extra polish)
+   ============================================================================ */
+
+/* Ultra-wide screens: use the space, keep text readable */
+@media (min-width: 1920px) {
+    .main-content { max-width: 1680px; }
+    .classes-grid { grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); }
+}
+
+/* Landscape phones with a notch: keep content out of the cut-outs */
+.main-content {
+    padding-left: max(clamp(14px, 3.2vw, 40px), env(safe-area-inset-left, 0px));
+    padding-right: max(clamp(14px, 3.2vw, 40px), env(safe-area-inset-right, 0px));
+}
+
+/* Tablets and below: don't pin three columns on the monthly grid */
+@media (max-width: 1024px) {
+    .header-date { display: none; }
+    .monthly-table .col-guardian { position: static; left: auto; min-width: 120px; }
+    .monthly-table thead th.col-guardian { position: static; }
+    .monthly-table .col-name { min-width: 150px; }
+    .bulk-btn { padding: 10px 12px; }
+}
+
+/* Portrait tablets / large phones (561–860): two cards per row */
+@media (min-width: 561px) and (max-width: 860px) {
+    .attendance-table:not(.monthly-table) tbody {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+        align-items: start;
+    }
+    .attendance-table:not(.monthly-table) tbody tr { margin-bottom: 0; }
+    /* rows that span the whole table (empty / "no staff" messages) */
+    .attendance-table:not(.monthly-table) tbody tr:only-child { grid-column: 1 / -1; }
+    .classes-grid { grid-template-columns: repeat(3, 1fr); }
+    .kpi-grid { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+    .attn-stats-grid { grid-template-columns: repeat(4, 1fr); }
+    .attn-stat-card { flex-direction: column; text-align: center; }
+}
+
+/* View-Attendance summary rows: Present / Absent / Leave side by side */
+@media (max-width: 860px) {
+    #view-tbody tr { display: grid !important; grid-template-columns: repeat(3, 1fr); column-gap: 8px; }
+    #view-tbody td { grid-column: 1 / -1; }
+    #view-tbody td.td-name { grid-column: 1 / -1; }
+    #view-tbody td[data-label="Present"],
+    #view-tbody td[data-label="Absent"],
+    #view-tbody td[data-label="Leave"] {
+        grid-column: auto;
+        flex-direction: column; justify-content: center; text-align: center !important;
+        gap: 6px; padding: 12px 0 8px; border-bottom: 0;
+    }
+    #view-tbody td[data-label="Present"]::before,
+    #view-tbody td[data-label="Absent"]::before,
+    #view-tbody td[data-label="Leave"]::before { font-size: 10px; }
+    /* Latest status gets its own line after the three counts */
+    #view-tbody td[data-label="Latest Status"] { border-top: 1px dashed var(--border-subtle); border-bottom: 0; margin-top: 4px; }
+    #view-tbody tr:only-child { grid-column: auto; }
+}
+
+/* Save bar: sticky on tablets too, but not on short landscape screens */
+@media (max-height: 520px) and (orientation: landscape) {
+    .save-bar { position: static !important; box-shadow: none !important; flex-direction: row !important; }
+    .save-btn { width: auto !important; }
+}
+
+/* Very small phones: tighter paddings so nothing wraps awkwardly */
+@media (max-width: 360px) {
+    .main-content { padding-left: 10px; padding-right: 10px; }
+    .attendance-table:not(.monthly-table) tbody tr { padding: 2px 11px 10px; }
+    .stage-header .back-btn { padding: 8px 10px; }
+    .bulk-btn, .filter-btn { font-size: 11.5px; padding: 9px 8px; }
+    .report-card { padding: 16px 14px; }
+}
+
+/* Light theme: make the sticky save bar and sheets read clearly */
+[data-theme="light"] .save-bar { box-shadow: 0 -6px 20px rgba(15,23,42,.10); }
+[data-theme="light"] .attendance-table:not(.monthly-table) tbody tr { box-shadow: 0 4px 14px rgba(15,23,42,.06); }
+
+/* Smooth theme switch (skipped automatically for reduced-motion users) */
+body, .table-card, .save-bar, .attn-stat-card, .choice-card, .class-card, .kpi-card,
+.search-wrap input, .section-trigger, .bulk-btn, .filter-btn {
+    transition-property: background-color, border-color, color, box-shadow, transform, filter, opacity;
 }

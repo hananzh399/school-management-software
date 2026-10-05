@@ -8,11 +8,10 @@
     <meta name="description" content="EduFlow Pro Attendance — Mark and review staff and student attendance.">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="attendance.css?v=20261004">
-    <!-- Default theme applied immediately to avoid a flash of unstyled content.
-         The real saved preference is fetched from the backend (GET /api/settings/theme)
-         and applied by initTheme() in attendance.js — nothing is read from localStorage. -->
-    <script>(function(){document.documentElement.setAttribute('data-theme','dark');})()</script>
+    <link rel="stylesheet" href="attendance.css?v=20261005">
+    <!-- Saved theme is read from localStorage ('eduflow-theme') and applied immediately
+         so there is no flash of the wrong theme. initTheme() in attendance.js saves changes. -->
+    <script>(function(){var t='dark';try{var s=localStorage.getItem('eduflow-theme');if(s==='light'||s==='dark')t=s;}catch(e){}document.documentElement.setAttribute('data-theme',t);})()</script>
     <style>
         .biometric-input-row{display:flex;gap:8px;align-items:stretch;}
         .biometric-input-row .biometric-input{flex:1;}
@@ -771,6 +770,6 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@zxing/library@0.21.3/umd/index.min.js"></script>
-    <script src="attendance.js?v=20261004"></script>
+    <script src="attendance.js?v=20261005"></script>
 </body>
 </html>

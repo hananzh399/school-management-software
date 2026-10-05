@@ -486,18 +486,49 @@ function initAttendanceStats() {
     setInterval(renderAttendanceStats, 5000);
 }
 
-// Theme has no backend field yet — SchoolSettings (SchoolSettingsController)
-// doesn't store a per-user theme, so it's held in-memory for the current
-// page load only (defaults to dark on every visit) instead of localStorage.
-// If you want it to persist, add a `theme` column to SchoolSettings and
-// wire GET/PUT /api/settings/{schoolId} to read/write it — then this can
-// call that instead.
+// THEME — saved in localStorage (same key as the Staff page, so the chosen
+// theme follows the user across pages). Every storage call is wrapped in
+// try/catch because browsers can block storage (private mode, strict settings);
+// the toggle still works for the current page in that case.
+const THEME_KEY = "eduflow-theme";
+
+function readSavedTheme() {
+    try {
+        const t = localStorage.getItem(THEME_KEY);
+        return (t === "light" || t === "dark") ? t : "dark";
+    } catch (e) { return "dark"; }
+}
+
+function applyTheme(theme) {
+    document.documentElement.setAttribute("data-theme", theme);
+    // Keep the mobile browser's address bar colour in step with the theme
+    let meta = document.querySelector('meta[name="theme-color"]');
+    if (!meta) {
+        meta = document.createElement("meta");
+        meta.name = "theme-color";
+        document.head.appendChild(meta);
+    }
+    meta.content = theme === "light" ? "#f1f5f9" : "#0f172a";
+}
+
 function initTheme() {
-    document.documentElement.setAttribute("data-theme", "dark");
-    $("#theme-toggle").addEventListener("click", () => {
-        const cur  = document.documentElement.getAttribute("data-theme") || "dark";
-        const next = cur === "dark" ? "light" : "dark";
-        document.documentElement.setAttribute("data-theme", next);
+    applyTheme(readSavedTheme());
+
+    const btn = $("#theme-toggle");
+    if (btn) {
+        btn.addEventListener("click", () => {
+            const cur  = document.documentElement.getAttribute("data-theme") || "dark";
+            const next = cur === "dark" ? "light" : "dark";
+            applyTheme(next);
+            try { localStorage.setItem(THEME_KEY, next); } catch (e) { /* storage blocked */ }
+        });
+    }
+
+    // If the theme is changed in another tab/page, follow it live
+    window.addEventListener("storage", (e) => {
+        if (e.key === THEME_KEY && (e.newValue === "light" || e.newValue === "dark")) {
+            applyTheme(e.newValue);
+        }
     });
 }
  
