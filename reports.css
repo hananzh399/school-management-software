@@ -620,3 +620,367 @@
 .reports-toast.reports-toast-error i { color: #ef4444; }
 .reports-toast.reports-toast-info { border-left-color: #3b82f6; }
 .reports-toast.reports-toast-info i { color: #3b82f6; }
+
+/* ============================================================
+   RESPONSIVE LAYER  (phones → tablets → laptops → large screens)
+   Loaded last on purpose so it refines the rules above.
+   Breakpoints: 1280 · 1100 · 900 · 700 · 520 · 380
+   ============================================================ */
+
+/* ---------- Safety: nothing may push the page sideways ---------- */
+.reports-toolbar,
+.quick-links-row,
+.reports-stats-strip,
+.reports-grid,
+.transactions-card {
+    width: 100%;
+    box-sizing: border-box;
+}
+
+/* Grid children must be allowed to shrink or canvases/tables overflow */
+.reports-grid > *,
+.quick-links-row > *,
+.reports-stats-strip > * {
+    min-width: 0;
+}
+
+.report-card .dash-card-body,
+.report-card .dash-card-header {
+    min-width: 0;
+}
+
+.chart-wrap canvas {
+    max-width: 100%;
+}
+
+.reports-title h2,
+.reports-title p {
+    overflow-wrap: anywhere;
+}
+
+/* ---------- Stat pills: fluid grid (4 → 2 → 1) ---------- */
+.quick-stats-strip.reports-stats-strip {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 14px;
+    max-width: 1200px;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+.reports-stats-strip .stat-pill {
+    min-width: 0;
+}
+
+.reports-stats-strip .stat-pill-info {
+    min-width: 0;
+    flex: 1;
+}
+
+.reports-stats-strip .stat-pill-value,
+.reports-stats-strip .stat-pill-label {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* Fluid type so big numbers never clip */
+.reports-stats-strip .stat-pill-value {
+    font-size: clamp(15px, 1.6vw, 20px);
+}
+
+/* ---------- ≥ 1600px: roomy screens ---------- */
+@media (min-width: 1600px) {
+    .reports-toolbar,
+    .quick-links-row,
+    .reports-stats-strip,
+    .reports-grid,
+    .transactions-card {
+        max-width: 1400px;
+    }
+
+    .chart-wrap { height: 300px; }
+}
+
+/* ---------- ≤ 1100px: small laptops / landscape tablets ---------- */
+@media (max-width: 1100px) {
+    .quick-stats-strip.reports-stats-strip {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+/* ---------- ≤ 900px: tablets ---------- */
+@media (max-width: 900px) {
+    .reports-grid {
+        grid-template-columns: 1fr;
+        gap: 16px;
+    }
+
+    .chart-card-wide,
+    .reports-grid .report-card:not(.chart-card-wide) {
+        grid-column: 1 / -1;
+    }
+
+    .quick-links-row {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 10px;
+    }
+
+    /* Donut cards sit side by side on wide-ish tablets */
+}
+
+@media (min-width: 640px) and (max-width: 900px) {
+    .reports-grid .report-card:not(.chart-card-wide) {
+        grid-column: span 1;
+    }
+
+    .reports-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .chart-card-wide {
+        grid-column: 1 / -1;
+    }
+}
+
+/* Quick links: compact stacked layout when 3-across gets tight */
+@media (max-width: 820px) {
+    .quick-link-card {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 8px;
+        padding: 12px;
+        position: relative;
+    }
+
+    .quick-link-card .ql-arrow {
+        position: absolute;
+        top: 12px;
+        right: 12px;
+    }
+
+    .ql-info { width: 100%; }
+
+    .ql-label {
+        white-space: normal;
+        line-height: 1.3;
+    }
+}
+
+/* ---------- ≤ 700px: large phones ---------- */
+@media (max-width: 700px) {
+    .reports-toolbar { margin-bottom: 16px; }
+
+    .reports-title h2 { font-size: 18px; }
+    .reports-title p  { font-size: 12px; line-height: 1.5; }
+
+    .quick-links-row {
+        grid-template-columns: 1fr;
+        gap: 10px;
+    }
+
+    /* Back to a horizontal row when each card gets the full width */
+    .quick-link-card {
+        flex-direction: row;
+        align-items: center;
+        padding: 12px 14px;
+    }
+
+    .quick-link-card .ql-arrow {
+        position: static;
+    }
+
+    .ql-label { white-space: nowrap; }
+
+    .chart-wrap { height: 230px; }
+    .chart-wrap-donut { height: 190px; }
+
+    /* Card headers: title on top, actions below, full width */
+    .report-card .dash-card-header {
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+
+    .report-card .dash-card-header h3 {
+        flex: 1 1 100%;
+        min-width: 0;
+        line-height: 1.35;
+    }
+
+    .header-subtag {
+        display: inline-block;
+        margin-left: 6px;
+        margin-top: 4px;
+    }
+
+    .card-header-actions {
+        width: 100%;
+        justify-content: space-between;
+    }
+
+    /* Transactions toolbar: stack controls */
+    .transactions-card .card-header-actions {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+        align-items: stretch;
+    }
+
+    .transactions-card .card-header-actions #rp-txn-count {
+        grid-column: 1 / -1;
+        justify-self: start;
+    }
+
+    .txn-filter-select,
+    .txn-export-btn {
+        width: 100%;
+        justify-content: center;
+        min-height: 40px;
+        box-sizing: border-box;
+    }
+
+    /* Transactions table: keep readable, scroll inside its own box */
+    .table-scroll {
+        -webkit-overflow-scrolling: touch;
+        border-radius: var(--radius-md);
+    }
+
+    .txn-table { min-width: 560px; }
+
+    .txn-table thead th,
+    .txn-table tbody td {
+        padding-left: 10px;
+        padding-right: 10px;
+    }
+}
+
+/* ---------- ≤ 520px: phones ---------- */
+@media (max-width: 520px) {
+    .quick-stats-strip.reports-stats-strip {
+        grid-template-columns: 1fr;
+        gap: 10px;
+    }
+
+    .chart-wrap { height: 210px; }
+    .chart-wrap-donut { height: 180px; max-width: 200px; }
+
+    .chart-foot-note {
+        font-size: 10px;
+        line-height: 1.55;
+    }
+
+    .chart-legend li { font-size: 11.5px; }
+
+    .pending-list li,
+    .payroll-snapshot li {
+        padding: 9px 10px;
+    }
+
+    .pending-list .pending-amount { font-size: 12.5px; }
+    .payroll-snapshot li { font-size: 12px; gap: 8px; }
+
+    .txn-table { font-size: 12px; min-width: 520px; }
+
+    .txn-type-badge {
+        font-size: 10px;
+        padding: 3px 8px;
+    }
+
+    .reports-toast-container {
+        left: 12px;
+        right: 12px;
+        bottom: 16px;
+        transform: none;
+        align-items: stretch;
+    }
+
+    .reports-toast {
+        width: 100%;
+        box-sizing: border-box;
+        font-size: 12.5px;
+    }
+}
+
+/* ---------- ≤ 380px: very small phones ---------- */
+@media (max-width: 380px) {
+    .reports-title h2 { font-size: 16.5px; gap: 8px; }
+    .chart-wrap { height: 190px; }
+
+    .ql-icon { width: 34px; height: 34px; font-size: 14px; }
+    .ql-value { font-size: 15px; }
+
+    .transactions-card .card-header-actions {
+        grid-template-columns: 1fr;
+    }
+
+    .stat-pill-trend {
+        font-size: 10px;
+        padding: 2px 6px;
+    }
+}
+
+/* ---------- Short landscape phones ---------- */
+@media (max-height: 480px) and (orientation: landscape) {
+    .chart-wrap { height: 200px; }
+    .reports-toast-container { bottom: 10px; }
+}
+
+/* ---------- Touch devices: comfortable tap targets, no sticky hover ---------- */
+@media (hover: none) and (pointer: coarse) {
+    .card-link-btn {
+        width: 34px;
+        height: 34px;
+        font-size: 13px;
+    }
+
+    .quick-link-card:hover,
+    .stat-pill-link:hover {
+        transform: none;
+    }
+
+    .txn-export-btn:hover {
+        color: var(--text-secondary);
+        background: transparent;
+        border-color: var(--border-subtle);
+    }
+
+    .txn-filter-select,
+    .txn-export-btn { min-height: 40px; }
+}
+
+/* ---------- Respect reduced-motion preferences ---------- */
+@media (prefers-reduced-motion: reduce) {
+    .report-card,
+    .transactions-card,
+    .quick-link-card,
+    .reports-toast {
+        animation: none !important;
+        transition: none !important;
+    }
+
+    .transactions-card { opacity: 1; transform: none; }
+}
+
+/* ---------- Print: clean, single column ---------- */
+@media print {
+    .reports-grid,
+    .quick-links-row,
+    .reports-stats-strip {
+        grid-template-columns: 1fr !important;
+    }
+
+    .report-card,
+    .transactions-card {
+        break-inside: avoid;
+        animation: none;
+        opacity: 1;
+        transform: none;
+        box-shadow: none;
+    }
+
+    .txn-export-btn,
+    .txn-filter-select,
+    .card-link-btn,
+    .reports-toast-container { display: none !important; }
+}

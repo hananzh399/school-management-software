@@ -42,10 +42,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     initTxnControls();
     
     await loadReportsDataFromBackend();
-    
-    renderReports();
 
+    renderReports();               // first paint, no waiting on per-student fines
     initLiveRefresh();
+
+    if (_reportsDataCache.finePhase) {
+        await _reportsDataCache.finePhase;
+        renderReports();           // refine totals once fines are in
+    }
 });
 
 /* ============================================
@@ -57,15 +61,20 @@ document.addEventListener('DOMContentLoaded', async () => {
    simple in-flight guard stops overlapping refreshes from stacking up if
    the network is slow.
    ============================================ */
-const REPORTS_REFRESH_INTERVAL_MS = 30000; // 30s
+const REPORTS_REFRESH_INTERVAL_MS = 120000; // 2 min
+const REPORTS_MIN_GAP_MS = 20000;           // ignore focus/visibility bursts
+let _reportsLastRefresh = Date.now();
 let _reportsRefreshInFlight = false;
 
 async function refreshReportsData() {
     if (_reportsRefreshInFlight) return;
+    if (Date.now() - _reportsLastRefresh < REPORTS_MIN_GAP_MS) return;
     _reportsRefreshInFlight = true;
     try {
         await loadReportsDataFromBackend();
         renderReports();
+        _reportsLastRefresh = Date.now();
+        if (_reportsDataCache.finePhase) { await _reportsDataCache.finePhase; renderReports(); }
     } catch (err) {
         console.error('[Reports] Live refresh failed:', err);
     } finally {
@@ -284,21 +293,38 @@ function _reportsDate(value, monthKey) {
         : parsed;
 }
 
-async function _reportsGet(path, fallback) {
-    const schoolId = _getSchoolId();
-    const separator = path.includes('?') ? '&' : '?';
-    try {
-        const response = await fetch(
-            `${REPORTS_BACKEND_ORIGIN}${path}${separator}schoolId=${encodeURIComponent(schoolId)}`,
-            { headers: { 'Content-Type': 'application/json' } }
-        );
-        if (!response.ok) return fallback;
-        const text = await response.text();
-        return text ? JSON.parse(text) : fallback;
-    } catch (error) {
-        console.warn(`[Reports] Could not read ${path}:`, error);
-        return fallback;
+const _reportsInFlight = new Map();
+const REPORTS_FETCH_TIMEOUT_MS = 15000;
+
+function _reportsGet(path, fallback) {
+    // Same request already running (e.g. status-all for the same month asked
+    // for twice) → share it instead of hitting the backend again.
+    if (_reportsInFlight.has(path)) {
+        return _reportsInFlight.get(path).then(v => v === undefined ? fallback : v);
     }
+    const p = (async () => {
+        const schoolId = _getSchoolId();
+        const separator = path.includes('?') ? '&' : '?';
+        const ctrl = new AbortController();
+        const timer = setTimeout(() => ctrl.abort(), REPORTS_FETCH_TIMEOUT_MS);
+        try {
+            const response = await fetch(
+                `${REPORTS_BACKEND_ORIGIN}${path}${separator}schoolId=${encodeURIComponent(schoolId)}`,
+                { headers: { 'Content-Type': 'application/json' }, signal: ctrl.signal }
+            );
+            if (!response.ok) return fallback;
+            const text = await response.text();
+            return text ? JSON.parse(text) : fallback;
+        } catch (error) {
+            console.warn(`[Reports] Could not read ${path}:`, error);
+            return fallback;
+        } finally {
+            clearTimeout(timer);
+            _reportsInFlight.delete(path);
+        }
+    })();
+    _reportsInFlight.set(path, p);
+    return p;
 }
 
 /**
@@ -365,8 +391,11 @@ function _reportsAttendanceMap(data) {
             const dateKey = String(rawDate).slice(0, 10);
             const entry = bucket(dateKey);
 
-            const memberType = String(record.memberType || record.type || '').toUpperCase();
-            const status = String(record.status || '').toLowerCase();
+            const memberType = String(record.memberType || record.type || record.role || '').toUpperCase();
+            let status = String(record.status || record.attendanceStatus || '').trim().toLowerCase();
+            if (status === 'p') status = 'present';
+            else if (status === 'a') status = 'absent';
+            else if (status === 'l') status = 'leave';
             const isPresent = status === 'present' || status === 'late';
             // "leave" and "absent" still count the person as marked for
             // the day (part of the total), just not present.
@@ -374,7 +403,7 @@ function _reportsAttendanceMap(data) {
                 status === 'leave' || status === 'late';
             if (!isMarked) return;
 
-            if (memberType === 'STAFF') {
+            if (/STAFF|TEACHER|EMPLOYEE/.test(memberType)) {
                 entry.totalStaff++;
                 if (isPresent) entry.presentStaff++;
             } else {
@@ -421,6 +450,7 @@ async function loadReportsDataFromBackend() {
         salaryRecordsData,
         staffAdvancesData,
         attendanceData,
+        vouchersData,
         statusResponses,
         fineResponses
     ] = await Promise.all([
@@ -439,6 +469,7 @@ async function loadReportsDataFromBackend() {
         // returns every raw attendance row for the school so it can be
         // bucketed into a real 12-month trend below.
         _reportsGet('/api/attendance/all', []),
+        _reportsGet('/api/finance/vouchers', []),
         Promise.all(months.map(month =>
             _reportsGet(`/api/finance/status-all/${encodeURIComponent(month)}`, [])
         )),
@@ -448,6 +479,9 @@ async function loadReportsDataFromBackend() {
     ]);
 
     const students = _reportsArray(studentsData).filter(_reportsIsActiveStudent);
+    // Full roster (active + dropped/inactive). Needed for "Students Dropped
+    // This Month" — the active-only list above can never contain them.
+    const allStudentsFull = _reportsArray(studentsData);
     // BUGFIX — "Reports' Total Revenue drops after deleting a student":
     // _computeExactDashboardTotals() below intentionally mirrors main.js's
     // dashboard math line-for-line, and main.js was fixed to stop scoping
@@ -523,7 +557,8 @@ async function loadReportsDataFromBackend() {
         students,
         staff: _reportsStaffArray(staffData),
         salaryRecords: _reportsArray(salaryRecordsData),
-        feeStatus: statusRows
+        feeStatus: statusRows,
+        allStudents: allStudentsFull
     };
 
     // FEATURE — Report & Analytics' "Total Revenue" / "Total Expense" stat
@@ -535,7 +570,7 @@ async function loadReportsDataFromBackend() {
     // per-student fine-details endpoint, so the two pages can never drift
     // apart. See _computeExactDashboardTotals() below.
     const staffForTotals = _reportsStaffArray(staffData);
-    const feeMonthKey = await _rdResolveFeeMonthKey();
+    const feeMonthKey = _rdFeeMonthFromVouchers(vouchersData);
     const prevFeeMonthKey = _reportsMonthKey(new Date(
         Number(feeMonthKey.slice(0, 4)), Number(feeMonthKey.slice(5, 7)) - 2, 1
     ));
@@ -547,18 +582,30 @@ async function loadReportsDataFromBackend() {
         salaryRecordsRaw: salaryRecordsData,
         staffAdvancesRaw: staffAdvancesData
     };
-    const [current, previous] = await Promise.all([
-        _computeExactDashboardTotals(feeMonthKey, allStudentsForMoneyTotals, staffForTotals, rawFinanceData),
-        _computeExactDashboardTotals(prevFeeMonthKey, allStudentsForMoneyTotals, staffForTotals, rawFinanceData)
+
+    // Status rows for the 12 months are already downloaded above — reuse
+    // them instead of fetching status-all again for the same months.
+    const statusByMonth = {};
+    months.forEach((m, i) => { statusByMonth[m] = _reportsArray(statusResponses[i]); });
+
+    // PHASE 1 (fast, no per-student requests): totals without the
+    // per-student fine-details so the page can paint immediately.
+    const quick = await Promise.all([
+        _computeExactDashboardTotals(feeMonthKey, allStudentsFull, staffForTotals, rawFinanceData, { statusRows: statusByMonth[feeMonthKey], skipFines: true }),
+        _computeExactDashboardTotals(prevFeeMonthKey, allStudentsFull, staffForTotals, rawFinanceData, { statusRows: statusByMonth[prevFeeMonthKey], skipFines: true })
     ]);
-    _reportsDataCache.exactTotals = { current, previous };
-    // Authoritative per-student fee state for the CURRENT fee month — the
-    // same netPayable/paidAmount rows Manage Finance and the Dashboard use
-    // to decide whether a student has paid. Used by the "Top Pending Fees"
-    // list and "Fee Collection Status" chart below instead of a local
-    // recompute, so a student marked Paid in Finance can never still show
-    // up here as pending.
-    _reportsDataCache.currentFeeStatusRows = current.statusRows;
+    _reportsDataCache.exactTotals = { current: quick[0], previous: quick[1] };
+    _reportsDataCache.currentFeeStatusRows = quick[0].statusRows;
+
+    // PHASE 2 (slow, one request per student): fills in paid-fine totals
+    // in the background; the caller re-renders when it resolves.
+    _reportsDataCache.finePhase = Promise.all([
+        _computeExactDashboardTotals(feeMonthKey, allStudentsFull, staffForTotals, rawFinanceData, { statusRows: statusByMonth[feeMonthKey] }),
+        _computeExactDashboardTotals(prevFeeMonthKey, allStudentsFull, staffForTotals, rawFinanceData, { statusRows: statusByMonth[prevFeeMonthKey] })
+    ]).then(([cur, prev]) => {
+        _reportsDataCache.exactTotals = { current: cur, previous: prev };
+        _reportsDataCache.currentFeeStatusRows = cur.statusRows;
+    }).catch(err => console.warn('[Reports] Fine totals failed:', err));
 }
 
 /* ============================================
@@ -573,6 +620,14 @@ async function loadReportsDataFromBackend() {
 // (changed only by the "Move to Next Month" button). There is no day-of-month
 // rule; the calendar month is only a fallback when nothing is stored yet or
 // the request fails.
+function _rdFeeMonthFromVouchers(data) {
+    const calendarKey = _reportsMonthKey(new Date());
+    const list = Array.isArray(data) ? data : _reportsArray(data && data.items);
+    const marker = list.find(r => r && r.key === '__FEE_MONTH_STATE__');
+    const stored = marker && marker.activeMonthKey ? String(marker.activeMonthKey) : null;
+    return (stored && /^\d{4}-\d{2}$/.test(stored)) ? stored : calendarKey;
+}
+
 async function _rdResolveFeeMonthKey() {
     const calendarKey = _reportsMonthKey(new Date());
     try {
@@ -591,16 +646,29 @@ function _rdPaidFine(fine) {
     return status === 'paid' || status === 'settled';
 }
 
+const _rdFineCache = new Map(); // monthKey -> { at, records }
+const RD_FINE_CACHE_MS = 5 * 60 * 1000;
+const RD_FINE_CONCURRENCY = 8;
+
 async function _rdFineRecords(students, monthKey) {
+    const cached = _rdFineCache.get(monthKey);
+    if (cached && Date.now() - cached.at < RD_FINE_CACHE_MS) return cached.records;
+
     const records = [];
-    await Promise.all(students.map(async student => {
-        const id = student.regNo || student.id;
-        if (!id) return;
-        const data = await _reportsGet(
-            `/api/finance/fine-details/${encodeURIComponent(id)}/${encodeURIComponent(monthKey)}`, []
-        );
-        if (Array.isArray(data)) records.push(...data);
-    }));
+    const ids = students.map(s => s.regNo || s.id).filter(Boolean);
+    let next = 0;
+    // Small worker pool instead of firing hundreds of requests at once.
+    const worker = async () => {
+        while (next < ids.length) {
+            const id = ids[next++];
+            const data = await _reportsGet(
+                `/api/finance/fine-details/${encodeURIComponent(id)}/${encodeURIComponent(monthKey)}`, []
+            );
+            if (Array.isArray(data)) records.push(...data);
+        }
+    };
+    await Promise.all(Array.from({ length: Math.min(RD_FINE_CONCURRENCY, ids.length) }, worker));
+    _rdFineCache.set(monthKey, { at: Date.now(), records });
     return records;
 }
 
@@ -630,8 +698,10 @@ function _rdSalaryPaid(salaryRecords, staffAdvances, monthKey) {
     return paidFromPayroll + advance;
 }
 
-async function _computeExactDashboardTotals(monthKey, moneyStudents, staff, raw) {
-    const statusRows = await _reportsGet(`/api/finance/status-all/${encodeURIComponent(monthKey)}`, []);
+async function _computeExactDashboardTotals(monthKey, moneyStudents, staff, raw, opts = {}) {
+    const statusRows = opts.statusRows
+        ? opts.statusRows
+        : await _reportsGet(`/api/finance/status-all/${encodeURIComponent(monthKey)}`, []);
     const statusByStudent = new Map(_reportsArray(statusRows)
         .filter(row => row && row.regNo)
         .map(row => [String(row.regNo), row]));
@@ -644,7 +714,9 @@ async function _computeExactDashboardTotals(monthKey, moneyStudents, staff, raw)
         return total + _reportsNumber(row && row.paidAmount);
     }, 0);
 
-    const fineRecords = await _rdFineRecords(moneyStudents, monthKey);
+    const fineRecords = opts.skipFines
+        ? (_rdFineCache.get(monthKey) ? _rdFineCache.get(monthKey).records : [])
+        : await _rdFineRecords(moneyStudents, monthKey);
     const studentFinesTotal = fineRecords.filter(_rdPaidFine)
         .reduce((total, fine) => total + _reportsNumber(fine.amount), 0);
 
@@ -730,7 +802,11 @@ function getAttendanceForDate(dateKey) {
 /* ============================================
    PERIOD BUCKETS (calendar-accurate)
    ============================================ */
-function toDateKey(d) { return d.toISOString().slice(0, 10); }
+function toDateKey(d) {
+    // LOCAL date (not toISOString/UTC) so attendance for a given day lands on
+    // that same day — in UTC+5 the UTC key was one day behind.
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
 
 /**
  * Builds `count` calendar-month buckets, oldest first, ending at the
@@ -997,7 +1073,8 @@ function renderReports() {
     const avgOverall = overallPct(attendanceStudentSeries[currentMonthIdx], attendanceStaffSeries[currentMonthIdx]);
     const prevAvgOverall = currentMonthIdx > 0 ? overallPct(attendanceStudentSeries[currentMonthIdx - 1], attendanceStaffSeries[currentMonthIdx - 1]) : 0;
 
-    setText('rp-avg-attendance', avgOverall + '%');
+    const thisMonthHasAtt = attendanceStudentSeries[currentMonthIdx] !== null || attendanceStaffSeries[currentMonthIdx] !== null;
+    setText('rp-avg-attendance', thisMonthHasAtt ? avgOverall + '%' : '—');
     renderTrendBadge('rp-attendance-trend', avgOverall, prevAvgOverall, 'up');
 
     // ---------- Expense breakdown (whole-of-record totals, matches Fees & Finance) ----------
@@ -1495,8 +1572,9 @@ function pickDate(obj, keys) {
 }
 
 function isDroppedStudent(s) {
-    const status = (s.status || s.enrollmentStatus || '').toString().toLowerCase();
-    return s.isDropped === true || s.dropped === true || status === 'dropped' || status === 'inactive';
+    const status = (s.status || s.enrollmentStatus || '').toString().trim().toLowerCase();
+    return s.isDropped === true || s.dropped === true ||
+        /^(dropped|drop|dropout|dropped out|inactive|left|withdrawn|struck off|removed|discontinued)/.test(status);
 }
 
 function renderQuickLinks(students) {
@@ -1510,10 +1588,13 @@ function renderQuickLinks(students) {
     }).length;
     setText('ql-students-added-count', addedThisMonth);
 
-    const droppedThisMonth = students.filter(s => {
+    // Must read the FULL roster — `students` is active-only, so dropped
+    // students were never in it and this always showed 0.
+    const fullRoster = Array.isArray(_reportsDataCache.allStudents) ? _reportsDataCache.allStudents : students;
+    const droppedThisMonth = fullRoster.filter(s => {
         if (!isDroppedStudent(s)) return false;
-        const d = pickDate(s, ['dropDate', 'dateDropped', 'leftDate', 'deactivatedAt', 'statusChangedAt']);
-        return d ? (d >= monthStart && d <= monthEnd) : true; // no drop date on record: still count it
+        const d = pickDate(s, ['dropDate', 'droppedDate', 'droppedAt', 'dateDropped', 'dropDateTime', 'leftDate', 'deactivatedAt', 'statusChangedAt', 'statusUpdatedAt', 'updatedAt']);
+        return d ? (d >= monthStart && d <= monthEnd) : false; // no date on record: can't prove it was this month
     }).length;
     setText('ql-students-dropped-count', droppedThisMonth);
 
