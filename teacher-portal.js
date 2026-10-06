@@ -134,6 +134,32 @@
   /* ── Tests & quizzes (stored per teacher; ready to swap for API) ── */
   let tests = store.get("tests", []);
   const saveTests = () => store.set("tests", tests);
+  /* Server sync: PUT/DELETE /api/teacher-tests. Failures are queued and retried on refresh / next open. */
+  let pendingPut = store.get("tests_put", []), pendingDel = store.get("tests_del", []);
+  const savePending = () => { store.set("tests_put", pendingPut); store.set("tests_del", pendingDel); };
+  async function flushTests() {
+    for (const id of pendingPut.slice()) {
+      const t = tests.find((x) => x.id === id);
+      if (!t) { pendingPut = pendingPut.filter((x) => x !== id); continue; }
+      try { await api("/teacher-tests/" + encodeURIComponent(id), { method: "PUT", body: JSON.stringify(Object.assign({ schoolId }, t)) }); pendingPut = pendingPut.filter((x) => x !== id); } catch (e) { if (e.message === "401") return; break; }
+    }
+    for (const id of pendingDel.slice()) {
+      try { await api("/teacher-tests/" + encodeURIComponent(id) + "?schoolId=" + encodeURIComponent(schoolId), { method: "DELETE" }); pendingDel = pendingDel.filter((x) => x !== id); } catch (e) { if (e.message === "401") return; break; }
+    }
+    savePending();
+  }
+  function pushTest(t) { if (pendingPut.indexOf(t.id) < 0) pendingPut.push(t.id); savePending(); flushTests(); }
+  async function loadTests() {
+    try {
+      const list = await api("/teacher-tests?schoolId=" + encodeURIComponent(schoolId));
+      if (!Array.isArray(list)) return;
+      const byId = {}; list.forEach((t) => { if (t && t.id) byId[t.id] = t; });
+      pendingPut.forEach((id) => { const l = tests.find((x) => x.id === id); if (l) byId[id] = l; });   // unsynced local edits win
+      pendingDel.forEach((id) => delete byId[id]);
+      tests.filter((l) => !byId[l.id] && pendingDel.indexOf(l.id) < 0).forEach((l) => { byId[l.id] = l; if (pendingPut.indexOf(l.id) < 0) pendingPut.push(l.id); });  // local-only tests get uploaded once
+      tests = Object.keys(byId).map((k) => byId[k]); saveTests(); savePending(); flushTests();
+    } catch (e) { /* offline or endpoint not deployed — keep local copy */ }
+  }
   let qb = null;         // test being built
   let gradeCtx = null;   // { id, reg }
   let quizView = "list"; // list | build | detail
@@ -302,7 +328,7 @@
       if (q.kind === "mcq" && q.options.filter((o) => o.trim()).length < 2) return toast("Question " + (i + 1) + " needs at least 2 options.", true);
       if (q.kind === "mcq" && !q.options[q.answer].trim()) return toast("Q" + (i + 1) + ": correct option is blank.", true);
     }
-    tests.push(qb); saveTests(); openTest = qb.id; qb = null; quizView = "detail"; toast("Saved."); quizzes();
+    tests.push(qb); saveTests(); pushTest(qb); openTest = qb.id; qb = null; quizView = "detail"; toast("Saved."); quizzes();
   }
   function quizzes() {
     if (quizView === "build" && qb) { view.innerHTML = buildView(); return; }
@@ -355,7 +381,7 @@
     document.querySelectorAll("[data-gm]").forEach((i) => { if (i.value !== "") gradeCtx.answers[i.dataset.gm] = Math.min(+i.value || 0, +t.questions.find((q) => q.id === i.dataset.gm).marks); else delete gradeCtx.answers[i.dataset.gm]; });
     t.results = t.results || {};
     t.results[gradeCtx.reg] = { answers: gradeCtx.answers, absent: abs, score: abs ? 0 : scoreSheet(t, { answers: gradeCtx.answers }), at: Date.now() };
-    saveTests(); const nxt = gradeCtx.next; closeSheet(); toast("Saved."); quizzes();
+    saveTests(); pushTest(t); const nxt = gradeCtx.next; closeSheet(); toast("Saved."); quizzes();
     if (goNext && nxt) openGrade(t, nxt);
   }
   function exportCsv(t) {
@@ -518,7 +544,7 @@
   $("#btn-inbox").addEventListener("click", () => go("inbox"));
   $("#btn-refresh").addEventListener("click", async (e) => {
     const b = e.currentTarget; b.classList.add("spin"); att.students = null;
-    await Promise.all([loadAttendanceData(), loadAnnouncements(), syncOutbox()]); b.classList.remove("spin"); go(current); toast("Refreshed");
+    await Promise.all([loadAttendanceData(), loadAnnouncements(), syncOutbox(), loadTests()]); b.classList.remove("spin"); go(current); toast("Refreshed");
   });
 
   view.addEventListener("click", (e) => {
@@ -545,7 +571,7 @@
     if (d.delq != null) { harvest(); if (qb.questions.length < 2) return toast("A test needs at least one question.", true); qb.questions.splice(+d.delq, 1); return quizzes(); }
     if (t.id === "save-test") return saveBuilt();
     if (d.csv) return exportCsv(tests.find((x) => x.id === d.csv));
-    if (d.deltest) { if (confirm("Delete this " + "test and all its results?")) { tests = tests.filter((x) => x.id !== d.deltest); saveTests(); quizView = "list"; quizzes(); toast("Deleted."); } return; }
+    if (d.deltest) { if (confirm("Delete this " + "test and all its results?")) { tests = tests.filter((x) => x.id !== d.deltest); saveTests(); pendingPut = pendingPut.filter((x) => x !== d.deltest); pendingDel.push(d.deltest); savePending(); flushTests(); quizView = "list"; quizzes(); toast("Deleted."); } return; }
     /* notices */
     if (d.atab) { ann.tab = d.atab; return inbox(); }
     if (d.aud) { compose.audience = d.aud; return inbox(); }
@@ -581,5 +607,6 @@
   updateDot();
   go("home");
   if (inchargeClasses().length) loadAttendanceData().then(() => current === "home" && home());
+  loadTests().then(() => { if (current === "quizzes" && quizView === "list") quizzes(); else if (current === "home") home(); });
   loadAnnouncements().then(() => { syncOutbox(); if (current === "home") home(); else if (current === "inbox") inbox(); });
 })();
