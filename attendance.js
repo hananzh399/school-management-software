@@ -633,7 +633,9 @@ function renderClasses() {
     }
     CLASSES.forEach(cls => {
         const count = STUDENTS.filter(s => s.class === cls.name).length;
-        const alreadySaved = !!todayAttendanceCache[cls.name];
+        const savedRecs = todayAttendanceCache[cls.name] || {};
+        const alreadySaved = count > 0 &&
+            STUDENTS.filter(s => s.class === cls.name).every(s => savedRecs[s.regNo]);
         const card = document.createElement("div");
         card.className = "class-card" + (alreadySaved ? " class-card--saved" : "");
         card.innerHTML = `
@@ -652,23 +654,24 @@ function openClass(cls) {
     state.search = "";
     state.studentEditMode.clear();
 
-    // Check if attendance has already been saved today for this class in our cache
-    const existing = todayAttendanceCache[cls.name];
+    // BUGFIX: build state PER STUDENT. Previously, if the class had even one
+    // saved record (e.g. a single ID-card scan), every student in the class was
+    // locked as "Done" and the unmarked ones were drawn as Absent. Now only
+    // students that really have a saved record are locked; everyone else stays
+    // open with the normal default, and nothing is marked absent unless chosen.
+    const existing = todayAttendanceCache[cls.name] || {};
 
-    if (existing) {
-        // Pre-load the saved records so rows show the correct status
-        state.attendance = { ...existing };
-        // Mark every student in the class as already saved (locked "Done" state)
-        state.savedStudentKeys = new Set(
-            STUDENTS.filter(s => s.class === cls.name).map(s => s.regNo)
-        );
-    } else {
-        // No record yet for today — start fresh
-        state.attendance = {};
-        state.savedStudentKeys.clear();
-        STUDENTS.filter(s => s.class === cls.name)
-            .forEach(s => { state.attendance[s.regNo] = { status: "present", reason: "" }; });
-    }
+    state.attendance = {};
+    state.savedStudentKeys.clear();
+
+    STUDENTS.filter(s => s.class === cls.name).forEach(s => {
+        if (existing[s.regNo]) {
+            state.attendance[s.regNo] = { ...existing[s.regNo] };
+            state.savedStudentKeys.add(s.regNo);   // locked / Done
+        } else {
+            state.attendance[s.regNo] = { status: "present", reason: "" };
+        }
+    });
 
     $("#table-title").textContent = `${cls.name} — Attendance`;
     $("#search-input").value = "";
@@ -3358,7 +3361,9 @@ function initScanner() {
 
             // Keep any on-screen sheet / cache in step with what was just saved.
             const entry = { status: "present", reason: "" };
-            if (todayAttendanceCache[student.class]) todayAttendanceCache[student.class][student.regNo] = { ...entry };
+            if (!todayAttendanceCache[student.class]) todayAttendanceCache[student.class] = {};
+            todayAttendanceCache[student.class][student.regNo] = { ...entry };
+            renderAttendanceStats();
             if (state.selectedClass && state.selectedClass.name === student.class) {
                 state.attendance[student.regNo] = { ...entry };
                 state.savedStudentKeys.add(student.regNo);
