@@ -304,6 +304,57 @@ function switchTab(name, btn) {
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
   document.getElementById('tab-' + name).classList.add('active');
   btn.classList.add('active');
+  if (name === 'teacherlogin') refreshTeacherPasswordState();
+}
+
+// ═══════════════════════════════════════════════
+//  TEACHER LOGIN  (default password + reset)
+// ═══════════════════════════════════════════════
+const STAFF_API_BASE = 'https://167-86-120-247.sslip.io/api/staff';
+
+function _flash(id, msg, ms = 3000) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.textContent = msg;
+  if (ms) setTimeout(() => { if (el.textContent === msg) el.textContent = ''; }, ms);
+}
+
+async function refreshTeacherPasswordState() {
+  const el = document.getElementById('tl-state');
+  if (!el) return;
+  try {
+    const r = await apiRequest(_settingsUrl('/teacher-password'));
+    el.textContent = r && r.set ? '✓ A default password is set. Enter a new one to change it.' : 'Not set yet. Teachers cannot sign in until you set one.';
+  } catch (e) { el.textContent = 'Could not check status.'; }
+}
+
+function toggleTeacherPassword() {
+  const input = document.getElementById('tl-password');
+  const show = input.type === 'password';
+  input.type = show ? 'text' : 'password';
+  document.getElementById('tl-eye').innerHTML = show ? '<i class="fas fa-eye-slash"></i> Hide' : '<i class="fas fa-eye"></i> Show';
+}
+
+async function saveTeacherDefaultPassword() {
+  const input = document.getElementById('tl-password');
+  const password = input.value.trim();
+  if (password.length < 6) { _flash('tl-status', '⚠ Password must be at least 6 characters.'); return; }
+  try {
+    await apiRequest(_settingsUrl('/teacher-password'), { method: 'PUT', body: JSON.stringify({ password }) });
+    input.value = '';
+    _flash('tl-status', '✓ Default password saved.');
+    refreshTeacherPasswordState();
+  } catch (e) { _flash('tl-status', '⚠ Could not save. Try again.'); }
+}
+
+async function resetTeacherPassword() {
+  const id = document.getElementById('tl-reset-id').value.trim();
+  if (!id) { _flash('tl-reset-status', '⚠ Enter the Teacher ID.'); return; }
+  try {
+    await apiRequest(`${STAFF_API_BASE}/${encodeURIComponent(id)}/reset-password?schoolId=${encodeURIComponent(_getSchoolId())}`, { method: 'POST' });
+    document.getElementById('tl-reset-id').value = '';
+    _flash('tl-reset-status', '✓ Reset. Teacher can use the default password.');
+  } catch (e) { _flash('tl-reset-status', /404/.test(e.message) ? '⚠ Teacher ID not found.' : '⚠ Could not reset. Try again.'); }
 }
 
 // ═══════════════════════════════════════════════

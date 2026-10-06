@@ -97,6 +97,9 @@
       <button class="tab-btn" onclick="switchTab('attendance-timing', this)">
         <i class="fas fa-clock"></i> Attendance Timing
       </button>
+      <button class="tab-btn" onclick="switchTab('teacherlogin', this)">
+        <i class="fas fa-user-lock"></i> Teacher Login
+      </button>
     </div>
 
     <!-- ═══════════════════ TAB: SCHOOL INFO ═══════════════════ -->
@@ -316,29 +319,6 @@
         </div>
 
         <div class="timing-grid">
-          <!-- FIRST AUTO SAVE -->
-          <div class="timing-card">
-            <div class="timing-card-head">
-              <span class="timing-badge">1</span>
-              <h3>First Auto Save <span class="timing-subtitle">— Staff Attendance</span></h3>
-            </div>
-            <label>Time</label>
-            <div class="time-row">
-              <input type="number" id="autosave1-hour"   min="1" max="12" placeholder="HH">
-              <span>:</span>
-              <input type="number" id="autosave1-minute" min="0" max="59" placeholder="MM">
-              <select id="autosave1-meridiem">
-                <option value="AM">AM</option>
-                <option value="PM">PM</option>
-              </select>
-            </div>
-            <label class="switch-row">
-              <input type="checkbox" id="autosave1-enabled" checked>
-              <span>Enabled</span>
-            </label>
-            <div class="var-hint">Staff attendance auto-save.</div>
-          </div>
-
           <!-- SECOND AUTO SAVE -->
           <div class="timing-card">
             <div class="timing-card-head">
@@ -361,6 +341,29 @@
             </label>
             <div class="var-hint">Student attendance auto-save.</div>
           </div>
+
+          <!-- FIRST AUTO SAVE -->
+          <div class="timing-card">
+            <div class="timing-card-head">
+              <span class="timing-badge">1</span>
+              <h3>First Auto Save <span class="timing-subtitle">— Staff Attendance</span></h3>
+            </div>
+            <label>Time</label>
+            <div class="time-row">
+              <input type="number" id="autosave1-hour"   min="1" max="12" placeholder="HH">
+              <span>:</span>
+              <input type="number" id="autosave1-minute" min="0" max="59" placeholder="MM">
+              <select id="autosave1-meridiem">
+                <option value="AM">AM</option>
+                <option value="PM">PM</option>
+              </select>
+            </div>
+            <label class="switch-row">
+              <input type="checkbox" id="autosave1-enabled" checked>
+              <span>Enabled</span>
+            </label>
+            <div class="var-hint">Staff attendance auto-save.</div>
+          </div>
         </div>
 
         <div class="timing-actions">
@@ -368,6 +371,49 @@
             <i class="fas fa-save"></i> Save Timings
           </button>
           <span id="timing-status" class="timing-status"></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════════ TAB: TEACHER LOGIN ═══════════════════ -->
+    <div class="tab-panel" id="tab-teacherlogin">
+      <div class="section-card">
+        <div class="section-header">
+          <div class="section-header-info">
+            <h2><i class="fas fa-user-lock"></i> Teacher Portal Password</h2>
+            <p>Default password teachers use to sign in.</p>
+          </div>
+        </div>
+        <div class="variables-panel">
+          <div class="var-item">
+            <label>Default Password</label>
+            <input type="password" id="tl-password" class="var-input" placeholder="At least 6 characters" autocomplete="new-password">
+            <div class="var-hint" id="tl-state">Checking…</div>
+          </div>
+        </div>
+        <div class="timing-actions">
+          <button class="btn-primary" onclick="saveTeacherDefaultPassword()"><i class="fas fa-save"></i> Save Password</button>
+          <button class="btn-outline" onclick="toggleTeacherPassword()" id="tl-eye"><i class="fas fa-eye"></i> Show</button>
+          <span id="tl-status" class="timing-status"></span>
+        </div>
+      </div>
+
+      <div class="section-card">
+        <div class="section-header">
+          <div class="section-header-info">
+            <h2><i class="fas fa-rotate-left"></i> Reset a Teacher</h2>
+            <p>Back to the default password. Allows one more change.</p>
+          </div>
+        </div>
+        <div class="variables-panel">
+          <div class="var-item">
+            <label>Teacher ID</label>
+            <input type="text" id="tl-reset-id" class="var-input" placeholder="e.g. PSC_T_1">
+          </div>
+        </div>
+        <div class="timing-actions">
+          <button class="btn-outline" onclick="resetTeacherPassword()"><i class="fas fa-rotate-left"></i> Reset Password</button>
+          <span id="tl-reset-status" class="timing-status"></span>
         </div>
       </div>
     </div>

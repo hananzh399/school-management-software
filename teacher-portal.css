@@ -130,3 +130,14 @@ button{font:inherit;color:inherit;border:0;background:none;cursor:pointer;touch-
 .toast.show{opacity:1;transform:translate(-50%,0)}
 .toast.err{background:var(--coral)}
 @media (min-width:521px){body{display:grid;place-items:center}.app{height:min(900px,100dvh);border-radius:28px;margin:auto}}
+
+/* Password card & nudge */
+.field{margin-bottom:12px}
+.field label{display:block;font-size:12px;font-weight:600;color:var(--ink-soft);margin-bottom:6px}
+.field input{width:100%;height:48px;border:1.5px solid var(--border);border-radius:var(--r-sm);padding:0 14px;font:inherit;font-size:16px;background:var(--paper);color:var(--ink);outline:none}
+.field input:focus{border-color:var(--teal-500);background:#fff}
+.hint{font-size:13px;color:var(--ink-soft);line-height:1.5;margin-bottom:12px}
+.hint.warn{color:var(--amber)}.hint i{margin-right:6px}
+.btn.ghost{background:var(--teal-100);color:var(--teal-700);box-shadow:none}
+.btn.sm{height:44px;font-size:14px;margin-top:12px}
+.nudge{background:var(--amber-100);border-color:#f2d3a4}.nudge .ic{background:#fff;color:var(--amber)}

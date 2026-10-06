@@ -4,7 +4,9 @@
 
    BACKEND CONTRACT (one endpoint is needed):
    POST /api/school/teacher-login   { staffId, password }
-     200 -> { token, schoolId, staff: { ...Staff row... } }
+     200 -> { token, schoolId, staff: { ...Staff row... }, passwordChanged }
+     Teachers sign in with the DEFAULT password the admin sets in Settings until
+     they change their own (allowed once): POST /api/staff/change-password.
             (token = school-scoped session, same kind /api/school/login issues)
      401 -> wrong ID or password (same reply for both)   429 -> locked out
      403 -> school blocked/expired   (error text is in { error })
@@ -42,13 +44,18 @@
   function setSession() {
     if (!pending) return;
     localStorage.setItem(KEY, JSON.stringify({
-      token: pending.token, schoolId: pending.schoolId, staff: pending.staff, at: Date.now()
+      token: pending.token, schoolId: pending.schoolId, staff: pending.staff,
+      passwordChanged: !!pending.passwordChanged, at: Date.now()
     }));
   }
   function getSession() {
     try { return JSON.parse(localStorage.getItem(KEY)) || null; } catch (e) { return null; }
   }
+  function updateSession(patch) {
+    const s = getSession();
+    if (s) localStorage.setItem(KEY, JSON.stringify(Object.assign(s, patch)));
+  }
   function clearSession() { localStorage.removeItem(KEY); }
 
-  window.SoftSchoolTeacher = { authenticateTeacher, setSession, getSession, clearSession };
+  window.SoftSchoolTeacher = { authenticateTeacher, setSession, getSession, updateSession, clearSession };
 })();

@@ -20,7 +20,11 @@
       headers: Object.assign({ "Content-Type": "application/json", Authorization: "Bearer " + session.token }, (opts && opts.headers) || {})
     }));
     if (res.status === 401) { auth.clearSession(); toast("Session expired. Please sign in again.", true); setTimeout(() => location.replace("index.html"), 900); throw new Error("401"); }
-    if (!res.ok) throw new Error((await res.text().catch(() => "")) || "HTTP " + res.status);
+    if (!res.ok) {
+      const text = await res.text().catch(() => "");
+      let msg = text; try { msg = JSON.parse(text).error || text; } catch (e) { /* plain text */ }
+      throw new Error(msg || "HTTP " + res.status);
+    }
     return res.json().catch(() => ({}));
   }
   let toastTimer;
@@ -93,6 +97,7 @@
         <div class="stat"><i class="fas fa-chalkboard"></i><b>${teach.length}</b><span>Classes</span></div>
         <div class="stat amber"><i class="fas fa-book"></i><b>${subjects().length}</b><span>Subjects</span></div>
       </div>${today$}
+      ${session.passwordChanged ? "" : `<div class="card nudge"><div class="row"><div class="ic"><i class="fas fa-key"></i></div><div class="tx"><b>Secure your account</b><span>You're using the default password. Change it once from Profile.</span></div></div><button class="btn sm" data-go="profile">Change password</button></div>`}
       ${inc.length ? `<button class="btn" data-go="attendance"><i class="fas fa-clipboard-check"></i> Mark Attendance</button>` : ""}`;
   }
 
@@ -149,9 +154,38 @@
       <div class="card"><h2><i class="fas fa-book"></i> Subjects</h2><div class="tags">${subjects().map((s) => `<span class="pill teal">${esc(s)}</span>`).join("") || "<span style='color:var(--ink-faint)'>None assigned</span>"}</div></div>
       <div class="card"><h2><i class="fas fa-chalkboard"></i> Classes</h2><div class="tags">${teachingClasses().map((c) => `<span class="pill teal">${esc(label(c))}</span>`).join("") || "<span style='color:var(--ink-faint)'>None assigned</span>"}
         ${inc.map((c) => `<span class="pill amber"><i class="fas fa-star"></i> ${esc(label(c))}</span>`).join("")}</div></div>
+      <div class="card"><h2><i class="fas fa-lock"></i> Password</h2>
+        ${session.passwordChanged
+          ? `<p class="hint"><i class="fas fa-circle-check"></i> You've changed your password. To change it again, ask your admin to reset it.</p>`
+          : pwOpen
+            ? `<div class="field"><label>Current password</label><input type="password" id="pw-cur" autocomplete="current-password" placeholder="Default password from admin"></div>
+               <div class="field"><label>New password</label><input type="password" id="pw-new" autocomplete="new-password" placeholder="At least 6 characters"></div>
+               <div class="field"><label>Confirm new password</label><input type="password" id="pw-new2" autocomplete="new-password"></div>
+               <p class="hint warn"><i class="fas fa-triangle-exclamation"></i> You can only change your password once.</p>
+               <button class="btn" id="pw-save"><i class="fas fa-check"></i> Save new password</button>`
+            : `<p class="hint">You can change your password <b>one time</b>.</p><button class="btn ghost" data-pw="open"><i class="fas fa-key"></i> Change password</button>`}
+      </div>
       <button class="btn out" id="logout"><i class="fas fa-right-from-bracket"></i> Sign out</button>`;
   }
+  let pwOpen = false;
   const empty = (ic, t, p) => `<div class="empty"><i class="fas ${ic}"></i><b>${t}</b><p>${p}</p></div>`;
+
+  async function changePassword() {
+    const cur = $("#pw-cur").value, nw = $("#pw-new").value, nw2 = $("#pw-new2").value;
+    if (!cur || !nw) return toast("Fill in all password fields.", true);
+    if (nw.length < 6) return toast("New password must be at least 6 characters.", true);
+    if (nw !== nw2) return toast("New passwords don't match.", true);
+    if (nw === cur) return toast("New password must be different.", true);
+    if (!confirm("You can only change your password once. Continue?")) return;
+    const btn = $("#pw-save"); btn.disabled = true;
+    try {
+      await api("/staff/change-password?schoolId=" + encodeURIComponent(schoolId), {
+        method: "POST", body: JSON.stringify({ staffId: staff.staffId, currentPassword: cur, newPassword: nw })
+      });
+      session.passwordChanged = true; auth.updateSession({ passwordChanged: true });
+      pwOpen = false; profile(); toast("Password changed.");
+    } catch (e) { if (e.message !== "401") toast(e.message || "Could not change password.", true); btn.disabled = false; }
+  }
 
   /* ── Navigation ── */
   const TITLES = { home: "Home", classes: "My Classes", attendance: "Attendance", profile: "My Profile" };
@@ -174,6 +208,8 @@
     if (t.dataset.cls) { att.cls = +t.dataset.cls; return attendance(); }
     if (t.dataset.set) { att.marks[t.closest(".stu").dataset.id] = t.dataset.set; t.parentElement.querySelectorAll("button").forEach((b) => b.classList.toggle("on", b === t)); const c = counts(classStudents()); $("#c-p").textContent = c.present; $("#c-a").textContent = c.absent; $("#c-l").textContent = c.leave; return; }
     if (t.dataset.bulk) { classStudents().forEach((s) => (att.marks[s.regNo] = t.dataset.bulk)); return attendance(); }
+    if (t.dataset.pw) { pwOpen = true; return profile(); }
+    if (t.id === "pw-save") return changePassword();
     if (t.id === "save-att") return saveAttendance();
     if (t.id === "logout") { auth.clearSession(); location.replace("index.html"); }
   });
