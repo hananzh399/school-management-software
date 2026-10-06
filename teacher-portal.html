@@ -7,8 +7,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<title>Teacher Portal | SoftSchool</title>
-<link rel="icon" type="image/png" href="logo-icon.png">
+<title>Teacher Portal</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
 <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet">
 <link rel="stylesheet" href="teacher-portal.css">
@@ -16,11 +15,12 @@
 <body>
 <div class="app">
   <header class="appbar">
-    <img src="logo-icon.png" alt="" class="appbar-logo">
+    <div class="appbar-logo" id="school-logo" aria-hidden="true"></div>
     <div class="appbar-text">
       <h1 id="page-title">Home</h1>
       <p id="page-date"></p>
     </div>
+    <button class="icon-btn" id="btn-inbox" aria-label="Notices"><i class="fas fa-bell"></i><span class="dot" id="inbox-dot" hidden></span></button>
     <button class="icon-btn" id="btn-refresh" aria-label="Refresh"><i class="fas fa-rotate"></i></button>
   </header>
 
@@ -30,10 +30,14 @@
     <button data-tab="home" class="tab active"><i class="fas fa-house"></i><span>Home</span></button>
     <button data-tab="classes" class="tab"><i class="fas fa-chalkboard"></i><span>Classes</span></button>
     <button data-tab="attendance" class="tab"><i class="fas fa-clipboard-check"></i><span>Attendance</span></button>
+    <button data-tab="quizzes" class="tab"><i class="fas fa-file-pen"></i><span>Tests</span></button>
     <button data-tab="profile" class="tab"><i class="fas fa-user"></i><span>Profile</span></button>
   </nav>
 </div>
+<div class="sheet-back" id="sheet" hidden><div class="sheet" id="sheet-body" role="dialog" aria-modal="true"></div></div>
 <div class="toast" id="toast" role="status"></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script src="teacher-auth.js"></script>
 <script src="teacher-portal.js"></script>
 </body>
