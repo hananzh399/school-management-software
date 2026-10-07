@@ -8,8 +8,8 @@
 
   const staff = session.staff || {};
   const schoolId = session.schoolId;
-  const school = session.school || {};
-  const schoolName = school.name || "My School";
+  let school = session.school || {};
+  let schoolName = school.name || "School";
   const $ = (s) => document.querySelector(s);
   const view = $("#view");
   const esc = (v) => String(v == null ? "" : v).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -25,14 +25,20 @@
     set(k, v) { try { localStorage.setItem(SK + k, JSON.stringify(v)); } catch (e) { /* storage full / blocked */ } }
   };
 
-  /* ── School branding (logo + name replace the SoftSchool mark) ── */
-  document.title = "Teacher Portal | " + schoolName;
-  (function brand() {
+  /* ── School branding (real school logo + name replace the SoftSchool mark) ── */
+  function renderBrand() {
+    document.title = "Teacher Portal | " + schoolName;
     const el = $("#school-logo");
-    if (school.logo) { const img = new Image(); img.alt = schoolName; img.src = school.logo; img.onerror = () => fallback(); el.appendChild(img); }
+    el.innerHTML = ""; el.className = "appbar-logo";
+    const fallback = () => {
+      el.innerHTML = ""; el.classList.add("letter");
+      if (school.name) el.textContent = school.name.trim().charAt(0).toUpperCase();
+      else el.innerHTML = '<i class="fas fa-graduation-cap"></i>';
+    };
+    if (school.logo) { const img = new Image(); img.alt = schoolName; img.onerror = fallback; img.src = school.logo; el.appendChild(img); }
     else fallback();
-    function fallback() { el.innerHTML = ""; el.textContent = schoolName.trim().charAt(0).toUpperCase(); el.classList.add("letter"); }
-  })();
+  }
+  renderBrand();
 
   /* ── API helper (sends the teacher's school-scoped token) ── */
   async function api(path, opts) {
@@ -51,6 +57,32 @@
   function toast(msg, err) {
     const t = $("#toast"); t.textContent = msg; t.className = "toast show" + (err ? " err" : "");
     clearTimeout(toastTimer); toastTimer = setTimeout(() => (t.className = "toast"), 2600);
+  }
+
+  /* ── Real school name / logo / contact ──
+     Sources, in order: the teacher-login response (school object) → the admin session on this same
+     browser → GET /api/settings/{schoolId}. Never signs the teacher out if one of them fails. */
+  async function softGet(path) {
+    try { const r = await fetch(API + path, { headers: { Authorization: "Bearer " + session.token } }); return r.ok ? await r.json() : null; } catch (e) { return null; }
+  }
+  async function loadSchoolInfo() {
+    const next = Object.assign({}, school);
+    try {
+      const a = JSON.parse(localStorage.getItem("softschool_session")), s = a && a.school;
+      if (s && String(s.schoolId || a.schoolId) === String(schoolId)) {
+        ["name", "logo", "address", "phone"].forEach((k) => { if (!next[k] && s[k]) next[k] = s[k]; });
+      }
+    } catch (e) { /* no admin session here */ }
+    const st = await softGet("/settings/" + encodeURIComponent(schoolId));
+    if (st) {
+      if (st.schoolName) next.name = st.schoolName;
+      if (st.schoolAddress) next.address = st.schoolAddress;
+      if (st.schoolPhone) next.phone = st.schoolPhone;
+      const lg = st.schoolLogo || st.logo; if (lg && !next.logo) next.logo = lg;
+    }
+    if (JSON.stringify(next) === JSON.stringify(school)) return;
+    school = next; schoolName = school.name || "School";
+    auth.updateSession({ school: next }); renderBrand();
   }
 
   /* ── Staff data → assignments ── */
@@ -72,7 +104,7 @@
 
   /* ── Attendance state ── */
   const att = { students: null, saved: {}, cls: 0, marks: {}, loading: false };
-  async function loadAttendanceData() {
+  async function loadAttendanceData(quiet) {
     att.loading = true;
     try {
       const [stu, logs] = await Promise.all([
@@ -84,9 +116,9 @@
       }));
       att.saved = {};
       (Array.isArray(logs) ? logs : []).forEach((l) => { if (l.memberId) att.saved[l.memberId] = l.status || "absent"; });
-      att.marks = {};
+      if (!quiet) att.marks = {};
       (typeof attPending !== "undefined" ? attPending : []).forEach((p) => p.forEach((x) => { if (x.date === today()) att.saved[x.memberId] = x.status; }));   // not-yet-uploaded saves still show
-    } catch (e) { if (e.message !== "401") toast("Could not load attendance data.", true); att.students = att.students || []; }
+    } catch (e) { if (e.message !== "401" && !quiet) toast("Could not load attendance data.", true); att.students = att.students || []; }
     att.loading = false;
   }
   function classStudents() {
@@ -203,8 +235,6 @@
         <button class="link" data-go="attendance">${marked ? "Review" : "Mark now"} <i class="fas fa-arrow-right"></i></button></div></div>`;
     }
     const strength = att.students && mine.length ? `<div class="card"><h2><i class="fas fa-users"></i> Class strength</h2>${mine.map((c) => { const n = studentsOf(c).length, mx = Math.max.apply(null, mine.map((x) => studentsOf(x).length).concat([1])); return `<div class="bar-row"><span>${esc(label(c))}</span><div class="bar"><i style="width:${(n / mx) * 100}%"></i></div><b>${n}</b></div>`; }).join("")}</div>` : "";
-    const news = prefs.receiveAdmin ? ann.received.slice().sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 3) : [];
-    const newsCard = `<div class="card"><h2><i class="fas fa-bullhorn"></i> Latest notices <button class="link r" data-go="inbox">All</button></h2>${news.length ? news.map(noticeRow).join("") : `<p class="hint" style="margin:0">${prefs.receiveAdmin ? "No announcements from admin yet." : "Admin announcements are switched off in Profile."}</p>`}</div>`;
     const recent = tests.slice().sort((a, b) => b.created - a.created).slice(0, 2);
     const testCard = `<div class="card"><h2><i class="fas fa-file-pen"></i> Tests & quizzes <button class="link r" data-go="quizzes">All</button></h2>${recent.length ? recent.map((t) => { const st = testStats(t); return `<div class="row" data-test="${t.id}" style="cursor:pointer"><div class="ic"><i class="fas fa-file-lines"></i></div><div class="tx"><b>${esc(t.title)}</b><span>${esc(t.cls)} · ${esc(t.subject)}</span></div>${st ? `<span class="pill teal">${Math.round(st.avg)}% avg</span>` : `<span class="pill amber">Marks pending</span>`}</div>`; }).join("") : `<p class="hint" style="margin:0 0 10px">Add your first paper test in a minute.</p><button class="btn ghost sm" style="margin:0" data-newtest="1"><i class="fas fa-plus"></i> New test</button>`}</div>`;
     const todos = store.get("todos", []);
@@ -214,16 +244,17 @@
 
     view.innerHTML = `
       <div class="hero"><small>${greet},</small><h2>${esc((staff.name || "Teacher").split(" ")[0])}</h2>
-        <div class="hero-school">${esc(schoolName)}</div>
+        ${school.name ? `<div class="hero-school">${esc(school.name)}</div>` : ""}
         <span class="pill"><i class="fas fa-id-badge"></i> ${esc(staff.staffId || "")}</span>
         ${inc.length ? `<span class="pill"><i class="fas fa-star"></i> Incharge ${esc(label(inc[0]))}</span>` : ""}</div>
       ${weekStrip()}
       <div class="qa">
         ${inc.length ? `<button data-go="attendance"><i class="fas fa-clipboard-check"></i><span>Attendance</span></button>` : ""}
         <button data-newtest="1"><i class="fas fa-file-circle-plus"></i><span>Add test</span></button>
-        <button data-go="inbox"><i class="fas fa-bullhorn"></i><span>Notices</span></button>
+        <button data-go="inbox"><i class="fas fa-envelope"></i><span>Messages</span></button>
         <button data-card="1"><i class="fas fa-id-card"></i><span>ID card</span></button>
       </div>
+      ${messagesCard()}
       <div class="stats s4">
         <div class="stat"><i class="fas fa-chalkboard"></i><b>${teach.length}</b><span>Classes</span></div>
         <div class="stat amber"><i class="fas fa-book"></i><b>${subjects().length}</b><span>Subjects</span></div>
@@ -232,10 +263,17 @@
       </div>
       ${attCard}
       ${session.passwordChanged ? "" : `<div class="card nudge"><div class="row"><div class="ic"><i class="fas fa-key"></i></div><div class="tx"><b>Secure your account</b><span>You're using the default password. Change it once from Profile.</span></div></div><button class="btn sm" data-go="profile">Change password</button></div>`}
-      ${newsCard}${testCard}${strength}${todoCard}`;
+      ${testCard}${strength}${todoCard}`;
   }
   function noticeRow(a) {
-    return `<div class="row notice ${a.read ? "" : "new"}" data-notice="${esc(a.id)}"><div class="ic ${a.priority === "urgent" ? "urgent" : ""}"><i class="fas ${a.priority === "urgent" ? "fa-triangle-exclamation" : "fa-bullhorn"}"></i></div><div class="tx"><b>${esc(a.title)}</b><span>${esc(a.from)} · ${fmtDate(a.date)}</span></div>${a.read ? "" : `<i class="udot"></i>`}</div>`;
+    return `<div class="row notice ${a.read ? "" : "new"}" data-notice="${esc(a.id)}"><div class="ic"><i class="fas fa-envelope"></i></div><div class="tx"><b>${esc(a.title)}</b><span>${esc(a.from)} · ${fmtDate(a.date)}</span></div>${a.read ? "" : `<i class="udot"></i>`}</div>`;
+  }
+  /* Messages card: received from admin + Send message button (used on Home) */
+  function messagesCard() {
+    const news = prefs.receiveAdmin ? ann.received.slice().sort((x, y) => new Date(y.date) - new Date(x.date)).slice(0, 3) : [];
+    return `<div class="card msg-card"><h2><i class="fas fa-envelope"></i> Messages <button class="link r" data-go="inbox">All</button></h2>
+      <div class="msg-list">${news.length ? news.map(noticeRow).join("") : `<p class="hint" style="margin:0">${prefs.receiveAdmin ? "No messages from admin yet." : "Admin messages are switched off in Profile."}</p>`}</div>
+      <button class="btn ghost sm" data-compose="1"><i class="fas fa-paper-plane"></i> Send message</button></div>`;
   }
   function classes() {
     const teach = teachingClasses(), inc = inchargeClasses(), subs = subjects();
@@ -410,45 +448,50 @@
     const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" })); a.download = t.title.replace(/\W+/g, "_") + "_results.csv"; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1500);
   }
 
-  /* ── NOTICES (receive from admin · send area) ── */
-  const AUD = { admin: "Admin / Principal", class: "My class — students & parents", teachers: "All teachers" };
-  let compose = { audience: "admin", cls: "", priority: "normal" };
+  /* ── MESSAGES (received from admin · send to admin / parents) ── */
+  const AUD = { admin: "Admin / Principal", parents: "Parents", class: "Parents", teachers: "All teachers" };
+  let compose = { audience: "admin", cls: "" };
   function inbox() {
-    const t = ann.tab, mine = allMyClasses();
-    if (!compose.cls && mine[0]) compose.cls = label(mine[0]);
+    if (ann.tab === "send") ann.tab = "in";
+    const t = ann.tab;
     let body = "";
     if (t === "in") {
       const list = ann.received.slice().sort((a, b) => new Date(b.date) - new Date(a.date));
-      body = !prefs.receiveAdmin ? empty("fa-bell-slash", "Admin announcements are off", "Turn them back on from Profile → Notifications.")
-        : list.length ? list.map(noticeRow).join("") : empty("fa-bullhorn", "No announcements yet", "When your admin posts a notice for teachers, it will show up here.");
-    } else if (t === "send") {
-      body = `<div class="card"><h2><i class="fas fa-paper-plane"></i> New message</h2>
-        <div class="field"><label>Send to</label><div class="chips wrap">${Object.keys(AUD).map((k) => `<button class="chip ${compose.audience === k ? "on" : ""}" data-aud="${k}">${AUD[k]}</button>`).join("")}</div></div>
-        ${compose.audience === "class" ? `<div class="field"><label>Class</label><select id="c-cls">${mine.map((c) => `<option ${label(c) === compose.cls ? "selected" : ""}>${esc(label(c))}</option>`).join("")}</select></div>` : ""}
-        <div class="field"><label>Priority</label><div class="seg two"><button class="${compose.priority === "normal" ? "on t" : ""}" data-prio="normal">Normal</button><button class="${compose.priority === "urgent" ? "on a" : ""}" data-prio="urgent">Urgent</button></div></div>
-        <div class="field"><label>Title</label><input id="c-title" maxlength="80" placeholder="Subject"></div>
-        <div class="field"><label>Message</label><textarea id="c-body" rows="5" maxlength="1000" placeholder="Write your announcement, request or note…"></textarea></div>
-        <button class="btn" id="c-send"><i class="fas fa-paper-plane"></i> Send</button>
-        <p class="hint" style="margin:12px 0 0"><i class="fas fa-circle-info"></i> Sending is being connected to the school server. Messages are saved on this device and delivered automatically once it's live.</p></div>`;
+      body = !prefs.receiveAdmin ? empty("fa-bell-slash", "Admin messages are off", "Turn them back on from Profile → Notifications.")
+        : list.length ? `<div class="card">${list.map(noticeRow).join("")}</div>` : empty("fa-envelope-open", "No messages yet", "When your admin sends you a message, it will show up here.");
     } else {
       const list = ann.sent.slice().sort((a, b) => b.at - a.at);
-      body = list.length ? list.map((m) => `<div class="card sent"><div class="sent-top"><b>${esc(m.title)}</b><span class="pill ${m.status === "sent" ? "teal" : "amber"}">${m.status === "sent" ? "Delivered" : "Queued"}</span></div><p>${esc(m.body)}</p><small>To ${esc(AUD[m.audience])}${m.audience === "class" ? " · " + esc(m.cls) : ""} · ${fmtDate(m.at)}${m.priority === "urgent" ? " · Urgent" : ""}</small></div>`).join("")
+      body = list.length ? list.map((m) => `<div class="card sent"><div class="sent-top"><b>${esc(m.title)}</b><span class="pill ${m.status === "sent" ? "teal" : "amber"}">${m.status === "sent" ? "Delivered" : "Sending…"}</span></div><p>${esc(m.body)}</p><small>To ${esc(AUD[m.audience] || "Admin")}${(m.audience === "parents" || m.audience === "class") && m.cls ? " · " + esc(m.cls) : ""} · ${fmtDate(m.at)}</small></div>`).join("")
         : empty("fa-paper-plane", "Nothing sent yet", "Messages you send will be listed here.");
     }
-    view.innerHTML = `<div class="seg three">${[["in", "Received", unread()], ["send", "Send", 0], ["out", "Sent", 0]].map((x) => `<button class="${ann.tab === x[0] ? "on t" : ""}" data-atab="${x[0]}">${x[1]}${x[2] ? ` <i class="cnt">${x[2]}</i>` : ""}</button>`).join("")}</div><div style="height:14px"></div>${body}`;
+    view.innerHTML = `<div class="seg two">${[["in", "Received", unread()], ["out", "Sent", 0]].map((x) => `<button class="${ann.tab === x[0] ? "on t" : ""}" data-atab="${x[0]}">${x[1]}${x[2] ? ` <i class="cnt">${x[2]}</i>` : ""}</button>`).join("")}</div>
+      <button class="btn sm msg-send" data-compose="1"><i class="fas fa-paper-plane"></i> Send message</button>
+      <div class="msg-body">${body}</div>`;
   }
   function openNotice(id) {
     const a = ann.received.find((x) => x.id === id); if (!a) return;
     a.read = true; store.set("ann_in", ann.received); updateDot();
-    openSheet(`<div class="sheet-head"><div><b>${esc(a.title)}</b><span>${esc(a.from)} · ${new Date(a.date).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</span></div><button class="icon-btn dark" data-close="1" aria-label="Close"><i class="fas fa-xmark"></i></button></div>${a.priority === "urgent" ? `<span class="pill amber" style="margin-bottom:10px"><i class="fas fa-triangle-exclamation"></i> Urgent</span>` : ""}<p class="notice-body">${esc(a.body).replace(/\n/g, "<br>")}</p>`);
+    openSheet(`<div class="sheet-head"><div><b>${esc(a.title)}</b><span>${esc(a.from)} · ${new Date(a.date).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</span></div><button class="icon-btn dark" data-close="1" aria-label="Close"><i class="fas fa-xmark"></i></button></div><p class="notice-body">${esc(a.body).replace(/\n/g, "<br>")}</p>`);
     if (current === "inbox") inbox(); else if (current === "home") home();
+  }
+  function openCompose() {
+    const mine = allMyClasses();
+    if (!mine.some((c) => label(c) === compose.cls)) compose.cls = mine[0] ? label(mine[0]) : "";
+    openSheet(`<div class="sheet-head"><div><b>Send message</b><span>To admin or the parents of your class</span></div><button class="icon-btn dark" data-close="1" aria-label="Close"><i class="fas fa-xmark"></i></button></div>
+      <div class="field"><label>Send to</label><div class="seg two" id="c-aud"><button class="${compose.audience === "admin" ? "on t" : ""}" data-aud="admin"><i class="fas fa-user-tie"></i> Admin</button><button class="${compose.audience === "parents" ? "on t" : ""}" data-aud="parents"><i class="fas fa-people-roof"></i> Parents</button></div></div>
+      <div class="field" id="c-cls-wrap" ${compose.audience === "parents" ? "" : "hidden"}><label>Class</label>${mine.length ? `<select id="c-cls">${mine.map((c) => `<option ${label(c) === compose.cls ? "selected" : ""}>${esc(label(c))}</option>`).join("")}</select>` : `<p class="hint" style="margin:0">No class is assigned to you yet.</p>`}</div>
+      <div class="field"><label>Title</label><input id="c-title" maxlength="80" placeholder="Subject"></div>
+      <div class="field"><label>Message</label><textarea id="c-body" rows="5" maxlength="1000" placeholder="Write your message…"></textarea></div>
+      <button class="btn" id="c-send"><i class="fas fa-paper-plane"></i> Send</button>`);
   }
   function sendMessage() {
     const title = $("#c-title").value.trim(), body = $("#c-body").value.trim();
     if (!title || !body) return toast("Add a title and a message.", true);
-    ann.sent.push({ id: uid(), audience: compose.audience, cls: compose.cls, priority: compose.priority, title, body, at: Date.now(), status: "queued" });
-    store.set("ann_out", ann.sent); ann.tab = "out"; inbox(); toast("Message saved & queued.");
-    syncOutbox().then(() => current === "inbox" && inbox());
+    if (compose.audience === "parents" && !compose.cls) return toast("No class assigned — you can't message parents yet.", true);
+    ann.sent.push({ id: uid(), audience: compose.audience, cls: compose.audience === "parents" ? compose.cls : "", priority: "normal", title, body, at: Date.now(), status: "queued" });
+    store.set("ann_out", ann.sent); closeSheet(); toast("Message sent.");
+    if (current === "inbox") { ann.tab = "out"; inbox(); } else if (current === "home") home();
+    syncOutbox().then(() => { if (current === "inbox") inbox(); });
   }
 
   /* ── PROFILE + TEACHER ID CARD ── */
@@ -458,7 +501,7 @@
     view.innerHTML = `
       <div class="profile-head"><div class="avatar">${staff.photo ? `<img src="${esc(staff.photo)}" alt="">` : esc(initials())}</div>
         <h2>${esc(staff.name || "Teacher")}</h2><p>${esc(staff.role || "Teacher")} · ${esc(staff.staffId || "")}</p></div>
-      <div class="idmini"><div class="idmini-top"><div class="idmini-logo">${school.logo ? `<img src="${esc(school.logo)}" alt="">` : esc(schoolName.charAt(0))}</div><div><small>Staff Identity Card</small><b>${esc(schoolName)}</b></div></div>
+      <div class="idmini"><div class="idmini-top"><div class="idmini-logo">${school.logo ? `<img src="${esc(school.logo)}" alt="">` : school.name ? esc(school.name.trim().charAt(0).toUpperCase()) : `<i class="fas fa-graduation-cap"></i>`}</div><div><small>Staff Identity Card</small><b>${esc(schoolName)}</b></div></div>
         <div class="idmini-name">${esc(staff.name || "Teacher")}<span>ID ${esc(staff.staffId || "—")}</span></div>
         <button class="btn light" data-card="1"><i class="fas fa-id-card"></i> View your teacher card</button></div>
       <div class="card"><h2><i class="fas fa-address-card"></i> Details</h2>
@@ -468,7 +511,7 @@
       <div class="card"><h2><i class="fas fa-chalkboard"></i> Classes</h2><div class="tags">${teachingClasses().map((c) => `<span class="pill teal">${esc(label(c))}</span>`).join("") || "<span style='color:var(--ink-faint)'>None assigned</span>"}
         ${inc.map((c) => `<span class="pill amber"><i class="fas fa-star"></i> ${esc(label(c))}</span>`).join("")}</div></div>
       <div class="card"><h2><i class="fas fa-bell"></i> Notifications</h2>
-        <label class="switch"><span><b>Admin announcements</b><small>Receive notices the admin sends to teachers</small></span><input type="checkbox" id="pref-admin" ${prefs.receiveAdmin ? "checked" : ""}><i class="sw"></i></label></div>
+        <label class="switch"><span><b>Admin messages</b><small>Receive messages the admin sends to teachers</small></span><input type="checkbox" id="pref-admin" ${prefs.receiveAdmin ? "checked" : ""}><i class="sw"></i></label></div>
       <div class="card"><h2><i class="fas fa-lock"></i> Password</h2>
         ${session.passwordChanged
           ? `<p class="hint"><i class="fas fa-circle-check"></i> You've changed your password. To change it again, ask your admin to reset it.</p>`
@@ -571,7 +614,7 @@
 
 
   /* ── Navigation ── */
-  const TITLES = { home: "Home", classes: "My Classes", attendance: "Attendance", quizzes: "Tests & Quizzes", inbox: "Notices", profile: "My Profile" };
+  const TITLES = { home: "Home", classes: "My Classes", attendance: "Attendance", quizzes: "Tests & Quizzes", inbox: "Messages", profile: "My Profile" };
   const VIEWS = { home, classes, attendance, quizzes, inbox, profile };
   let current = "home";
   function go(tab) {
@@ -586,10 +629,6 @@
   }
   document.querySelectorAll(".tab").forEach((t) => t.addEventListener("click", () => { if (t.dataset.tab === "quizzes") quizView = "list"; go(t.dataset.tab); }));
   $("#btn-inbox").addEventListener("click", () => go("inbox"));
-  $("#btn-refresh").addEventListener("click", async (e) => {
-    const b = e.currentTarget; b.classList.add("spin"); att.students = null;
-    await flushAttendance(); await Promise.all([loadAttendanceData(), loadAnnouncements(), syncOutbox(), loadTests()]); b.classList.remove("spin"); go(current); toast("Refreshed");
-  });
 
   view.addEventListener("click", (e) => {
     const nt = e.target.closest("[data-notice]"); if (nt) return openNotice(nt.dataset.notice);
@@ -616,9 +655,7 @@
     if (d.deltest) { if (confirm("Delete this test and all its marks?")) { tests = tests.filter((x) => x.id !== d.deltest); saveTests(); pendingPut = pendingPut.filter((x) => x !== d.deltest); pendingDel.push(d.deltest); savePending(); flushTests(); quizView = "list"; quizzes(); toast("Deleted."); } return; }
     /* notices */
     if (d.atab) { ann.tab = d.atab; return inbox(); }
-    if (d.aud) { compose.audience = d.aud; return inbox(); }
-    if (d.prio) { compose.priority = d.prio; const ti = $("#c-title").value, bo = $("#c-body").value; inbox(); $("#c-title").value = ti; $("#c-body").value = bo; return; }
-    if (t.id === "c-send") return sendMessage();
+    if (d.compose) return openCompose();
     /* home to-do */
     if (t.id === "todo-add") return addTodo();
     if (d.deltodo != null) { const l = store.get("todos", []); l.splice(+d.deltodo, 1); store.set("todos", l); return home(); }
@@ -628,11 +665,17 @@
   view.addEventListener("change", (e) => {
     const t = e.target;
     if (t.dataset.todo != null) { const l = store.get("todos", []); if (l[+t.dataset.todo]) l[+t.dataset.todo].done = t.checked; store.set("todos", l); return home(); }
-    if (t.id === "pref-admin") { prefs.receiveAdmin = t.checked; store.set("prefs", prefs); updateDot(); toast(t.checked ? "Admin announcements on." : "Admin announcements off."); }
-    if (t.id === "c-cls") compose.cls = t.value;
+    if (t.id === "pref-admin") { prefs.receiveAdmin = t.checked; store.set("prefs", prefs); updateDot(); toast(t.checked ? "Admin messages on." : "Admin messages off."); }
   });
+  $("#sheet-body").addEventListener("change", (e) => { if (e.target.id === "c-cls") compose.cls = e.target.value; });
   $("#sheet-body").addEventListener("click", (e) => {
     const b = e.target.closest("button"); if (!b) return;
+    if (b.dataset.aud) {
+      compose.audience = b.dataset.aud;
+      b.parentElement.querySelectorAll("button").forEach((x) => x.classList.toggle("on", x === b)); b.parentElement.querySelectorAll("button").forEach((x) => x.classList.toggle("t", x === b));
+      const w = $("#c-cls-wrap"); if (w) w.hidden = compose.audience !== "parents"; return;
+    }
+    if (b.id === "c-send") return sendMessage();
     if (b.id === "card-print") return cardPrint();
     if (b.id === "card-share") return cardShare();
     if (b.id === "card-dl") return cardDownload();
@@ -651,7 +694,41 @@
   updateDot();
   go("home");
   flushAttendance();
+  loadSchoolInfo().then(() => { if (current === "home" || current === "profile") VIEWS[current](); });
   if (inchargeClasses().length) loadAttendanceData().then(() => current === "home" && home());
   loadTests().then(() => { if (current === "quizzes" && quizView === "list") quizzes(); else if (current === "home") home(); });
   loadAnnouncements().then(() => { syncOutbox(); if (current === "home") home(); else if (current === "inbox") inbox(); });
+
+  /* ── Live sync: no reload button. Data re-syncs automatically every few seconds, when the app
+        comes back to the foreground or the network returns, and the screen updates only if something
+        actually changed — and never while the teacher is typing, marking or has a sheet open. ── */
+  const LIVE_MS = 8000;
+  let syncing = false, stale = false;
+  const liveSig = () => JSON.stringify([ann.received.map((a) => [a.id, a.title, a.body, a.date]), ann.sent.map((m) => [m.id, m.status]), att.saved, att.students ? att.students.length : -1, tests.map((t) => [t.id, t.marked, Object.keys(t.results || {}).length]), school.name, school.logo ? school.logo.length : 0]);
+  function userBusy() {
+    const a = document.activeElement;
+    if (!$("#sheet").hidden) return true;
+    if (a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName) && (view.contains(a))) return true;
+    if (current === "quizzes" && quizView !== "list") return true;
+    if (current === "profile") return true;
+    if (current === "attendance" && Object.keys(att.marks).length) return true;
+    return false;
+  }
+  function rerender() { const y = view.scrollTop; VIEWS[current](); view.scrollTop = y; }
+  async function liveSync() {
+    if (syncing || document.hidden) return;
+    syncing = true;
+    const before = liveSig();
+    try {
+      await flushAttendance();
+      await Promise.all([att.students || inchargeClasses().length ? loadAttendanceData(true) : null, loadAnnouncements(), syncOutbox(), loadTests(), loadSchoolInfo()]);
+    } catch (e) { /* retried on the next tick */ }
+    syncing = false;
+    if (liveSig() !== before) stale = true;
+    if (stale && !userBusy()) { stale = false; rerender(); }
+  }
+  setInterval(() => { if (stale && !userBusy() && !document.hidden) { stale = false; rerender(); } else liveSync(); }, LIVE_MS);
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) liveSync(); });
+  window.addEventListener("online", liveSync);
+  window.addEventListener("focus", liveSync);
 })();

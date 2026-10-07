@@ -4,7 +4,9 @@
 
    BACKEND CONTRACT (one endpoint is needed):
    POST /api/school/teacher-login   { staffId, password }
-     200 -> { token, schoolId, staff: { ...Staff row... }, passwordChanged }
+     200 -> { token, schoolId, staff: { ...Staff row... }, passwordChanged,
+              school: { name, logo, address, phone, prefix } }   <- school is what the portal shows as the real
+                                                                    school name/logo (else it falls back to /api/settings)
      Teachers sign in with the DEFAULT password the admin sets in Settings until
      they change their own (allowed once): POST /api/staff/change-password.
             (token = school-scoped session, same kind /api/school/login issues)
@@ -45,7 +47,7 @@
     if (!pending) return;
     localStorage.setItem(KEY, JSON.stringify({
       token: pending.token, schoolId: pending.schoolId, staff: pending.staff,
-      school: pending.school ? { name: pending.school.name, logo: pending.school.logo, prefix: pending.school.prefix } : null,
+      school: pending.school ? { name: pending.school.name, logo: pending.school.logo, prefix: pending.school.prefix, address: pending.school.address, phone: pending.school.phone } : null,
       passwordChanged: !!pending.passwordChanged, at: Date.now()
     }));
   }

@@ -131,7 +131,8 @@ button{font:inherit;color:inherit;border:0;background:none;cursor:pointer;touch-
   background:var(--ink);color:#fff;padding:12px 18px;border-radius:99px;font-size:13.5px;font-weight:500;max-width:88vw;z-index:50;transition:.25s}
 .toast.show{opacity:1;transform:translate(-50%,0)}
 .toast.err{background:var(--coral)}
-@media (min-width:521px){body{display:grid;place-items:center}.app{height:min(900px,100dvh);border-radius:28px;margin:auto}}
+/* Fixed frame: same width/height on every screen (the old grid-centred body let .app shrink to its content) */
+@media (min-width:521px){body{display:flex;align-items:center;justify-content:center}.app{flex:none;width:520px;max-width:100%;height:min(900px,100dvh);border-radius:28px;margin:0}}
 
 /* Password card & nudge */
 .field{margin-bottom:12px}
@@ -749,3 +750,19 @@ button{font:inherit;color:inherit;border:0;background:none;cursor:pointer;touch-
 .row .ic{width:32px;height:32px}.row{padding:10px 0}
 .tab{height:56px}:root{--bar-h:56px}
 .btn{height:46px;font-size:14px}
+
+/* ═════ Stable layout: no size jumps when switching screens / content changes ═════ */
+.app{width:100%;min-width:0}
+.view{overflow-x:hidden;scrollbar-gutter:stable;min-width:0}
+.view>*{min-width:0;max-width:100%}
+.card,.hero,.class-card,.tbl-wrap{width:100%}
+.tbl-wrap{overflow-x:auto}
+.seg button{min-width:0;white-space:nowrap}
+
+/* Messages */
+.msg-send{margin:12px 0 14px}
+.msg-card .msg-list{margin-bottom:12px}
+.msg-card .btn.sm{margin-top:0}
+.notice .ic{background:var(--teal-100);color:var(--teal-600)}
+.seg button i{margin-right:4px;pointer-events:none}
+.field[hidden]{display:none}
