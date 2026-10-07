@@ -85,6 +85,7 @@
       att.saved = {};
       (Array.isArray(logs) ? logs : []).forEach((l) => { if (l.memberId) att.saved[l.memberId] = l.status || "absent"; });
       att.marks = {};
+      (typeof attPending !== "undefined" ? attPending : []).forEach((p) => p.forEach((x) => { if (x.date === today()) att.saved[x.memberId] = x.status; }));   // not-yet-uploaded saves still show
     } catch (e) { if (e.message !== "401") toast("Could not load attendance data.", true); att.students = att.students || []; }
     att.loading = false;
   }
@@ -164,7 +165,7 @@
   let gradeCtx = null;   // { id, reg }
   let quizView = "list"; // list | build | detail
   let openTest = null;
-  const qTotal = (t) => t.questions.reduce((a, q) => a + (+q.marks || 0), 0);
+  const qTotal = (t) => (t.questions || []).reduce((a, q) => a + (+q.marks || 0), 0);
   const gradeOf = (p) => (p >= 90 ? "A+" : p >= 80 ? "A" : p >= 70 ? "B" : p >= 60 ? "C" : p >= 50 ? "D" : "F");
   function scoreSheet(t, r) {
     let got = 0;
@@ -173,7 +174,7 @@
   }
   const resultsOf = (t) => Object.keys(t.results || {}).map((k) => Object.assign({ reg: k }, t.results[k]));
   function testStats(t) {
-    const res = resultsOf(t).filter((r) => !r.absent), tot = qTotal(t) || 1;
+    const res = resultsOf(t).filter((r) => !r.absent), tot = (+t.totalMarks || qTotal(t)) || 1;
     if (!res.length) return null;
     const pcts = res.map((r) => (r.score / tot) * 100);
     return { n: res.length, avg: pcts.reduce((a, b) => a + b, 0) / pcts.length, hi: Math.max.apply(null, pcts), lo: Math.min.apply(null, pcts), pass: pcts.filter((p) => p >= (t.passPct || 40)).length };
@@ -205,7 +206,7 @@
     const news = prefs.receiveAdmin ? ann.received.slice().sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 3) : [];
     const newsCard = `<div class="card"><h2><i class="fas fa-bullhorn"></i> Latest notices <button class="link r" data-go="inbox">All</button></h2>${news.length ? news.map(noticeRow).join("") : `<p class="hint" style="margin:0">${prefs.receiveAdmin ? "No announcements from admin yet." : "Admin announcements are switched off in Profile."}</p>`}</div>`;
     const recent = tests.slice().sort((a, b) => b.created - a.created).slice(0, 2);
-    const testCard = `<div class="card"><h2><i class="fas fa-file-pen"></i> Tests & quizzes <button class="link r" data-go="quizzes">All</button></h2>${recent.length ? recent.map((t) => { const st = testStats(t); return `<div class="row" data-test="${t.id}" style="cursor:pointer"><div class="ic"><i class="fas ${t.type === "quiz" ? "fa-bolt" : "fa-file-lines"}"></i></div><div class="tx"><b>${esc(t.title)}</b><span>${esc(t.cls)} · ${esc(t.subject)}</span></div>${st ? `<span class="pill teal">${Math.round(st.avg)}% avg</span>` : `<span class="pill amber">Not checked</span>`}</div>`; }).join("") : `<p class="hint" style="margin:0 0 10px">Create your first quiz or test in a minute.</p><button class="btn ghost sm" style="margin:0" data-newtest="1"><i class="fas fa-plus"></i> New test</button>`}</div>`;
+    const testCard = `<div class="card"><h2><i class="fas fa-file-pen"></i> Tests & quizzes <button class="link r" data-go="quizzes">All</button></h2>${recent.length ? recent.map((t) => { const st = testStats(t); return `<div class="row" data-test="${t.id}" style="cursor:pointer"><div class="ic"><i class="fas fa-file-lines"></i></div><div class="tx"><b>${esc(t.title)}</b><span>${esc(t.cls)} · ${esc(t.subject)}</span></div>${st ? `<span class="pill teal">${Math.round(st.avg)}% avg</span>` : `<span class="pill amber">Marks pending</span>`}</div>`; }).join("") : `<p class="hint" style="margin:0 0 10px">Add your first paper test in a minute.</p><button class="btn ghost sm" style="margin:0" data-newtest="1"><i class="fas fa-plus"></i> New test</button>`}</div>`;
     const todos = store.get("todos", []);
     const todoCard = `<div class="card"><h2><i class="fas fa-list-check"></i> My to-do</h2>
       ${todos.map((t, i) => `<label class="todo ${t.done ? "done" : ""}"><input type="checkbox" data-todo="${i}" ${t.done ? "checked" : ""}><span>${esc(t.text)}</span><button data-deltodo="${i}" aria-label="Delete"><i class="fas fa-xmark"></i></button></label>`).join("")}
@@ -219,7 +220,7 @@
       ${weekStrip()}
       <div class="qa">
         ${inc.length ? `<button data-go="attendance"><i class="fas fa-clipboard-check"></i><span>Attendance</span></button>` : ""}
-        <button data-newtest="1"><i class="fas fa-file-circle-plus"></i><span>New test</span></button>
+        <button data-newtest="1"><i class="fas fa-file-circle-plus"></i><span>Add test</span></button>
         <button data-go="inbox"><i class="fas fa-bullhorn"></i><span>Notices</span></button>
         <button data-card="1"><i class="fas fa-id-card"></i><span>ID card</span></button>
       </div>
@@ -248,52 +249,74 @@
         inc.filter((i) => !teach.some((t) => norm(t.cls) === norm(i.cls))).map((c) => `<div class="class-card"><div class="class-badge"><i class="fas fa-star"></i></div><div class="tx"><b>${esc(label(c))}</b><span>Class incharge</span></div></div>`).join("") : "");
   }
 
+  const isMarkedToday = (list) => list.length > 0 && list.every((s) => att.saved[s.regNo]);
+  const isDirty = (list) => list.some((s) => att.marks[s.regNo] && att.marks[s.regNo] !== att.saved[s.regNo]);
+  function saveBtnHtml(list) {
+    const marked = isMarkedToday(list), dirty = isDirty(list);
+    if (marked && !dirty) return `<button class="btn done" id="save-att" disabled><i class="fas fa-circle-check"></i> Attendance saved</button>`;
+    return `<button class="btn" id="save-att"><i class="fas fa-floppy-disk"></i> ${marked ? "Update attendance" : "Save attendance"}</button>`;
+  }
+  function refreshAttBar() {
+    const list = classStudents(), c = counts(list);
+    $("#c-p").textContent = c.present; $("#c-a").textContent = c.absent; $("#c-l").textContent = c.leave;
+    const bar = $(".savebar"); if (bar) bar.innerHTML = saveBtnHtml(list);
+    const note = $("#att-note"); if (note) note.hidden = !isMarkedToday(list) || isDirty(list);
+  }
   function attendance() {
     const inc = inchargeClasses();
     if (!inc.length) { view.innerHTML = empty("fa-user-lock", "Not a class incharge", "Attendance is only available for the class you are incharge of."); return; }
     if (!att.students) { view.innerHTML = '<div class="skel"></div><div class="skel"></div><div class="skel"></div>'; loadAttendanceData().then(() => current === "attendance" && attendance()); return; }
-    const list = classStudents(), c = counts(list);
+    const list = classStudents(), c = counts(list), marked = isMarkedToday(list);
     view.innerHTML = `
       ${inc.length > 1 ? `<div class="chips">${inc.map((x, i) => `<button class="chip ${i === att.cls ? "on" : ""}" data-cls="${i}">${esc(label(x))}</button>`).join("")}</div>` : ""}
       <div class="sumbar"><div class="p"><b id="c-p">${c.present}</b>Present</div><div class="a"><b id="c-a">${c.absent}</b>Absent</div><div class="l"><b id="c-l">${c.leave}</b>Leave</div></div>
+      <div class="att-note" id="att-note" ${marked ? "" : "hidden"}><i class="fas fa-circle-check"></i> Today's attendance is saved. Tap any status to change it, then press <b>Update</b>.</div>
       ${list.length ? `<div class="bulk"><button data-bulk="present"><i class="fas fa-check-double"></i> All Present</button><button data-bulk="absent">All Absent</button></div>
-      ${list.map((s, i) => `<div class="stu" data-id="${esc(s.regNo)}"><div class="stu-top"><div class="stu-no">${i + 1}</div><div><b>${esc(s.name)}</b><span>${esc(s.regNo)}</span></div></div>
-        <div class="seg">${["present", "absent", "leave"].map((k) => `<button class="${k[0]} ${statusOf(s) === k ? "on" : ""}" data-set="${k}">${k[0].toUpperCase() + k.slice(1)}</button>`).join("")}</div></div>`).join("")}
-      <div class="savebar"><button class="btn" id="save-att"><i class="fas fa-floppy-disk"></i> Save Attendance</button></div>`
+      ${list.map((s, i) => `<div class="stu" data-id="${esc(s.regNo)}"><div class="stu-no">${i + 1}</div><div class="stu-nm"><b>${esc(s.name)}</b><span>${esc(s.regNo)}</span></div>
+        <div class="seg">${["present", "absent", "leave"].map((k) => `<button class="${k[0]} ${statusOf(s) === k ? "on" : ""}" data-set="${k}" aria-label="${k}">${k[0].toUpperCase()}</button>`).join("")}</div></div>`).join("")}
+      <div class="savebar">${saveBtnHtml(list)}</div>`
       : empty("fa-user-graduate", "No students found", "No active students in " + esc(label(inc[att.cls])) + ".")}`;
   }
 
-  async function saveAttendance() {
-    const btn = $("#save-att"), c = inchargeClasses()[att.cls], list = classStudents();
-    btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving…';
+  /* Saving is instant on screen; the upload runs in the background and is retried if it fails. */
+  let attPending = store.get("att_pending", []);
+  let attFlushing = false;
+  async function flushAttendance() {
+    if (attFlushing) return; attFlushing = true;
     try {
-      await api("/attendance/save", { method: "POST", body: JSON.stringify(list.map((s) => ({
-        schoolId, memberId: s.regNo, memberName: s.name, memberType: "STUDENT",
-        className: s.cls, section: s.section, date: today(), status: statusOf(s), reason: ""
-      }))) });
-      list.forEach((s) => (att.saved[s.regNo] = statusOf(s)));
-      toast("Attendance saved for " + label(c));
-    } catch (e) { if (e.message !== "401") toast("Save failed. Try again.", true); }
-    btn.disabled = false; btn.innerHTML = '<i class="fas fa-floppy-disk"></i> Save Attendance';
+      while (attPending.length) {
+        await api("/attendance/save", { method: "POST", body: JSON.stringify(attPending[0]) });
+        attPending.shift(); store.set("att_pending", attPending);
+      }
+    } catch (e) { /* stays queued, retried on next save / refresh */ }
+    attFlushing = false;
+  }
+  function saveAttendance() {
+    const c = inchargeClasses()[att.cls], list = classStudents(), wasMarked = isMarkedToday(list);
+    if (!list.length) return;
+    const payload = list.map((s) => ({ schoolId, memberId: s.regNo, memberName: s.name, memberType: "STUDENT", className: s.cls, section: s.section, date: today(), status: statusOf(s), reason: "" }));
+    list.forEach((s) => { att.saved[s.regNo] = statusOf(s); });
+    att.marks = {};
+    attPending = attPending.filter((p) => !(p[0] && p[0].date === today() && p[0].className === list[0].cls && p[0].section === list[0].section)).concat([payload]);
+    store.set("att_pending", attPending);
+    refreshAttBar(); toast(wasMarked ? "Attendance updated for " + label(c) : "Attendance saved for " + label(c));
+    flushAttendance();
   }
 
 
-  /* ── TESTS / QUIZZES ── */
-  function newQuestion(kind) { return { id: uid(), kind, text: "", options: ["", "", "", ""], answer: 0, marks: kind === "mcq" ? 1 : 5 }; }
-  function startBuild() {
+  /* ── TESTS (paper test / quiz / class test …) ──
+     Flow: teacher adds a test (own name, subject, total marks, syllabus) → it sits under "Upcoming"
+     → open it to see every student of the class in a table → "Enter marks" → saved tests move to "Past". */
+  const TYPES = ["Paper test", "Class test", "Quiz", "Monthly test", "Mid-term", "Final term", "Other"];
+  const totalOf = (t) => +t.totalMarks || (t.questions ? qTotal(t) : 0);
+  function newTestDraft() {
     const mc = allMyClasses(), subs = subjects();
-    qb = { id: uid(), type: "quiz", title: "", cls: mc[0] ? label(mc[0]) : "", subject: subs[0] || "", date: today(), duration: 20, passPct: 40, questions: [newQuestion("mcq")], results: {}, created: Date.now() };
-    quizView = "build"; quizzes();
+    return { id: uid(), kind: TYPES[0], title: "", cls: mc[0] ? label(mc[0]) : "", subject: subs[0] || "", date: today(), totalMarks: "", passPct: 40, syllabus: "", results: {}, marked: false, created: Date.now() };
   }
+  function startBuild() { qb = newTestDraft(); quizView = "build"; quizzes(); }
   function harvest() {
     if (!qb) return;
-    view.querySelectorAll("[data-f]").forEach((el) => { const f = el.dataset.f; qb[f] = el.type === "number" ? +el.value : el.value; });
-    view.querySelectorAll(".qcard").forEach((card, i) => {
-      const q = qb.questions[i]; if (!q) return;
-      q.text = card.querySelector(".q-text").value;
-      q.marks = +card.querySelector(".q-marks").value || 0;
-      if (q.kind === "mcq") { q.options = Array.prototype.map.call(card.querySelectorAll(".q-opt"), (o) => o.value); const ck = card.querySelector("input[type=radio]:checked"); q.answer = ck ? +ck.value : 0; }
-    });
+    view.querySelectorAll("[data-f]").forEach((el) => { qb[el.dataset.f] = el.value; });
   }
   function buildView() {
     const mc = allMyClasses(), subs = subjects();
@@ -301,92 +324,88 @@
     const subOpts = (subs.length ? subs : [qb.subject || "General"]).map((s) => `<option ${s === qb.subject ? "selected" : ""}>${esc(s)}</option>`).join("");
     return `
       <button class="back" data-qback="1"><i class="fas fa-arrow-left"></i> Back</button>
-      <div class="card"><h2><i class="fas fa-pen-ruler"></i> Setup</h2>
-        <div class="seg two" style="margin-bottom:14px"><button class="${qb.type === "quiz" ? "on t" : ""}" data-qtype="quiz"><i class="fas fa-bolt"></i> Quiz</button><button class="${qb.type === "test" ? "on t" : ""}" data-qtype="test"><i class="fas fa-file-lines"></i> Test</button></div>
-        <div class="field"><label>Title</label><input data-f="title" value="${esc(qb.title)}" placeholder="e.g. Chapter 3 – Fractions" maxlength="80"></div>
+      <div class="card"><h2><i class="fas fa-file-circle-plus"></i> Add test / paper</h2>
+        <div class="field"><label>Type</label><div class="chips wrap" style="margin:0">${TYPES.map((k) => `<button class="chip ${qb.kind === k ? "on" : ""}" data-qkind="${esc(k)}">${esc(k)}</button>`).join("")}</div></div>
+        <div class="field"><label>Test name</label><input data-f="title" value="${esc(qb.title)}" placeholder="e.g. Chapter 3 – Fractions" maxlength="80"></div>
         <div class="two-col"><div class="field"><label>Class</label><select data-f="cls">${clsOpts || "<option>—</option>"}</select></div>
         <div class="field"><label>Subject</label><select data-f="subject">${subOpts}</select></div></div>
-        <div class="two-col three"><div class="field"><label>Date</label><input type="date" data-f="date" value="${esc(qb.date)}"></div>
-        <div class="field"><label>Minutes</label><input type="number" min="1" data-f="duration" value="${qb.duration}"></div>
-        <div class="field"><label>Pass %</label><input type="number" min="1" max="100" data-f="passPct" value="${qb.passPct}"></div></div>
+        <div class="two-col"><div class="field"><label>Total marks of paper</label><input type="number" inputmode="numeric" min="1" data-f="totalMarks" value="${esc(qb.totalMarks)}" placeholder="e.g. 50"></div>
+        <div class="field"><label>Test date</label><input type="date" data-f="date" value="${esc(qb.date)}"></div></div>
+        <div class="field"><label>Syllabus of the paper</label><textarea data-f="syllabus" rows="4" maxlength="600" placeholder="e.g. Chapters 3 & 4, exercises 3.1 – 4.2">${esc(qb.syllabus)}</textarea></div>
       </div>
-      <div class="section-title">Questions · ${qb.questions.length} · ${qTotal(qb)} marks</div>
-      ${qb.questions.map((q, i) => `<div class="card qcard"><div class="q-head"><b>Q${i + 1} · ${q.kind === "mcq" ? "Multiple choice" : "Short / long answer"}</b><button class="icon-btn dark sm" data-delq="${i}" aria-label="Remove"><i class="fas fa-trash"></i></button></div>
-        <div class="field"><textarea class="q-text" rows="2" placeholder="Type the question…">${esc(q.text)}</textarea></div>
-        ${q.kind === "mcq" ? q.options.map((o, k) => `<label class="opt"><input type="radio" name="ans${i}" value="${k}" ${q.answer === k ? "checked" : ""}><span class="ltr">${"ABCD"[k]}</span><input class="q-opt" value="${esc(o)}" placeholder="Option ${"ABCD"[k]}"></label>`).join("") + `<p class="hint" style="margin:4px 0 8px"><i class="fas fa-circle-check"></i> Select the correct option.</p>` : ""}
-        <div class="field" style="margin:0;max-width:130px"><label>Marks</label><input class="q-marks" type="number" min="0" value="${q.marks}"></div></div>`).join("")}
-      <div class="bulk"><button data-addq="mcq"><i class="fas fa-list-ul"></i> Add MCQ</button><button data-addq="short"><i class="fas fa-align-left"></i> Add short</button></div>
-      <div class="savebar"><button class="btn" id="save-test"><i class="fas fa-floppy-disk"></i> Save ${qb.type}</button></div>`;
+      <div class="savebar"><button class="btn" id="save-test"><i class="fas fa-floppy-disk"></i> Add ${esc(qb.kind.toLowerCase())}</button></div>`;
   }
   function saveBuilt() {
     harvest();
-    if (!qb.title.trim()) return toast("Give your " + qb.type + " a title.", true);
+    if (!qb.title.trim()) return toast("Enter the test name.", true);
     if (!qb.cls || qb.cls === "—") return toast("Choose a class.", true);
-    for (let i = 0; i < qb.questions.length; i++) {
-      const q = qb.questions[i];
-      if (!q.text.trim()) return toast("Question " + (i + 1) + " is empty.", true);
-      if (q.kind === "mcq" && q.options.filter((o) => o.trim()).length < 2) return toast("Question " + (i + 1) + " needs at least 2 options.", true);
-      if (q.kind === "mcq" && !q.options[q.answer].trim()) return toast("Q" + (i + 1) + ": correct option is blank.", true);
-    }
-    tests.push(qb); saveTests(); pushTest(qb); openTest = qb.id; qb = null; quizView = "detail"; toast("Saved."); quizzes();
+    if (!qb.subject) return toast("Choose the subject.", true);
+    if (!(+qb.totalMarks > 0)) return toast("Enter the total marks of the paper.", true);
+    qb.totalMarks = +qb.totalMarks;
+    tests.push(qb); saveTests(); pushTest(qb); openTest = qb.id; qb = null; quizView = "list"; quizzes.tab = "upcoming"; toast("Added to Upcoming."); quizzes();
   }
+  const isMarked = (t) => !!t.marked || (!t.totalMarks && resultsOf(t).length > 0);
   function quizzes() {
     if (quizView === "build" && qb) { view.innerHTML = buildView(); return; }
     const t = tests.find((x) => x.id === openTest);
     if (quizView === "detail" && t) { detailView(t); return; }
     quizView = "list";
-    const f = quizzes.filter || "all", list = tests.filter((x) => f === "all" || x.type === f).sort((a, b) => b.created - a.created);
-    view.innerHTML = `<button class="btn" data-newtest="1" style="margin-bottom:14px"><i class="fas fa-plus"></i> Create quiz / test</button>
-      <div class="chips">${["all", "quiz", "test"].map((k) => `<button class="chip ${f === k ? "on" : ""}" data-qf="${k}">${k === "all" ? "All" : k === "quiz" ? "Quizzes" : "Tests"}</button>`).join("")}</div>
-      ${list.length ? list.map((x) => { const st = testStats(x); return `<div class="class-card tcard" data-test="${x.id}"><div class="class-badge ${x.type}"><i class="fas ${x.type === "quiz" ? "fa-bolt" : "fa-file-lines"}"></i></div>
-        <div class="tx"><b>${esc(x.title)}</b><span>${esc(x.cls)} · ${esc(x.subject)} · ${x.questions.length} Qs · ${qTotal(x)} marks</span><span>${fmtDate(x.date)} · ${x.duration} min</span></div>
-        ${st ? `<span class="pill teal">${Math.round(st.avg)}%</span>` : `<span class="pill amber">To check</span>`}</div>`; }).join("")
-        : empty("fa-file-pen", "No " + (f === "all" ? "tests" : f + "s") + " yet", "Build a quiz with multiple-choice and written questions, then mark your students' papers here.")}`;
+    const tab = quizzes.tab || "upcoming";
+    const up = tests.filter((x) => !isMarked(x)).sort((a, b) => new Date(a.date) - new Date(b.date));
+    const past = tests.filter(isMarked).sort((a, b) => new Date(b.date) - new Date(a.date));
+    const list = tab === "upcoming" ? up : past;
+    view.innerHTML = `<button class="btn" data-newtest="1" style="margin-bottom:12px"><i class="fas fa-plus"></i> Add test / paper</button>
+      <div class="seg two" style="margin-bottom:12px"><button class="${tab === "upcoming" ? "on t" : ""}" data-qtab="upcoming">Upcoming · ${up.length}</button><button class="${tab === "past" ? "on t" : ""}" data-qtab="past">Past · ${past.length}</button></div>
+      ${list.length ? list.map((x) => { const st = testStats(x); return `<div class="class-card tcard" data-test="${x.id}"><div class="class-badge test"><i class="fas ${x.kind === "Quiz" ? "fa-bolt" : "fa-file-lines"}"></i></div>
+        <div class="tx"><b>${esc(x.title)}</b><span>${esc(x.kind || "Test")} · ${esc(x.cls)} · ${esc(x.subject)}</span><span>${fmtDate(x.date)} · ${totalOf(x)} marks</span></div>
+        ${isMarked(x) ? (st ? `<span class="pill teal">${Math.round(st.avg)}% avg</span>` : `<span class="pill teal">Done</span>`) : `<span class="pill amber">Marks pending</span>`}</div>`; }).join("")
+        : empty(tab === "upcoming" ? "fa-file-pen" : "fa-clock-rotate-left", tab === "upcoming" ? "No upcoming tests" : "No past tests yet", tab === "upcoming" ? "Add a paper test or quiz with its subject, total marks and syllabus." : "Once you enter marks for a test it moves here.")}`;
   }
+  function classOfTest(t) { return allMyClasses().find((c) => label(c) === t.cls) || { cls: t.cls.split(" - ")[0], section: (t.cls.split(" - ")[1] || "") }; }
   function detailView(t) {
-    const cl = allMyClasses().find((c) => label(c) === t.cls) || { cls: t.cls.split(" - ")[0], section: (t.cls.split(" - ")[1] || "") };
-    const stu = studentsOf(cl), st = testStats(t), tot = qTotal(t);
     if (!att.students) { view.innerHTML = '<div class="skel"></div><div class="skel"></div>'; ensureStudents().then(() => current === "quizzes" && quizzes()); return; }
-    const ranked = stu.map((s) => ({ s, r: (t.results || {})[s.regNo] })).sort((a, b) => ((b.r && !b.r.absent ? b.r.score : -1) - (a.r && !a.r.absent ? a.r.score : -1)));
+    const stu = studentsOf(classOfTest(t)).slice().sort((a, b) => a.name.localeCompare(b.name)), st = testStats(t), tot = totalOf(t);
     view.innerHTML = `<button class="back" data-qback="1"><i class="fas fa-arrow-left"></i> All tests</button>
-      <div class="hero small"><small>${t.type === "quiz" ? "Quiz" : "Test"} · ${esc(t.subject)}</small><h2>${esc(t.title)}</h2>
-        <span class="pill"><i class="fas fa-chalkboard"></i> ${esc(t.cls)}</span><span class="pill"><i class="fas fa-star"></i> ${tot} marks</span><span class="pill"><i class="fas fa-clock"></i> ${t.duration} min</span></div>
+      <div class="hero small"><small>${esc(t.kind || "Test")} · ${esc(t.subject)}</small><h2>${esc(t.title)}</h2>
+        <span class="pill"><i class="fas fa-chalkboard"></i> ${esc(t.cls)}</span><span class="pill"><i class="fas fa-star"></i> ${tot} marks</span><span class="pill"><i class="fas fa-calendar"></i> ${fmtDate(t.date)}</span></div>
+      ${t.syllabus ? `<div class="card syl"><h2><i class="fas fa-book-open"></i> Syllabus</h2><p>${esc(t.syllabus).replace(/\n/g, "<br>")}</p></div>` : ""}
       ${st ? `<div class="stats s4"><div class="stat"><i class="fas fa-chart-line"></i><b>${Math.round(st.avg)}%</b><span>Average</span></div><div class="stat green"><i class="fas fa-trophy"></i><b>${Math.round(st.hi)}%</b><span>Highest</span></div><div class="stat red"><i class="fas fa-arrow-down"></i><b>${Math.round(st.lo)}%</b><span>Lowest</span></div><div class="stat amber"><i class="fas fa-circle-check"></i><b>${st.pass}/${st.n}</b><span>Passed</span></div></div>` : ""}
-      <div class="section-title">Check papers · ${resultsOf(t).length}/${stu.length} done</div>
-      ${stu.length ? ranked.map((x, i) => { const r = x.r, pct = r && !r.absent ? (r.score / (tot || 1)) * 100 : null; return `<div class="stu res" data-grade="${esc(x.s.regNo)}"><div class="stu-top"><div class="stu-no">${i + 1}</div><div style="flex:1"><b>${esc(x.s.name)}</b><span>${esc(x.s.regNo)}</span></div>
-        ${r ? (r.absent ? `<span class="pill amber">Absent</span>` : `<div class="score ${pct >= t.passPct ? "ok" : "bad"}"><b>${r.score}/${tot}</b><span>${gradeOf(pct)}</span></div>`) : `<span class="pill teal"><i class="fas fa-pen"></i> Check</span>`}</div></div>`; }).join("")
+      <div class="tbl-head"><div class="section-title" style="margin:0">Students · ${stu.length}</div>
+        <button class="btn-mini" data-entermarks="${t.id}"><i class="fas fa-pen-to-square"></i> ${isMarked(t) ? "Edit marks" : "Enter marks"}</button></div>
+      ${stu.length ? `<div class="tbl-wrap"><table class="mt"><thead><tr><th>#</th><th>Student</th><th>Marks</th><th>%</th></tr></thead><tbody>${stu.map((s, i) => { const r = (t.results || {})[s.regNo], pct = r && !r.absent ? (r.score / (tot || 1)) * 100 : null;
+        return `<tr><td>${i + 1}</td><td><b>${esc(s.name)}</b><small>${esc(s.regNo)}</small></td><td>${r ? (r.absent ? `<span class="pill amber sm">Absent</span>` : `<b class="${pct >= (t.passPct || 40) ? "okc" : "badc"}">${r.score}</b> / ${tot}`) : `<span class="muted">—</span>`}</td><td>${pct == null ? "" : Math.round(pct) + "%"}</td></tr>`; }).join("")}</tbody></table></div>`
         : empty("fa-user-graduate", "No students found", "No active students in " + esc(t.cls) + ".")}
-      <div class="bulk" style="margin-top:6px"><button data-csv="${t.id}"><i class="fas fa-file-csv"></i> Export results</button><button data-deltest="${t.id}" style="color:var(--coral);background:var(--coral-100)"><i class="fas fa-trash"></i> Delete</button></div>`;
+      <div class="bulk" style="margin-top:12px"><button data-csv="${t.id}"><i class="fas fa-file-csv"></i> Export</button><button data-deltest="${t.id}" style="color:var(--coral);background:var(--coral-100)"><i class="fas fa-trash"></i> Delete</button></div>`;
   }
-  function openGrade(t, reg) {
-    const cl = allMyClasses().find((c) => label(c) === t.cls) || { cls: t.cls.split(" - ")[0], section: (t.cls.split(" - ")[1] || "") };
-    const stu = studentsOf(cl), s = stu.find((x) => x.regNo === reg); if (!s) return;
-    const prev = (t.results || {})[reg] || { answers: {}, absent: false };
-    gradeCtx = { id: t.id, reg, answers: Object.assign({}, prev.answers), absent: !!prev.absent, next: (stu[stu.findIndex((x) => x.regNo === reg) + 1] || {}).regNo };
-    renderGrade(t, s);
+  /* Marks entry sheet: one compact row per student */
+  function openMarks(t) {
+    const stu = studentsOf(classOfTest(t)).slice().sort((a, b) => a.name.localeCompare(b.name)), tot = totalOf(t);
+    gradeCtx = { id: t.id, tot, vals: {}, abs: {} };
+    stu.forEach((s) => { const r = (t.results || {})[s.regNo]; if (r) { gradeCtx.abs[s.regNo] = !!r.absent; if (!r.absent) gradeCtx.vals[s.regNo] = r.score; } });
+    openSheet(`<div class="sheet-head"><div><b>${esc(t.title)}</b><span>${esc(t.subject)} · ${esc(t.cls)} · out of ${tot}</span></div><button class="icon-btn dark" data-close="1" aria-label="Close"><i class="fas fa-xmark"></i></button></div>
+      <div class="mk-list">${stu.map((s, i) => `<div class="mk-row" data-reg="${esc(s.regNo)}"><span class="mk-no">${i + 1}</span><div class="mk-n"><b>${esc(s.name)}</b><small>${esc(s.regNo)}</small></div>
+        <input type="number" inputmode="decimal" min="0" max="${tot}" step="0.5" class="mk-in" data-mk="${esc(s.regNo)}" value="${gradeCtx.vals[s.regNo] != null ? gradeCtx.vals[s.regNo] : ""}" placeholder="—" ${gradeCtx.abs[s.regNo] ? "disabled" : ""}>
+        <button class="mk-abs ${gradeCtx.abs[s.regNo] ? "on" : ""}" data-abs="${esc(s.regNo)}">Abs</button></div>`).join("") || empty("fa-user-graduate", "No students", "")}</div>
+      <div class="savebar" style="margin-bottom:0"><button class="btn" id="mk-save"><i class="fas fa-floppy-disk"></i> Save marks</button></div>`, "tall");
   }
-  function renderGrade(t, s) {
-    const g = gradeCtx, tot = qTotal(t), sc = scoreSheet(t, { answers: g.answers });
-    openSheet(`<div class="sheet-head"><div><b>${esc(s.name)}</b><span>${esc(s.regNo)} · ${esc(t.title)}</span></div><button class="icon-btn dark" data-close="1" aria-label="Close"><i class="fas fa-xmark"></i></button></div>
-      <label class="absent-sw"><input type="checkbox" id="g-absent" ${g.absent ? "checked" : ""}> Student was absent</label>
-      <div class="${g.absent ? "dim" : ""}">${t.questions.map((q, i) => `<div class="gq"><div class="gq-t"><b>Q${i + 1}.</b> ${esc(q.text)} <em>${q.marks} mark${q.marks == 1 ? "" : "s"}</em></div>
-        ${q.kind === "mcq" ? `<div class="gopts">${q.options.map((o, k) => o.trim() ? `<button class="gopt ${g.answers[q.id] != null && +g.answers[q.id] === k ? (k === +q.answer ? "right" : "wrong") : ""} ${k === +q.answer ? "key" : ""}" data-gq="${q.id}" data-gk="${k}"><span class="ltr">${"ABCD"[k]}</span>${esc(o)}</button>` : "").join("")}</div>`
-          : `<div class="field" style="margin:0"><label>Marks awarded (max ${q.marks})</label><input type="number" min="0" max="${q.marks}" step="0.5" data-gm="${q.id}" value="${g.answers[q.id] != null ? esc(g.answers[q.id]) : ""}" placeholder="0"></div>`}</div>`).join("")}</div>
-      <div class="gtotal"><span>Total</span><b id="g-total">${g.absent ? "—" : sc + " / " + tot}</b></div>
-      <div class="two-col" style="margin-top:12px"><button class="btn ghost" style="margin:0" id="g-save">Save</button><button class="btn" style="margin:0" id="g-next" ${g.next ? "" : "disabled"}>Save & next <i class="fas fa-arrow-right"></i></button></div>`, "tall");
-  }
-  function saveGrade(goNext) {
+  function saveMarks() {
     const t = tests.find((x) => x.id === gradeCtx.id); if (!t) return;
-    const abs = $("#g-absent").checked;
-    document.querySelectorAll("[data-gm]").forEach((i) => { if (i.value !== "") gradeCtx.answers[i.dataset.gm] = Math.min(+i.value || 0, +t.questions.find((q) => q.id === i.dataset.gm).marks); else delete gradeCtx.answers[i.dataset.gm]; });
-    t.results = t.results || {};
-    t.results[gradeCtx.reg] = { answers: gradeCtx.answers, absent: abs, score: abs ? 0 : scoreSheet(t, { answers: gradeCtx.answers }), at: Date.now() };
-    saveTests(); pushTest(t); const nxt = gradeCtx.next; closeSheet(); toast("Saved."); quizzes();
-    if (goNext && nxt) openGrade(t, nxt);
+    const tot = gradeCtx.tot; t.results = {}; let bad = 0;
+    document.querySelectorAll("#sheet-body [data-mk]").forEach((i) => {
+      const reg = i.dataset.mk;
+      if (gradeCtx.abs[reg]) { t.results[reg] = { absent: true, score: 0, at: Date.now() }; return; }
+      if (i.value === "") return;
+      const v = +i.value; if (isNaN(v) || v < 0 || v > tot) { bad++; return; }
+      t.results[reg] = { absent: false, score: v, at: Date.now() };
+    });
+    if (bad) return toast(bad + " mark(s) are above " + tot + " or invalid.", true);
+    if (!Object.keys(t.results).length) return toast("Enter at least one mark.", true);
+    t.marked = true; saveTests(); pushTest(t); closeSheet(); gradeCtx = null;
+    quizView = "list"; quizzes.tab = "past"; openTest = null; toast("Marks saved — moved to Past."); quizzes();
   }
   function exportCsv(t) {
-    const cl = allMyClasses().find((c) => label(c) === t.cls) || { cls: t.cls.split(" - ")[0], section: (t.cls.split(" - ")[1] || "") }, tot = qTotal(t);
-    const rows = [["Reg No", "Name", "Score", "Total", "Percent", "Grade", "Status"]].concat(studentsOf(cl).map((s) => { const r = (t.results || {})[s.regNo]; if (!r) return [s.regNo, s.name, "", tot, "", "", "Not checked"]; if (r.absent) return [s.regNo, s.name, "", tot, "", "", "Absent"]; const p = (r.score / (tot || 1)) * 100; return [s.regNo, s.name, r.score, tot, p.toFixed(1), gradeOf(p), p >= t.passPct ? "Pass" : "Fail"]; }));
+    const tot = totalOf(t);
+    const rows = [["Reg No", "Name", "Score", "Total", "Percent", "Grade", "Status"]].concat(studentsOf(classOfTest(t)).map((s) => { const r = (t.results || {})[s.regNo]; if (!r) return [s.regNo, s.name, "", tot, "", "", "Not marked"]; if (r.absent) return [s.regNo, s.name, "", tot, "", "", "Absent"]; const p = (r.score / (tot || 1)) * 100; return [s.regNo, s.name, r.score, tot, p.toFixed(1), gradeOf(p), p >= (t.passPct || 40) ? "Pass" : "Fail"]; }));
     const csv = rows.map((r) => r.map((c) => '"' + String(c).replace(/"/g, '""') + '"').join(",")).join("\n");
     const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" })); a.download = t.title.replace(/\W+/g, "_") + "_results.csv"; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1500);
   }
@@ -463,25 +482,50 @@
       </div>
       <button class="btn out" id="logout"><i class="fas fa-right-from-bracket"></i> Sign out</button>`;
   }
+  /* Same staff ID card as Staff Management (blue .sidc-card, front = QR, back = school contact + barcode) */
+  function barcodeSvg(text) {
+    const VIEW_H = 60, QUIET = 10, str = String(text || "").trim() || "0";
+    let binary = "";
+    try { if (window.JsBarcode) { const out = {}; JsBarcode(out, str, { format: "CODE128" }); binary = out.encodings.map((e) => e.data).join(""); } } catch (e) { /* fallback below */ }
+    if (binary) {
+      let bars = "", i = 0;
+      while (i < binary.length) { if (binary[i] === "1") { let j = i; while (j < binary.length && binary[j] === "1") j++; bars += `<rect x="${QUIET + i}" y="0" width="${j - i}" height="${VIEW_H}" fill="#000"/>`; i = j; } else i++; }
+      return `<svg viewBox="0 0 ${binary.length + QUIET * 2} ${VIEW_H}" preserveAspectRatio="none" shape-rendering="crispEdges" xmlns="http://www.w3.org/2000/svg">${bars}</svg>`;
+    }
+    let seed = 0, x = 0, bars = ""; for (let k = 0; k < str.length; k++) seed = (seed * 131 + str.charCodeAt(k) + 7) >>> 0;
+    const rnd = () => { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 4294967296; };
+    while (x < 480) { const w = 2 + Math.floor(rnd() * 6); if (rnd() > 0.42) bars += `<rect x="${x}" y="0" width="${w}" height="${VIEW_H}" fill="#0f172a"/>`; x += w; }
+    return `<svg viewBox="0 0 480 ${VIEW_H}" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">${bars}</svg>`;
+  }
   function cardFace(side) {
-    const logo = school.logo ? `<img src="${esc(school.logo)}" alt="" crossorigin="anonymous">` : `<span>${esc(schoolName.charAt(0))}</span>`;
-    const head = `<div class="tc-head"><div class="tc-logo">${logo}</div><div><b>${esc(schoolName)}</b><small>Staff Identity Card</small></div></div>`;
-    if (side === "front") return `<div class="tcard-face" id="card-front">${head}
-      <div class="tc-photo">${staff.photo ? `<img src="${esc(staff.photo)}" alt="" crossorigin="anonymous">` : `<i class="fas fa-user"></i>`}</div>
-      <div class="tc-name">${esc(staff.name || "Teacher")}</div><div class="tc-badge">ID: ${esc(staff.staffId || "—")}</div>
-      <div class="tc-rows"><div><span>Designation</span><b>${esc(staff.role || "Teacher")}</b></div><div><span>CNIC</span><b>${esc(staff.cnic || "—")}</b></div><div><span>Contact</span><b>${esc(staff.phone || "—")}</b></div><div><span>Address</span><b class="clamp">${esc(staff.address || "—")}</b></div></div>
-      <div class="tc-qr"><div id="tc-qr"></div><small>Scan for attendance</small></div></div>`;
-    return `<div class="tcard-face" id="card-back">${head}
-      <div class="tc-terms"><b>This card is property of ${esc(schoolName)}.</b><p>If found, please return it to the school office. It is non-transferable and must be worn on school premises.</p></div>
-      <div class="tc-rows"><div><span>Subjects</span><b class="clamp">${esc(subjects().join(", ") || "—")}</b></div><div><span>Joined</span><b>${esc(staff.joined || "—")}</b></div></div>
-      <div class="tc-sign"><i></i><small>Principal's signature</small></div></div>`;
+    const logoInner = school.logo ? `<img src="${esc(school.logo)}" alt="Logo" crossorigin="anonymous">` : `<i class="fas fa-graduation-cap"></i>`;
+    const id = staff.staffId || "—", designation = staff.role || "Teacher";
+    const head = (lbl) => `<div class="sidc-card-header"><div class="sidc-card-logo">${logoInner}</div><div class="sidc-card-header-text"><div class="sidc-card-school-name">${esc(schoolName)}</div><div class="sidc-card-doc-label">${lbl}</div></div></div>`;
+    if (side === "front") return `<div class="sidc-card" id="card-front">${head("Staff Identity Card")}
+      <div class="sidc-card-body"><div class="sidc-card-photo">${staff.photo ? `<img src="${esc(staff.photo)}" alt="" crossorigin="anonymous">` : `<i class="fas fa-user"></i>`}</div>
+        <div class="sidc-card-info"><div class="sidc-card-name">${esc(staff.name || "—")}</div><span class="sidc-card-idbadge">ID: ${esc(id)}</span>
+          <div class="sidc-card-rows">
+            <div class="sidc-card-row"><span class="sidc-label">Designation:</span><span class="sidc-value">${esc(designation)}</span></div>
+            <div class="sidc-card-row"><span class="sidc-label">Department:</span><span class="sidc-value">Teaching</span></div>
+            <div class="sidc-card-row"><span class="sidc-label">CNIC:</span><span class="sidc-value">${esc(staff.cnic || "—")}</span></div>
+            <div class="sidc-card-row"><span class="sidc-label">Contact:</span><span class="sidc-value">${esc(staff.phone || "—")}</span></div>
+            <div class="sidc-card-row sidc-row-clamp"><span class="sidc-label">Address:</span><span class="sidc-value sidc-value-clamp">${esc(staff.address || "—")}</span></div></div></div></div>
+      <div class="sidc-card-barcode-wrap"><div class="sidc-card-barcode-label">Scan for Attendance</div><div class="sidc-card-front-qr-box" id="tc-qr"><i class="fas fa-qrcode sidc-card-front-qr-fallback"></i></div><div class="sidc-card-barcode-text">${esc(id)}</div></div></div>`;
+    const phone = school.phone || school.contact || "Not set in Settings", addr = school.address || "Not set in Settings";
+    return `<div class="sidc-card sidc-card-back" id="card-back">${head("School Contact &amp; Attendance")}
+      <div class="sidc-card-back-body"><div class="sidc-back-contact-col">
+        <div class="sidc-back-section-label">School Address</div><div class="sidc-back-line"><i class="fas fa-map-marker-alt"></i><span>${esc(addr)}</span></div>
+        <div class="sidc-back-section-label" style="margin-top:2px">Contact Number</div><div class="sidc-back-line"><i class="fas fa-phone"></i><span>${esc(phone)}</span></div>
+        <div class="sidc-back-note">If found, please return this card to the school address above. This card remains the property of ${esc(schoolName)}.</div></div></div>
+      <div class="sidc-card-barcode-wrap"><div class="sidc-card-barcode-label">Scan for Attendance</div>${barcodeSvg(id)}<div class="sidc-card-barcode-text">${esc(id)}</div></div>
+      <div class="sidc-software-brand"><span class="sidc-software-logo">S</span><span>Powered by <strong>SoftSchool</strong></span></div></div>`;
   }
   function openCard() {
     openSheet(`<div class="sheet-head"><div><b>Your teacher card</b><span>Issued by ${esc(schoolName)}</span></div><button class="icon-btn dark" data-close="1" aria-label="Close"><i class="fas fa-xmark"></i></button></div>
       <div class="cards-row">${cardFace("front")}${cardFace("back")}</div>
       <div class="card-actions"><button class="btn" id="card-print"><i class="fas fa-print"></i> Print</button><button class="btn ghost" id="card-share"><i class="fas fa-share-nodes"></i> Share</button></div>
       <button class="link center" id="card-dl"><i class="fas fa-download"></i> Save as image</button>`, "tall");
-    try { if (window.QRCode) new QRCode($("#tc-qr"), { text: String(staff.staffId || ""), width: 84, height: 84, correctLevel: QRCode.CorrectLevel.M }); } catch (e) { /* QR optional */ }
+    try { if (window.QRCode) { const box = $("#tc-qr"); box.innerHTML = ""; new QRCode(box, { text: String(staff.staffId || ""), width: 100, height: 100, correctLevel: QRCode.CorrectLevel.M }); } } catch (e) { /* QR optional */ }
   }
   async function snap(id) {
     if (!window.html2canvas) throw new Error("Image tools didn't load. Check your connection.");
@@ -544,34 +588,32 @@
   $("#btn-inbox").addEventListener("click", () => go("inbox"));
   $("#btn-refresh").addEventListener("click", async (e) => {
     const b = e.currentTarget; b.classList.add("spin"); att.students = null;
-    await Promise.all([loadAttendanceData(), loadAnnouncements(), syncOutbox(), loadTests()]); b.classList.remove("spin"); go(current); toast("Refreshed");
+    await flushAttendance(); await Promise.all([loadAttendanceData(), loadAnnouncements(), syncOutbox(), loadTests()]); b.classList.remove("spin"); go(current); toast("Refreshed");
   });
 
   view.addEventListener("click", (e) => {
     const nt = e.target.closest("[data-notice]"); if (nt) return openNotice(nt.dataset.notice);
     const tt = e.target.closest("[data-test]"); if (tt && !e.target.closest("button[data-go]")) { openTest = tt.dataset.test; quizView = "detail"; return go("quizzes"); }
-    const gg = e.target.closest("[data-grade]"); if (gg) { const t = tests.find((x) => x.id === openTest); return t && openGrade(t, gg.dataset.grade); }
     const t = e.target.closest("button"); if (!t) return;
     const d = t.dataset;
     if (d.go) return go(d.go);
     if (d.card) return openCard();
     if (d.newtest) { go("quizzes"); return startBuild(); }
     if (d.cls) { att.cls = +d.cls; return attendance(); }
-    if (d.set) { att.marks[t.closest(".stu").dataset.id] = d.set; t.parentElement.querySelectorAll("button").forEach((b) => b.classList.toggle("on", b === t)); const c = counts(classStudents()); $("#c-p").textContent = c.present; $("#c-a").textContent = c.absent; $("#c-l").textContent = c.leave; return; }
+    if (d.set) { att.marks[t.closest(".stu").dataset.id] = d.set; t.parentElement.querySelectorAll("button").forEach((b) => b.classList.toggle("on", b === t)); return refreshAttBar(); }
     if (d.bulk) { classStudents().forEach((s) => (att.marks[s.regNo] = d.bulk)); return attendance(); }
     if (d.pw) { pwOpen = true; return profile(); }
     if (t.id === "pw-save") return changePassword();
     if (t.id === "save-att") return saveAttendance();
     if (t.id === "logout") { auth.clearSession(); location.replace("index.html"); }
     /* tests */
-    if (d.qf) { quizzes.filter = d.qf; return quizzes(); }
+    if (d.qtab) { quizzes.tab = d.qtab; return quizzes(); }
+    if (d.entermarks) { const tt2 = tests.find((x) => x.id === d.entermarks); return tt2 && openMarks(tt2); }
     if (d.qback) { quizView = "list"; qb = null; openTest = null; return quizzes(); }
-    if (d.qtype) { harvest(); qb.type = d.qtype; return quizzes(); }
-    if (d.addq) { harvest(); qb.questions.push(newQuestion(d.addq)); quizzes(); view.scrollTop = view.scrollHeight; return; }
-    if (d.delq != null) { harvest(); if (qb.questions.length < 2) return toast("A test needs at least one question.", true); qb.questions.splice(+d.delq, 1); return quizzes(); }
+    if (d.qkind) { harvest(); qb.kind = d.qkind; return quizzes(); }
     if (t.id === "save-test") return saveBuilt();
     if (d.csv) return exportCsv(tests.find((x) => x.id === d.csv));
-    if (d.deltest) { if (confirm("Delete this " + "test and all its results?")) { tests = tests.filter((x) => x.id !== d.deltest); saveTests(); pendingPut = pendingPut.filter((x) => x !== d.deltest); pendingDel.push(d.deltest); savePending(); flushTests(); quizView = "list"; quizzes(); toast("Deleted."); } return; }
+    if (d.deltest) { if (confirm("Delete this test and all its marks?")) { tests = tests.filter((x) => x.id !== d.deltest); saveTests(); pendingPut = pendingPut.filter((x) => x !== d.deltest); pendingDel.push(d.deltest); savePending(); flushTests(); quizView = "list"; quizzes(); toast("Deleted."); } return; }
     /* notices */
     if (d.atab) { ann.tab = d.atab; return inbox(); }
     if (d.aud) { compose.audience = d.aud; return inbox(); }
@@ -594,18 +636,21 @@
     if (b.id === "card-print") return cardPrint();
     if (b.id === "card-share") return cardShare();
     if (b.id === "card-dl") return cardDownload();
-    if (gradeCtx && b.dataset.gq) { gradeCtx.answers[b.dataset.gq] = +b.dataset.gk; const t = tests.find((x) => x.id === gradeCtx.id); document.querySelectorAll("[data-gm]").forEach((i) => { if (i.value !== "") gradeCtx.answers[i.dataset.gm] = +i.value; }); const abs = $("#g-absent").checked, s = studentsOf(allMyClasses().find((c) => label(c) === t.cls) || { cls: t.cls.split(" - ")[0], section: t.cls.split(" - ")[1] || "" }).find((x) => x.regNo === gradeCtx.reg); gradeCtx.absent = abs; return renderGrade(t, s); }
-    if (b.id === "g-save") return saveGrade(false);
-    if (b.id === "g-next") return saveGrade(true);
+    if (b.id === "mk-save") return saveMarks();
+    if (gradeCtx && b.dataset.abs) {
+      const reg = b.dataset.abs, on = !gradeCtx.abs[reg]; gradeCtx.abs[reg] = on; b.classList.toggle("on", on);
+      const inp = b.parentElement.querySelector(".mk-in"); inp.disabled = on; if (on) inp.value = ""; else inp.focus();
+    }
   });
   $("#sheet-body").addEventListener("input", (e) => {
-    if (gradeCtx && e.target.dataset.gm != null) { const t = tests.find((x) => x.id === gradeCtx.id), q = t.questions.find((x) => x.id === e.target.dataset.gm); const v = Math.min(+e.target.value || 0, q.marks); if (e.target.value === "") delete gradeCtx.answers[q.id]; else gradeCtx.answers[q.id] = v; $("#g-total").textContent = $("#g-absent").checked ? "—" : scoreSheet(t, { answers: gradeCtx.answers }) + " / " + qTotal(t); }
+    const i = e.target; if (!gradeCtx || i.dataset.mk == null) return;
+    if (+i.value > gradeCtx.tot) i.classList.add("over"); else i.classList.remove("over");
   });
-  $("#sheet-body").addEventListener("change", (e) => { if (e.target.id === "g-absent" && gradeCtx) { const t = tests.find((x) => x.id === gradeCtx.id); $("#g-total").textContent = e.target.checked ? "—" : scoreSheet(t, { answers: gradeCtx.answers }) + " / " + qTotal(t); e.target.closest(".sheet").querySelector(".dim, [class=\"\"]"); } });
 
   $("#page-date").textContent = new Date().toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" });
   updateDot();
   go("home");
+  flushAttendance();
   if (inchargeClasses().length) loadAttendanceData().then(() => current === "home" && home());
   loadTests().then(() => { if (current === "quizzes" && quizView === "list") quizzes(); else if (current === "home") home(); });
   loadAnnouncements().then(() => { syncOutbox(); if (current === "home") home(); else if (current === "inbox") inbox(); });
