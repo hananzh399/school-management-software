@@ -174,17 +174,17 @@
     for (const id of pendingPut.slice()) {
       const t = tests.find((x) => x.id === id);
       if (!t) { pendingPut = pendingPut.filter((x) => x !== id); continue; }
-      try { await api("/teacher-tests/" + encodeURIComponent(id), { method: "PUT", body: JSON.stringify(Object.assign({ schoolId }, t)) }); pendingPut = pendingPut.filter((x) => x !== id); } catch (e) { if (e.message === "401") return; break; }
+      try { await api("/teacher-tests/" + encodeURIComponent(id), { method: "PUT", body: JSON.stringify(Object.assign({ schoolId, staffId: staff.staffId, staffName: staff.name }, t)) }); pendingPut = pendingPut.filter((x) => x !== id); } catch (e) { if (e.message === "401") return; break; }
     }
     for (const id of pendingDel.slice()) {
-      try { await api("/teacher-tests/" + encodeURIComponent(id) + "?schoolId=" + encodeURIComponent(schoolId), { method: "DELETE" }); pendingDel = pendingDel.filter((x) => x !== id); } catch (e) { if (e.message === "401") return; break; }
+      try { await api("/teacher-tests/" + encodeURIComponent(id) + "?schoolId=" + encodeURIComponent(schoolId) + "&staffId=" + encodeURIComponent(staff.staffId || ""), { method: "DELETE" }); pendingDel = pendingDel.filter((x) => x !== id); } catch (e) { if (e.message === "401") return; break; }
     }
     savePending();
   }
   function pushTest(t) { if (pendingPut.indexOf(t.id) < 0) pendingPut.push(t.id); savePending(); flushTests(); }
   async function loadTests() {
     try {
-      const list = await api("/teacher-tests?schoolId=" + encodeURIComponent(schoolId));
+      const list = await api("/teacher-tests?schoolId=" + encodeURIComponent(schoolId) + "&staffId=" + encodeURIComponent(staff.staffId || ""));
       if (!Array.isArray(list)) return;
       const byId = {}; list.forEach((t) => { if (t && t.id) byId[t.id] = t; });
       pendingPut.forEach((id) => { const l = tests.find((x) => x.id === id); if (l) byId[id] = l; });   // unsynced local edits win
