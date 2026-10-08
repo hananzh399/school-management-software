@@ -766,3 +766,84 @@ button{font:inherit;color:inherit;border:0;background:none;cursor:pointer;touch-
 .notice .ic{background:var(--teal-100);color:var(--teal-600)}
 .seg button i{margin-right:4px;pointer-events:none}
 .field[hidden]{display:none}
+
+/* ═════ 6-tab bar + unread badge on Messages ═════ */
+.tab{font-size:10px;gap:3px;min-width:0}.tab i{font-size:17px}
+.tab .dot{position:absolute;top:5px;left:calc(50% + 6px);min-width:16px;height:16px;padding:0 4px;border-radius:99px;background:var(--coral);color:#fff;font:700 9.5px 'Inter';display:grid;place-items:center;border:2px solid #fff}
+.tab .dot[hidden]{display:none}
+
+/* ═════ Messaging module ═════ */
+.view.chat-mode{padding:0 0 calc(var(--bar-h) + var(--safe-b));display:flex;flex-direction:column;overflow:hidden}
+.thr-list{display:flex;flex-direction:column;gap:6px}
+.thr{display:flex;align-items:center;gap:11px;width:100%;text-align:left;background:var(--white);border:1px solid var(--border);border-radius:14px;padding:10px 12px}
+.thr:active{background:var(--paper-deep)}
+.thr-ic{width:40px;height:40px;border-radius:13px;display:grid;place-items:center;font-size:16px;flex-shrink:0;background:var(--teal-100);color:var(--teal-600)}
+.thr-ic.notices{background:var(--amber-100);color:var(--amber)}.thr-ic.chat .fa-people-roof{color:var(--violet)}
+.thr-tx{flex:1;min-width:0}.thr-tx b{display:block;font-size:13.5px;font-weight:600}
+.thr-tx span{display:block;font-size:12px;color:var(--ink-soft);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:1px}
+.thr-r{display:flex;flex-direction:column;align-items:flex-end;gap:5px;flex-shrink:0}.thr-r small{font-size:10.5px;color:var(--ink-faint)}
+.thr.sm{padding:8px 4px;border:0;border-top:1px solid var(--border);border-radius:0;background:none}.thr.sm:first-of-type{border-top:0}
+.thr.sm .thr-ic{width:32px;height:32px;font-size:13px;border-radius:10px}
+.msg-card h2 .cnt{margin-left:2px}
+.chat-wrap{flex:1;display:flex;flex-direction:column;min-height:0;background:var(--paper)}
+.chat-head{display:flex;align-items:center;gap:10px;padding:8px 12px;background:var(--white);border-bottom:1px solid var(--border);flex-shrink:0}
+.back-ic{width:34px;height:34px;border-radius:50%;background:var(--paper-deep);color:var(--ink-soft);font-size:13px}
+.chat-head .thr-ic{width:34px;height:34px;font-size:14px;border-radius:11px}
+.ch-t{min-width:0}.ch-t b{display:block;font-size:14px}.ch-t span{display:block;font-size:11px;color:var(--ink-soft);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.chat-body{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:12px;display:flex;flex-direction:column;gap:6px;min-height:0}
+.chat-body .empty{margin:auto;padding:20px}
+.day-sep{text-align:center;margin:8px 0 4px}.day-sep span{font-size:10.5px;font-weight:600;color:var(--ink-faint);background:var(--paper-deep);padding:3px 10px;border-radius:99px}
+.bub{max-width:82%;padding:8px 11px 5px;border-radius:16px;font-size:14px;line-height:1.4;overflow-wrap:anywhere;position:relative}
+.bub p{margin:0}.bub .meta{display:block;text-align:right;font-size:10px;margin-top:2px;opacity:.7}
+.bub .who{display:block;font-size:10.5px;font-weight:700;color:var(--teal-600);margin-bottom:2px}
+.bub.me{align-self:flex-end;background:var(--teal-600);color:#fff;border-bottom-right-radius:5px}
+.bub.them{align-self:flex-start;background:var(--white);border:1px solid var(--border);border-bottom-left-radius:5px}
+.bub.failed{background:var(--coral);cursor:pointer}
+.composer{display:flex;align-items:flex-end;gap:8px;padding:8px 10px calc(8px);background:var(--white);border-top:1px solid var(--border);flex-shrink:0}
+.composer textarea{flex:1;resize:none;border:1.5px solid var(--border);border-radius:20px;padding:9px 14px;font:inherit;font-size:16px;line-height:1.35;max-height:120px;background:var(--paper);outline:none}
+.composer textarea:focus{border-color:var(--teal-500);background:#fff}
+.composer .send{width:42px;height:42px;border-radius:50%;background:var(--teal-600);color:#fff;font-size:15px;flex-shrink:0}
+.composer .send:active{transform:scale(.94)}
+.chat-note{padding:10px;text-align:center;font-size:12px;color:var(--ink-faint);background:var(--white);border-top:1px solid var(--border);flex-shrink:0}
+.ncard{background:var(--white);border:1px solid var(--border);border-radius:14px;padding:11px 12px;margin-bottom:2px}
+.ncard.urgent{border-color:#f2d3a4;background:#fffaf2}
+.ncard .n-top{display:flex;justify-content:space-between;gap:8px;align-items:center;margin-bottom:4px}.ncard b{font-size:14px}
+.ncard p{font-size:13.5px;line-height:1.5;color:var(--ink);overflow-wrap:anywhere}.ncard small{display:block;margin-top:6px;font-size:11px;color:var(--ink-faint)}
+
+/* ═════ Attendance: locked after saving ═════ */
+.stu.locked{opacity:.95;background:var(--paper)}
+.st-badge{font-size:11px;font-weight:700;padding:4px 10px;border-radius:99px;flex-shrink:0}
+.st-badge.p{background:#DDF3E4;color:#1d8a4b}.st-badge.a{background:var(--coral-100);color:var(--coral)}.st-badge.l{background:var(--amber-100);color:var(--amber)}
+.att-note i{margin-right:6px}
+
+/* ═════ My Classes → class students ═════ */
+.class-card.tap{width:100%;text-align:left;cursor:pointer}.class-card.tap:active{background:var(--paper-deep)}
+.class-card .chev{color:var(--ink-faint);font-size:12px;margin-left:2px}
+.class-card .pill{flex-shrink:0}
+.cl-head{display:flex;align-items:center;gap:11px;margin-bottom:10px}.cl-head b{display:block;font:700 16px 'Space Grotesk',sans-serif}.cl-head span{font-size:12px;color:var(--ink-soft)}
+.searchbox{display:flex;align-items:center;gap:8px;background:var(--white);border:1.5px solid var(--border);border-radius:12px;padding:0 12px;margin-bottom:10px}
+.searchbox i{color:var(--ink-faint);font-size:13px}.searchbox input{flex:1;height:40px;border:0;background:none;font:inherit;font-size:16px;outline:none}
+.slist{background:var(--white);border:1px solid var(--border);border-radius:14px;overflow:hidden}
+.srow{display:flex;align-items:center;gap:9px;padding:8px 11px;border-top:1px solid var(--border)}.srow:first-child{border-top:0}.srow[hidden]{display:none}
+.srow .sn{width:20px;font-size:10.5px;font-weight:700;color:var(--ink-faint);text-align:center;flex-shrink:0}
+.sav{width:30px;height:30px;border-radius:50%;background:var(--teal-100);color:var(--teal-700);display:grid;place-items:center;font:700 12px 'Space Grotesk',sans-serif;flex-shrink:0}
+.stx{flex:1;min-width:0}.stx b{display:block;font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.stx span{display:block;font-size:11px;color:var(--ink-faint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.stt{font-style:normal;font-size:10.5px;font-weight:700;width:20px;height:20px;border-radius:6px;display:grid;place-items:center;flex-shrink:0}
+.stt.p{background:#DDF3E4;color:#1d8a4b}.stt.a{background:var(--coral-100);color:var(--coral)}.stt.l{background:var(--amber-100);color:var(--amber)}
+
+/* ═════ Diary ═════ */
+.dstep h2{margin-bottom:10px}
+.sn2{width:22px;height:22px;border-radius:50%;background:var(--paper-deep);color:var(--ink-soft);display:grid;place-items:center;font-size:11px;font-weight:700}.sn2.ok{background:var(--teal-600);color:#fff}
+.thumbs{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.thumbs .th{position:relative;aspect-ratio:1;border-radius:12px;overflow:hidden;background:var(--paper-deep)}
+.thumbs .th img{width:100%;height:100%;object-fit:cover;display:block}
+.thumbs .th button{position:absolute;top:4px;right:4px;width:24px;height:24px;border-radius:50%;background:rgba(11,43,40,.7);color:#fff;font-size:11px}
+.thumbs .th.add{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;border:1.5px dashed var(--teal-200);background:var(--teal-100);color:var(--teal-700);font-size:11px;font-weight:600;cursor:pointer}
+.thumbs .th.add i{font-size:20px}
+.thumbs.sm{grid-template-columns:repeat(4,1fr);gap:6px;margin-top:8px}
+.dimg{width:100%;aspect-ratio:1;object-fit:cover;border-radius:10px;background:var(--paper-deep);display:block;cursor:zoom-in}
+.dimg:not([src]){visibility:hidden}.dimg.broken{visibility:visible;opacity:.3}
+.dentry .de-top{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}.dentry b{font-size:14px}.dentry .de-top span{display:block;font-size:11.5px;color:var(--ink-soft)}
+.dentry p{font-size:13px;color:var(--ink-soft);margin-top:6px;overflow-wrap:anywhere}
+.fullimg{width:100%;border-radius:14px;display:block}
+.btn:disabled{opacity:.55}

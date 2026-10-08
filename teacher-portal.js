@@ -112,7 +112,7 @@
         api("/attendance/students?date=" + today() + "&schoolId=" + encodeURIComponent(schoolId))
       ]);
       att.students = (Array.isArray(stu) ? stu : []).filter((s) => !s.status || s.status === "active").map((s) => ({
-        regNo: s.regNo, name: s.fullName || "Unknown", cls: s.studentClass || "", section: s.section || "A"
+        regNo: s.regNo, name: s.fullName || "Unknown", cls: s.studentClass || "", section: s.section || "A", guardian: s.guardianName || ""
       }));
       att.saved = {};
       (Array.isArray(logs) ? logs : []).forEach((l) => { if (l.memberId) att.saved[l.memberId] = l.status || "absent"; });
@@ -142,10 +142,11 @@
   $("#sheet").addEventListener("click", (e) => { if (e.target.id === "sheet" || e.target.closest("[data-close]")) closeSheet(); });
 
   /* ── Announcements store (received + sent). Backend endpoints are TODO — see api* helpers ── */
-  const ann = { received: store.get("ann_in", []), sent: store.get("ann_out", []), tab: "in", loaded: false };
+  const ann = { received: store.get("ann_in", []), loaded: false };
   const prefs = Object.assign({ receiveAdmin: true }, store.get("prefs", {}));
   const unread = () => (prefs.receiveAdmin ? ann.received.filter((a) => !a.read).length : 0);
-  function updateDot() { const n = unread(); const d = $("#inbox-dot"); d.hidden = !n; d.textContent = n > 9 ? "9+" : n; }
+  const totalUnread = () => unread() + chatUnread();
+  function updateDot() { const n = totalUnread(); const d = $("#inbox-dot"); if (!d) return; d.hidden = !n; d.textContent = n > 9 ? "9+" : n; }
   async function loadAnnouncements() {
     try {
       const list = await api("/announcements?schoolId=" + encodeURIComponent(schoolId) + "&audience=teachers");
@@ -157,13 +158,6 @@
     } catch (e) { /* endpoint not live yet — keep cached copy */ }
     ann.loaded = true; updateDot();
   }
-  async function syncOutbox() {
-    for (const m of ann.sent.filter((x) => x.status === "queued")) {
-      try { await api("/announcements/teacher", { method: "POST", body: JSON.stringify({ schoolId, staffId: staff.staffId, staffName: staff.name, audience: m.audience, className: m.cls, title: m.title, body: m.body, priority: m.priority }) }); m.status = "sent"; } catch (e) { break; }
-    }
-    store.set("ann_out", ann.sent);
-  }
-
   /* ── Tests & quizzes (stored per teacher; ready to swap for API) ── */
   let tests = store.get("tests", []);
   const saveTests = () => store.set("tests", tests);
@@ -232,7 +226,7 @@
       attCard = `<div class="card att-card"><div class="att-ring">${marked ? ring(pct, "var(--teal-500)") : `<div class="ring-empty"><i class="fas fa-bell"></i></div>`}</div>
         <div class="tx"><h2 style="margin-bottom:4px">Today · ${esc(label(inc[att.cls]))}</h2>
         ${marked ? `<div class="mini-stats"><span class="g"><b>${c.present}</b> Present</span><span class="r"><b>${c.absent}</b> Absent</span><span class="a"><b>${c.leave}</b> Leave</span></div>` : `<p class="hint" style="margin:0">Attendance isn't marked yet.</p>`}
-        <button class="link" data-go="attendance">${marked ? "Review" : "Mark now"} <i class="fas fa-arrow-right"></i></button></div></div>`;
+        <button class="link" data-go="attendance">${marked ? "View" : "Mark now"} <i class="fas fa-arrow-right"></i></button></div></div>`;
     }
     const strength = att.students && mine.length ? `<div class="card"><h2><i class="fas fa-users"></i> Class strength</h2>${mine.map((c) => { const n = studentsOf(c).length, mx = Math.max.apply(null, mine.map((x) => studentsOf(x).length).concat([1])); return `<div class="bar-row"><span>${esc(label(c))}</span><div class="bar"><i style="width:${(n / mx) * 100}%"></i></div><b>${n}</b></div>`; }).join("")}</div>` : "";
     const recent = tests.slice().sort((a, b) => b.created - a.created).slice(0, 2);
@@ -265,52 +259,68 @@
       ${session.passwordChanged ? "" : `<div class="card nudge"><div class="row"><div class="ic"><i class="fas fa-key"></i></div><div class="tx"><b>Secure your account</b><span>You're using the default password. Change it once from Profile.</span></div></div><button class="btn sm" data-go="profile">Change password</button></div>`}
       ${testCard}${strength}${todoCard}`;
   }
-  function noticeRow(a) {
-    return `<div class="row notice ${a.read ? "" : "new"}" data-notice="${esc(a.id)}"><div class="ic"><i class="fas fa-envelope"></i></div><div class="tx"><b>${esc(a.title)}</b><span>${esc(a.from)} · ${fmtDate(a.date)}</span></div>${a.read ? "" : `<i class="udot"></i>`}</div>`;
-  }
-  /* Messages card: received from admin + Send message button (used on Home) */
+  /* Home: compact view of the latest conversations */
   function messagesCard() {
-    const news = prefs.receiveAdmin ? ann.received.slice().sort((x, y) => new Date(y.date) - new Date(x.date)).slice(0, 3) : [];
-    return `<div class="card msg-card"><h2><i class="fas fa-envelope"></i> Messages <button class="link r" data-go="inbox">All</button></h2>
-      <div class="msg-list">${news.length ? news.map(noticeRow).join("") : `<p class="hint" style="margin:0">${prefs.receiveAdmin ? "No messages from admin yet." : "Admin messages are switched off in Profile."}</p>`}</div>
-      <button class="btn ghost sm" data-compose="1"><i class="fas fa-paper-plane"></i> Send message</button></div>`;
-  }
-  function classes() {
-    const teach = teachingClasses(), inc = inchargeClasses(), subs = subjects();
-    if (!teach.length && !inc.length) { view.innerHTML = empty("fa-chalkboard", "No classes yet", "Your admin hasn't assigned classes to you."); return; }
-    const isInc = (c) => inc.some((i) => norm(i.cls) === norm(c.cls) && (!i.section || norm(i.section) === norm(c.section)));
-    view.innerHTML = `<div class="section-title">Classes I teach</div>` + teach.map((c) => `
-      <div class="class-card"><div class="class-badge">${esc(String(c.cls).replace(/class/i, "").trim().slice(0, 4) || "—")}</div>
-        <div class="tx"><b>${esc(label(c))}</b><span>${esc(subs.join(" · ") || "Subjects not set")}</span></div>
-        ${isInc(c) ? `<span class="pill amber"><i class="fas fa-star"></i> Incharge</span>` : ""}</div>`).join("") +
-      (inc.some((i) => !teach.some((t) => norm(t.cls) === norm(i.cls))) ? `<div class="section-title">Incharge of</div>` +
-        inc.filter((i) => !teach.some((t) => norm(t.cls) === norm(i.cls))).map((c) => `<div class="class-card"><div class="class-badge"><i class="fas fa-star"></i></div><div class="tx"><b>${esc(label(c))}</b><span>Class incharge</span></div></div>`).join("") : "");
+    const rows = threadList().map((th) => Object.assign({ th }, threadInfo(th))).filter((x) => x.unread || x.at).sort((a, b) => b.at - a.at).slice(0, 3), un = totalUnread();
+    return `<div class="card msg-card"><h2><i class="fas fa-comments"></i> Messages ${un ? `<i class="cnt">${un}</i>` : ""}<button class="link r" data-go="inbox">Open</button></h2>
+      ${rows.length ? rows.map((x) => `<button class="thr sm" data-thread="${esc(x.th.key)}"><div class="thr-ic ${x.th.kind}"><i class="fas ${x.th.icon}"></i></div><div class="thr-tx"><b>${esc(x.th.title)}</b><span>${esc(x.last)}</span></div>${x.unread ? `<i class="cnt">${x.unread}</i>` : ""}</button>`).join("") : `<p class="hint" style="margin:0">No messages yet. Open Messages to write to the admin or to parents.</p>`}</div>`;
   }
 
-  const isMarkedToday = (list) => list.length > 0 && list.every((s) => att.saved[s.regNo]);
-  const isDirty = (list) => list.some((s) => att.marks[s.regNo] && att.marks[s.regNo] !== att.saved[s.regNo]);
+  /* ── MY CLASSES (tap a class you are incharge of → its students) ── */
+  let classOpen = null;
+  function classes() {
+    const inc = inchargeClasses(), subs = subjects(), mine = allMyClasses();
+    if (!mine.length) { view.innerHTML = empty("fa-chalkboard", "No classes yet", "Your admin hasn't assigned classes to you."); return; }
+    const incIdx = (c) => inc.findIndex((i) => norm(i.cls) === norm(c.cls) && (!i.section || norm(i.section) === norm(c.section)));
+    if (classOpen != null && inc[classOpen]) return classDetail(inc[classOpen]);
+    classOpen = null;
+    view.innerHTML = `<div class="section-title">My classes</div>` + mine.map((c) => {
+      const ix = incIdx(c), n = att.students ? studentsOf(c).length : null;
+      const inner = `<div class="class-badge">${esc(String(c.cls).replace(/class/i, "").trim().slice(0, 4) || "—")}</div>
+        <div class="tx"><b>${esc(label(c))}</b><span>${esc(subs.join(" · ") || "Subjects not set")}${n == null ? "" : " · " + n + " students"}</span></div>
+        ${ix >= 0 ? `<span class="pill amber"><i class="fas fa-star"></i> Incharge</span><i class="fas fa-chevron-right chev"></i>` : ""}`;
+      return ix >= 0 ? `<button class="class-card tap" data-openclass="${ix}">${inner}</button>` : `<div class="class-card">${inner}</div>`;
+    }).join("") + (inc.length ? `<p class="hint" style="margin:6px 4px 0"><i class="fas fa-circle-info"></i> Tap a class you are incharge of to see its students.</p>` : "");
+  }
+  function classDetail(c) {
+    if (!att.students) { view.innerHTML = '<div class="skel"></div><div class="skel"></div>'; ensureStudents().then(() => current === "classes" && classes()); return; }
+    const list = studentsOf(c).slice().sort((a, b) => a.name.localeCompare(b.name)), cnt = { present: 0, absent: 0, leave: 0 };
+    list.forEach((s) => { if (att.saved[s.regNo]) cnt[att.saved[s.regNo]]++; });
+    const marked = list.length && list.every((s) => att.saved[s.regNo]);
+    const tag = { present: "P", absent: "A", leave: "L" };
+    view.innerHTML = `<button class="back" data-classback="1"><i class="fas fa-arrow-left"></i> My classes</button>
+      <div class="cl-head"><div class="class-badge">${esc(String(c.cls).replace(/class/i, "").trim().slice(0, 4) || "—")}</div><div><b>${esc(label(c))}</b><span>${list.length} student${list.length === 1 ? "" : "s"}${marked ? ` · Today: ${cnt.present} P · ${cnt.absent} A · ${cnt.leave} L` : " · Attendance not marked today"}</span></div></div>
+      ${list.length > 6 ? `<div class="searchbox"><i class="fas fa-magnifying-glass"></i><input id="class-q" placeholder="Search name or reg no" autocomplete="off"></div>` : ""}
+      ${list.length ? `<div class="slist">${list.map((s, i) => `<div class="srow" data-q="${esc((s.name + " " + s.regNo).toLowerCase())}"><span class="sn">${i + 1}</span><div class="sav">${esc(s.name.trim().charAt(0).toUpperCase())}</div>
+        <div class="stx"><b>${esc(s.name)}</b><span>${esc(s.regNo)}${s.guardian ? " · " + esc(s.guardian) : ""}</span></div>${att.saved[s.regNo] ? `<i class="stt ${tag[att.saved[s.regNo]].toLowerCase()}">${tag[att.saved[s.regNo]]}</i>` : ""}</div>`).join("")}</div>`
+        : empty("fa-user-graduate", "No students found", "No active students in " + esc(label(c)) + ".")}`;
+  }
+
+  /* Attendance is marked ONCE per day. After saving it is locked (the server enforces this too). */
+  const unsaved = (list) => list.filter((s) => !att.saved[s.regNo]);
+  const isMarkedToday = (list) => list.length > 0 && unsaved(list).length === 0;
   function saveBtnHtml(list) {
-    const marked = isMarkedToday(list), dirty = isDirty(list);
-    if (marked && !dirty) return `<button class="btn done" id="save-att" disabled><i class="fas fa-circle-check"></i> Attendance saved</button>`;
-    return `<button class="btn" id="save-att"><i class="fas fa-floppy-disk"></i> ${marked ? "Update attendance" : "Save attendance"}</button>`;
+    if (isMarkedToday(list)) return `<button class="btn done" disabled><i class="fas fa-lock"></i> Attendance saved</button>`;
+    return `<button class="btn" id="save-att"><i class="fas fa-floppy-disk"></i> Save attendance</button>`;
   }
   function refreshAttBar() {
     const list = classStudents(), c = counts(list);
     $("#c-p").textContent = c.present; $("#c-a").textContent = c.absent; $("#c-l").textContent = c.leave;
     const bar = $(".savebar"); if (bar) bar.innerHTML = saveBtnHtml(list);
-    const note = $("#att-note"); if (note) note.hidden = !isMarkedToday(list) || isDirty(list);
   }
   function attendance() {
     const inc = inchargeClasses();
     if (!inc.length) { view.innerHTML = empty("fa-user-lock", "Not a class incharge", "Attendance is only available for the class you are incharge of."); return; }
     if (!att.students) { view.innerHTML = '<div class="skel"></div><div class="skel"></div><div class="skel"></div>'; loadAttendanceData().then(() => current === "attendance" && attendance()); return; }
-    const list = classStudents(), c = counts(list), marked = isMarkedToday(list);
+    const list = classStudents(), c = counts(list), marked = isMarkedToday(list), name = { present: "Present", absent: "Absent", leave: "Leave" };
     view.innerHTML = `
       ${inc.length > 1 ? `<div class="chips">${inc.map((x, i) => `<button class="chip ${i === att.cls ? "on" : ""}" data-cls="${i}">${esc(label(x))}</button>`).join("")}</div>` : ""}
       <div class="sumbar"><div class="p"><b id="c-p">${c.present}</b>Present</div><div class="a"><b id="c-a">${c.absent}</b>Absent</div><div class="l"><b id="c-l">${c.leave}</b>Leave</div></div>
-      <div class="att-note" id="att-note" ${marked ? "" : "hidden"}><i class="fas fa-circle-check"></i> Today's attendance is saved. Tap any status to change it, then press <b>Update</b>.</div>
-      ${list.length ? `<div class="bulk"><button data-bulk="present"><i class="fas fa-check-double"></i> All Present</button><button data-bulk="absent">All Absent</button></div>
-      ${list.map((s, i) => `<div class="stu" data-id="${esc(s.regNo)}"><div class="stu-no">${i + 1}</div><div class="stu-nm"><b>${esc(s.name)}</b><span>${esc(s.regNo)}</span></div>
+      ${marked ? `<div class="att-note"><i class="fas fa-lock"></i> Today's attendance is saved and locked. If something is wrong, ask the admin to correct it.</div>` : ""}
+      ${list.length ? `${unsaved(list).length ? `<div class="bulk"><button data-bulk="present"><i class="fas fa-check-double"></i> All Present</button><button data-bulk="absent">All Absent</button></div>` : ""}
+      ${list.map((s, i) => att.saved[s.regNo]
+        ? `<div class="stu locked" data-id="${esc(s.regNo)}"><div class="stu-no">${i + 1}</div><div class="stu-nm"><b>${esc(s.name)}</b><span>${esc(s.regNo)}</span></div><span class="st-badge ${att.saved[s.regNo][0]}">${name[att.saved[s.regNo]] || ""}</span></div>`
+        : `<div class="stu" data-id="${esc(s.regNo)}"><div class="stu-no">${i + 1}</div><div class="stu-nm"><b>${esc(s.name)}</b><span>${esc(s.regNo)}</span></div>
         <div class="seg">${["present", "absent", "leave"].map((k) => `<button class="${k[0]} ${statusOf(s) === k ? "on" : ""}" data-set="${k}" aria-label="${k}">${k[0].toUpperCase()}</button>`).join("")}</div></div>`).join("")}
       <div class="savebar">${saveBtnHtml(list)}</div>`
       : empty("fa-user-graduate", "No students found", "No active students in " + esc(label(inc[att.cls])) + ".")}`;
@@ -323,24 +333,24 @@
     if (attFlushing) return; attFlushing = true;
     try {
       while (attPending.length) {
-        await api("/attendance/save", { method: "POST", body: JSON.stringify(attPending[0]) });
+        try { await api("/attendance/save", { method: "POST", body: JSON.stringify(attPending[0]) }); }
+        catch (e) { if (!/already marked/i.test(e.message || "")) throw e; /* server already has today's marks */ }
         attPending.shift(); store.set("att_pending", attPending);
       }
     } catch (e) { /* stays queued, retried on next save / refresh */ }
     attFlushing = false;
   }
   function saveAttendance() {
-    const c = inchargeClasses()[att.cls], list = classStudents(), wasMarked = isMarkedToday(list);
+    const c = inchargeClasses()[att.cls], list = unsaved(classStudents());
     if (!list.length) return;
+    if (!confirm("Save attendance for " + label(c) + "?\n\nIt cannot be changed afterwards.")) return;
     const payload = list.map((s) => ({ schoolId, memberId: s.regNo, memberName: s.name, memberType: "STUDENT", className: s.cls, section: s.section, date: today(), status: statusOf(s), reason: "" }));
     list.forEach((s) => { att.saved[s.regNo] = statusOf(s); });
     att.marks = {};
-    attPending = attPending.filter((p) => !(p[0] && p[0].date === today() && p[0].className === list[0].cls && p[0].section === list[0].section)).concat([payload]);
-    store.set("att_pending", attPending);
-    refreshAttBar(); toast(wasMarked ? "Attendance updated for " + label(c) : "Attendance saved for " + label(c));
+    attPending.push(payload); store.set("att_pending", attPending);
+    attendance(); toast("Attendance saved for " + label(c));
     flushAttendance();
   }
-
 
   /* ── TESTS (paper test / quiz / class test …) ──
      Flow: teacher adds a test (own name, subject, total marks, syllabus) → it sits under "Upcoming"
@@ -448,51 +458,193 @@
     const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" })); a.download = t.title.replace(/\W+/g, "_") + "_results.csv"; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1500);
   }
 
-  /* ── MESSAGES (received from admin · send to admin / parents) ── */
-  const AUD = { admin: "Admin / Principal", parents: "Parents", class: "Parents", teachers: "All teachers" };
-  let compose = { audience: "admin", cls: "" };
-  function inbox() {
-    if (ann.tab === "send") ann.tab = "in";
-    const t = ann.tab;
-    let body = "";
-    if (t === "in") {
-      const list = ann.received.slice().sort((a, b) => new Date(b.date) - new Date(a.date));
-      body = !prefs.receiveAdmin ? empty("fa-bell-slash", "Admin messages are off", "Turn them back on from Profile → Notifications.")
-        : list.length ? `<div class="card">${list.map(noticeRow).join("")}</div>` : empty("fa-envelope-open", "No messages yet", "When your admin sends you a message, it will show up here.");
-    } else {
-      const list = ann.sent.slice().sort((a, b) => b.at - a.at);
-      body = list.length ? list.map((m) => `<div class="card sent"><div class="sent-top"><b>${esc(m.title)}</b><span class="pill ${m.status === "sent" ? "teal" : "amber"}">${m.status === "sent" ? "Delivered" : "Sending…"}</span></div><p>${esc(m.body)}</p><small>To ${esc(AUD[m.audience] || "Admin")}${(m.audience === "parents" || m.audience === "class") && m.cls ? " · " + esc(m.cls) : ""} · ${fmtDate(m.at)}</small></div>`).join("")
-        : empty("fa-paper-plane", "Nothing sent yet", "Messages you send will be listed here.");
+  /* ── MESSAGES: real conversations ──
+     • School notices  – broadcasts from the admin (read only)
+     • Admin / Principal – two-way chat
+     • Parents · <class> – your messages to the parents of a class (parent replies will land here once the parent portal is linked)
+     Messages are saved on the phone first, then sent in the background (clock → tick), and retried if the network drops. */
+  const enc = encodeURIComponent;
+  const chat = { items: store.get("chat", []), thread: null, draft: {} };
+  const saveChat = () => store.set("chat", chat.items.slice(-600));
+  const chatUnread = () => chat.items.filter((m) => m.senderType !== "TEACHER" && !m.read).length;
+  const fmtClock = (ms) => new Date(ms).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+  function fmtWhen(ms) { const d = new Date(ms), n = new Date(), y = new Date(n); y.setDate(n.getDate() - 1); if (d.toDateString() === n.toDateString()) return fmtClock(ms); if (d.toDateString() === y.toDateString()) return "Yesterday"; return d.toLocaleDateString("en-US", { month: "short", day: "numeric" }); }
+  function dayLabel(ms) { const d = new Date(ms), n = new Date(), y = new Date(n); y.setDate(n.getDate() - 1); if (d.toDateString() === n.toDateString()) return "Today"; if (d.toDateString() === y.toDateString()) return "Yesterday"; return d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" }); }
+  function threadList() {
+    const t = [{ key: "notices", kind: "notices", title: "School notices", sub: "Announcements from the admin", icon: "fa-bullhorn" },
+      { key: "admin", kind: "chat", channel: "admin", className: "", title: "Admin / Principal", sub: "Direct chat with the admin", icon: "fa-user-tie" }];
+    allMyClasses().forEach((c) => t.push({ key: "class:" + label(c), kind: "chat", channel: "class", className: label(c), title: "Parents · " + label(c), sub: "Your message goes to every parent of this class", icon: "fa-people-roof" }));
+    return t;
+  }
+  const msgsOf = (th) => chat.items.filter((m) => m.channel === th.channel && (th.channel === "admin" || m.className === th.className)).sort((a, b) => a.at - b.at);
+  function threadInfo(th) {
+    if (th.kind === "notices") {
+      const list = prefs.receiveAdmin ? ann.received.slice().sort((a, b) => new Date(b.date) - new Date(a.date)) : [], l = list[0];
+      return { last: l ? l.title : (prefs.receiveAdmin ? "No notices yet" : "Turned off in Profile"), at: l ? new Date(l.date).getTime() : 0, unread: prefs.receiveAdmin ? ann.received.filter((a) => !a.read).length : 0 };
     }
-    view.innerHTML = `<div class="seg two">${[["in", "Received", unread()], ["out", "Sent", 0]].map((x) => `<button class="${ann.tab === x[0] ? "on t" : ""}" data-atab="${x[0]}">${x[1]}${x[2] ? ` <i class="cnt">${x[2]}</i>` : ""}</button>`).join("")}</div>
-      <button class="btn sm msg-send" data-compose="1"><i class="fas fa-paper-plane"></i> Send message</button>
-      <div class="msg-body">${body}</div>`;
+    const list = msgsOf(th), l = list[list.length - 1];
+    return { last: l ? (l.senderType === "TEACHER" ? "You: " : "") + l.body : (th.channel === "admin" ? "Say hello to the admin" : "Write to the parents"), at: l ? l.at : 0, unread: list.filter((m) => m.senderType !== "TEACHER" && !m.read).length };
   }
-  function openNotice(id) {
-    const a = ann.received.find((x) => x.id === id); if (!a) return;
-    a.read = true; store.set("ann_in", ann.received); updateDot();
-    openSheet(`<div class="sheet-head"><div><b>${esc(a.title)}</b><span>${esc(a.from)} · ${new Date(a.date).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</span></div><button class="icon-btn dark" data-close="1" aria-label="Close"><i class="fas fa-xmark"></i></button></div><p class="notice-body">${esc(a.body).replace(/\n/g, "<br>")}</p>`);
-    if (current === "inbox") inbox(); else if (current === "home") home();
+  async function loadChat() {
+    try {
+      const list = await api("/messages?schoolId=" + enc(schoolId) + "&staffId=" + enc(staff.staffId || ""));
+      if (!Array.isArray(list)) return;
+      const localRead = {}; chat.items.forEach((m) => { if (m.read && m.id) localRead[m.id] = 1; });
+      const server = list.map((x) => ({ id: x.id, clientId: x.clientId || "s" + x.id, channel: x.channel, className: x.className || "", senderType: x.senderType, senderName: x.senderName || "", body: x.body, at: Date.parse(x.createdAt) || 0, read: x.senderType === "TEACHER" ? true : (!!x.readByTeacher || !!localRead[x.id]), status: "sent" }));
+      const have = {}; server.forEach((m) => (have[m.clientId] = 1));
+      const pending = chat.items.filter((m) => m.senderType === "TEACHER" && m.status !== "sent" && !have[m.clientId]);
+      chat.items = server.concat(pending); saveChat(); flushChat();
+    } catch (e) { /* offline or endpoint not live — keep the cached copy */ }
+    updateDot();
   }
-  function openCompose() {
-    const mine = allMyClasses();
-    if (!mine.some((c) => label(c) === compose.cls)) compose.cls = mine[0] ? label(mine[0]) : "";
-    openSheet(`<div class="sheet-head"><div><b>Send message</b><span>To admin or the parents of your class</span></div><button class="icon-btn dark" data-close="1" aria-label="Close"><i class="fas fa-xmark"></i></button></div>
-      <div class="field"><label>Send to</label><div class="seg two" id="c-aud"><button class="${compose.audience === "admin" ? "on t" : ""}" data-aud="admin"><i class="fas fa-user-tie"></i> Admin</button><button class="${compose.audience === "parents" ? "on t" : ""}" data-aud="parents"><i class="fas fa-people-roof"></i> Parents</button></div></div>
-      <div class="field" id="c-cls-wrap" ${compose.audience === "parents" ? "" : "hidden"}><label>Class</label>${mine.length ? `<select id="c-cls">${mine.map((c) => `<option ${label(c) === compose.cls ? "selected" : ""}>${esc(label(c))}</option>`).join("")}</select>` : `<p class="hint" style="margin:0">No class is assigned to you yet.</p>`}</div>
-      <div class="field"><label>Title</label><input id="c-title" maxlength="80" placeholder="Subject"></div>
-      <div class="field"><label>Message</label><textarea id="c-body" rows="5" maxlength="1000" placeholder="Write your message…"></textarea></div>
-      <button class="btn" id="c-send"><i class="fas fa-paper-plane"></i> Send</button>`);
+  let chatFlushing = false;
+  async function flushChat() {
+    if (chatFlushing) return; chatFlushing = true;
+    try {
+      for (const m of chat.items.filter((x) => x.senderType === "TEACHER" && x.status === "sending")) {
+        try {
+          const r = await api("/messages", { method: "POST", body: JSON.stringify({ schoolId, staffId: staff.staffId, clientId: m.clientId, channel: m.channel, className: m.className, body: m.body }) });
+          m.status = "sent"; if (r && r.id) m.id = r.id; if (r && r.createdAt) m.at = Date.parse(r.createdAt) || m.at;
+        } catch (e) {
+          if (e.message === "401") return;
+          if (e instanceof TypeError || /^HTTP 5/.test(e.message || "")) break;           // network / server down: stay "sending", retry later
+          m.status = "failed"; m.error = e.message;                                          // refused (limit, not your class…): let the teacher retry
+        }
+      }
+    } finally { chatFlushing = false; saveChat(); if (current === "inbox") inbox(); }
   }
-  function sendMessage() {
-    const title = $("#c-title").value.trim(), body = $("#c-body").value.trim();
-    if (!title || !body) return toast("Add a title and a message.", true);
-    if (compose.audience === "parents" && !compose.cls) return toast("No class assigned — you can't message parents yet.", true);
-    ann.sent.push({ id: uid(), audience: compose.audience, cls: compose.audience === "parents" ? compose.cls : "", priority: "normal", title, body, at: Date.now(), status: "queued" });
-    store.set("ann_out", ann.sent); closeSheet(); toast("Message sent.");
-    if (current === "inbox") { ann.tab = "out"; inbox(); } else if (current === "home") home();
-    syncOutbox().then(() => { if (current === "inbox") inbox(); });
+  function markRead(th) {
+    if (th.kind === "notices") { if (ann.received.some((a) => !a.read)) { ann.received.forEach((a) => (a.read = true)); store.set("ann_in", ann.received); updateDot(); } return; }
+    const un = msgsOf(th).filter((m) => m.senderType !== "TEACHER" && !m.read); if (!un.length) return;
+    un.forEach((m) => (m.read = true)); saveChat(); updateDot();
+    api("/messages/read", { method: "POST", body: JSON.stringify({ schoolId, staffId: staff.staffId, channel: th.channel, className: th.className }) }).catch(() => {});
   }
+  function threadBodyHtml(th) {
+    if (th.kind === "notices") {
+      if (!prefs.receiveAdmin) return empty("fa-bell-slash", "Notices are off", "Turn them back on from Profile → Notifications.");
+      const list = ann.received.slice().sort((a, b) => new Date(b.date) - new Date(a.date));
+      return list.length ? list.map((a) => `<div class="ncard ${a.priority === "urgent" ? "urgent" : ""}"><div class="n-top"><b>${esc(a.title)}</b>${a.priority === "urgent" ? `<span class="pill amber sm"><i class="fas fa-triangle-exclamation"></i> Urgent</span>` : ""}</div><p>${esc(a.body).replace(/\n/g, "<br>")}</p><small>${esc(a.from)} · ${dayLabel(new Date(a.date).getTime())}, ${fmtClock(new Date(a.date).getTime())}</small></div>`).join("")
+        : empty("fa-bullhorn", "No notices yet", "When the admin posts a notice for teachers it will appear here.");
+    }
+    const list = msgsOf(th);
+    if (!list.length) return empty(th.channel === "admin" ? "fa-comments" : "fa-people-roof", "No messages yet", th.channel === "admin" ? "Write below to start a chat with the admin." : "Write below to message the parents of " + esc(th.className) + ". Their replies will appear here once the parent portal is live.");
+    let html = "", last = "";
+    list.forEach((m) => {
+      const dl = dayLabel(m.at); if (dl !== last) { html += `<div class="day-sep"><span>${dl}</span></div>`; last = dl; }
+      const me = m.senderType === "TEACHER", ic = m.status === "sending" ? "fa-clock" : m.status === "failed" ? "fa-circle-exclamation" : "fa-check";
+      html += `<div class="bub ${me ? "me" : "them"} ${m.status === "failed" ? "failed" : ""}" ${m.status === "failed" ? `data-retry="${esc(m.clientId)}"` : ""}>${me ? "" : `<small class="who">${esc(m.senderName || (m.senderType === "ADMIN" ? "Admin" : "Parent"))}</small>`}<p>${esc(m.body).replace(/\n/g, "<br>")}</p><span class="meta">${fmtClock(m.at)}${me ? ` <i class="fas ${ic}"></i>` : ""}${m.status === "failed" ? " · " + esc(m.error || "Not sent") + " · tap to retry" : ""}</span></div>`;
+    });
+    return html;
+  }
+  function inbox() {
+    const th = chat.thread && threadList().find((t) => t.key === chat.thread);
+    if (!th) {
+      chat.thread = null; view.classList.remove("chat-mode");
+      const rows = threadList().map((t) => Object.assign({ th: t }, threadInfo(t)));
+      view.innerHTML = `<div class="thr-list">${rows.map((x) => `<button class="thr" data-thread="${esc(x.th.key)}"><div class="thr-ic ${x.th.kind}"><i class="fas ${x.th.icon}"></i></div><div class="thr-tx"><b>${esc(x.th.title)}</b><span>${esc(x.last)}</span></div><div class="thr-r"><small>${x.at ? fmtWhen(x.at) : ""}</small>${x.unread ? `<i class="cnt">${x.unread > 99 ? "99+" : x.unread}</i>` : ""}</div></button>`).join("")}</div>
+        ${allMyClasses().length ? "" : `<p class="hint" style="margin:10px 4px"><i class="fas fa-circle-info"></i> Parent channels appear here once the admin assigns you a class.</p>`}`;
+      return;
+    }
+    view.classList.add("chat-mode");
+    const body = $("#chat-body");
+    if (body && body.dataset.key === th.key && view.contains(body)) {           // already open: refresh the bubbles only (keeps the keyboard and draft)
+      const near = body.scrollHeight - body.scrollTop - body.clientHeight < 90, top = body.scrollTop;
+      body.innerHTML = threadBodyHtml(th); body.scrollTop = near && th.kind === "chat" ? body.scrollHeight : top;
+      markRead(th); return;
+    }
+    view.innerHTML = `<div class="chat-wrap"><div class="chat-head"><button class="back-ic" data-chatback="1" aria-label="Back"><i class="fas fa-arrow-left"></i></button><div class="thr-ic ${th.kind}"><i class="fas ${th.icon}"></i></div><div class="ch-t"><b>${esc(th.title)}</b><span>${esc(th.sub)}</span></div></div>
+      <div class="chat-body" id="chat-body" data-key="${esc(th.key)}">${threadBodyHtml(th)}</div>
+      ${th.kind === "chat" ? `<div class="composer"><textarea id="chat-in" rows="1" maxlength="1000" placeholder="Message…">${esc(chat.draft[th.key] || "")}</textarea><button class="send" id="chat-send" aria-label="Send"><i class="fas fa-paper-plane"></i></button></div>` : `<div class="chat-note">Only the admin can post notices.</div>`}</div>`;
+    const b = $("#chat-body"); if (b) b.scrollTop = th.kind === "chat" ? b.scrollHeight : 0;
+    const ta = $("#chat-in"); if (ta) autoGrow(ta);
+    markRead(th);
+  }
+  function autoGrow(ta) { ta.style.height = "auto"; ta.style.height = Math.min(ta.scrollHeight, 120) + "px"; }
+  function sendChat() {
+    const th = threadList().find((t) => t.key === chat.thread), ta = $("#chat-in");
+    if (!th || th.kind !== "chat" || !ta) return;
+    const body = ta.value.trim(); if (!body) return;
+    chat.items.push({ id: null, clientId: uid(), channel: th.channel, className: th.className || "", senderType: "TEACHER", senderName: staff.name || "", body, at: Date.now(), read: true, status: "sending" });
+    chat.draft[th.key] = ""; ta.value = ""; autoGrow(ta); saveChat(); inbox(); flushChat();
+  }
+
+  /* ── DIARY: class → subject → pictures → sent to the class's parents ── */
+  const dz = { cls: "", subject: "", note: "", files: [], sending: false, list: store.get("diary", []), loaded: false, blobs: {} };
+  async function apiForm(path, fd) {
+    const res = await fetch(API + path, { method: "POST", headers: { Authorization: "Bearer " + session.token }, body: fd });
+    if (res.status === 401) { auth.clearSession(); location.replace("index.html"); throw new Error("401"); }
+    if (!res.ok) { const t = await res.text().catch(() => ""); let m = t; try { m = JSON.parse(t).error || t; } catch (e) { /* plain */ } throw new Error(m || "HTTP " + res.status); }
+    return res.json().catch(() => ({}));
+  }
+  async function loadDiary() {
+    try {
+      const list = await api("/diary?schoolId=" + enc(schoolId) + "&staffId=" + enc(staff.staffId || ""));
+      if (Array.isArray(list)) { dz.list = list; store.set("diary", list.slice(0, 40)); }
+    } catch (e) { /* offline: show cached */ }
+    dz.loaded = true;
+  }
+  function compressImage(file) {
+    return new Promise((res, rej) => {
+      const img = new Image(), url = URL.createObjectURL(file);
+      img.onload = () => {
+        const max = 1400, k = Math.min(1, max / Math.max(img.width, img.height)), w = Math.round(img.width * k), h = Math.round(img.height * k), c = document.createElement("canvas");
+        c.width = w; c.height = h; c.getContext("2d").drawImage(img, 0, 0, w, h); URL.revokeObjectURL(url);
+        c.toBlob((b) => (b ? res(b) : rej(new Error("Could not read that picture"))), "image/jpeg", 0.82);
+      };
+      img.onerror = () => { URL.revokeObjectURL(url); rej(new Error("That file isn't a picture")); };
+      img.src = url;
+    });
+  }
+  async function addPhotos(fileList) {
+    const room = 6 - dz.files.length; if (room <= 0) return toast("You can send up to 6 pictures.", true);
+    const picked = Array.prototype.slice.call(fileList).slice(0, room);
+    if (fileList.length > room) toast("Only 6 pictures per diary — extra ones skipped.", true);
+    for (const f of picked) { try { const b = await compressImage(f); dz.files.push({ blob: b, url: URL.createObjectURL(b) }); } catch (e) { toast(e.message, true); } }
+    if (current === "diary") diary();
+  }
+  async function sendDiary() {
+    if (dz.sending) return;
+    if (!dz.cls || !dz.subject) return toast("Choose the class and subject first.", true);
+    if (!dz.files.length) return toast("Add at least one picture.", true);
+    dz.sending = true; diary();
+    try {
+      const fd = new FormData();
+      fd.append("schoolId", schoolId); fd.append("className", dz.cls); fd.append("subject", dz.subject); fd.append("note", dz.note.trim()); fd.append("date", today());
+      dz.files.forEach((f, i) => fd.append("images", f.blob, "diary" + (i + 1) + ".jpg"));
+      await apiForm("/diary", fd);
+      dz.files.forEach((f) => URL.revokeObjectURL(f.url));
+      const cls = dz.cls; dz.files = []; dz.note = ""; dz.subject = "";
+      toast("Diary sent to the parents of " + cls); await loadDiary();
+    } catch (e) { if (e.message !== "401") toast(e.message || "Could not send. Check your connection and try again.", true); }
+    dz.sending = false; if (current === "diary") diary();
+  }
+  function diary() {
+    const mc = allMyClasses(), subs = subjects();
+    if (!mc.length) { view.innerHTML = empty("fa-book-open", "No classes yet", "Your admin hasn't assigned classes to you."); return; }
+    if (!dz.cls || !mc.some((c) => label(c) === dz.cls)) { dz.cls = mc.length === 1 ? label(mc[0]) : ""; }
+    const ready = dz.cls && dz.subject;
+    const step = (n, done, title, inner) => `<div class="card dstep"><h2><span class="sn2 ${done ? "ok" : ""}">${done ? '<i class="fas fa-check"></i>' : n}</span> ${title}</h2>${inner}</div>`;
+    view.innerHTML = `
+      ${step(1, !!dz.cls, "Class", `<div class="chips wrap" style="margin:0">${mc.map((c) => `<button class="chip ${label(c) === dz.cls ? "on" : ""}" data-dcls="${esc(label(c))}">${esc(label(c))}</button>`).join("")}</div>`)}
+      ${dz.cls ? step(2, !!dz.subject, "Subject", subs.length ? `<div class="chips wrap" style="margin:0">${subs.map((s) => `<button class="chip ${s === dz.subject ? "on" : ""}" data-dsub="${esc(s)}">${esc(s)}</button>`).join("")}</div>` : `<div class="field" style="margin:0"><input id="d-subj" maxlength="40" placeholder="Type the subject" value="${esc(dz.subject)}"></div>`) : ""}
+      ${ready ? step(3, dz.files.length > 0, "Diary pictures", `
+        <div class="thumbs">${dz.files.map((f, i) => `<div class="th"><img src="${f.url}" alt=""><button data-drm="${i}" aria-label="Remove"><i class="fas fa-xmark"></i></button></div>`).join("")}
+          ${dz.files.length < 6 ? `<label class="th add"><input type="file" id="d-cam" accept="image/*" capture="environment" hidden><i class="fas fa-camera"></i><span>Camera</span></label><label class="th add"><input type="file" id="d-files" accept="image/*" multiple hidden><i class="fas fa-image"></i><span>Gallery</span></label>` : ""}</div>
+        <div class="field" style="margin:12px 0 0"><label>Note for parents (optional)</label><textarea id="d-note" rows="2" maxlength="500" placeholder="e.g. Learn Q1–Q5 for tomorrow">${esc(dz.note)}</textarea></div>
+        <button class="btn" id="d-send" style="margin-top:12px" ${dz.sending || !dz.files.length ? "disabled" : ""}>${dz.sending ? '<i class="fas fa-spinner fa-spin"></i> Sending…' : '<i class="fas fa-paper-plane"></i> Send to parents of ' + esc(dz.cls)}</button>`) : ""}
+      <div class="section-title" style="margin-top:18px">Sent diary</div>
+      ${dz.list.length ? dz.list.map((d) => `<div class="card dentry"><div class="de-top"><div><b>${esc(d.subject)}</b><span>${esc(d.className)} · ${esc(d.date || "")}</span></div><button class="icon-btn dark sm" data-ddel="${d.id}" aria-label="Delete"><i class="fas fa-trash"></i></button></div>
+        ${d.note ? `<p>${esc(d.note)}</p>` : ""}<div class="thumbs sm">${Array.from({ length: d.imageCount || 0 }, (_, i) => `<img data-dimg="${d.id}:${i}" alt="" class="dimg">`).join("")}</div></div>`).join("")
+        : `<p class="hint" style="margin:0 4px">Nothing sent yet.</p>`}`;
+    hydrateThumbs();
+  }
+  async function diaryBlob(key) {
+    if (dz.blobs[key]) return dz.blobs[key];
+    const [id, idx] = key.split(":");
+    const res = await fetch(API + "/diary/" + id + "/image/" + idx + "?schoolId=" + enc(schoolId), { headers: { Authorization: "Bearer " + session.token } });
+    if (!res.ok) throw new Error("img"); return (dz.blobs[key] = URL.createObjectURL(await res.blob()));
+  }
+  function hydrateThumbs() { view.querySelectorAll("img[data-dimg]").forEach((im) => { diaryBlob(im.dataset.dimg).then((u) => (im.src = u)).catch(() => im.classList.add("broken")); }); }
 
   /* ── PROFILE + TEACHER ID CARD ── */
   function profile() {
@@ -614,25 +766,29 @@
 
 
   /* ── Navigation ── */
-  const TITLES = { home: "Home", classes: "My Classes", attendance: "Attendance", quizzes: "Tests & Quizzes", inbox: "Messages", profile: "My Profile" };
-  const VIEWS = { home, classes, attendance, quizzes, inbox, profile };
+  const TITLES = { home: "Home", classes: "My Classes", attendance: "Attendance", diary: "Diary", quizzes: "Tests & Quizzes", inbox: "Messages", profile: "My Profile" };
+  const VIEWS = { home, classes, attendance, diary, quizzes, inbox, profile };
   let current = "home";
   function go(tab) {
     if (current === "quizzes" && tab !== "quizzes" && quizView === "build") harvest();
     current = tab;
     document.querySelectorAll(".tab").forEach((t) => t.classList.toggle("active", t.dataset.tab === tab));
-    $("#btn-inbox").classList.toggle("on", tab === "inbox");
+    $("#btn-profile").classList.toggle("on", tab === "profile");
+    view.classList.remove("chat-mode");
     $("#page-title").textContent = TITLES[tab];
     view.scrollTop = 0; view.style.animation = "none"; void view.offsetWidth; view.style.animation = "";
     VIEWS[tab]();
-    if (["home", "classes", "quizzes"].includes(tab) && !att.students && !att.loading) ensureStudents().then(() => current === tab && VIEWS[tab]());
+    if (tab === "diary" && !dz.loaded) loadDiary().then(() => current === "diary" && diary());
+    if (["home", "classes", "quizzes", "diary"].includes(tab) && !att.students && !att.loading) ensureStudents().then(() => current === tab && VIEWS[tab]());
   }
-  document.querySelectorAll(".tab").forEach((t) => t.addEventListener("click", () => { if (t.dataset.tab === "quizzes") quizView = "list"; go(t.dataset.tab); }));
-  $("#btn-inbox").addEventListener("click", () => go("inbox"));
+  document.querySelectorAll(".tab").forEach((t) => t.addEventListener("click", () => { if (t.dataset.tab === "quizzes") quizView = "list"; if (t.dataset.tab === "inbox") chat.thread = null; if (t.dataset.tab === "classes") classOpen = null; go(t.dataset.tab); }));
+  $("#btn-profile").addEventListener("click", () => go("profile"));
 
   view.addEventListener("click", (e) => {
-    const nt = e.target.closest("[data-notice]"); if (nt) return openNotice(nt.dataset.notice);
+    const th = e.target.closest("[data-thread]"); if (th) { chat.thread = th.dataset.thread; return current === "inbox" ? inbox() : go("inbox"); }
+    const rt = e.target.closest("[data-retry]"); if (rt) { const m = chat.items.find((x) => x.clientId === rt.dataset.retry); if (m) { m.status = "sending"; m.error = ""; saveChat(); inbox(); flushChat(); } return; }
     const tt = e.target.closest("[data-test]"); if (tt && !e.target.closest("button[data-go]")) { openTest = tt.dataset.test; quizView = "detail"; return go("quizzes"); }
+    const im = e.target.closest("img[data-dimg]"); if (im && im.src) { openSheet(`<div class="sheet-head"><div><b>Diary picture</b></div><button class="icon-btn dark" data-close="1" aria-label="Close"><i class="fas fa-xmark"></i></button></div><img src="${im.src}" alt="" class="fullimg">`, "tall"); return; }
     const t = e.target.closest("button"); if (!t) return;
     const d = t.dataset;
     if (d.go) return go(d.go);
@@ -640,7 +796,7 @@
     if (d.newtest) { go("quizzes"); return startBuild(); }
     if (d.cls) { att.cls = +d.cls; return attendance(); }
     if (d.set) { att.marks[t.closest(".stu").dataset.id] = d.set; t.parentElement.querySelectorAll("button").forEach((b) => b.classList.toggle("on", b === t)); return refreshAttBar(); }
-    if (d.bulk) { classStudents().forEach((s) => (att.marks[s.regNo] = d.bulk)); return attendance(); }
+    if (d.bulk) { unsaved(classStudents()).forEach((s) => (att.marks[s.regNo] = d.bulk)); return attendance(); }
     if (d.pw) { pwOpen = true; return profile(); }
     if (t.id === "pw-save") return changePassword();
     if (t.id === "save-att") return saveAttendance();
@@ -653,29 +809,43 @@
     if (t.id === "save-test") return saveBuilt();
     if (d.csv) return exportCsv(tests.find((x) => x.id === d.csv));
     if (d.deltest) { if (confirm("Delete this test and all its marks?")) { tests = tests.filter((x) => x.id !== d.deltest); saveTests(); pendingPut = pendingPut.filter((x) => x !== d.deltest); pendingDel.push(d.deltest); savePending(); flushTests(); quizView = "list"; quizzes(); toast("Deleted."); } return; }
-    /* notices */
-    if (d.atab) { ann.tab = d.atab; return inbox(); }
-    if (d.compose) return openCompose();
+    /* messages */
+    if (d.chatback != null) { chat.thread = null; return inbox(); }
+    if (t.id === "chat-send") return sendChat();
+    /* classes */
+    if (d.openclass != null) { classOpen = +d.openclass; return classes(); }
+    if (d.classback != null) { classOpen = null; return classes(); }
+    /* diary */
+    if (d.dcls != null) { dz.cls = d.dcls; dz.subject = ""; return diary(); }
+    if (d.dsub != null) { dz.subject = d.dsub; return diary(); }
+    if (d.drm != null) { const f = dz.files.splice(+d.drm, 1)[0]; if (f) URL.revokeObjectURL(f.url); return diary(); }
+    if (t.id === "d-send") return sendDiary();
+    if (d.ddel != null) { if (confirm("Delete this diary entry? Parents will no longer see it.")) { const id = d.ddel; api("/diary/" + enc(id) + "?schoolId=" + enc(schoolId), { method: "DELETE" }).then(() => { dz.list = dz.list.filter((x) => String(x.id) !== String(id)); store.set("diary", dz.list.slice(0, 40)); if (current === "diary") diary(); toast("Deleted."); }).catch((e) => e.message !== "401" && toast(e.message || "Could not delete.", true)); } return; }
     /* home to-do */
     if (t.id === "todo-add") return addTodo();
     if (d.deltodo != null) { const l = store.get("todos", []); l.splice(+d.deltodo, 1); store.set("todos", l); return home(); }
   });
   function addTodo() { const i = $("#todo-in"), v = i.value.trim(); if (!v) return; const l = store.get("todos", []); l.push({ text: v, done: false }); store.set("todos", l.slice(-20)); home(); }
-  view.addEventListener("keydown", (e) => { if (e.key === "Enter" && e.target.id === "todo-in") addTodo(); });
+  view.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && e.target.id === "todo-in") addTodo();
+    if (e.key === "Enter" && (e.ctrlKey || e.metaKey) && e.target.id === "chat-in") { e.preventDefault(); sendChat(); }
+  });
+  view.addEventListener("input", (e) => {
+    const t = e.target;
+    if (t.id === "chat-in") { chat.draft[chat.thread] = t.value; autoGrow(t); }
+    else if (t.id === "d-note") dz.note = t.value;
+    else if (t.id === "d-subj") { dz.subject = t.value.trim(); const b = $("#d-send"); }
+    else if (t.id === "class-q") { const q = t.value.trim().toLowerCase(); view.querySelectorAll(".srow").forEach((r) => (r.hidden = !!q && r.dataset.q.indexOf(q) < 0)); }
+  });
+  view.addEventListener("focusout", (e) => { if (e.target.id === "d-subj" && current === "diary") diary(); });
   view.addEventListener("change", (e) => {
     const t = e.target;
     if (t.dataset.todo != null) { const l = store.get("todos", []); if (l[+t.dataset.todo]) l[+t.dataset.todo].done = t.checked; store.set("todos", l); return home(); }
+    if (t.id === "d-files" || t.id === "d-cam") { const fl = t.files; if (fl && fl.length) addPhotos(fl); t.value = ""; return; }
     if (t.id === "pref-admin") { prefs.receiveAdmin = t.checked; store.set("prefs", prefs); updateDot(); toast(t.checked ? "Admin messages on." : "Admin messages off."); }
   });
-  $("#sheet-body").addEventListener("change", (e) => { if (e.target.id === "c-cls") compose.cls = e.target.value; });
   $("#sheet-body").addEventListener("click", (e) => {
     const b = e.target.closest("button"); if (!b) return;
-    if (b.dataset.aud) {
-      compose.audience = b.dataset.aud;
-      b.parentElement.querySelectorAll("button").forEach((x) => x.classList.toggle("on", x === b)); b.parentElement.querySelectorAll("button").forEach((x) => x.classList.toggle("t", x === b));
-      const w = $("#c-cls-wrap"); if (w) w.hidden = compose.audience !== "parents"; return;
-    }
-    if (b.id === "c-send") return sendMessage();
     if (b.id === "card-print") return cardPrint();
     if (b.id === "card-share") return cardShare();
     if (b.id === "card-dl") return cardDownload();
@@ -697,20 +867,23 @@
   loadSchoolInfo().then(() => { if (current === "home" || current === "profile") VIEWS[current](); });
   if (inchargeClasses().length) loadAttendanceData().then(() => current === "home" && home());
   loadTests().then(() => { if (current === "quizzes" && quizView === "list") quizzes(); else if (current === "home") home(); });
-  loadAnnouncements().then(() => { syncOutbox(); if (current === "home") home(); else if (current === "inbox") inbox(); });
+  loadAnnouncements().then(() => { if (current === "home") home(); else if (current === "inbox") inbox(); });
+  loadChat().then(() => { if (current === "home") home(); else if (current === "inbox") inbox(); });
 
   /* ── Live sync: no reload button. Data re-syncs automatically every few seconds, when the app
         comes back to the foreground or the network returns, and the screen updates only if something
         actually changed — and never while the teacher is typing, marking or has a sheet open. ── */
   const LIVE_MS = 8000;
   let syncing = false, stale = false;
-  const liveSig = () => JSON.stringify([ann.received.map((a) => [a.id, a.title, a.body, a.date]), ann.sent.map((m) => [m.id, m.status]), att.saved, att.students ? att.students.length : -1, tests.map((t) => [t.id, t.marked, Object.keys(t.results || {}).length]), school.name, school.logo ? school.logo.length : 0]);
+  const liveSig = () => JSON.stringify([ann.received.map((a) => [a.id, a.title, a.body, a.date]), chat.items.map((m) => [m.id, m.status, m.read]), dz.list.map((d) => d.id), att.saved, att.students ? att.students.length : -1, tests.map((t) => [t.id, t.marked, Object.keys(t.results || {}).length]), school.name, school.logo ? school.logo.length : 0]);
   function userBusy() {
     const a = document.activeElement;
     if (!$("#sheet").hidden) return true;
+    if (current === "inbox" && chat.thread) return false;
     if (a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName) && (view.contains(a))) return true;
     if (current === "quizzes" && quizView !== "list") return true;
-    if (current === "profile") return true;
+    if (current === "profile" || current === "diary") return true;
+    if (current === "inbox" && chat.thread) return false;                 // thread updates in place, never steals the keyboard
     if (current === "attendance" && Object.keys(att.marks).length) return true;
     return false;
   }
@@ -721,7 +894,7 @@
     const before = liveSig();
     try {
       await flushAttendance();
-      await Promise.all([att.students || inchargeClasses().length ? loadAttendanceData(true) : null, loadAnnouncements(), syncOutbox(), loadTests(), loadSchoolInfo()]);
+      await Promise.all([att.students || inchargeClasses().length ? loadAttendanceData(true) : null, loadAnnouncements(), loadChat(), loadTests(), loadSchoolInfo()]);
     } catch (e) { /* retried on the next tick */ }
     syncing = false;
     if (liveSig() !== before) stale = true;
