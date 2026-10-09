@@ -3869,6 +3869,18 @@
     z-index: 10;
     letter-spacing: 8px;
     text-transform: uppercase;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    line-height: 1.1;
+    white-space: nowrap;
+}
+.paid-stamp-overlay .paid-stamp-date {
+    margin-top: 8px;
+    font-size: 1.15rem;
+    font-weight: 800;
+    letter-spacing: 2px;
+    color: rgba(22, 163, 74, 0.55);
 }
 .voucher-sheet {
     position: relative;
@@ -8201,6 +8213,7 @@ input[type="date"]::-webkit-calendar-picker-indicator {
         padding: 8px 20px;
         letter-spacing: 4px;
     }
+    .paid-stamp-overlay .paid-stamp-date { font-size: 0.8rem; letter-spacing: 1px; margin-top: 4px; }
 
     /* ======================= FULL-SCREEN FINE RECORD PAGE ======================= */
     #fine-full-record-page {
@@ -8340,4 +8353,60 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 .stats-header-section,
 [data-theme="dark"] .stats-header-section {
     position: relative !important;
+}
+
+
+/* ============================================================================
+   CLASS CARDS — identical to the Attendance page's class cards
+   (copied from attendance.css: .classes-grid / .class-card). The Finance-only
+   voucher-status dot (.class-status-badge) sits on top of the card.
+   ============================================================================ */
+.classes-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 230px), 1fr));
+    gap: clamp(12px, 2vw, 20px);
+    margin-top: 20px;
+}
+.class-card {
+    background: var(--bg-card); border: 1px solid var(--border-subtle);
+    border-radius: 16px; padding: 26px 24px; cursor: pointer;
+    min-height: 130px; justify-content: center;
+    transition: border-color 0.25s ease, box-shadow 0.25s ease, transform 0.25s ease;
+    color: var(--text-primary);
+    display: flex; flex-direction: column; gap: 8px;
+    position: relative; overflow: hidden;
+}
+.class-card::before {
+    content: '';
+    position: absolute; top: 0; left: 0; right: 0; height: 2px;
+    background: #3b82f6;
+    transform: scaleX(0); transform-origin: left center;
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.class-card:hover::before { transform: scaleX(1); }
+.class-card:hover {
+    transform: translateY(-3px);
+    border-color: rgba(59,130,246,0.35);
+    box-shadow: 0 12px 32px -8px rgba(59,130,246,0.18);
+}
+.class-card .class-name { font-size: 18px; font-weight: 700; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.class-card .class-meta { font-size: 13px; color: var(--text-secondary); }
+.class-card .class-count { margin-top: 10px; font-size: 13px; color: var(--indigo-light, #818cf8); font-weight: 600; }
+
+@media (max-width: 640px) {
+    .classes-grid { grid-template-columns: 1fr 1fr; gap: 10px; }
+    .class-card { padding: 18px 14px; min-height: 104px; }
+    .class-card .class-name { font-size: 16px; }
+}
+@media (max-width: 380px) {
+    .classes-grid { grid-template-columns: 1fr; }
+}
+
+/* Class · section tag under the student name in the All Classes list */
+.fee-class-tag {
+    display: inline-block;
+    margin-top: 2px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: var(--text-secondary);
 }

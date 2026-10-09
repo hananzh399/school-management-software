@@ -2626,10 +2626,10 @@ function updateClassFeeStats(className) {
     let totalGenerated = 0;
     try {
         const billableIds = new Set(getAllStudentsForFinanceTotals()
-            .filter(s => s.studentClass === className)
+            .filter(s => feeClassMatches(s, className))
             .map(s => String(s.regNo || s.id || '')));
         totalGenerated = getGeneratedVouchers()
-            .filter(r => r.monthKey === monthKey && r.studentClass === className
+            .filter(r => r.monthKey === monthKey && (isAllFeeClasses(className) || r.studentClass === className)
                 && billableIds.has(String(r.studentId)))
             .reduce((sum, r) => {
                 const snap = r.snapshot || {};
@@ -2642,7 +2642,7 @@ function updateClassFeeStats(className) {
     let totalCollected = 0;
     try {
         const students = getAllStudentsForFinanceTotals()
-            .filter(s => s.studentClass === className);
+            .filter(s => feeClassMatches(s, className));
         // See updateFeeStatsHeader() / _computeCollectedThisPeriod's own
         // docs — counts real cash received this billing period, including a
         // defaulter paying off an older month's bill from the Fee
@@ -2653,7 +2653,7 @@ function updateClassFeeStats(className) {
     let totalPending = 0;
     try {
         const classStudents = getAllStudentsForFinanceTotals()
-            .filter(s => s.studentClass === className);
+            .filter(s => feeClassMatches(s, className));
         totalPending = _computeRealtimePendingTotal(classStudents);
     } catch (e) { totalPending = 0; }
 
@@ -2721,19 +2721,36 @@ function renderClassCardGrid() {
         return;
     }
 
-    grid.innerHTML = classes.map((cls, i) => {
-        const name        = (cls.name || 'Class ' + (i + 1)).trim();
-        const colorClass  = _CLASS_CARD_COLORS[i % _CLASS_CARD_COLORS.length];
-        const iconHTML    = _classCardIcon(name, i);
-        const label       = _classDisplayLabel(name);
-        // Escape name for inline onclick attribute
-        const safeName    = name.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-        const badge       = _classVoucherBadgeHTML(name);
-        return `<div class="class-selector-card ${colorClass}" onclick="selectClassForFees('${safeName}')">
+    // Cards use the exact same markup as the Attendance page's class cards
+    // (.class-card / .class-name / .class-meta / .class-count). The voucher
+    // generation status dot is kept on top, since that's Finance-specific.
+    const billableAll = getRealStudents().filter(isStudentBillable);
+    const classCardHTML = (name, label, sectionsText, count, badge, onclickName) => {
+        const safeName = onclickName.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+        return `<div class="class-card" onclick="selectClassForFees('${safeName}')">
                     ${badge}
-                    <div class="c-icon">${iconHTML}</div>
-                    <h4>${label}</h4>
+                    <div class="class-name">${escapeHtml(label)}</div>
+                    <div class="class-meta">Sections: ${escapeHtml(sectionsText)}</div>
+                    <div class="class-count"><i class="fas fa-users"></i> ${count} students</div>
                 </div>`;
+    };
+
+    const allSectionsCount = new Set(billableAll.map(s => s.section).filter(Boolean)).size;
+    const allCard = classCardHTML(
+        ALL_FEE_CLASSES_KEY,
+        'All Classes',
+        `${classes.length} classes` + (allSectionsCount ? ` · ${allSectionsCount} sections` : ''),
+        billableAll.length,
+        _classVoucherBadgeHTML(ALL_FEE_CLASSES_KEY),
+        ALL_FEE_CLASSES_KEY
+    );
+
+    grid.innerHTML = allCard + classes.map((cls, i) => {
+        const name     = (cls.name || 'Class ' + (i + 1)).trim();
+        const label    = _classDisplayLabel(name);
+        const sections = String(cls.sections || '').split(',').map(x => x.trim()).filter(Boolean);
+        const count    = billableAll.filter(s => s.studentClass === name).length;
+        return classCardHTML(name, label, sections.length ? sections.join(', ') : 'A', count, _classVoucherBadgeHTML(name), name);
     }).join('');
 }
 
@@ -2741,6 +2758,17 @@ function renderClassCardGrid() {
  * Switcher function for Finance Modules
  */
 let currentFeeClassName = null;
+
+// Special "class" value for the All Classes card: shows every active student
+// in one list. Everything that scopes by class goes through feeClassMatches().
+const ALL_FEE_CLASSES_KEY = '__ALL_CLASSES__';
+function isAllFeeClasses(className) { return className === ALL_FEE_CLASSES_KEY; }
+function feeClassMatches(student, className) {
+    return isAllFeeClasses(className) || student.studentClass === className;
+}
+function feeClassTitle(className) {
+    return isAllFeeClasses(className) ? 'All Classes' : className;
+}
 
 function selectClassForFees(className) {
     // 1. Toggle UI Views
@@ -2757,7 +2785,7 @@ function selectClassForFees(className) {
     if (statsHeader) statsHeader.style.display = 'none';
 
     // 2. Set Title
-    document.getElementById('selected-class-title').innerText = `Fee Records: ${className}`;
+    document.getElementById('selected-class-title').innerText = `Fee Records: ${feeClassTitle(className)}`;
     currentFeeClassName = className;
     
     // 3. Render Students
@@ -2883,7 +2911,7 @@ async function viewVoucher(studentId, fullName, isPaidBill = false) {
                 html = `
                     <div style="position:relative;">
                         ${html}
-                        <div class="paid-stamp-overlay">PAID</div>
+                        ${buildPaidStampHTML(_familyPaidDateLabel(familyGroup, monthKey))}
                     </div>`;
             }
 
@@ -2944,7 +2972,7 @@ async function viewVoucher(studentId, fullName, isPaidBill = false) {
             html = `
                 <div style="position:relative;">
                     ${html}
-                    <div class="paid-stamp-overlay">PAID</div>
+                    ${buildPaidStampHTML(getFeePaidDateLabel(student, monthKey))}
                 </div>`;
         }
 
@@ -4123,21 +4151,37 @@ async function renderFees(className) {
     // up as rows in the Fees table (just with an "Inactive"-style badge
     // instead of action buttons). They should not appear here at all —
     // this table is specifically for billing active students.
-    const filtered = students.filter(s => s.studentClass === className).filter(isStudentBillable);
+    const filtered = students.filter(s => feeClassMatches(s, className)).filter(isStudentBillable);
+    const isAllView = isAllFeeClasses(className);
 
     if(filtered.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; padding:40px;">No active students found enrolled in <strong>${className}</strong>.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; padding:40px;">No active students found enrolled in <strong>${escapeHtml(feeClassTitle(className))}</strong>.</td></tr>`;
         return;
     }
 
     let rowsHtml = "";
 
-    // Loop through filtered students and fetch fresh backend status for each
-    for (const s of filtered) {
+    // Fetch every student's fresh backend status in small parallel batches
+    // (one at a time was fine for a single class but far too slow for the
+    // All Classes list). Rows are still rendered in the original order.
+    const financeResults = new Array(filtered.length);
+    const BATCH = 8;
+    for (let i = 0; i < filtered.length; i += BATCH) {
+        await Promise.all(filtered.slice(i, i + BATCH).map(async (st, j) => {
+            try { financeResults[i + j] = { ok: true, value: await getFeeRowFinance(st, monthKey) }; }
+            catch (err) { financeResults[i + j] = { ok: false, error: err }; }
+        }));
+    }
+
+    // Loop through filtered students and render each with its fetched status
+    for (let idx = 0; idx < filtered.length; idx++) {
+        const s = filtered[idx];
         const studentIdentifier = s.regNo || s.id;
 
         try {
-            const finance = await getFeeRowFinance(s, monthKey);
+            const res = financeResults[idx];
+            if (!res || !res.ok) throw (res && res.error) || new Error('Failed to load fee record');
+            const finance = res.value;
 
             const isPaid = finance.paymentStatus === "Paid";
             const hasUnpaidFine = finance.fineAmount > 0 && !isMonthlyFeePaid(finance);
@@ -4172,6 +4216,7 @@ async function renderFees(className) {
                     <td><span class="hrk-id-badge">${finance.regNo}</span></td>
                     <td>
                         <strong>${finance.studentName}</strong>
+                        ${isAllView ? `<br><span class="fee-class-tag">${escapeHtml(_classDisplayLabel(s.studentClass || ''))}${s.section ? ' · ' + escapeHtml(s.section) : ''}</span>` : ''}
                         ${hasUnpaidFine ? `<br><span style="font-size:0.72rem;color:#dc2626;font-weight:700;"><i class="fas fa-exclamation-triangle"></i> Unpaid Fine: Rs. ${finance.fineAmount}</span>` : ''}
                     </td>
                     <td>${finance.guardianName || '-'}</td>
@@ -4481,6 +4526,15 @@ async function openAddFeesModal(studentId, fullName) {
     const notesInput = document.getElementById('af-fee-notes');
     if(notesInput) notesInput.value = '';
 
+    // Payment date defaults to today; the admin can pick an earlier day
+    // (e.g. a fee received yesterday) but not a future one.
+    const dateInput = document.getElementById('afm-pay-date');
+    if (dateInput) {
+        const todayIso = _todayIsoDate();
+        dateInput.value = todayIso;
+        dateInput.max = todayIso;
+    }
+
     // Show the modal immediately with whatever is already known locally
     // (instant feedback, no blank/loading flash) ...
     renderAddFeesModal(student);
@@ -4653,6 +4707,64 @@ async function autoSettleFinesIfFullyPaid(student, monthKey) {
     }
 }
 
+/** Today as yyyy-MM-dd in the browser's local timezone (for <input type="date">). */
+function _todayIsoDate() {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+/** yyyy-MM-dd -> a Date at local noon (avoids UTC parsing shifting the day). */
+function _isoDateToLocalDate(iso) {
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso || '');
+    return m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]), 12, 0, 0) : null;
+}
+
+function _formatPaidDate(d) {
+    return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+}
+
+/**
+ * The date a student's monthly fee was last paid, formatted for the PAID
+ * voucher. Prefers the persisted backend ledger (payDate, then
+ * lastTransactionDate for rows paid before payment dates existed), then the
+ * newest local payment for the month. Returns '' when nothing is known so
+ * the stamp simply shows PAID as before.
+ */
+function getFeePaidDateLabel(student, monthKey) {
+    if (!student) return '';
+    const studentId = student.regNo || student.id;
+    const rec = (_studentFeeStatusMonthKey === monthKey) ? _studentFeeStatusCache[studentId] : null;
+    if (rec) {
+        if (rec.payDate) return String(rec.payDate);
+        if (rec.lastTransactionDate) {
+            const d = new Date(rec.lastTransactionDate);
+            if (!isNaN(d.getTime())) return _formatPaidDate(d);
+        }
+    }
+    const pays = (Array.isArray(student.feePayments) ? student.feePayments : [])
+        .filter(p => p.monthKey === monthKey && p.method !== 'discount' && p.date)
+        .map(p => new Date(p.date))
+        .filter(d => !isNaN(d.getTime()))
+        .sort((a, b) => b - a);
+    return pays.length ? _formatPaidDate(pays[0]) : '';
+}
+
+/** For a combined Family Voucher: the most recent payment date among the siblings. */
+function _familyPaidDateLabel(group, monthKey) {
+    const labels = (group || []).map(st => getFeePaidDateLabel(st, monthKey)).filter(Boolean);
+    if (!labels.length) return '';
+    const parsed = labels.map(l => ({ l, t: Date.parse(l) })).filter(x => !isNaN(x.t)).sort((a, b) => b.t - a.t);
+    return parsed.length ? parsed[0].l : labels[0];
+}
+
+/** PAID stamp markup, with "Paid on <date>" underneath when the date is known. */
+function buildPaidStampHTML(dateLabel) {
+    const dateLine = dateLabel
+        ? `<span class="paid-stamp-date">Paid on ${escapeHtml(dateLabel)}</span>`
+        : '';
+    return `<div class="paid-stamp-overlay"><span class="paid-stamp-word">PAID</span>${dateLine}</div>`;
+}
+
 async function saveSimpleStudentFeePayment() {
     const studentId = document.getElementById('add-fees-student-id').value;
     const paid = parseFloat(document.getElementById('afm-pay-amount').value) || 0;
@@ -4660,6 +4772,15 @@ async function saveSimpleStudentFeePayment() {
     const discount = discountInput ? (parseFloat(discountInput.value) || 0) : 0;
     const notesInput = document.getElementById('af-fee-notes');
     const notes = notesInput ? notesInput.value.trim() : '';
+    const dateInput = document.getElementById('afm-pay-date');
+    const paymentDateIso = (dateInput && dateInput.value) ? dateInput.value : _todayIsoDate();
+    if (paymentDateIso > _todayIsoDate()) {
+        showFinanceToast('Payment date cannot be in the future.', 'error');
+        return;
+    }
+    const paymentDateObj = _isoDateToLocalDate(paymentDateIso) || new Date();
+    // Today keeps its real time; a backdated payment is filed at noon of that day.
+    const paymentDateStamp = (paymentDateIso === _todayIsoDate() ? new Date() : paymentDateObj).toISOString();
 
     if (paid <= 0 && discount <= 0) {
         showFinanceToast('Please enter a payment amount.', 'error');
@@ -4695,7 +4816,7 @@ async function saveSimpleStudentFeePayment() {
     // Awaiting the POST here guarantees the backend write is committed
     // before we re-render, so the very next /status GET reflects it.
     try {
-        await apiRequest("/pay", "POST", { regNo: studentId, monthKey, amount: paid, discount });
+        await apiRequest("/pay", "POST", { regNo: studentId, monthKey, amount: paid, discount, paymentDate: paymentDateIso });
     } catch (e) {
         // Backend unreachable/failed — local save below still keeps the
         // UI correct via getFeeRowFinance()'s local fallback.
@@ -4716,7 +4837,7 @@ async function saveSimpleStudentFeePayment() {
             monthLabel,
             feeType: 'Monthly Fee',
             method: 'cash',
-            date: new Date().toISOString(),
+            date: paymentDateStamp,
             notes
         });
     }
@@ -4731,7 +4852,7 @@ async function saveSimpleStudentFeePayment() {
             monthLabel,
             feeType: 'On-the-spot Discount',
             method: 'discount',
-            date: new Date().toISOString(),
+            date: paymentDateStamp,
             notes: notes || 'Discount applied at time of payment'
         });
     }
@@ -4749,7 +4870,8 @@ async function saveSimpleStudentFeePayment() {
 
     showFeeSuccessToast(`Payment of Rs. ${paid} recorded successfully`);
     closeAddFeesModal();
-    const className = document.getElementById('selected-class-title').innerText.replace('Fee Records: ', '');
+    const className = currentFeeClassName
+        || document.getElementById('selected-class-title').innerText.replace('Fee Records: ', '');
     renderFees(className);
     // Class-card badges and any dashboard widgets reading 'edu_students'
     // should reflect the new Paid status immediately too.
@@ -5963,7 +6085,9 @@ async function processIndividualPay(fineId) {
         // status.
         try { await refreshStudentFeeStatusCache(); } catch (e) { /* best-effort */ }
         const classTitleEl = document.getElementById('selected-class-title');
-        if (classTitleEl && classTitleEl.innerText.includes(':')) {
+        if (currentFeeClassName) {
+            await renderFees(currentFeeClassName);
+        } else if (classTitleEl && classTitleEl.innerText.includes(':')) {
             const className = classTitleEl.innerText.split(': ')[1];
             await renderFees(className);
         }
@@ -6530,7 +6654,7 @@ function getPendingStudentsForClass(className) {
     const students = getRealStudents();
     const monthKey = getCurrentFeeMonthKey();
     return students
-        .filter(s => s.studentClass === className)
+        .filter(s => feeClassMatches(s, className))
         .filter(isStudentBillable)
         .filter(s => !isVoucherGenerated(s.regNo || s.id, monthKey));
 }
@@ -6551,7 +6675,7 @@ function getPendingStudentsSchoolWide() {
  */
 function getClassVoucherStatus(className) {
     const students = getRealStudents()
-        .filter(s => s.studentClass === className)
+        .filter(s => feeClassMatches(s, className))
         .filter(isStudentBillable);
     if (students.length === 0) return { state: 'none', total: 0, generated: 0 };
     const monthKey = getCurrentFeeMonthKey();
@@ -6711,7 +6835,7 @@ function countAlreadyGeneratedFor(source) {
     const monthKey = getCurrentFeeMonthKey();
     const students = getRealStudents().filter(isStudentBillable);
     const scoped = source === 'class' && currentFeeClassName
-        ? students.filter(s => s.studentClass === currentFeeClassName)
+        ? students.filter(s => feeClassMatches(s, currentFeeClassName))
         : students;
     return scoped.filter(s => isVoucherGenerated(s.regNo || s.id, monthKey)).length;
 }
@@ -6752,7 +6876,7 @@ function handleGenerateMonthlyGlobalClick() {
 function handleGenerateClassClick() {
     if (!currentFeeClassName) return;
     const pending = getPendingStudentsForClass(currentFeeClassName);
-    showVoucherGenerationPreview(pending, 'class', currentFeeClassName);
+    showVoucherGenerationPreview(pending, 'class', feeClassTitle(currentFeeClassName));
 }
 
 /** Per-student "Generate Voucher" button in the student list. */
