@@ -8410,3 +8410,93 @@ input[type="date"]::-webkit-calendar-picker-indicator {
     font-weight: 600;
     color: var(--text-secondary);
 }
+
+
+/* ============================================================================
+   MANAGE STUDENT FEES — DESKTOP LAYOUT TIGHTENING (keep this block LAST)
+   ----------------------------------------------------------------------------
+   Desktop only (>= 1025px); phones/tablets keep their existing responsive
+   rules. What this does:
+   • Back button + the 4 stat cards share ONE line at the very top (the Back
+     button used to be absolutely positioned on its own row with 48px of
+     padding under it, leaving a big empty band under the page header).
+   • Stat cards are smaller (less padding, smaller icon/text) and their long
+     "Label · Month" captions truncate instead of overflowing the row.
+   • The five action buttons (Generate / Next Month / Print / Custom Fee /
+     Fee Defaulter) always stay on a single line, level with the heading.
+   • Spacing between header -> stats -> buttons -> class cards is reduced so
+     the class cards no longer "hang" far below.
+   ============================================================================ */
+@media (min-width: 1025px) {
+    /* the global page header has a 40px bottom margin — pull this page up into it */
+    #page-student-fees { margin-top: -30px; }
+
+    /* Row 1: Back + stat cards on one line */
+    #page-student-fees .fee-stats-header {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        padding: 8px 0 10px;
+        margin-bottom: 12px;
+    }
+    #page-student-fees .fee-stats-header .back-btn {
+        position: static;
+        flex: 0 0 auto;
+        padding: 7px 14px;
+        font-size: 13px;
+    }
+    #page-student-fees .fee-stats-header .fee-stats-row {
+        flex: 1 1 auto;
+        min-width: 0;
+        margin: 0;
+        padding: 0;
+        gap: 12px;
+        justify-content: stretch;
+        overflow: hidden;
+    }
+    #page-student-fees .fee-stats-header .fee-stat-card {
+        flex: 1 1 0;
+        min-width: 0;
+        padding: 7px 12px;
+        gap: 9px;
+        border-radius: 11px;
+    }
+    #page-student-fees .fee-stats-header .fee-stat-icon {
+        width: 26px;
+        height: 26px;
+        font-size: 11px;
+        border-radius: 7px;
+    }
+    #page-student-fees .fee-stats-header .fee-stat-info { min-width: 0; gap: 1px; }
+    #page-student-fees .fee-stats-header .fee-stat-label {
+        font-size: 0.58rem;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    #page-student-fees .fee-stats-header .fee-stat-value { font-size: 0.86rem; }
+
+    /* Row 2: heading + all action buttons on one line */
+    #class-selection-view .fee-global-toolbar {
+        flex-wrap: nowrap;
+        gap: 16px;
+        margin: 0 0 14px;
+    }
+    #class-selection-view .fee-toolbar-heading-group { flex: 0 1 auto; min-width: 0; gap: 2px; }
+    #class-selection-view .fee-toolbar-heading { font-size: 1rem; }
+    #class-selection-view .fee-toolbar-desc { font-size: 0.78rem; }
+    #class-selection-view .fee-global-actions {
+        flex: 0 1 auto;
+        flex-wrap: nowrap;
+        gap: 8px;
+        margin-left: auto;
+    }
+    #class-selection-view .fee-global-actions .btn-global-action {
+        padding: 8px clamp(9px, 0.9vw, 14px);
+        font-size: clamp(0.72rem, 0.78vw, 0.82rem);
+        gap: 6px;
+    }
+
+    /* Class cards sit right under the toolbar */
+    #class-selection-view .classes-grid { margin-top: 0; }
+}
