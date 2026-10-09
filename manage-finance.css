@@ -8389,14 +8389,14 @@ input[type="date"]::-webkit-calendar-picker-indicator {
     border-color: rgba(59,130,246,0.35);
     box-shadow: 0 12px 32px -8px rgba(59,130,246,0.18);
 }
-.class-card .class-name { font-size: 18px; font-weight: 700; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.class-card .class-name { font-size: 15px; font-weight: 700; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .class-card .class-meta { font-size: 13px; color: var(--text-secondary); }
 .class-card .class-count { margin-top: 10px; font-size: 13px; color: var(--indigo-light, #818cf8); font-weight: 600; }
 
 @media (max-width: 640px) {
     .classes-grid { grid-template-columns: 1fr 1fr; gap: 10px; }
     .class-card { padding: 18px 14px; min-height: 104px; }
-    .class-card .class-name { font-size: 16px; }
+    .class-card .class-name { font-size: 14px; }
 }
 @media (max-width: 380px) {
     .classes-grid { grid-template-columns: 1fr; }
