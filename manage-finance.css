@@ -8587,3 +8587,74 @@ input[type="date"]::-webkit-calendar-picker-indicator {
     white-space: nowrap;
 }
 .fee-paid-date i { color: #16a34a; margin-right: 3px; font-size: 0.64rem; }
+
+
+/* ============================================================================
+   STUDENT FEE TABLE — compact one-line rows + status filter chips
+   (scoped to the class / All Classes table only)
+   ============================================================================ */
+.fee-toolbar-left { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; flex: 1 1 auto; min-width: 0; }
+.fee-toolbar-left .fee-search-wrap { flex: 1 1 280px; max-width: 420px; }
+
+.fee-status-filter { display: inline-flex; gap: 6px; flex-wrap: wrap; }
+.fee-filter-chip {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 7px 12px;
+    border-radius: 999px;
+    border: 1px solid var(--border-subtle);
+    background: var(--bg-card);
+    color: var(--text-secondary);
+    font-size: 0.78rem; font-weight: 700;
+    cursor: pointer; white-space: nowrap;
+    transition: all .15s ease;
+}
+.fee-filter-chip:hover { border-color: #6366f1; color: var(--text-primary); }
+.fee-filter-count {
+    min-width: 18px; padding: 1px 6px;
+    border-radius: 999px;
+    background: rgba(148,163,184,0.18);
+    font-size: 0.68rem; font-weight: 800; text-align: center;
+}
+.fee-filter-chip.active { color: #fff; border-color: transparent; background: linear-gradient(135deg, #6366f1, #4f46e5); }
+.fee-filter-chip[data-filter="paid"].active    { background: linear-gradient(135deg, #16a34a, #15803d); }
+.fee-filter-chip[data-filter="partial"].active { background: linear-gradient(135deg, #f59e0b, #d97706); }
+.fee-filter-chip[data-filter="pending"].active { background: linear-gradient(135deg, #ef4444, #dc2626); }
+.fee-filter-chip.active .fee-filter-count { background: rgba(255,255,255,0.25); }
+
+#class-student-list-view .fee-students-table { font-size: 0.82rem; }
+#class-student-list-view .fee-students-table thead th {
+    padding: 10px 12px;
+    font-size: 0.66rem;
+}
+#class-student-list-view .fee-students-table tbody td {
+    padding: 8px 12px;
+    white-space: nowrap;
+}
+#class-student-list-view .fee-name-cell { max-width: 300px; }
+#class-student-list-view .fee-name-line { display: flex; align-items: center; gap: 8px; min-width: 0; }
+#class-student-list-view .fee-name-line strong {
+    min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 700;
+}
+#class-student-list-view .fee-name-line .fee-class-tag {
+    flex-shrink: 0; margin: 0;
+    padding: 1px 8px; border-radius: 999px;
+    background: rgba(99,102,241,0.12); color: #818cf8;
+    font-size: 0.66rem; font-weight: 700;
+}
+#class-student-list-view .fee-fine-line { margin-top: 2px; font-size: 0.68rem; font-weight: 700; color: #dc2626; }
+#class-student-list-view .fee-guardian-cell { max-width: 200px; overflow: hidden; text-overflow: ellipsis; }
+.fee-pending-line { display: flex; align-items: baseline; gap: 8px; white-space: nowrap; }
+.fee-paid-so-far { font-size: 0.68rem; font-weight: 600; color: #16a34a; }
+
+/* Action buttons: one line, smaller, and a normal table cell so row borders line up */
+#class-student-list-view .fee-actions-cell { display: table-cell !important; white-space: nowrap; }
+#class-student-list-view .fee-students-table .btn-tiny {
+    padding: 5px 10px;
+    font-size: 0.72rem;
+    gap: 5px;
+    margin-right: 6px;
+}
+#class-student-list-view .fee-students-table .btn-tiny:last-child { margin-right: 0; }
+
+/* Paid date sits a little lower, clear of the badge */
+#class-student-list-view .fee-paid-date { margin-top: 6px; }

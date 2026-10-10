@@ -230,9 +230,17 @@
                     </div>
                 </div>
                 <div class="fee-table-toolbar">
-                    <div class="fee-search-wrap">
-                        <i class="fas fa-search"></i>
-                        <input type="text" id="fee-search-input" placeholder="Search by name, ID or guardian..." oninput="filterFeeTable()">
+                    <div class="fee-toolbar-left">
+                        <div class="fee-search-wrap">
+                            <i class="fas fa-search"></i>
+                            <input type="text" id="fee-search-input" placeholder="Search by name, ID or guardian..." oninput="filterFeeTable()">
+                        </div>
+                        <div class="fee-status-filter" id="fee-status-filter">
+                            <button type="button" class="fee-filter-chip active" data-filter="all" onclick="setFeeStatusFilter('all')">All <span class="fee-filter-count">0</span></button>
+                            <button type="button" class="fee-filter-chip" data-filter="paid" onclick="setFeeStatusFilter('paid')">Paid <span class="fee-filter-count">0</span></button>
+                            <button type="button" class="fee-filter-chip" data-filter="partial" onclick="setFeeStatusFilter('partial')">Partial <span class="fee-filter-count">0</span></button>
+                            <button type="button" class="fee-filter-chip" data-filter="pending" onclick="setFeeStatusFilter('pending')">Pending <span class="fee-filter-count">0</span></button>
+                        </div>
                     </div>
                     <div class="fee-search-count" id="fee-search-count"></div>
                 </div>

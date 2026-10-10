@@ -2771,6 +2771,9 @@ function feeClassTitle(className) {
 }
 
 function selectClassForFees(className) {
+    currentFeeStatusFilter = 'all';
+    const _srch = document.getElementById('fee-search-input');
+    if (_srch) _srch.value = '';
     // 1. Toggle UI Views
     document.getElementById('class-selection-view').style.display = 'none';
     document.getElementById('class-student-list-view').style.display = 'block';
@@ -4211,23 +4214,23 @@ async function renderFees(className) {
                     ` : ''}`;
             }
 
-            actionsHtml += `
-                <button class="btn-tiny btn-fee-record" onclick="openFeeRecordForStudent('${escapeForAttr(studentIdentifier)}')" title="View this student's full fee record">
-                    <i class="fas fa-history"></i> Record
-                </button>`;
-
+            const rowStatus = !voucherRec ? 'notgenerated' : (isPaid ? 'paid' : (finance.paidAmount > 0 ? 'partial' : 'pending'));
             rowsHtml += `
-                <tr>
+                <tr data-fee-status="${rowStatus}">
                     <td><span class="hrk-id-badge">${finance.regNo}</span></td>
-                    <td>
-                        <strong>${finance.studentName}</strong>
-                        ${isAllView ? `<br><span class="fee-class-tag">${escapeHtml(_classDisplayLabel(s.studentClass || ''))}${s.section ? ' · ' + escapeHtml(s.section) : ''}</span>` : ''}
-                        ${hasUnpaidFine ? `<br><span style="font-size:0.72rem;color:#dc2626;font-weight:700;"><i class="fas fa-exclamation-triangle"></i> Unpaid Fine: Rs. ${finance.fineAmount}</span>` : ''}
+                    <td class="fee-name-cell">
+                        <div class="fee-name-line">
+                            <strong title="${escapeHtml(finance.studentName)}">${escapeHtml(finance.studentName)}</strong>
+                            ${isAllView ? `<span class="fee-class-tag">${escapeHtml(_classDisplayLabel(s.studentClass || ''))}${s.section ? ' \u00b7 ' + escapeHtml(s.section) : ''}</span>` : ''}
+                        </div>
+                        ${hasUnpaidFine ? `<div class="fee-fine-line"><i class="fas fa-exclamation-triangle"></i> Unpaid Fine: Rs. ${finance.fineAmount}</div>` : ''}
                     </td>
-                    <td>${finance.guardianName || '-'}</td>
+                    <td class="fee-guardian-cell" title="${escapeHtml(finance.guardianName || '')}">${escapeHtml(finance.guardianName || '-')}</td>
                     <td>
-                        <strong style="color:${isPaid ? '#27ae60' : '#c2410c'}">Rs. ${finance.remainingBalance.toLocaleString()}</strong>
-                        ${finance.paidAmount > 0 ? `<br><span style="font-size:0.7rem; color:#16a34a;">Paid so far: Rs. ${finance.paidAmount}</span>` : ''}
+                        <div class="fee-pending-line">
+                            <strong style="color:${isPaid ? '#27ae60' : '#c2410c'}">Rs. ${finance.remainingBalance.toLocaleString()}</strong>
+                            ${finance.paidAmount > 0 ? `<span class="fee-paid-so-far">Paid so far: Rs. ${Number(finance.paidAmount).toLocaleString()}</span>` : ''}
+                        </div>
                     </td>
                     <td>
                         <span class="fee-status-badge ${statusClass}">${voucherRec ? finance.paymentStatus : 'Not Generated'}</span>
@@ -4254,28 +4257,59 @@ async function renderFees(className) {
     }
     
     tbody.innerHTML = rowsHtml;
+    filterFeeTable();
 }
 
-// Filter the fee table rows by name / id / guardian
+// Status chips (All / Paid / Partial / Pending) shown next to the search box
+let currentFeeStatusFilter = 'all';
+
+function setFeeStatusFilter(status) {
+    currentFeeStatusFilter = status || 'all';
+    filterFeeTable();
+}
+
+function _updateFeeFilterChips() {
+    const tbody = document.getElementById('fee-table-body');
+    const counts = { all: 0, paid: 0, partial: 0, pending: 0 };
+    if (tbody) {
+        tbody.querySelectorAll('tr[data-fee-status]').forEach(r => {
+            counts.all++;
+            const st = r.getAttribute('data-fee-status');
+            if (counts[st] !== undefined) counts[st]++;
+        });
+    }
+    document.querySelectorAll('#fee-status-filter .fee-filter-chip').forEach(chip => {
+        const f = chip.getAttribute('data-filter');
+        const c = chip.querySelector('.fee-filter-count');
+        if (c) c.textContent = counts[f] !== undefined ? counts[f] : 0;
+        chip.classList.toggle('active', f === currentFeeStatusFilter);
+    });
+}
+
+// Filter the fee table rows by name / id / guardian AND the selected status chip
 function filterFeeTable() {
     const input = document.getElementById('fee-search-input');
     const tbody = document.getElementById('fee-table-body');
     const countEl = document.getElementById('fee-search-count');
     if (!tbody) return;
     const q = (input ? input.value : '').trim().toLowerCase();
+    const statusFilter = currentFeeStatusFilter;
     const rows = tbody.querySelectorAll('tr');
     let visible = 0;
     rows.forEach(r => {
         // skip the "no students" placeholder row
         if (r.children.length < 2) { return; }
         const text = r.innerText.toLowerCase();
-        const match = !q || text.includes(q);
+        const statusOk = statusFilter === 'all' || r.getAttribute('data-fee-status') === statusFilter;
+        const match = statusOk && (!q || text.includes(q));
         r.style.display = match ? '' : 'none';
         if (match) visible++;
     });
     if (countEl) {
-        countEl.textContent = q ? `${visible} match${visible === 1 ? '' : 'es'}` : '';
+        const filtering = !!q || statusFilter !== 'all';
+        countEl.textContent = filtering ? `${visible} match${visible === 1 ? '' : 'es'}` : '';
     }
+    _updateFeeFilterChips();
 }
 
 // =============================================
@@ -4730,7 +4764,7 @@ async function autoSettleFinesIfFullyPaid(student, monthKey) {
    fee table uses (GET /status-all/{month} for each billed month) plus the
    saved voucher snapshots (fee / arrears split) and the student's payments.
    ============================================================================ */
-const FR_MAX_MONTHS = 24;
+const FR_MAX_MONTHS = 12;   // the record keeps one year of history
 let _frMonthCache = {};          // monthKey -> { at, map: Map(regNo -> ledger row) }
 let _frStudents = [];            // students shown in the list pane
 let _frRecords = new Map();      // studentId -> built record
@@ -4825,7 +4859,7 @@ function _frBuildRecord(student, months, maps) {
     const paidTotal = rows.reduce((t, r) => t + r.paid, 0);
     const outstanding = rows.length ? rows[rows.length - 1].balance : 0;
     const lastPaid = rows.reduce((t, r) => Math.max(t, r.paidTs), 0);
-    return { id, student, rows, charged, paidTotal, outstanding, lastPaid };
+    return { id, student, rows, charged, paidTotal, outstanding, lastPaid, firstMonth: months[0] || '' };
 }
 
 function _frSummaryCards(items) {
@@ -4861,7 +4895,7 @@ async function openFeeRecordList() {
     const token = ++_frLoadToken;
     _frOpenedFromList = true;
 
-    _frShowModal(`Fee Record — ${feeClassTitle(scope)}`, 'Every student, all billed months up to ' + _frFeeMonthLabelNow());
+    _frShowModal(`Fee Record — ${feeClassTitle(scope)}`, 'Every student \u00b7 last 12 months up to ' + _frFeeMonthLabelNow());
     document.getElementById('fr-list-pane').style.display = 'block';
     document.getElementById('fr-detail-pane').style.display = 'none';
     document.getElementById('fr-search-input').value = '';
@@ -4944,7 +4978,7 @@ function backToFeeRecordList() {
     document.getElementById('fr-detail-pane').style.display = 'none';
     document.getElementById('fr-list-pane').style.display = 'block';
     document.getElementById('fr-title').textContent = `Fee Record — ${feeClassTitle(currentFeeClassName)}`;
-    document.getElementById('fr-subtitle').textContent = 'Every student, all billed months up to ' + _frFeeMonthLabelNow();
+    document.getElementById('fr-subtitle').textContent = 'Every student \u00b7 last 12 months up to ' + _frFeeMonthLabelNow();
 }
 
 function openFeeRecordDetail(studentId) {
@@ -5019,6 +5053,14 @@ function _frRenderDetail(rec) {
 
     const pays = (Array.isArray(s.feePayments) ? s.feePayments : [])
         .filter(p => p && _frNum(p.amount) !== 0)
+        // keep only the same one-year window as the month table
+        .filter(p => {
+            if (!rec.firstMonth) return true;
+            if (/^\d{4}-\d{2}$/.test(p.monthKey || '')) return p.monthKey >= rec.firstMonth;
+            const t = new Date(p.date).getTime();
+            const from = new Date(Number(rec.firstMonth.slice(0, 4)), Number(rec.firstMonth.slice(5, 7)) - 1, 1).getTime();
+            return isNaN(t) || t >= from;
+        })
         .slice()
         .sort((a, b) => (new Date(b.date).getTime() || 0) - (new Date(a.date).getTime() || 0));
     document.getElementById('fr-payments-body').innerHTML = pays.length
