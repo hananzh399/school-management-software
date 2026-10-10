@@ -2172,11 +2172,21 @@ const ANNUAL_FUND_AMOUNT = 2000; // Rs. — must match value in manage-students.
 function getVoucherSettings() {
     const cfg = _latefeeConfigCache || {};
 
+    // BUGFIX — "Rs. 200 pending on every student": before the school's
+    // settings had loaded this fell back to "fine ON, Rs. 200", and a
+    // configured amount of 0 was also turned into 200 by `|| 200`. Now no
+    // fine is ever charged until the real settings are known, and an
+    // explicit 0 stays 0. (200 is only the default for a setting that was
+    // never saved at all — the same default Settings itself shows.)
+    const loaded = ['enabled', 'deadlineDay', 'type', 'amount', 'grace']
+        .some(k => cfg[k] !== undefined && cfg[k] !== null);
+
     const deadlineDay  = parseInt(cfg.deadlineDay, 10)  || 10;
     const grace        = parseInt(cfg.grace,        10)  || 0;
     const lateFineType = cfg.type   || 'fixed';
-    const lateFineVal  = parseFloat(cfg.amount)          || 200;
-    const enabled      = cfg.enabled !== false;           // default true
+    const rawAmount    = parseFloat(cfg.amount);
+    const lateFineVal  = Number.isFinite(rawAmount) && rawAmount >= 0 ? rawAmount : 200;
+    const enabled      = loaded && cfg.enabled !== false;
 
     return {
         dueDayOfMonth:      deadlineDay,
@@ -3478,6 +3488,39 @@ function getCurrentStudentBackendFine(student) {
     };
 }
 
+/**
+ * How much of this month's bill was already settled on or before `deadline`
+ * (payments + on-the-spot discounts, by their own payment date — a backdated
+ * payment counts on the day it was really made). A payment with no usable
+ * date gets the benefit of the doubt. If the backend knows of more money
+ * than the local payment list (e.g. after a page reload), the surplus is
+ * dated by the backend's last payment date.
+ */
+function _amountSettledByDeadline(student, monthKey, deadline) {
+    const studentId = student.regNo || student.id;
+    const limit = deadline.getTime();
+    const local = (Array.isArray(student.feePayments) ? student.feePayments : [])
+        .filter(p => p.monthKey === monthKey);
+
+    let localTotal = 0, onTime = 0;
+    local.forEach(p => {
+        const amt = Number(p.amount) || 0;
+        localTotal += amt;
+        const t = p.date ? new Date(p.date).getTime() : NaN;
+        if (isNaN(t) || t <= limit) onTime += amt;
+    });
+
+    const rec = (_studentFeeStatusMonthKey === monthKey) ? _studentFeeStatusCache[studentId] : null;
+    const backendPaid = rec ? (Number(rec.paidAmount) || 0) : 0;
+    if (backendPaid > localTotal + 0.01) {
+        const t = rec.payDate
+            ? new Date(rec.payDate).getTime()
+            : (rec.lastTransactionDate ? new Date(rec.lastTransactionDate).getTime() : NaN);
+        if (isNaN(t) || t <= limit) onTime += (backendPaid - localTotal);
+    }
+    return onTime;
+}
+
 function computeFeeBreakdown(s) {
     const today = new Date();
     // The month label on the voucher comes from the same stored fee-month key
@@ -3613,7 +3656,11 @@ function computeFeeBreakdown(s) {
     const voucherTotal = Math.max(0, (totalCharges - totalDiscounts) + arrears);
 
     const vs = getVoucherSettings();
-    const lateFeeSurcharge = vs.lateFineEnabled ? (vs.lateFineFixedAmount > 0 ? vs.lateFineFixedAmount : Math.round(voucherTotal * (vs.lateFinePercent / 100))) : 0;
+    // BUGFIX — a bill with nothing to pay (100% discount, or total 0) can
+    // never be late, so it never carries a late fine.
+    const lateFeeSurcharge = (vs.lateFineEnabled && voucherTotal > 0)
+        ? (vs.lateFineFixedAmount > 0 ? vs.lateFineFixedAmount : Math.round(voucherTotal * (vs.lateFinePercent / 100)))
+        : 0;
 
     // Due date: the configured due day, in the calendar month right AFTER the
     // fee month. `feeMonth` is 1-indexed here and is used directly as a
@@ -3623,6 +3670,11 @@ function computeFeeBreakdown(s) {
     // presses "Move to Next Month".
     const dueDate = new Date(feeYear, feeMonth, vs.dueDayOfMonth);
     const graceExpiryDate = new Date(feeYear, feeMonth, vs.expiryDayOfMonth);
+    // BUGFIX — "after the due date the data gets mixed": Settings says fees
+    // paid AFTER day (deadline + grace) are fined, so that last day is still
+    // on time all the way to 23:59:59. Comparing against 00:00 of that day
+    // started charging the fine a whole day early.
+    const graceEndOfDay = new Date(feeYear, feeMonth, vs.expiryDayOfMonth, 23, 59, 59, 999);
 
     // Overdue is decided ONLY by comparing today with this voucher's own grace
     // expiry date above. There is no separate "30 days after generation"
@@ -3644,8 +3696,21 @@ function computeFeeBreakdown(s) {
     // this student billed for right now" should read payableNow, not
     // voucherTotal (which stays the pre-fine base, still shown on its own
     // line on the printed voucher).
-    const isPastDue = vs.lateFineEnabled
-        && today.getTime() > graceExpiryDate.getTime();
+    //
+    // BUGFIX — "fees paid / 100% discount still show Rs. 200 remaining": the
+    // fine used to be added to EVERY bill once the grace period ended, then
+    // compared with payments — so a bill paid in full on time (or one with
+    // nothing to pay) was left Rs. 200 short. The fine now only applies when
+    // the bill still had money due at the deadline: it is skipped when
+    // nothing is payable, or when the bill was already fully settled
+    // (payments + discounts) by the end of the grace period.
+    let isPastDue = false;
+    if (vs.lateFineEnabled && lateFeeSurcharge > 0
+        && today.getTime() > graceEndOfDay.getTime()) {
+        const settledOnTime = _amountSettledByDeadline(s, getCurrentFeeMonthKey(), graceEndOfDay)
+            >= voucherTotal - 0.01;
+        isPastDue = !settledOnTime;
+    }
     const payableNow = isPastDue ? (voucherTotal + lateFeeSurcharge) : voucherTotal;
 
     return {
@@ -3739,10 +3804,7 @@ async function ensureStudentPhotoLoaded(student) {
 
 function buildVoucherHTML(s) {
     const today = new Date();
-    // Issue Date shows the fee month this voucher was generated for (e.g.
-    // "Oct 2026"), not today's date — a day-specific date changed every time
-    // the voucher was opened, so reprints never matched the original.
-    const dateStr = feeMonthDisplayLabel(getCurrentFeeMonthKey(), 'en-US', 'short');
+    const dateStr = today.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
     const challanNo = `CH-${s.id}-${getCurrentFeeMonthKey().replace('-', '')}`;
     const photoSrc = financePhotoUrl(s);
     const f = computeFeeBreakdown(s);
@@ -3813,6 +3875,7 @@ function buildVoucherHTML(s) {
                     ${voucherLogoHtml()}
                     <div>
                         <h2>${escapeHtml(getSchoolIdentity().name)}</h2>
+                        <p>Financial Control Center &middot; Fee Voucher</p>
                     </div>
                 </div>
                 ${photoSrc
@@ -3824,6 +3887,7 @@ function buildVoucherHTML(s) {
                 <div><span>Challan No.</span><strong>${challanNo}</strong></div>
                 <div><span>Issue Date</span><strong>${dateStr}</strong></div>
                 <div><span>Due Date</span><strong>${f.dueDateStr}</strong></div>
+                <div><span>Expiry Date</span><strong>${f.expiryDateStr}</strong></div>
             </div>
 
             <div class="voucher-divider"></div>
@@ -4229,10 +4293,8 @@ async function renderFees(className) {
                     <td class="fee-guardian-cell" title="${escapeHtml(finance.guardianName || '')}">${escapeHtml(finance.guardianName || '-')}</td>
                     <td>
                         <div class="fee-pending-line">
-                            ${isPaid
-                                ? `<strong style="color:#27ae60">0</strong>`
-                                : `<strong style="color:#c2410c">Rs. ${finance.remainingBalance.toLocaleString()}</strong>
-                                   ${finance.paidAmount > 0 ? `<span class="fee-paid-so-far">Paid: Rs. ${Number(finance.paidAmount).toLocaleString()}</span>` : ''}`}
+                            <strong style="color:${isPaid ? '#27ae60' : '#c2410c'}">Rs. ${finance.remainingBalance.toLocaleString()}</strong>
+                            ${finance.paidAmount > 0 ? `<span class="fee-paid-so-far">Paid so far: Rs. ${Number(finance.paidAmount).toLocaleString()}</span>` : ''}
                         </div>
                     </td>
                     <td>
@@ -4281,13 +4343,12 @@ function _updateFeeFilterChips() {
             if (counts[st] !== undefined) counts[st]++;
         });
     }
-    const sel = document.getElementById('fee-status-filter');
-    if (!sel) return;
-    const names = { all: 'All Status', paid: 'Paid', partial: 'Partial', pending: 'Pending' };
-    Array.from(sel.options).forEach(opt => {
-        opt.textContent = `${names[opt.value] || opt.value} (${counts[opt.value] || 0})`;
+    document.querySelectorAll('#fee-status-filter .fee-filter-chip').forEach(chip => {
+        const f = chip.getAttribute('data-filter');
+        const c = chip.querySelector('.fee-filter-count');
+        if (c) c.textContent = counts[f] !== undefined ? counts[f] : 0;
+        chip.classList.toggle('active', f === currentFeeStatusFilter);
     });
-    sel.value = currentFeeStatusFilter;
 }
 
 // Filter the fee table rows by name / id / guardian AND the selected status chip
@@ -7429,8 +7490,7 @@ function groupStudentsForPrinting(students, combineSiblings) {
  *  whole family. */
 function buildFamilyVoucherHTML(studentsGroup) {
     const today = new Date();
-    // Issue Date = the fee month of this voucher (see buildVoucherHTML).
-    const dateStr = feeMonthDisplayLabel(getCurrentFeeMonthKey(), 'en-US', 'short');
+    const dateStr = today.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
     const guardianName = studentsGroup[0].guardianName || 'Guardian';
     const famTag = (guardianName || 'FAM').replace(/[^a-zA-Z0-9]/g, '').toUpperCase().slice(0, 6) || 'FAM';
     const challanNo = `FV-${famTag}-${getCurrentFeeMonthKey().replace('-', '')}`;
@@ -7517,6 +7577,7 @@ function buildFamilyVoucherHTML(studentsGroup) {
                     ${voucherLogoHtml()}
                     <div>
                         <h2>${escapeHtml(getSchoolIdentity().name)}</h2>
+                        <p>Financial Control Center &middot; Combined Family Fee Voucher</p>
                     </div>
                 </div>
             </div>
@@ -7525,6 +7586,7 @@ function buildFamilyVoucherHTML(studentsGroup) {
                 <div><span>Challan No.</span><strong>${challanNo}</strong></div>
                 <div><span>Issue Date</span><strong>${dateStr}</strong></div>
                 <div><span>Due Date</span><strong>${dueDateStr}</strong></div>
+                <div><span>Expiry Date</span><strong>${expiryDateStr}</strong></div>
             </div>
 
             <div class="voucher-divider"></div>
@@ -8194,11 +8256,7 @@ function viewCustomFeeVoucher(feeId, studentId) {
 
 function _buildCustomFeeVoucherHTML(fee, rec) {
     const today = new Date();
-    // Issue Date = the month this custom fee belongs to (not today's date).
-    const _cfm = /^(\d{4})-(\d{2})$/.exec(fee.monthKey || '');
-    const dateStr = _cfm
-        ? new Date(Number(_cfm[1]), Number(_cfm[2]) - 1, 1).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
-        : String(fee.monthKey || '');
+    const dateStr = today.toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'numeric' });
     const challanNo = `CF-${rec.studentId}-${fee.monthKey.replace('-','')}`;
     const paidStamp = rec.paid ? `<div class="paid-stamp-overlay">PAID</div>` : '';
 
@@ -8222,7 +8280,7 @@ function _buildCustomFeeVoucherHTML(fee, rec) {
             <div class="voucher-header">
                 <div class="voucher-school-info">
                     ${voucherLogoHtml()}
-                    <div><h2>${_escHtml(getSchoolIdentity().name)}</h2></div>
+                    <div><h2>${_escHtml(getSchoolIdentity().name)}</h2><p>Financial Control Center &middot; Custom Fee Voucher</p></div>
                 </div>
             </div>
             <div class="voucher-meta-row" style="grid-template-columns: repeat(${dueDateRow ? 4 : 3}, 1fr);">
