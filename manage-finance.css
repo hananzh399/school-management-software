@@ -8500,3 +8500,90 @@ input[type="date"]::-webkit-calendar-picker-indicator {
     /* Class cards sit right under the toolbar */
     #class-selection-view .classes-grid { margin-top: 0; }
 }
+
+
+/* ============================================================================
+   FEE RECORD — class/All-Classes record list + per-student record modal
+   ============================================================================ */
+.class-level-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.btn-global-action.btn-record-class {
+    background: transparent;
+    color: var(--text-primary);
+    border: 1.5px solid var(--border-subtle);
+}
+.btn-global-action.btn-record-class:hover {
+    border-color: #6366f1;
+    color: #6366f1;
+    transform: translateY(-1px);
+}
+.btn-tiny.btn-fee-record { color: #6366f1; border-color: rgba(99,102,241,0.4); }
+.btn-tiny.btn-fee-record:hover { background: rgba(99,102,241,0.1); border-color: #6366f1; }
+
+.fr-box { width: min(1120px, 100%); }
+.fr-scroll { color: var(--text-primary); }
+.fr-summary {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 12px;
+    margin: 4px 0 16px;
+}
+.fr-sum-card {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    padding: 10px 14px;
+    border-radius: 12px;
+    border: 1px solid var(--border-subtle);
+    background: var(--bg-card);
+}
+.fr-sum-label {
+    font-size: 0.64rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+}
+.fr-sum-value { font-size: 1.05rem; font-weight: 800; color: var(--text-primary); white-space: nowrap; }
+.fr-sum-card.fr-good .fr-sum-value { color: #16a34a; }
+.fr-sum-card.fr-bad .fr-sum-value { color: #ef4444; }
+
+.fr-student-head { margin: 12px 0 14px; }
+.fr-student-name { font-size: 1.15rem; font-weight: 800; }
+.fr-student-meta {
+    display: flex; flex-wrap: wrap; gap: 6px 18px;
+    margin-top: 4px;
+    font-size: 0.82rem;
+    color: var(--text-secondary);
+}
+.fr-student-meta i { margin-right: 5px; color: #6366f1; }
+.fr-section-title {
+    display: flex; align-items: center; gap: 8px;
+    margin: 20px 0 10px;
+    font-size: 0.95rem;
+    font-weight: 700;
+}
+.fr-section-title i { color: #6366f1; }
+.fr-table-wrap { overflow-x: auto; }
+.fr-table th, .fr-table td { white-space: nowrap; }
+.fr-table td:last-child { white-space: normal; }
+.fr-empty { text-align: center; padding: 22px 12px !important; color: var(--text-secondary); }
+#fr-list-pane .fee-table-toolbar { margin-bottom: 12px; }
+
+@media (max-width: 720px) {
+    .fr-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .class-level-actions { width: 100%; }
+    .class-level-actions .btn-global-action { flex: 1; justify-content: center; }
+}
+
+
+/* Paid date shown under the "Paid" badge in the fee table — small and muted
+   so it doesn't change the row height much or compete with the badge. */
+.fee-paid-date {
+    margin-top: 3px;
+    font-size: 0.68rem;
+    font-weight: 600;
+    line-height: 1.2;
+    color: var(--text-secondary);
+    white-space: nowrap;
+}
+.fee-paid-date i { color: #16a34a; margin-right: 3px; font-size: 0.64rem; }

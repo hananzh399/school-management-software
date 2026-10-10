@@ -4211,6 +4211,11 @@ async function renderFees(className) {
                     ` : ''}`;
             }
 
+            actionsHtml += `
+                <button class="btn-tiny btn-fee-record" onclick="openFeeRecordForStudent('${escapeForAttr(studentIdentifier)}')" title="View this student's full fee record">
+                    <i class="fas fa-history"></i> Record
+                </button>`;
+
             rowsHtml += `
                 <tr>
                     <td><span class="hrk-id-badge">${finance.regNo}</span></td>
@@ -4224,7 +4229,12 @@ async function renderFees(className) {
                         <strong style="color:${isPaid ? '#27ae60' : '#c2410c'}">Rs. ${finance.remainingBalance.toLocaleString()}</strong>
                         ${finance.paidAmount > 0 ? `<br><span style="font-size:0.7rem; color:#16a34a;">Paid so far: Rs. ${finance.paidAmount}</span>` : ''}
                     </td>
-                    <td><span class="fee-status-badge ${statusClass}">${voucherRec ? finance.paymentStatus : 'Not Generated'}</span></td>
+                    <td>
+                        <span class="fee-status-badge ${statusClass}">${voucherRec ? finance.paymentStatus : 'Not Generated'}</span>
+                        ${(voucherRec && isPaid && getFeePaidDateLabel(s, monthKey))
+                            ? `<div class="fee-paid-date" title="Date this fee was paid"><i class="fas fa-calendar-check"></i> ${escapeHtml(getFeePaidDateLabel(s, monthKey))}</div>`
+                            : ''}
+                    </td>
                     <td class="fee-actions-cell">
                         ${actionsHtml}
                     </td>
@@ -4707,6 +4717,329 @@ async function autoSettleFinesIfFullyPaid(student, monthKey) {
     }
 }
 
+
+/* ============================================================================
+   FEATURE — FEE RECORD
+   ----------------------------------------------------------------------------
+   A read-only history of what every student was charged and has paid.
+   • "Fee Record" button in a class (or All Classes) view -> a table of every
+     student in that view with Total Charged / Total Paid / Outstanding.
+   • "Record" button on any student row (or "View" in that table) -> that
+     student's month-by-month record plus every payment received.
+   Nothing here writes any data. Numbers come from the same backend ledger the
+   fee table uses (GET /status-all/{month} for each billed month) plus the
+   saved voucher snapshots (fee / arrears split) and the student's payments.
+   ============================================================================ */
+const FR_MAX_MONTHS = 24;
+let _frMonthCache = {};          // monthKey -> { at, map: Map(regNo -> ledger row) }
+let _frStudents = [];            // students shown in the list pane
+let _frRecords = new Map();      // studentId -> built record
+let _frLoadToken = 0;            // guards against out-of-order async loads
+let _frOpenedFromList = false;
+
+function _frNum(v) { return Number(v) || 0; }
+function _frMoney(n) { return 'Rs. ' + Math.round(_frNum(n)).toLocaleString(); }
+function _frDateLabel(d) { return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }); }
+
+/** Billed months (oldest -> newest): every month with a saved voucher + the current month. */
+function _frMonthKeys() {
+    const set = new Set([getCurrentFeeMonthKey()]);
+    getGeneratedVouchers().forEach(r => {
+        if (r && /^\d{4}-\d{2}$/.test(r.monthKey || '')) set.add(r.monthKey);
+    });
+    return Array.from(set).sort().slice(-FR_MAX_MONTHS);
+}
+
+async function _frFetchMonth(monthKey, force) {
+    const cached = _frMonthCache[monthKey];
+    if (!force && cached && Date.now() - cached.at < 30000) return cached.map;
+    const rows = await apiRequest(`/status-all/${encodeURIComponent(monthKey)}`, 'GET');
+    const map = new Map();
+    (Array.isArray(rows) ? rows : []).forEach(r => { if (r && r.regNo != null) map.set(String(r.regNo), r); });
+    if (Array.isArray(rows)) _frMonthCache[monthKey] = { at: Date.now(), map };
+    return map;
+}
+
+async function _frLoadMonths(force) {
+    const months = _frMonthKeys();
+    const maps = await Promise.all(months.map(m => _frFetchMonth(m, force).catch(() => new Map())));
+    return { months, maps: Object.fromEntries(months.map((m, i) => [m, maps[i]])) };
+}
+
+/** Timestamp (ms) a ledger row was last paid, or 0 when nothing was paid. */
+function _frPaidTs(row) {
+    if (!row || _frNum(row.paidAmount) <= 0) return 0;
+    if (row.lastTransactionDate) {
+        const t = new Date(row.lastTransactionDate).getTime();
+        if (!isNaN(t)) return t;
+    }
+    const t = Date.parse(row.payDate || '');
+    return isNaN(t) ? 0 : t;
+}
+
+function _frPaidLabel(row) {
+    if (!row || _frNum(row.paidAmount) <= 0) return '—';
+    if (row.payDate) return String(row.payDate);
+    const ts = _frPaidTs(row);
+    return ts ? _frDateLabel(new Date(ts)) : '—';
+}
+
+/** Builds one student's month-by-month rows and totals. */
+function _frBuildRecord(student, months, maps) {
+    const id = String(student.regNo || student.id);
+    const rows = [];
+    let prevBalance = 0;   // unpaid amount carried in from the previous billed month
+    months.forEach(monthKey => {
+        const led = maps[monthKey] && maps[monthKey].get(id);
+        const voucher = getVoucherRecord(id, monthKey);
+        if (!led && !voucher) return;                       // not billed that month
+        const snap = (voucher && voucher.snapshot) || null;
+
+        const payable = led ? _frNum(led.netPayable) : _frNum(snap && snap.voucherTotal);
+        const paid = led ? _frNum(led.paidAmount) : 0;
+        const balance = led ? _frNum(led.remainingBalance) : Math.max(0, payable - paid);
+        const arrears = snap ? _frNum(snap.arrears) : (rows.length ? prevBalance : 0);
+        const fee = snap ? _frNum(snap.tuitionFee) + _frNum(snap.transportFee) + _frNum(snap.otherFee) : null;
+        const fine = led ? _frNum(led.totalFineCharged) || _frNum(led.fineAmount) : (snap ? _frNum(snap.fineAmount) : null);
+        const discount = led ? _frNum(led.totalDiscountApplied) : (snap ? _frNum(snap.totalDiscounts) : null);
+
+        let status;
+        if (payable > 0 && balance <= 0.01) status = 'Paid';
+        else if (paid > 0) status = 'Partial';
+        else status = 'Pending';
+        if (payable <= 0 && balance <= 0.01 && paid <= 0) status = 'Paid';
+
+        rows.push({
+            monthKey, label: feeMonthDisplayLabel(monthKey, 'en-US', 'short'),
+            fee, arrears, fine, discount, payable, paid, balance, status,
+            paidOn: _frPaidLabel(led), paidTs: _frPaidTs(led),
+            newCharge: Math.max(0, payable - prevBalance)
+        });
+        prevBalance = balance;
+    });
+
+    // Charged = brand-new charges only (this month's payable minus what was
+    // carried in unpaid from last month). Summing "payable" itself would count
+    // the same unpaid debt again every month.
+    const charged = rows.reduce((t, r) => t + r.newCharge, 0);
+    const paidTotal = rows.reduce((t, r) => t + r.paid, 0);
+    const outstanding = rows.length ? rows[rows.length - 1].balance : 0;
+    const lastPaid = rows.reduce((t, r) => Math.max(t, r.paidTs), 0);
+    return { id, student, rows, charged, paidTotal, outstanding, lastPaid };
+}
+
+function _frSummaryCards(items) {
+    return items.map(i => `
+        <div class="fr-sum-card ${i.cls || ''}">
+            <span class="fr-sum-label">${escapeHtml(i.label)}</span>
+            <span class="fr-sum-value">${escapeHtml(String(i.value))}</span>
+        </div>`).join('');
+}
+
+function _frStatusBadge(status) {
+    const cls = status === 'Paid' ? 'fee-paid' : (status === 'Partial' ? 'fee-pending' : 'fee-overdue');
+    return `<span class="fee-status-badge ${cls}">${escapeHtml(status)}</span>`;
+}
+
+function _frShowModal(title, subtitle) {
+    document.getElementById('fr-title').textContent = title;
+    document.getElementById('fr-subtitle').textContent = subtitle || '';
+    document.getElementById('fee-record-modal').style.display = 'flex';
+}
+
+function closeFeeRecordModal() {
+    _frLoadToken++;
+    document.getElementById('fee-record-modal').style.display = 'none';
+}
+
+function _frFeeMonthLabelNow() { return getCurrentFeeMonthLabel(); }
+
+/* ---- Pane 1: all students in the open class / All Classes ---- */
+async function openFeeRecordList() {
+    const scope = currentFeeClassName;
+    if (!scope) return;
+    const token = ++_frLoadToken;
+    _frOpenedFromList = true;
+
+    _frShowModal(`Fee Record — ${feeClassTitle(scope)}`, 'Every student, all billed months up to ' + _frFeeMonthLabelNow());
+    document.getElementById('fr-list-pane').style.display = 'block';
+    document.getElementById('fr-detail-pane').style.display = 'none';
+    document.getElementById('fr-search-input').value = '';
+    document.getElementById('fr-list-summary').innerHTML = '';
+    document.getElementById('fr-search-count').textContent = '';
+    document.getElementById('fr-list-body').innerHTML =
+        `<tr><td colspan="9" class="fr-empty"><i class="fas fa-spinner fa-spin"></i> Loading fee records...</td></tr>`;
+
+    _frStudents = getRealStudents().filter(s => feeClassMatches(s, scope)).filter(isStudentBillable);
+    const { months, maps } = await _frLoadMonths(true);
+    if (token !== _frLoadToken) return;
+
+    _frRecords = new Map();
+    _frStudents.forEach(st => {
+        const rec = _frBuildRecord(st, months, maps);
+        _frRecords.set(rec.id, rec);
+    });
+    _frRenderList();
+}
+
+function _frRenderList() {
+    const body = document.getElementById('fr-list-body');
+    const recs = _frStudents.map(st => _frRecords.get(String(st.regNo || st.id))).filter(Boolean);
+    const isAll = isAllFeeClasses(currentFeeClassName);
+
+    if (!recs.length) {
+        body.innerHTML = `<tr><td colspan="9" class="fr-empty">No active students found.</td></tr>`;
+        document.getElementById('fr-list-summary').innerHTML = '';
+        return;
+    }
+
+    const totCharged = recs.reduce((t, r) => t + r.charged, 0);
+    const totPaid = recs.reduce((t, r) => t + r.paidTotal, 0);
+    const totOut = recs.reduce((t, r) => t + r.outstanding, 0);
+    document.getElementById('fr-list-summary').innerHTML = _frSummaryCards([
+        { label: 'Students', value: recs.length },
+        { label: 'Total Charged', value: _frMoney(totCharged) },
+        { label: 'Total Paid', value: _frMoney(totPaid), cls: 'fr-good' },
+        { label: 'Outstanding', value: _frMoney(totOut), cls: 'fr-bad' }
+    ]);
+
+    body.innerHTML = recs.map(r => {
+        const s = r.student;
+        const idAttr = escapeForAttr(r.id);
+        return `
+            <tr>
+                <td><span class="hrk-id-badge">${escapeHtml(r.id)}</span></td>
+                <td>
+                    <strong>${escapeHtml(s.fullName || '')}</strong>
+                    ${isAll ? `<br><span class="fee-class-tag">${escapeHtml(_classDisplayLabel(s.studentClass || ''))}${s.section ? ' · ' + escapeHtml(s.section) : ''}</span>` : ''}
+                </td>
+                <td>${escapeHtml(s.guardianName || '-')}</td>
+                <td>${r.rows.length}</td>
+                <td>${_frMoney(r.charged)}</td>
+                <td style="color:#16a34a;font-weight:700;">${_frMoney(r.paidTotal)}</td>
+                <td style="color:${r.outstanding > 0.01 ? '#c2410c' : '#16a34a'};font-weight:700;">${_frMoney(r.outstanding)}</td>
+                <td>${r.lastPaid ? _frDateLabel(new Date(r.lastPaid)) : '—'}</td>
+                <td><button class="btn-tiny" onclick="openFeeRecordDetail('${idAttr}')"><i class="fas fa-eye"></i> View</button></td>
+            </tr>`;
+    }).join('');
+    filterFeeRecordList();
+}
+
+function filterFeeRecordList() {
+    const q = (document.getElementById('fr-search-input').value || '').trim().toLowerCase();
+    let visible = 0, total = 0;
+    document.querySelectorAll('#fr-list-body tr').forEach(tr => {
+        if (tr.children.length < 3) return;
+        total++;
+        const match = !q || tr.innerText.toLowerCase().includes(q);
+        tr.style.display = match ? '' : 'none';
+        if (match) visible++;
+    });
+    document.getElementById('fr-search-count').textContent =
+        total ? (q ? `${visible} of ${total} students` : `${total} students`) : '';
+}
+
+/* ---- Pane 2: one student's record ---- */
+function backToFeeRecordList() {
+    document.getElementById('fr-detail-pane').style.display = 'none';
+    document.getElementById('fr-list-pane').style.display = 'block';
+    document.getElementById('fr-title').textContent = `Fee Record — ${feeClassTitle(currentFeeClassName)}`;
+    document.getElementById('fr-subtitle').textContent = 'Every student, all billed months up to ' + _frFeeMonthLabelNow();
+}
+
+function openFeeRecordDetail(studentId) {
+    const rec = _frRecords.get(String(studentId));
+    if (rec) _frRenderDetail(rec);
+}
+
+/** Row-level "Record" button: opens straight to that student's record. */
+async function openFeeRecordForStudent(studentId) {
+    const student = getRealStudents().find(s => String(s.regNo || s.id) === String(studentId));
+    if (!student) { showFinanceToast('Student not found.', 'error'); return; }
+    const token = ++_frLoadToken;
+    _frOpenedFromList = false;
+
+    _frShowModal('Fee Record', student.fullName || '');
+    document.getElementById('fr-list-pane').style.display = 'none';
+    document.getElementById('fr-detail-pane').style.display = 'block';
+    document.getElementById('fr-back-btn').style.display = 'none';
+    document.getElementById('fr-student-head').innerHTML = '';
+    document.getElementById('fr-detail-summary').innerHTML = '';
+    document.getElementById('fr-payments-body').innerHTML = '';
+    document.getElementById('fr-month-body').innerHTML =
+        `<tr><td colspan="10" class="fr-empty"><i class="fas fa-spinner fa-spin"></i> Loading fee record...</td></tr>`;
+
+    const { months, maps } = await _frLoadMonths(true);
+    if (token !== _frLoadToken) return;
+    const rec = _frBuildRecord(student, months, maps);
+    _frRecords.set(rec.id, rec);
+    _frRenderDetail(rec);
+}
+
+function _frRenderDetail(rec) {
+    const s = rec.student;
+    document.getElementById('fr-list-pane').style.display = 'none';
+    document.getElementById('fr-detail-pane').style.display = 'block';
+    document.getElementById('fr-back-btn').style.display = _frOpenedFromList ? '' : 'none';
+    document.getElementById('fr-title').textContent = 'Fee Record';
+    document.getElementById('fr-subtitle').textContent = s.fullName || '';
+
+    document.getElementById('fr-student-head').innerHTML = `
+        <div class="fr-student-name">${escapeHtml(s.fullName || '')}</div>
+        <div class="fr-student-meta">
+            <span><i class="fas fa-id-badge"></i> ${escapeHtml(rec.id)}</span>
+            <span><i class="fas fa-layer-group"></i> ${escapeHtml(_classDisplayLabel(s.studentClass || ''))}${s.section ? ' · ' + escapeHtml(s.section) : ''}</span>
+            <span><i class="fas fa-user"></i> ${escapeHtml(s.guardianName || '-')}</span>
+        </div>`;
+
+    document.getElementById('fr-detail-summary').innerHTML = _frSummaryCards([
+        { label: 'Months Billed', value: rec.rows.length },
+        { label: 'Total Charged', value: _frMoney(rec.charged) },
+        { label: 'Total Paid', value: _frMoney(rec.paidTotal), cls: 'fr-good' },
+        { label: 'Outstanding', value: _frMoney(rec.outstanding), cls: rec.outstanding > 0.01 ? 'fr-bad' : 'fr-good' }
+    ]);
+
+    const dash = v => (v === null || v === undefined) ? '—' : _frMoney(v);
+    const zero = v => (v === null || v === undefined) ? '—' : (_frNum(v) > 0 ? _frMoney(v) : '—');
+    document.getElementById('fr-month-body').innerHTML = rec.rows.length
+        ? rec.rows.slice().reverse().map(r => `
+            <tr>
+                <td><strong>${escapeHtml(r.label)}</strong></td>
+                <td>${dash(r.fee)}</td>
+                <td>${zero(r.arrears)}</td>
+                <td>${zero(r.fine)}</td>
+                <td>${zero(r.discount)}</td>
+                <td><strong>${_frMoney(r.payable)}</strong></td>
+                <td style="color:#16a34a;font-weight:700;">${_frMoney(r.paid)}</td>
+                <td style="color:${r.balance > 0.01 ? '#c2410c' : '#16a34a'};font-weight:700;">${_frMoney(r.balance)}</td>
+                <td>${_frStatusBadge(r.status)}</td>
+                <td>${escapeHtml(r.paidOn)}</td>
+            </tr>`).join('')
+        : `<tr><td colspan="10" class="fr-empty">No fee has been billed to this student yet.</td></tr>`;
+
+    const pays = (Array.isArray(s.feePayments) ? s.feePayments : [])
+        .filter(p => p && _frNum(p.amount) !== 0)
+        .slice()
+        .sort((a, b) => (new Date(b.date).getTime() || 0) - (new Date(a.date).getTime() || 0));
+    document.getElementById('fr-payments-body').innerHTML = pays.length
+        ? pays.map(p => {
+            const d = new Date(p.date);
+            const isDiscount = p.method === 'discount';
+            const monthLbl = /^\d{4}-\d{2}$/.test(p.monthKey || '')
+                ? feeMonthDisplayLabel(p.monthKey, 'en-US', 'short') : (p.monthLabel || p.monthKey || '—');
+            return `
+                <tr>
+                    <td>${isNaN(d.getTime()) ? '—' : _frDateLabel(d)}</td>
+                    <td>${escapeHtml(monthLbl)}</td>
+                    <td style="font-weight:700;color:${isDiscount ? '#b45309' : '#16a34a'};">${_frMoney(p.amount)}</td>
+                    <td>${isDiscount ? 'Discount' : escapeHtml(p.feeType || 'Fee')}</td>
+                    <td>${isDiscount ? '—' : escapeHtml(p.method || '—')}</td>
+                    <td>${p.notes ? escapeHtml(p.notes) : '—'}</td>
+                </tr>`;
+        }).join('')
+        : `<tr><td colspan="6" class="fr-empty">No payments recorded yet.</td></tr>`;
+}
+
 /** Today as yyyy-MM-dd in the browser's local timezone (for <input type="date">). */
 function _todayIsoDate() {
     const d = new Date();
@@ -4736,7 +5069,9 @@ function getFeePaidDateLabel(student, monthKey) {
     const rec = (_studentFeeStatusMonthKey === monthKey) ? _studentFeeStatusCache[studentId] : null;
     if (rec) {
         if (rec.payDate) return String(rec.payDate);
-        if (rec.lastTransactionDate) {
+        // lastTransactionDate is also touched when a voucher is generated, so
+        // only trust it as a "paid on" date when money was actually received.
+        if (Number(rec.paidAmount) > 0 && rec.lastTransactionDate) {
             const d = new Date(rec.lastTransactionDate);
             if (!isNaN(d.getTime())) return _formatPaidDate(d);
         }

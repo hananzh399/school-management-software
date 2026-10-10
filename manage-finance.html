@@ -220,9 +220,14 @@
                 <!-- Heading now sits directly above the search bar / table -->
                 <div class="section-title class-level-title-row">
                     <h3 id="selected-class-title">Class Name</h3>
-                    <button type="button" class="btn-global-action btn-generate-class" id="btn-generate-class" onclick="handleGenerateClassClick()">
-                        <i class="fas fa-file-invoice"></i> Generate Monthly Fee
-                    </button>
+                    <div class="class-level-actions">
+                        <button type="button" class="btn-global-action btn-record-class" id="btn-fee-record-class" onclick="openFeeRecordList()">
+                            <i class="fas fa-history"></i> Fee Record
+                        </button>
+                        <button type="button" class="btn-global-action btn-generate-class" id="btn-generate-class" onclick="handleGenerateClassClick()">
+                            <i class="fas fa-file-invoice"></i> Generate Monthly Fee
+                        </button>
+                    </div>
                 </div>
                 <div class="fee-table-toolbar">
                     <div class="fee-search-wrap">
@@ -1245,6 +1250,98 @@
         </div>
 
         <!-- ===================== PRINT VOUCHERS MODAL ===================== -->
+        <!-- ===================== FEE RECORD MODAL ===================== -->
+        <div id="fee-record-modal" class="voucher-modal-overlay" style="display:none;" onclick="if(event.target===this)closeFeeRecordModal()">
+            <div class="voucher-modal-box fr-box">
+                <div class="voucher-modal-header afm-header">
+                    <div class="afm-header-left">
+                        <div class="afm-header-icon"><i class="fas fa-history"></i></div>
+                        <div>
+                            <h3 id="fr-title">Fee Record</h3>
+                            <p id="fr-subtitle"></p>
+                        </div>
+                    </div>
+                    <button class="afm-close-btn" onclick="closeFeeRecordModal()"><i class="fas fa-times"></i></button>
+                </div>
+                <div class="voucher-modal-scroll fr-scroll">
+
+                    <!-- Pane 1: every student in the class / All Classes -->
+                    <div id="fr-list-pane">
+                        <div class="fr-summary" id="fr-list-summary"></div>
+                        <div class="fee-table-toolbar">
+                            <div class="fee-search-wrap">
+                                <i class="fas fa-search"></i>
+                                <input type="text" id="fr-search-input" placeholder="Search by name, ID or guardian..." oninput="filterFeeRecordList()">
+                            </div>
+                            <div class="fee-search-count" id="fr-search-count"></div>
+                        </div>
+                        <div class="data-table-wrapper fee-table-wrapper fr-table-wrap">
+                            <table class="student-table fee-students-table fr-table">
+                                <thead>
+                                    <tr>
+                                        <th>Student ID</th>
+                                        <th>Name</th>
+                                        <th>Guardian</th>
+                                        <th>Months</th>
+                                        <th>Total Charged</th>
+                                        <th>Total Paid</th>
+                                        <th>Outstanding</th>
+                                        <th>Last Payment</th>
+                                        <th></th>
+                                    </tr>
+                                </thead>
+                                <tbody id="fr-list-body"></tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Pane 2: one student's month-by-month record -->
+                    <div id="fr-detail-pane" style="display:none;">
+                        <button class="btn-ghost" id="fr-back-btn" onclick="backToFeeRecordList()"><i class="fas fa-chevron-left"></i> All Students</button>
+                        <div class="fr-student-head" id="fr-student-head"></div>
+                        <div class="fr-summary" id="fr-detail-summary"></div>
+                        <h4 class="fr-section-title"><i class="fas fa-calendar-alt"></i> Month-by-Month Record</h4>
+                        <div class="data-table-wrapper fee-table-wrapper fr-table-wrap">
+                            <table class="student-table fee-students-table fr-table">
+                                <thead>
+                                    <tr>
+                                        <th>Month</th>
+                                        <th>Fee</th>
+                                        <th>Arrears</th>
+                                        <th>Fine</th>
+                                        <th>Discount</th>
+                                        <th>Total Payable</th>
+                                        <th>Paid</th>
+                                        <th>Balance</th>
+                                        <th>Status</th>
+                                        <th>Paid On</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="fr-month-body"></tbody>
+                            </table>
+                        </div>
+                        <h4 class="fr-section-title"><i class="fas fa-receipt"></i> Payments Received</h4>
+                        <div class="data-table-wrapper fee-table-wrapper fr-table-wrap">
+                            <table class="student-table fee-students-table fr-table">
+                                <thead>
+                                    <tr>
+                                        <th>Date</th>
+                                        <th>For Month</th>
+                                        <th>Amount</th>
+                                        <th>Type</th>
+                                        <th>Method</th>
+                                        <th>Notes</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="fr-payments-body"></tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+
         <div id="print-vouchers-modal" class="voucher-modal-overlay" style="display:none;">
             <div class="voucher-modal-box pv-box">
                 <div class="voucher-modal-header afm-header">
