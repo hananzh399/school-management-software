@@ -3804,7 +3804,10 @@ async function ensureStudentPhotoLoaded(student) {
 
 function buildVoucherHTML(s) {
     const today = new Date();
-    const dateStr = today.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+    // Issue Date shows the fee month this voucher was generated for (e.g.
+    // "Oct 2026"), not today's date — a day-specific date changed every time
+    // the voucher was opened, so reprints never matched the original.
+    const dateStr = feeMonthDisplayLabel(getCurrentFeeMonthKey(), 'en-US', 'short');
     const challanNo = `CH-${s.id}-${getCurrentFeeMonthKey().replace('-', '')}`;
     const photoSrc = financePhotoUrl(s);
     const f = computeFeeBreakdown(s);
@@ -3875,7 +3878,6 @@ function buildVoucherHTML(s) {
                     ${voucherLogoHtml()}
                     <div>
                         <h2>${escapeHtml(getSchoolIdentity().name)}</h2>
-                        <p>Financial Control Center &middot; Fee Voucher</p>
                     </div>
                 </div>
                 ${photoSrc
@@ -3887,7 +3889,6 @@ function buildVoucherHTML(s) {
                 <div><span>Challan No.</span><strong>${challanNo}</strong></div>
                 <div><span>Issue Date</span><strong>${dateStr}</strong></div>
                 <div><span>Due Date</span><strong>${f.dueDateStr}</strong></div>
-                <div><span>Expiry Date</span><strong>${f.expiryDateStr}</strong></div>
             </div>
 
             <div class="voucher-divider"></div>
@@ -4293,8 +4294,10 @@ async function renderFees(className) {
                     <td class="fee-guardian-cell" title="${escapeHtml(finance.guardianName || '')}">${escapeHtml(finance.guardianName || '-')}</td>
                     <td>
                         <div class="fee-pending-line">
-                            <strong style="color:${isPaid ? '#27ae60' : '#c2410c'}">Rs. ${finance.remainingBalance.toLocaleString()}</strong>
-                            ${finance.paidAmount > 0 ? `<span class="fee-paid-so-far">Paid so far: Rs. ${Number(finance.paidAmount).toLocaleString()}</span>` : ''}
+                            ${isPaid
+                                ? `<strong style="color:#27ae60">0</strong>`
+                                : `<strong style="color:#c2410c">Rs. ${finance.remainingBalance.toLocaleString()}</strong>
+                                   ${finance.paidAmount > 0 ? `<span class="fee-paid-so-far">Paid: Rs. ${Number(finance.paidAmount).toLocaleString()}</span>` : ''}`}
                         </div>
                     </td>
                     <td>
@@ -4343,12 +4346,13 @@ function _updateFeeFilterChips() {
             if (counts[st] !== undefined) counts[st]++;
         });
     }
-    document.querySelectorAll('#fee-status-filter .fee-filter-chip').forEach(chip => {
-        const f = chip.getAttribute('data-filter');
-        const c = chip.querySelector('.fee-filter-count');
-        if (c) c.textContent = counts[f] !== undefined ? counts[f] : 0;
-        chip.classList.toggle('active', f === currentFeeStatusFilter);
+    const sel = document.getElementById('fee-status-filter');
+    if (!sel) return;
+    const names = { all: 'All Status', paid: 'Paid', partial: 'Partial', pending: 'Pending' };
+    Array.from(sel.options).forEach(opt => {
+        opt.textContent = `${names[opt.value] || opt.value} (${counts[opt.value] || 0})`;
     });
+    sel.value = currentFeeStatusFilter;
 }
 
 // Filter the fee table rows by name / id / guardian AND the selected status chip
@@ -7490,7 +7494,8 @@ function groupStudentsForPrinting(students, combineSiblings) {
  *  whole family. */
 function buildFamilyVoucherHTML(studentsGroup) {
     const today = new Date();
-    const dateStr = today.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+    // Issue Date = the fee month of this voucher (see buildVoucherHTML).
+    const dateStr = feeMonthDisplayLabel(getCurrentFeeMonthKey(), 'en-US', 'short');
     const guardianName = studentsGroup[0].guardianName || 'Guardian';
     const famTag = (guardianName || 'FAM').replace(/[^a-zA-Z0-9]/g, '').toUpperCase().slice(0, 6) || 'FAM';
     const challanNo = `FV-${famTag}-${getCurrentFeeMonthKey().replace('-', '')}`;
@@ -7577,7 +7582,6 @@ function buildFamilyVoucherHTML(studentsGroup) {
                     ${voucherLogoHtml()}
                     <div>
                         <h2>${escapeHtml(getSchoolIdentity().name)}</h2>
-                        <p>Financial Control Center &middot; Combined Family Fee Voucher</p>
                     </div>
                 </div>
             </div>
@@ -7586,7 +7590,6 @@ function buildFamilyVoucherHTML(studentsGroup) {
                 <div><span>Challan No.</span><strong>${challanNo}</strong></div>
                 <div><span>Issue Date</span><strong>${dateStr}</strong></div>
                 <div><span>Due Date</span><strong>${dueDateStr}</strong></div>
-                <div><span>Expiry Date</span><strong>${expiryDateStr}</strong></div>
             </div>
 
             <div class="voucher-divider"></div>
@@ -8256,7 +8259,11 @@ function viewCustomFeeVoucher(feeId, studentId) {
 
 function _buildCustomFeeVoucherHTML(fee, rec) {
     const today = new Date();
-    const dateStr = today.toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'numeric' });
+    // Issue Date = the month this custom fee belongs to (not today's date).
+    const _cfm = /^(\d{4})-(\d{2})$/.exec(fee.monthKey || '');
+    const dateStr = _cfm
+        ? new Date(Number(_cfm[1]), Number(_cfm[2]) - 1, 1).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
+        : String(fee.monthKey || '');
     const challanNo = `CF-${rec.studentId}-${fee.monthKey.replace('-','')}`;
     const paidStamp = rec.paid ? `<div class="paid-stamp-overlay">PAID</div>` : '';
 
@@ -8280,7 +8287,7 @@ function _buildCustomFeeVoucherHTML(fee, rec) {
             <div class="voucher-header">
                 <div class="voucher-school-info">
                     ${voucherLogoHtml()}
-                    <div><h2>${_escHtml(getSchoolIdentity().name)}</h2><p>Financial Control Center &middot; Custom Fee Voucher</p></div>
+                    <div><h2>${_escHtml(getSchoolIdentity().name)}</h2></div>
                 </div>
             </div>
             <div class="voucher-meta-row" style="grid-template-columns: repeat(${dueDateRow ? 4 : 3}, 1fr);">
