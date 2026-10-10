@@ -4329,3 +4329,62 @@ body { min-height: 100vh; min-height: 100dvh; }
         max-height: 94dvh !important;
     }
 }
+
+/* ============================================
+   SUBJECT -> CLASS ASSIGNMENT (teacher form)
+   ============================================ */
+.subject-assign-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+.subject-group {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 12px;
+}
+.subject-group-name {
+    flex: 0 0 auto;
+    min-width: 110px;
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+.subject-group-name em { font-weight: 500; color: var(--text-muted); }
+.class-assign-row.subject-assign-row {
+    grid-template-columns: 1.3fr 1fr 1fr auto;
+}
+.class-assign-row input[type="text"] {
+    width: 100%;
+    padding: 9px 12px;
+    font-size: 0.85rem;
+    color: var(--text-primary);
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-sm);
+    outline: none;
+    transition: var(--transition);
+}
+.class-assign-row input[type="text"]:focus { border-color: var(--accent-teaching); }
+.assign-hint {
+    margin: 10px 0 0;
+    font-size: 0.75rem;
+    color: var(--text-muted);
+}
+/* A subject without a class (or vice versa) — must be completed or removed before saving. */
+.class-tag.incomplete {
+    cursor: pointer;
+    color: #b45309;
+    background: rgba(245, 158, 11, 0.14);
+    border-color: rgba(245, 158, 11, 0.55);
+}
+.class-tag.incomplete .class-tag-remove { color: #b45309; }
+.class-tag.incomplete .class-tag-remove:hover { background: #b45309; color: #fff; }
+.class-tag.static.incomplete { cursor: default; }
+@media (max-width: 640px) {
+    .class-assign-row.subject-assign-row { grid-template-columns: 1fr 1fr; }
+    .class-assign-row.subject-assign-row > div:first-child { grid-column: 1 / -1; }
+    .class-assign-row.subject-assign-row .assign-add-btn { grid-column: 1 / -1; }
+    .subject-group-name { min-width: 100%; }
+}

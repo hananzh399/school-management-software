@@ -100,6 +100,17 @@
   }
   const label = (c) => c.cls + (c.section ? " - " + c.section : "");
   const subjects = () => String(staff.subjects || "").split(",").map((s) => s.trim()).filter(Boolean);
+  /* Subject → class pairs set by the admin ({subject, cls, section}). Teachers saved before this
+     existed have none, and keep the old behaviour (every subject in every class). */
+  const subjectPairs = () => { try { const a = JSON.parse(staff.subjectAssignments || "[]"); return Array.isArray(a) ? a.filter((x) => x && x.cls && x.subject) : []; } catch (e) { return []; } };
+  const hasPairs = () => subjectPairs().length > 0;
+  /* Subjects this teacher teaches in one class, given its label ("Class 5 - A" or "Class 5"). */
+  function subjectsForClass(lbl) {
+    if (!hasPairs()) return subjects();
+    const parts = String(lbl || "").split(/\s+-\s+/), c = norm(parts[0]), sc = norm(parts[1]), out = [];
+    subjectPairs().forEach((p) => { if (norm(p.cls) === c && (!p.section || !sc || norm(p.section) === sc) && out.indexOf(p.subject) < 0) out.push(p.subject); });
+    return out;
+  }
   const initials = () => String(staff.name || "T").split(/\s+/).slice(0, 2).map((w) => w[0]).join("").toUpperCase();
 
   /* ── Attendance state ── */
@@ -135,6 +146,8 @@
   async function ensureStudents() { if (!att.students && !att.loading) await loadAttendanceData(); return att.students || []; }
   function studentsOf(c) { return (att.students || []).filter((s) => norm(s.cls) === norm(c.cls) && (!c.section || norm(s.section) === norm(c.section))); }
   const allMyClasses = () => { const m = {}; teachingClasses().concat(inchargeClasses()).forEach((c) => (m[label(c)] = c)); return Object.keys(m).map((k) => m[k]); };
+  /* Classes where this teacher actually teaches a subject — what Diary and Tests should offer. */
+  const subjectClasses = () => { if (!hasPairs()) return allMyClasses(); const m = {}; subjectPairs().forEach((p) => { const c = { cls: p.cls, section: p.section || "" }; m[label(c)] = c; }); return Object.keys(m).map((k) => m[k]); };
 
   /* ── Sheet (bottom modal) ── */
   function openSheet(html, cls) { const b = $("#sheet-body"); b.className = "sheet" + (cls ? " " + cls : ""); b.innerHTML = html; $("#sheet").hidden = false; b.scrollTop = 0; document.body.style.overflow = "hidden"; }
@@ -269,15 +282,15 @@
   /* ── MY CLASSES (tap a class you are incharge of → its students) ── */
   let classOpen = null;
   function classes() {
-    const inc = inchargeClasses(), subs = subjects(), mine = allMyClasses();
+    const inc = inchargeClasses(), mine = allMyClasses();
     if (!mine.length) { view.innerHTML = empty("fa-chalkboard", "No classes yet", "Your admin hasn't assigned classes to you."); return; }
     const incIdx = (c) => inc.findIndex((i) => norm(i.cls) === norm(c.cls) && (!i.section || norm(i.section) === norm(c.section)));
     if (classOpen != null && inc[classOpen]) return classDetail(inc[classOpen]);
     classOpen = null;
     view.innerHTML = `<div class="section-title">My classes</div>` + mine.map((c) => {
-      const ix = incIdx(c), n = att.students ? studentsOf(c).length : null;
+      const ix = incIdx(c), n = att.students ? studentsOf(c).length : null, subs = subjectsForClass(label(c));
       const inner = `<div class="class-badge">${esc(String(c.cls).replace(/class/i, "").trim().slice(0, 4) || "—")}</div>
-        <div class="tx"><b>${esc(label(c))}</b><span>${esc(subs.join(" · ") || "Subjects not set")}${n == null ? "" : " · " + n + " students"}</span></div>
+        <div class="tx"><b>${esc(label(c))}</b><span>${esc(subs.join(" · ") || (hasPairs() ? "Class incharge" : "Subjects not set"))}${n == null ? "" : " · " + n + " students"}</span></div>
         ${ix >= 0 ? `<span class="pill amber"><i class="fas fa-star"></i> Incharge</span><i class="fas fa-chevron-right chev"></i>` : ""}`;
       return ix >= 0 ? `<button class="class-card tap" data-openclass="${ix}">${inner}</button>` : `<div class="class-card">${inner}</div>`;
     }).join("") + (inc.length ? `<p class="hint" style="margin:6px 4px 0"><i class="fas fa-circle-info"></i> Tap a class you are incharge of to see its students.</p>` : "");
@@ -358,7 +371,7 @@
   const TYPES = ["Paper test", "Class test", "Quiz", "Monthly test", "Mid-term", "Final term", "Other"];
   const totalOf = (t) => +t.totalMarks || (t.questions ? qTotal(t) : 0);
   function newTestDraft() {
-    const mc = allMyClasses(), subs = subjects();
+    const mc = subjectClasses(), subs = mc[0] ? subjectsForClass(label(mc[0])) : subjects();
     return { id: uid(), kind: TYPES[0], title: "", cls: mc[0] ? label(mc[0]) : "", subject: subs[0] || "", date: today(), totalMarks: "", passPct: 40, syllabus: "", results: {}, marked: false, created: Date.now() };
   }
   function startBuild() { qb = newTestDraft(); quizView = "build"; quizzes(); }
@@ -367,7 +380,7 @@
     view.querySelectorAll("[data-f]").forEach((el) => { qb[el.dataset.f] = el.value; });
   }
   function buildView() {
-    const mc = allMyClasses(), subs = subjects();
+    const mc = subjectClasses(), subs = subjectsForClass(qb.cls);
     const clsOpts = mc.map((c) => `<option ${label(c) === qb.cls ? "selected" : ""}>${esc(label(c))}</option>`).join("");
     const subOpts = (subs.length ? subs : [qb.subject || "General"]).map((s) => `<option ${s === qb.subject ? "selected" : ""}>${esc(s)}</option>`).join("");
     return `
@@ -388,6 +401,7 @@
     if (!qb.title.trim()) return toast("Enter the test name.", true);
     if (!qb.cls || qb.cls === "—") return toast("Choose a class.", true);
     if (!qb.subject) return toast("Choose the subject.", true);
+    if (hasPairs() && subjectsForClass(qb.cls).indexOf(qb.subject) < 0) return toast("You don't teach " + qb.subject + " in " + qb.cls + ".", true);
     if (!(+qb.totalMarks > 0)) return toast("Enter the total marks of the paper.", true);
     qb.totalMarks = +qb.totalMarks;
     tests.push(qb); saveTests(); pushTest(qb); openTest = qb.id; qb = null; quizView = "list"; quizzes.tab = "upcoming"; toast("Added to Upcoming."); quizzes();
@@ -619,9 +633,12 @@
     dz.sending = false; if (current === "diary") diary();
   }
   function diary() {
-    const mc = allMyClasses(), subs = subjects();
+    const mc = subjectClasses();
     if (!mc.length) { view.innerHTML = empty("fa-book-open", "No classes yet", "Your admin hasn't assigned classes to you."); return; }
     if (!dz.cls || !mc.some((c) => label(c) === dz.cls)) { dz.cls = mc.length === 1 ? label(mc[0]) : ""; }
+    const subs = dz.cls ? subjectsForClass(dz.cls) : [];
+    if (dz.subject && subs.length && subs.indexOf(dz.subject) < 0) dz.subject = "";
+    if (!dz.subject && subs.length === 1) dz.subject = subs[0];
     const ready = dz.cls && dz.subject;
     const step = (n, done, title, inner) => `<div class="card dstep"><h2><span class="sn2 ${done ? "ok" : ""}">${done ? '<i class="fas fa-check"></i>' : n}</span> ${title}</h2>${inner}</div>`;
     view.innerHTML = `
@@ -659,7 +676,9 @@
       <div class="card"><h2><i class="fas fa-address-card"></i> Details</h2>
         ${kv("Staff ID", staff.staffId)}${kv("Role", staff.role)}${kv("Phone", staff.phone)}${kv("Gender", staff.gender)}${kv("CNIC", staff.cnic)}
         ${kv(staff.guardianType || "Guardian", staff.guardianName)}${kv("Address", staff.address)}${kv("Qualification", staff.qualification)}${kv("Joined", staff.joined)}</div>
-      <div class="card"><h2><i class="fas fa-book"></i> Subjects</h2><div class="tags">${subjects().map((s) => `<span class="pill teal">${esc(s)}</span>`).join("") || "<span style='color:var(--ink-faint)'>None assigned</span>"}</div></div>
+      <div class="card"><h2><i class="fas fa-book"></i> Subjects</h2>${hasPairs()
+        ? subjects().map((sb) => `<div class="kv"><span>${esc(sb)}</span><b>${esc(subjectPairs().filter((p) => p.subject === sb).map((p) => label({ cls: p.cls, section: p.section || "" })).join(", "))}</b></div>`).join("")
+        : `<div class="tags">${subjects().map((s) => `<span class="pill teal">${esc(s)}</span>`).join("") || "<span style='color:var(--ink-faint)'>None assigned</span>"}</div>`}</div>
       <div class="card"><h2><i class="fas fa-chalkboard"></i> Classes</h2><div class="tags">${teachingClasses().map((c) => `<span class="pill teal">${esc(label(c))}</span>`).join("") || "<span style='color:var(--ink-faint)'>None assigned</span>"}
         ${inc.map((c) => `<span class="pill amber"><i class="fas fa-star"></i> ${esc(label(c))}</span>`).join("")}</div></div>
       <div class="card"><h2><i class="fas fa-bell"></i> Notifications</h2>
@@ -841,6 +860,7 @@
   view.addEventListener("change", (e) => {
     const t = e.target;
     if (t.dataset.todo != null) { const l = store.get("todos", []); if (l[+t.dataset.todo]) l[+t.dataset.todo].done = t.checked; store.set("todos", l); return home(); }
+    if (t.dataset.f === "cls" && qb) { harvest(); const ok = subjectsForClass(qb.cls); if (hasPairs() && ok.indexOf(qb.subject) < 0) qb.subject = ok[0] || ""; return quizzes(); }
     if (t.id === "d-files" || t.id === "d-cam") { const fl = t.files; if (fl && fl.length) addPhotos(fl); t.value = ""; return; }
     if (t.id === "pref-admin") { prefs.receiveAdmin = t.checked; store.set("prefs", prefs); updateDot(); toast(t.checked ? "Admin messages on." : "Admin messages off."); }
   });

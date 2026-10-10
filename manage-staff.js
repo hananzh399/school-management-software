@@ -1869,7 +1869,8 @@ const MAX_UPLOAD_BYTES = 200 * 1024;
 
 /* Shared state for the new widgets */
 let _pendingAgreement   = null;   // { name, type, data }
-let _classAssignments   = [];     // [{ cls, section }]
+let _classAssignments   = [];     // [{ cls, section }]  (derived from subject assignments on save)
+let _subjectAssignments = [];     // [{ subject, cls, section }]
 let _guardianType       = 'Father';
 let _inchargeOn         = false;
 
@@ -2174,32 +2175,93 @@ function onGenderChange() {
 }
 
 /* ============================================
-   DYNAMIC TEACHING CLASS ASSIGNMENT (green tags)
+   SUBJECT -> CLASS ASSIGNMENT (green tags)
+   Every subject a teacher teaches must be tied to the class (and
+   section) it is taught in. Stored as `subjectAssignments`, a JSON
+   array of { subject, cls, section }. `subjects`, `classes` and
+   `classAssignments` are derived from it on save, so everything that
+   already reads those (attendance, certificates, portal) keeps working.
    ============================================ */
-function buildClassAssignPicker(existing = '') {
-    _classAssignments = [];
-    if (existing) {
-        try {
-            const arr = typeof existing === 'string' ? JSON.parse(existing) : existing;
-            if (Array.isArray(arr)) {
-                arr.forEach(a => {
-                    if (a && a.cls) _classAssignments.push({ cls: a.cls, section: a.section || '' });
-                });
-            }
-        } catch (e) { /* ignore */ }
-    }
+const SUBJECT_NAME_PATTERN = /^[\p{L}\p{M}0-9 .&'()\-\/+]+$/u;
 
+function _parseAssignArray(v) {
+    try {
+        const a = typeof v === 'string' ? JSON.parse(v || '[]') : v;
+        return Array.isArray(a) ? a : [];
+    } catch (e) { return []; }
+}
+function _splitClassLabel(label) {
+    const parts = String(label || '').trim().split(/\s+-\s+/);
+    return { cls: (parts[0] || '').trim(), section: (parts[1] || '').trim() };
+}
+function _sameAssignment(a, b) {
+    return String(a.subject || '').toLowerCase() === String(b.subject || '').toLowerCase()
+        && String(a.cls || '').toLowerCase() === String(b.cls || '').toLowerCase()
+        && String(a.section || '').toLowerCase() === String(b.section || '').toLowerCase();
+}
+
+/* Build the editable list for a staff record. Records saved before this
+   feature only have a plain `subjects` string plus a separate class list;
+   those are expanded to subject x class (which is exactly how the portal
+   treated them) so the admin can trim them to what is really taught. */
+function loadSubjectAssignments(staff) {
+    staff = staff || {};
+    const out = [];
+    const push = a => { if (!out.some(x => _sameAssignment(x, a))) out.push(a); };
+
+    _parseAssignArray(staff.subjectAssignments).forEach(a => {
+        if (a && (a.subject || a.cls)) {
+            push({ subject: String(a.subject || '').trim(), cls: String(a.cls || '').trim(), section: String(a.section || '').trim() });
+        }
+    });
+    if (out.length) return out;
+
+    const subs = String(staff.subjects || '').split(',').map(x => x.trim()).filter(Boolean);
+    let classes = _parseAssignArray(staff.classAssignments)
+        .filter(a => a && a.cls).map(a => ({ cls: String(a.cls).trim(), section: String(a.section || '').trim() }));
+    if (!classes.length) {
+        classes = String(staff.classes || '').split(',').map(x => x.trim()).filter(Boolean).map(_splitClassLabel);
+    }
+    if (subs.length && classes.length) {
+        subs.forEach(sub => classes.forEach(c => push({ subject: sub, cls: c.cls, section: c.section })));
+    } else if (subs.length) {
+        subs.forEach(sub => push({ subject: sub, cls: '', section: '' }));
+    } else {
+        classes.forEach(c => push({ subject: '', cls: c.cls, section: c.section }));
+    }
+    return out;
+}
+
+function _knownSubjectNames() {
+    const seen = {}, list = [];
+    (staffData['Teaching'] || []).forEach(t => {
+        String(t.subjects || '').split(',').map(x => x.trim()).filter(Boolean).forEach(n => {
+            if (!seen[n.toLowerCase()]) { seen[n.toLowerCase()] = 1; list.push(n); }
+        });
+    });
+    return list.sort((a, b) => a.localeCompare(b));
+}
+
+function buildSubjectClassPicker(list) {
+    _subjectAssignments = Array.isArray(list) ? list.slice() : [];
     const classes = getAssignClasses();
     return `
     <div class="form-group full-width class-assign-group" id="f-classassign-group">
-        <label>Class Assignment</label>
-        <div class="class-tags" id="f-class-tags">${_renderClassTags()}</div>
+        <label>Subjects &amp; Classes</label>
+        <div class="subject-assign-list" id="f-class-tags">${_renderSubjectAssignments(true)}</div>
         ${classes.length ? `
         <button type="button" class="add-class-btn" onclick="toggleClassAssignBox()">
-            <i class="fas fa-plus"></i> Add Class
+            <i class="fas fa-plus"></i> Add Subject
         </button>
         <div class="class-assign-box collapsible" id="f-classassign-box">
-            <div class="class-assign-row">
+            <div class="class-assign-row subject-assign-row">
+                <div>
+                    <span class="assign-select-label">Subject</span>
+                    <input type="text" id="f-assign-subject" list="f-assign-subject-list" maxlength="50"
+                           placeholder="e.g. Mathematics" autocomplete="off"
+                           onkeydown="if(event.key==='Enter'){event.preventDefault();addSubjectAssignment();}">
+                    <datalist id="f-assign-subject-list">${_knownSubjectNames().map(n => `<option value="${_esc(n)}"></option>`).join('')}</datalist>
+                </div>
                 <div>
                     <span class="assign-select-label">Class</span>
                     <select id="f-assign-cls" onchange="onAssignClassChange()">
@@ -2213,67 +2275,173 @@ function buildClassAssignPicker(existing = '') {
                         <option value="">— Select Class first —</option>
                     </select>
                 </div>
-                <button type="button" class="assign-add-btn" onclick="addClassAssignment()">Add</button>
+                <button type="button" class="assign-add-btn" onclick="addSubjectAssignment()">Add</button>
             </div>
             <div class="upload-error" id="f-assign-error"></div>
-        </div>` : '<span class="incharge-no-assignment">No classes defined in Settings yet.</span>'}
+            <p class="assign-hint">Choose the class this teacher will teach the subject in. Add the same subject again for each additional class.</p>
+        </div>` : '<span class="incharge-no-assignment">No classes defined in Settings yet — add classes in Settings before assigning subjects.</span>'}
     </div>`;
 }
-function _renderClassTags() {
-    if (!_classAssignments.length) {
-        return '<span class="incharge-no-assignment">No class assigned yet.</span>';
+
+function _assignTagText(a) {
+    if (!a.cls) return 'Class not set';
+    return a.section ? `${_esc(a.cls)} — ${_esc(a.section)}` : _esc(a.cls);
+}
+function _groupSubjectAssignments(list) {
+    const groups = [];
+    list.forEach((a, i) => {
+        const key = String(a.subject || '').toLowerCase();
+        let g = groups.find(x => x.key === key);
+        if (!g) { g = { key, subject: a.subject || '', items: [] }; groups.push(g); }
+        g.items.push({ a, i });
+    });
+    return groups;
+}
+function _renderSubjectAssignments(editable) {
+    if (!_subjectAssignments.length) {
+        return '<span class="incharge-no-assignment">No subject assigned yet.</span>';
     }
-    return _classAssignments.map((a, i) => {
-        const label = a.section ? `${_esc(a.cls)} — ${_esc(a.section)}` : _esc(a.cls);
-        return `<span class="class-tag">${label}<button type="button" class="class-tag-remove"
-            onclick="removeClassAssignment(${i})" title="Remove">&times;</button></span>`;
-    }).join('');
+    return _groupSubjectAssignments(_subjectAssignments).map(g => `
+        <div class="subject-group">
+            <span class="subject-group-name">${g.subject ? _esc(g.subject) : '<em>No subject</em>'}</span>
+            <span class="class-tags">${g.items.map(({ a, i }) => {
+                const bad = !a.cls || !a.subject;
+                return `<span class="class-tag${bad ? ' incomplete' : ''}"
+                    ${bad ? `onclick="fixSubjectAssignment(${i})" title="Click to complete"` : ''}>${_assignTagText(a)}<button type="button" class="class-tag-remove"
+                    onclick="event.stopPropagation();removeSubjectAssignment(${i})" title="Remove">&times;</button></span>`;
+            }).join('')}</span>
+        </div>`).join('');
 }
 function _refreshClassTags() {
     const el = document.getElementById('f-class-tags');
-    if (el) el.innerHTML = _renderClassTags();
+    if (el) el.innerHTML = _renderSubjectAssignments(true);
 }
 function toggleClassAssignBox(force) {
     const box = document.getElementById('f-classassign-box');
     if (!box) return;
     const open = (typeof force === 'boolean') ? force : !box.classList.contains('open');
     box.classList.toggle('open', open);
+    if (open) { const i = document.getElementById('f-assign-subject'); if (i && !i.value) i.focus(); }
 }
 function onAssignClassChange() {
     const clsSel = document.getElementById('f-assign-cls');
-    _fillSectionSelect(document.getElementById('f-assign-sec'), clsSel ? clsSel.value : '', '— Select Class first —');
+    const secSel = document.getElementById('f-assign-sec');
+    _fillSectionSelect(secSel, clsSel ? clsSel.value : '', '— Select Class first —');
+    if (clsSel && clsSel.value && secSel && getSectionsFor(clsSel.value).length > 1) {
+        secSel.insertBefore(new Option('All sections', '__all__'), secSel.options[1]);
+    }
 }
-function addClassAssignment() {
+function addSubjectAssignment() {
+    const subInput = document.getElementById('f-assign-subject');
     const clsSel = document.getElementById('f-assign-cls');
     const secSel = document.getElementById('f-assign-sec');
     _setUploadError('f-assign-error', '');
+
+    const check = SSValidate.validate(
+        { subject: subInput ? subInput.value : '' },
+        { subject: SSValidate.rules.text({ required: true, maxLength: 50, label: 'Subject',
+            pattern: SUBJECT_NAME_PATTERN, patternMessage: 'Subject can only contain letters, numbers and basic punctuation (no commas).' }) }
+    );
+    if (!check.ok) {
+        _setUploadError('f-assign-error', Object.values(check.errors).find(Boolean) || 'Enter the subject.');
+        return;
+    }
+    let subject = check.values.subject;
     if (!clsSel || !clsSel.value) {
-        _setUploadError('f-assign-error', 'Please select a class.');
+        _setUploadError('f-assign-error', 'Select the class this subject will be taught in.');
         return;
     }
+    // Re-use the spelling already on this teacher / school so "maths" and "Maths" don't split.
+    const existing = _subjectAssignments.find(a => a.subject && a.subject.toLowerCase() === subject.toLowerCase());
+    if (existing) subject = existing.subject;
+
     const cls = clsSel.value;
-    const hasSections = getSectionsFor(cls).length > 0;
-    const section = hasSections ? (secSel ? secSel.value : '') : '';
-    if (hasSections && !section) {
-        _setUploadError('f-assign-error', 'Please select a section.');
-        return;
+    const sections = getSectionsFor(cls);
+    let targets;
+    if (!sections.length) {
+        targets = [''];
+    } else {
+        const picked = secSel ? secSel.value : '';
+        if (!picked) { _setUploadError('f-assign-error', 'Select the section.'); return; }
+        targets = picked === '__all__' ? sections.slice() : [picked];
     }
-    if (_classAssignments.some(a => a.cls === cls && a.section === section)) {
-        _setUploadError('f-assign-error', 'This class is already assigned.');
-        return;
-    }
-    _classAssignments.push({ cls, section });
+
+    let added = 0;
+    targets.forEach(section => {
+        const entry = { subject, cls, section };
+        if (_subjectAssignments.some(a => _sameAssignment(a, entry))) return;
+        // This completes an earlier incomplete entry (subject w/o class, or class w/o subject).
+        _subjectAssignments = _subjectAssignments.filter(a =>
+            !((!a.cls && a.subject.toLowerCase() === subject.toLowerCase()) ||
+              (!a.subject && a.cls === cls && a.section === section)));
+        _subjectAssignments.push(entry);
+        added++;
+    });
+    if (!added) { _setUploadError('f-assign-error', 'This subject is already assigned to that class.'); return; }
+
     _refreshClassTags();
     clsSel.value = '';
     _fillSectionSelect(secSel, '', '— Select Class first —');
-    toggleClassAssignBox(false);
+    // keep the subject typed so more classes can be added quickly
 }
-function removeClassAssignment(idx) {
-    _classAssignments.splice(idx, 1);
+function removeSubjectAssignment(idx) {
+    _subjectAssignments.splice(idx, 1);
     _refreshClassTags();
 }
-function readClassAssignments() {
-    return _classAssignments.map(a => a.section ? `${a.cls} - ${a.section}` : a.cls).join(', ');
+function fixSubjectAssignment(idx) {
+    const a = _subjectAssignments[idx];
+    if (!a) return;
+    toggleClassAssignBox(true);
+    const subInput = document.getElementById('f-assign-subject');
+    const clsSel = document.getElementById('f-assign-cls');
+    if (subInput) subInput.value = a.subject || '';
+    if (clsSel && a.cls) { clsSel.value = a.cls; onAssignClassChange(); }
+}
+/* Returns an error message, or '' when the subject/class list is ready to save. */
+function validateSubjectAssignments() {
+    const pending = ((document.getElementById('f-assign-subject') || {}).value || '').trim();
+    if (pending) {
+        return `"${_esc(pending)}" has not been added yet. Select its class and press <b>Add</b> (or clear the subject box).`;
+    }
+    const bad = _subjectAssignments.find(a => !a.subject || !a.cls);
+    if (bad) {
+        return bad.subject
+            ? `Select the class for <b>${_esc(bad.subject)}</b> (or remove it).`
+            : `Enter the subject taught in <b>${_esc(bad.cls)}</b> (or remove it).`;
+    }
+    return '';
+}
+/* Everything the rest of the app reads, derived from the subject/class pairs. */
+function readSubjectAssignmentFields() {
+    const list = _subjectAssignments.filter(a => a.subject && a.cls)
+        .map(a => ({ subject: a.subject, cls: a.cls, section: a.section || '' }));
+    const subjects = [], seenSub = {};
+    const classes = [], seenCls = {};
+    list.forEach(a => {
+        const sk = a.subject.toLowerCase();
+        if (!seenSub[sk]) { seenSub[sk] = 1; subjects.push(a.subject); }
+        const ck = (a.cls + '|' + a.section).toLowerCase();
+        if (!seenCls[ck]) { seenCls[ck] = 1; classes.push({ cls: a.cls, section: a.section }); }
+    });
+    _classAssignments = classes;
+    return {
+        subjects: subjects.join(', '),
+        classes: classes.map(c => c.section ? `${c.cls} - ${c.section}` : c.cls).join(', '),
+        classAssignments: JSON.stringify(classes),
+        subjectAssignments: JSON.stringify(list)
+    };
+}
+function readClassAssignments() { return readSubjectAssignmentFields().classes; }
+/* Read-only version for the profile view. */
+function buildSubjectClassReadonly(staff) {
+    const list = loadSubjectAssignments(staff);
+    if (!list.length) return '';
+    return `<div class="subject-assign-list readonly">` + _groupSubjectAssignments(list).map(g => `
+        <div class="subject-group">
+            <span class="subject-group-name">${g.subject ? _esc(g.subject) : '<em>No subject</em>'}</span>
+            <span class="class-tags readonly">${g.items.map(({ a }) =>
+                `<span class="class-tag static${(!a.cls || !a.subject) ? ' incomplete' : ''}">${_assignTagText(a)}</span>`).join('')}</span>
+        </div>`).join('') + `</div>`;
 }
 
 /* ============================================
@@ -2353,8 +2521,7 @@ function renderFormFields(category) {
         html += buildGenderField('Male');
         html += buildGuardianField('Father', '');
         html += createInput('f-qualification', 'Qualification');
-        html += createInput('f-subjects', 'Subjects');
-        html += buildClassAssignPicker('');
+        html += buildSubjectClassPicker([]);
         html += buildInchargePicker('', '');
         html += createInput('f-salary', 'Salary', 'number');
         html += createInput('f-joined', 'Date Joined', 'date');
@@ -2425,6 +2592,7 @@ function openAddForm() {
     _pendingPhoto = '';
     _pendingAgreement = null;
     _classAssignments = [];
+    _subjectAssignments = [];
     _inchargeOn = false;
     const title = currentCategory === 'Teaching' ? 'Add Teacher' : 'Add Non-Teaching Staff';
     document.getElementById('form-modal-title').textContent = title;
@@ -2480,14 +2648,13 @@ function openEditForm() {
 
     if (currentCategory === 'Teaching') {
         document.getElementById('f-qualification').value = staff.qualification || '';
-        document.getElementById('f-subjects').value = staff.subjects || '';
         document.getElementById('f-joined').value = staff.joined || '';
 
-        // Class assignment tags
+        // Subjects & the classes they are taught in
         const assignGroup = document.getElementById('f-classassign-group');
         if (assignGroup) {
             const tmp = document.createElement('div');
-            tmp.innerHTML = buildClassAssignPicker(staff.classAssignments || '');
+            tmp.innerHTML = buildSubjectClassPicker(loadSubjectAssignments(staff));
             assignGroup.replaceWith(tmp.firstElementChild);
         }
 
@@ -2534,6 +2701,12 @@ function handleFormSubmit(e) {
     const _pw = ((document.getElementById('f-portal-password') || {}).value || '').trim();
     if (_pw && _pw.length < 6) { alert('Teacher portal password must be at least 6 characters.'); return; }
 
+    // A subject must always come with the class it is taught in.
+    if (currentCategory === 'Teaching') {
+        const assignError = validateSubjectAssignments();
+        if (assignError) { showToast(assignError, 'error', 'Subject needs a class'); return; }
+    }
+
     const guardianInput = document.getElementById('f-guardian-name');
 
     // SECURITY: validate the free-typed fields before they're merged
@@ -2549,7 +2722,6 @@ function handleFormSubmit(e) {
             address: document.getElementById('f-address').value,
             salary: document.getElementById('f-salary').value,
             qualification: currentCategory === 'Teaching' ? document.getElementById('f-qualification').value : '',
-            subjects: currentCategory === 'Teaching' ? document.getElementById('f-subjects').value : '',
             job: currentCategory !== 'Teaching' ? document.getElementById('f-job').value : '',
         },
         STAFF_FORM_SCHEMA
@@ -2583,12 +2755,10 @@ function handleFormSubmit(e) {
 
     if (currentCategory === 'Teaching') {
         newData.qualification = document.getElementById('f-qualification').value;
-        newData.subjects = document.getElementById('f-subjects').value;
         newData.joined = document.getElementById('f-joined').value;
 
-        // Class assignment tags
-        newData.classes = readClassAssignments();
-        newData.classAssignments = JSON.stringify(_classAssignments);
+        // Subject -> class pairs (+ the derived subjects / classes fields)
+        Object.assign(newData, readSubjectAssignmentFields());
 
         // Class incharge
         const inc = readIncharge();
@@ -2704,20 +2874,8 @@ function showProfileView(staffId, category) {
         : `<span class="agreement-none">No agreement uploaded.</span>`;
 
     if (category === 'Teaching') {
-        let tags = '';
-        try {
-            const arr = JSON.parse(staff.classAssignments || '[]');
-            if (Array.isArray(arr) && arr.length) {
-                tags = `<span class="class-tags readonly">` + arr.map(a =>
-                    `<span class="class-tag static">${_esc(a.section ? `${a.cls} — ${a.section}` : a.cls)}</span>`
-                ).join('') + `</span>`;
-            }
-        } catch (e) {}
-        if (!tags) tags = staff.classes || '';
-
         grid.innerHTML += createItem('Qualification', staff.qualification);
-        grid.innerHTML += createItem('Subjects', staff.subjects);
-        grid.innerHTML += createItem('Class Assignment', tags, true, true);
+        grid.innerHTML += createItem('Subjects & Classes', buildSubjectClassReadonly(staff), true, true);
         grid.innerHTML += createItem('Class Incharge', staff.incharge || 'Not assigned', true);
         grid.innerHTML += createItem('Gender', staff.gender);
         grid.innerHTML += createItem(guardianLabel, staff.guardianName || staff.fatherName);
