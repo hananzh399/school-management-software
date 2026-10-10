@@ -8658,3 +8658,29 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 
 /* Paid date sits a little lower, clear of the badge */
 #class-student-list-view .fee-paid-date { margin-top: 6px; }
+
+
+/* Status filter is now a dropdown (replaces the separate chip buttons) */
+.fee-status-select {
+    padding: 10px 34px 10px 14px;
+    border-radius: 12px;
+    border: 1px solid var(--border-subtle);
+    background-color: var(--bg-card);
+    color: var(--text-primary);
+    font-size: 0.85rem;
+    font-weight: 600;
+    font-family: 'Inter', sans-serif;
+    cursor: pointer;
+    min-width: 150px;
+    appearance: none;
+    -webkit-appearance: none;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'><path fill='none' stroke='%2394a3b8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' d='M2 4l4 4 4-4'/></svg>");
+    background-repeat: no-repeat;
+    background-position: right 12px center;
+    transition: border-color .2s, box-shadow .2s;
+}
+.fee-status-select:focus { outline: none; border-color: #6366f1; box-shadow: 0 0 0 3px rgba(99,102,241,0.15); }
+.fee-status-select option { background: #1e293b; color: #f1f5f9; }
+
+/* Pending-fees cell: amount on top, short "Paid" note underneath */
+.fee-pending-line { flex-direction: column; align-items: flex-start; gap: 1px; }
