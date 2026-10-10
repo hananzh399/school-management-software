@@ -305,7 +305,7 @@
       <div class="cl-head"><div class="class-badge">${esc(String(c.cls).replace(/class/i, "").trim().slice(0, 4) || "—")}</div><div><b>${esc(label(c))}</b><span>${list.length} student${list.length === 1 ? "" : "s"}${marked ? ` · Today: ${cnt.present} P · ${cnt.absent} A · ${cnt.leave} L` : " · Attendance not marked today"}</span></div></div>
       ${list.length > 6 ? `<div class="searchbox"><i class="fas fa-magnifying-glass"></i><input id="class-q" placeholder="Search name or reg no" autocomplete="off"></div>` : ""}
       ${list.length ? `<div class="slist">${list.map((s, i) => `<div class="srow" data-q="${esc((s.name + " " + s.regNo).toLowerCase())}"><span class="sn">${i + 1}</span><div class="sav">${esc(s.name.trim().charAt(0).toUpperCase())}</div>
-        <div class="stx"><b>${esc(s.name)}</b><span>${esc(s.regNo)}${s.guardian ? " · " + esc(s.guardian) : ""}</span></div>${att.saved[s.regNo] ? `<i class="stt ${tag[att.saved[s.regNo]].toLowerCase()}">${tag[att.saved[s.regNo]]}</i>` : ""}</div>`).join("")}</div>`
+        <div class="stx"><b>${esc(s.name)}</b><span>${esc(s.regNo)}${s.guardian ? " · " + esc(s.guardian) : ""}</span></div>${att.saved[s.regNo] ? `<i class="stt ${tag[att.saved[s.regNo]].toLowerCase()}">${tag[att.saved[s.regNo]]}</i>` : ""}<button class="srow-msg" data-msgparent="${esc(s.regNo)}" aria-label="Message parent"><i class="fas fa-comment-dots"></i></button></div>`).join("")}</div>`
         : empty("fa-user-graduate", "No students found", "No active students in " + esc(label(c)) + ".")}`;
   }
 
@@ -478,7 +478,7 @@
      • Parents · <class> – your messages to the parents of a class (parent replies will land here once the parent portal is linked)
      Messages are saved on the phone first, then sent in the background (clock → tick), and retried if the network drops. */
   const enc = encodeURIComponent;
-  const chat = { items: store.get("chat", []), thread: null, draft: {} };
+  const chat = { items: store.get("chat", []), thread: null, draft: {}, started: store.get("chat_started", []) };
   const saveChat = () => store.set("chat", chat.items.slice(-600));
   const chatUnread = () => chat.items.filter((m) => m.senderType !== "TEACHER" && !m.read).length;
   const fmtClock = (ms) => new Date(ms).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
@@ -488,9 +488,14 @@
     const t = [{ key: "notices", kind: "notices", title: "School notices", sub: "Announcements from the admin", icon: "fa-bullhorn" },
       { key: "admin", kind: "chat", channel: "admin", className: "", title: "Admin / Principal", sub: "Direct chat with the admin", icon: "fa-user-tie" }];
     allMyClasses().forEach((c) => t.push({ key: "class:" + label(c), kind: "chat", channel: "class", className: label(c), title: "Parents · " + label(c), sub: "Your message goes to every parent of this class", icon: "fa-people-roof" }));
+    // one private conversation per student's parent (started by the teacher, or opened by the parent later)
+    const ppl = {};
+    chat.started.forEach((s) => (ppl[s.regNo] = Object.assign({}, s)));
+    chat.items.filter((m) => m.channel === "parent_teacher" && m.regNo).forEach((m) => { ppl[m.regNo] = Object.assign({ regNo: m.regNo }, ppl[m.regNo] || {}, { studentName: m.studentName || (ppl[m.regNo] || {}).studentName, guardianName: m.guardianName || (ppl[m.regNo] || {}).guardianName, className: m.className || (ppl[m.regNo] || {}).className }); });
+    Object.keys(ppl).forEach((r) => { const s = ppl[r]; t.push({ key: "parent:" + r, kind: "chat", channel: "parent_teacher", className: s.className || "", regNo: r, title: "Parent of " + (s.studentName || r), sub: "Father/Guardian: " + (s.guardianName || "—") + " · " + r + (s.className ? " · " + s.className : ""), icon: "fa-user-group" }); });
     return t;
   }
-  const msgsOf = (th) => chat.items.filter((m) => m.channel === th.channel && (th.channel === "admin" || m.className === th.className)).sort((a, b) => a.at - b.at);
+  const msgsOf = (th) => chat.items.filter((m) => m.channel === th.channel && (th.channel === "admin" || (th.channel === "parent_teacher" ? m.regNo === th.regNo : m.className === th.className))).sort((a, b) => a.at - b.at);
   function threadInfo(th) {
     if (th.kind === "notices") {
       const list = prefs.receiveAdmin ? ann.received.slice().sort((a, b) => new Date(b.date) - new Date(a.date)) : [], l = list[0];
@@ -504,7 +509,7 @@
       const list = await api("/messages?schoolId=" + enc(schoolId) + "&staffId=" + enc(staff.staffId || ""));
       if (!Array.isArray(list)) return;
       const localRead = {}; chat.items.forEach((m) => { if (m.read && m.id) localRead[m.id] = 1; });
-      const server = list.map((x) => ({ id: x.id, clientId: x.clientId || "s" + x.id, channel: x.channel, className: x.className || "", senderType: x.senderType, senderName: x.senderName || "", body: x.body, at: Date.parse(x.createdAt) || 0, read: x.senderType === "TEACHER" ? true : (!!x.readByTeacher || !!localRead[x.id]), status: "sent" }));
+      const server = list.map((x) => ({ id: x.id, clientId: x.clientId || "s" + x.id, channel: x.channel, className: x.className || "", regNo: x.regNo || "", studentName: x.studentName || "", guardianName: x.guardianName || "", senderType: x.senderType, senderName: x.senderName || "", body: x.body, at: Date.parse(x.createdAt) || 0, read: x.senderType === "TEACHER" ? true : (!!x.readByTeacher || !!localRead[x.id]), status: "sent" }));
       const have = {}; server.forEach((m) => (have[m.clientId] = 1));
       const pending = chat.items.filter((m) => m.senderType === "TEACHER" && m.status !== "sent" && !have[m.clientId]);
       chat.items = server.concat(pending); saveChat(); flushChat();
@@ -517,7 +522,7 @@
     try {
       for (const m of chat.items.filter((x) => x.senderType === "TEACHER" && x.status === "sending")) {
         try {
-          const r = await api("/messages", { method: "POST", body: JSON.stringify({ schoolId, staffId: staff.staffId, clientId: m.clientId, channel: m.channel, className: m.className, body: m.body }) });
+          const r = await api("/messages", { method: "POST", body: JSON.stringify({ schoolId, staffId: staff.staffId, clientId: m.clientId, channel: m.channel, className: m.className, regNo: m.regNo || undefined, body: m.body }) });
           m.status = "sent"; if (r && r.id) m.id = r.id; if (r && r.createdAt) m.at = Date.parse(r.createdAt) || m.at;
         } catch (e) {
           if (e.message === "401") return;
@@ -531,7 +536,7 @@
     if (th.kind === "notices") { if (ann.received.some((a) => !a.read)) { ann.received.forEach((a) => (a.read = true)); store.set("ann_in", ann.received); updateDot(); } return; }
     const un = msgsOf(th).filter((m) => m.senderType !== "TEACHER" && !m.read); if (!un.length) return;
     un.forEach((m) => (m.read = true)); saveChat(); updateDot();
-    api("/messages/read", { method: "POST", body: JSON.stringify({ schoolId, staffId: staff.staffId, channel: th.channel, className: th.className }) }).catch(() => {});
+    api("/messages/read", { method: "POST", body: JSON.stringify({ schoolId, staffId: staff.staffId, channel: th.channel, className: th.className, regNo: th.regNo || undefined }) }).catch(() => {});
   }
   function threadBodyHtml(th) {
     if (th.kind === "notices") {
@@ -541,7 +546,7 @@
         : empty("fa-bullhorn", "No notices yet", "When the admin posts a notice for teachers it will appear here.");
     }
     const list = msgsOf(th);
-    if (!list.length) return empty(th.channel === "admin" ? "fa-comments" : "fa-people-roof", "No messages yet", th.channel === "admin" ? "Write below to start a chat with the admin." : "Write below to message the parents of " + esc(th.className) + ". Their replies will appear here once the parent portal is live.");
+    if (!list.length) return empty(th.channel === "admin" ? "fa-comments" : "fa-people-roof", "No messages yet", th.channel === "admin" ? "Write below to start a chat with the admin." : th.channel === "parent_teacher" ? "Write below to message this student's parent privately." : "Write below to message the parents of " + esc(th.className) + ". Their replies will appear here once the parent portal is live.");
     let html = "", last = "";
     list.forEach((m) => {
       const dl = dayLabel(m.at); if (dl !== last) { html += `<div class="day-sep"><span>${dl}</span></div>`; last = dl; }
@@ -555,7 +560,7 @@
     if (!th) {
       chat.thread = null; view.classList.remove("chat-mode");
       const rows = threadList().map((t) => Object.assign({ th: t }, threadInfo(t)));
-      view.innerHTML = `<div class="thr-list">${rows.map((x) => `<button class="thr" data-thread="${esc(x.th.key)}"><div class="thr-ic ${x.th.kind}"><i class="fas ${x.th.icon}"></i></div><div class="thr-tx"><b>${esc(x.th.title)}</b><span>${esc(x.last)}</span></div><div class="thr-r"><small>${x.at ? fmtWhen(x.at) : ""}</small>${x.unread ? `<i class="cnt">${x.unread > 99 ? "99+" : x.unread}</i>` : ""}</div></button>`).join("")}</div>
+      view.innerHTML = `<button class="btn" data-newparent="1" style="margin-bottom:10px;height:42px"><i class="fas fa-user-plus"></i> Message a parent</button><div class="thr-list">${rows.map((x) => `<button class="thr" data-thread="${esc(x.th.key)}"><div class="thr-ic ${x.th.kind}"><i class="fas ${x.th.icon}"></i></div><div class="thr-tx"><b>${esc(x.th.title)}</b><span>${esc(x.last)}</span></div><div class="thr-r"><small>${x.at ? fmtWhen(x.at) : ""}</small>${x.unread ? `<i class="cnt">${x.unread > 99 ? "99+" : x.unread}</i>` : ""}</div></button>`).join("")}</div>
         ${allMyClasses().length ? "" : `<p class="hint" style="margin:10px 4px"><i class="fas fa-circle-info"></i> Parent channels appear here once the admin assigns you a class.</p>`}`;
       return;
     }
@@ -573,12 +578,30 @@
     const ta = $("#chat-in"); if (ta) autoGrow(ta);
     markRead(th);
   }
+  /* Pick any student from your classes → private chat with that student's parent */
+  function parentPickRows(q) {
+    const seen = {}, rows = [];
+    allMyClasses().forEach((c) => studentsOf(c).forEach((s) => { if (!seen[s.regNo]) { seen[s.regNo] = 1; rows.push(s); } }));
+    q = (q || "").trim().toLowerCase();
+    return rows.filter((s) => !q || (s.name + " " + s.regNo + " " + (s.guardian || "")).toLowerCase().indexOf(q) >= 0).sort((a, b) => a.name.localeCompare(b.name)).slice(0, 60)
+      .map((s) => `<button class="pp-row" data-pickparent="${esc(s.regNo)}"><div class="sav">${esc(s.name.trim().charAt(0).toUpperCase())}</div><div class="stx"><b>${esc(s.name)}</b><span>Father/Guardian: ${esc(s.guardian || "—")} · ${esc(s.regNo)} · ${esc(s.cls + (s.section ? " - " + s.section : ""))}</span></div></button>`).join("") || empty("fa-user-graduate", "No students found", "");
+  }
+  async function openParentPicker() {
+    openSheet(`<div class="sheet-head"><div><b>Message a parent</b><span>Choose a student from your classes</span></div><button class="icon-btn dark" data-close="1" aria-label="Close"><i class="fas fa-xmark"></i></button></div>
+      <div class="searchbox"><i class="fas fa-magnifying-glass"></i><input id="pp-q" placeholder="Student, guardian or reg no" autocomplete="off"></div><div class="pp-list" id="pp-list"><div class="skel"></div></div>`, "tall");
+    await ensureStudents(); const l = $("#pp-list"); if (l) l.innerHTML = parentPickRows("");
+  }
+  function startParentChat(regNo) {
+    let s = null; allMyClasses().forEach((c) => studentsOf(c).forEach((x) => { if (x.regNo === regNo) s = x; })); if (!s) return;
+    if (!chat.started.some((x) => x.regNo === regNo)) { chat.started.push({ regNo, studentName: s.name, guardianName: s.guardian || "", className: s.cls + (s.section ? " - " + s.section : "") }); store.set("chat_started", chat.started); }
+    closeSheet(); chat.thread = "parent:" + regNo; current === "inbox" ? inbox() : go("inbox");
+  }
   function autoGrow(ta) { ta.style.height = "auto"; ta.style.height = Math.min(ta.scrollHeight, 120) + "px"; }
   function sendChat() {
     const th = threadList().find((t) => t.key === chat.thread), ta = $("#chat-in");
     if (!th || th.kind !== "chat" || !ta) return;
     const body = ta.value.trim(); if (!body) return;
-    chat.items.push({ id: null, clientId: uid(), channel: th.channel, className: th.className || "", senderType: "TEACHER", senderName: staff.name || "", body, at: Date.now(), read: true, status: "sending" });
+    chat.items.push({ id: null, clientId: uid(), channel: th.channel, className: th.className || "", regNo: th.regNo || "", studentName: th.title.replace(/^Parent of /, ""), senderType: "TEACHER", senderName: staff.name || "", body, at: Date.now(), read: true, status: "sending" });
     chat.draft[th.key] = ""; ta.value = ""; autoGrow(ta); saveChat(); inbox(); flushChat();
   }
 
@@ -829,6 +852,8 @@
     if (d.csv) return exportCsv(tests.find((x) => x.id === d.csv));
     if (d.deltest) { if (confirm("Delete this test and all its marks?")) { tests = tests.filter((x) => x.id !== d.deltest); saveTests(); pendingPut = pendingPut.filter((x) => x !== d.deltest); pendingDel.push(d.deltest); savePending(); flushTests(); quizView = "list"; quizzes(); toast("Deleted."); } return; }
     /* messages */
+    if (d.newparent != null) return openParentPicker();
+    if (d.msgparent != null) return startParentChat(d.msgparent);
     if (d.chatback != null) { chat.thread = null; return inbox(); }
     if (t.id === "chat-send") return sendChat();
     /* classes */
@@ -870,11 +895,13 @@
     if (b.id === "card-share") return cardShare();
     if (b.id === "card-dl") return cardDownload();
     if (b.id === "mk-save") return saveMarks();
+    if (b.dataset.pickparent) return startParentChat(b.dataset.pickparent);
     if (gradeCtx && b.dataset.abs) {
       const reg = b.dataset.abs, on = !gradeCtx.abs[reg]; gradeCtx.abs[reg] = on; b.classList.toggle("on", on);
       const inp = b.parentElement.querySelector(".mk-in"); inp.disabled = on; if (on) inp.value = ""; else inp.focus();
     }
   });
+  $("#sheet-body").addEventListener("input", (e) => { if (e.target.id === "pp-q") { const l = $("#pp-list"); if (l) l.innerHTML = parentPickRows(e.target.value); } });
   $("#sheet-body").addEventListener("input", (e) => {
     const i = e.target; if (!gradeCtx || i.dataset.mk == null) return;
     if (+i.value > gradeCtx.tot) i.classList.add("over"); else i.classList.remove("over");

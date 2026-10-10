@@ -9,7 +9,7 @@
     const nativeFetch = window.fetch.bind(window);
     const protectedPrefixes = [
         "/api/students", "/api/staff", "/api/finance", "/api/attendance",
-        "/api/biometric", "/api/settings"
+        "/api/biometric", "/api/settings", "/api/messages", "/api/announcements"
     ];
 
     window.fetch = function schoolAuthenticatedFetch(input, init) {

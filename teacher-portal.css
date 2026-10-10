@@ -847,3 +847,9 @@ button{font:inherit;color:inherit;border:0;background:none;cursor:pointer;touch-
 .dentry p{font-size:13px;color:var(--ink-soft);margin-top:6px;overflow-wrap:anywhere}
 .fullimg{width:100%;border-radius:14px;display:block}
 .btn:disabled{opacity:.55}
+
+/* ═════ Message a parent ═════ */
+.pp-list{display:flex;flex-direction:column;gap:6px;max-height:58vh;overflow-y:auto}
+.pp-row{display:flex;align-items:center;gap:10px;text-align:left;width:100%;background:var(--white);border:1px solid var(--border);border-radius:12px;padding:8px 10px}
+.pp-row:active{background:var(--paper-deep)}
+.srow-msg{width:30px;height:30px;border-radius:50%;background:var(--teal-100);color:var(--teal-600);font-size:13px;flex-shrink:0}
