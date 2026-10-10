@@ -13,7 +13,7 @@
     <script>(function(){const t=localStorage.getItem('eduflow-theme')||'dark';document.documentElement.setAttribute('data-theme',t);})()</script>
     <script src="access-control.js"></script>
 </head>
-<body>
+<body class="am-page">
     <div class="sidebar-overlay" id="sidebar-overlay"></div>
     <aside id="sidebar" class="sidebar">
         <div class="sidebar-header">
@@ -52,8 +52,11 @@
         </header>
 
         <section class="am-title">
-            <h2><i class="fas fa-bullhorn"></i> Announcements &amp; Messages</h2>
-            <p>Chat with teachers and parents in real time.</p>
+            <h2><i class="fas fa-bullhorn"></i> Announcements <span>&amp; Messages</span></h2>
+            <div class="am-tools">
+                <button class="am-tool" id="am-sound" type="button" title="Message sound" aria-label="Message sound"><i class="fas fa-volume-high"></i></button>
+                <button class="am-tool" id="am-bell" type="button" title="Push notifications"><i class="fas fa-bell"></i><span>Notifications</span></button>
+            </div>
         </section>
 
         <section class="am-wrap" id="am-wrap">
@@ -61,27 +64,48 @@
             <div class="am-list">
                 <div class="am-list-top">
                     <div class="am-search"><i class="fas fa-search"></i><input id="am-q" placeholder="Search name, ID or student" autocomplete="off"></div>
-                    <button class="am-new" id="am-new"><i class="fas fa-pen-to-square"></i> New message</button>
                 </div>
                 <div class="am-tabs" id="am-tabs">
                     <button class="on" data-f="all">All <b id="cnt-all"></b></button>
                     <button data-f="teacher"><i class="fas fa-chalkboard-teacher"></i> Teachers <b id="cnt-teacher"></b></button>
                     <button data-f="parent"><i class="fas fa-people-roof"></i> Parents <b id="cnt-parent"></b></button>
+                    <button data-f="unread" title="Unread only"><i class="fas fa-envelope"></i></button>
                 </div>
                 <div class="am-threads" id="am-threads"></div>
+                <button class="am-fab" id="am-new" type="button" title="New message" aria-label="New message"><i class="fas fa-pen"></i></button>
             </div>
             <!-- chat -->
             <div class="am-chat" id="am-chat"></div>
         </section>
     </main>
 
-    <!-- new message picker -->
+    <!-- new message: one person or a group -->
     <div class="am-modal" id="am-modal" hidden>
         <div class="am-sheet">
-            <div class="am-sheet-head"><b>New message</b><button id="am-close" aria-label="Close"><i class="fas fa-xmark"></i></button></div>
-            <div class="am-seg"><button class="on" data-who="teacher"><i class="fas fa-chalkboard-teacher"></i> Teacher</button><button data-who="parent"><i class="fas fa-people-roof"></i> Parent</button></div>
-            <div class="am-search"><i class="fas fa-search"></i><input id="pick-q" placeholder="Search by name or ID" autocomplete="off"></div>
-            <div class="am-pick" id="am-pick"></div>
+            <div class="am-sheet-head"><b>New message</b><button id="am-close" type="button" aria-label="Close"><i class="fas fa-xmark"></i></button></div>
+            <div class="am-seg" id="am-who"><button class="on" data-who="teacher" type="button"><i class="fas fa-chalkboard-teacher"></i> Teachers</button><button data-who="parent" type="button"><i class="fas fa-people-roof"></i> Parents</button></div>
+            <div class="am-modes" id="am-modes"></div>
+            <div class="am-class" id="am-class-wrap" hidden><select id="am-class"></select></div>
+            <div class="am-pickbox" id="am-pickbox" hidden>
+                <div class="am-search"><i class="fas fa-search"></i><input id="pick-q" placeholder="Search by name or ID" autocomplete="off"></div>
+                <div class="am-pickbar"><button type="button" id="pick-all">Select shown</button><button type="button" id="pick-none">Clear</button><span id="pick-n"></span></div>
+                <div class="am-pick" id="am-pick"></div>
+            </div>
+            <div class="am-to" id="am-to"></div>
+            <div class="am-cm-compose">
+                <textarea id="cm-text" rows="2" maxlength="1000" placeholder="Write your message…"></textarea>
+                <button class="am-send" id="cm-send" type="button" aria-label="Send"><i class="fas fa-paper-plane"></i></button>
+            </div>
+        </div>
+    </div>
+
+    <!-- message actions + delete confirmation -->
+    <div class="am-menu" id="am-menu" hidden></div>
+    <div class="am-modal" id="am-confirm" hidden>
+        <div class="am-sheet am-small">
+            <b>Delete this message?</b>
+            <p>It will be removed for the teacher or parent as well.</p>
+            <div class="am-btnrow"><button type="button" id="cf-no" class="am-ghost">Cancel</button><button type="button" id="cf-yes" class="am-danger">Delete</button></div>
         </div>
     </div>
 
