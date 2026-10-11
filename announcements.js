@@ -27,7 +27,7 @@
     var state = {
         threads: [], filter: "all", q: "", active: null, msgs: [], editing: null, menuFor: null,
         pulse: { lastId: -1, unread: -1, count: -1, edited: "" }, dir: null, sending: false, drafts: {}, online: true,
-        pins: store.get("ann_pins", []), notify: store.get("ann_notify", false), sound: store.get("ann_sound", true),
+        pins: store.get("ann_pins", []), notify: store.get("ann_popup", true), sound: store.get("ann_sound", true),
         seen: null, newBelow: 0,
         cm: { who: "teacher", mode: "all", sel: {}, cls: "", q: "", busy: false }
     };
@@ -138,29 +138,21 @@
         } catch (e) { /* audio blocked until the first click */ }
     }
     function paintTools() {
-        var granted = "Notification" in window && Notification.permission === "granted";
-        var bell = $("#am-bell"), on = state.notify && granted;
+        var bell = $("#am-bell"), on = state.notify;
         bell.classList.toggle("on", on);
         bell.querySelector("i").className = "fas " + (on ? "fa-bell" : "fa-bell-slash");
-        bell.querySelector("span").textContent = on ? "Notifications on" : "Notifications off";
+        bell.querySelector("span").textContent = on ? "Pop-ups on" : "Pop-ups off";
         var snd = $("#am-sound"); snd.classList.toggle("on", state.sound);
         snd.querySelector("i").className = "fas " + (state.sound ? "fa-volume-high" : "fa-volume-xmark");
     }
     function toggleBell() {
-        if (!("Notification" in window)) { toast("This browser does not support notifications.", true); return; }
-        if (state.notify && Notification.permission === "granted") { state.notify = false; store.set("ann_notify", false); paintTools(); toast("Notifications turned off."); return; }
-        if (Notification.permission === "denied") { toast("Notifications are blocked. Allow them in the browser's site settings.", true); return; }
-        Notification.requestPermission().then(function (p) {
-            state.notify = p === "granted"; store.set("ann_notify", state.notify); paintTools();
-            if (state.notify) { toast("Notifications turned on."); beep(); try { new Notification("Notifications are on", { body: "You will be alerted when a message arrives.", icon: "logo-icon.png" }); } catch (e) { /* ignore */ } }
-        });
+        state.notify = !state.notify; store.set("ann_popup", state.notify); paintTools();
+        toast(state.notify ? "Message pop-ups turned on." : "Message pop-ups turned off.");
     }
+    /** In-app popup card (shown inside the page, not a browser notification). */
     function popup(t) {
-        if (!state.notify || !("Notification" in window) || Notification.permission !== "granted") return;
-        try {
-            var n = new Notification(threadTitle(t), { body: String(t.lastBody || "").slice(0, 140), icon: "logo-icon.png", tag: "ann-" + t.key });
-            n.onclick = function () { window.focus(); n.close(); open(descOfThread(t)); };
-        } catch (e) { /* some mobile browsers need a service worker */ }
+        if (!state.notify || !window.__annPopup) return;
+        window.__annPopup({ kind: t.type, title: threadTitle(t), body: t.lastBody, onClick: function () { open(descOfThread(t)); } });
     }
     /** Compare the thread list with what we showed last time; alert for each new message from a teacher / parent. */
     function announceNew() {
@@ -178,9 +170,7 @@
         fresh.forEach(function (t) {
             var here = state.active && state.active.key === t.key;
             if (here && watching) return;                                      // you are reading it right now
-            beep();
-            if (watching) toast(threadTitle(t) + ": " + String(t.lastBody || "").slice(0, 60), false, function () { open(descOfThread(t)); });
-            else popup(t);
+            beep(); popup(t);
         });
     }
 
