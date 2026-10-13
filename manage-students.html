@@ -224,7 +224,7 @@
                     <i class="fas fa-file-export"></i>
                     <h2 class="cert-page-title">Data Export &amp; Import</h2>
                 </div>
-                <p class="cert-page-subtitle">Export records to Excel or restore a backup.</p>
+                <p class="cert-page-subtitle">Export records to Excel or import students from an Excel / CSV file.</p>
             </div>
             <div class="cert-page-grid">
                 <!-- Export Card -->
@@ -243,8 +243,8 @@
                         <i class="fas fa-file-import"></i>
                     </div>
                     <h3 class="card-title">Import Data</h3>
-                    <p class="card-description">Restore records from a previously exported Excel backup.</p>
-                    <input type="file" id="import-file-input" accept=".xlsx,.xls" style="display:none" onchange="importStudentsFromExcel(event)">
+                    <p class="card-description">Import students from an Excel or CSV file and match its columns.</p>
+                    <input type="file" id="import-file-input" accept=".xlsx,.xls,.csv" style="display:none" onchange="importStudentsFromExcel(event)" onclick="event.stopPropagation()">
                 </div>
             </div>
             <!-- Status / feedback area -->
@@ -1022,6 +1022,37 @@
                     <button class="btn-share-profile" id="profile-share-btn" onclick="shareCurrentProfile()"><i class="fas fa-share-nodes"></i> Share</button>
                     <button class="btn-print-profile" onclick="printCurrentStudentRecord()"><i class="fas fa-print"></i> Print Record</button>
                     <button class="btn-print-admission" onclick="printCurrentAdmissionForm()"><i class="fas fa-file-signature"></i> Print Admission Form</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- IMPORT: COLUMN MAPPING MODAL — opened after the user picks an Excel/CSV
+         file. Left = SoftSchool fields, right = dropdown of the columns found in
+         the uploaded file (auto-matched where possible). -->
+    <div id="import-map-modal" class="modal-overlay" style="z-index: 5000;">
+        <div class="modal-container wider">
+            <div class="modal-header">
+                <h3><i class="fas fa-table-columns"></i> Match Columns to Import</h3>
+                <button class="close-modal-btn" onclick="closeImportMapper()">&times;</button>
+            </div>
+            <div class="modal-body-scroll imp-body">
+                <div class="imp-file-bar" id="imp-file-bar"></div>
+                <div class="imp-detected" id="imp-detected"></div>
+                <div class="imp-colhead">
+                    <span>SoftSchool field</span>
+                    <span></span>
+                    <span>Column found in your file</span>
+                </div>
+                <div id="imp-rows"></div>
+            </div>
+            <div class="modal-sticky-footer imp-footer">
+                <div class="imp-summary" id="imp-summary"></div>
+                <div class="imp-footer-btns">
+                    <button type="button" class="btn-ghost" onclick="closeImportMapper()">Cancel</button>
+                    <button type="button" class="btn-primary-submit" id="imp-run-btn" onclick="runStudentImport()">
+                        <i class="fas fa-file-import"></i> <span>Import Students</span>
+                    </button>
                 </div>
             </div>
         </div>

@@ -1521,6 +1521,11 @@ if (certUploadInput) {
     // from anywhere in the file.
     window.getDatabase  = getDatabase;
     window.saveDatabase = saveDatabase;
+    // The column-mapping importer (outside this closure) also needs these.
+    window.getActiveDatabase               = getActiveDatabase;
+    window.getStudentLimit                 = getStudentLimit;
+    window.generateNextRegistrationNumber  = generateNextRegistrationNumber;
+    window.updateDashboardStats            = updateDashboardStats;
 
     // ── ARCHIVE HELPERS ──────────────────────────────────────────────────────
     // A student with no `status` (or status "active") is on the live roster.
@@ -8349,181 +8354,585 @@ async function exportStudentsToExcel() {
 }
 
 /* ============================================================
-   IMPORT — Read xlsx and merge into the backend database
+   IMPORT — Pick an Excel / CSV file, analyze its headings, let the
+   user match each SoftSchool field to a column, then import.
+
+   Flow:
+     1. importStudentsFromExcel(event)  — reads the chosen file, finds the
+        header row, and collects every heading + all data rows.
+     2. openImportMapper()              — shows the mapping screen: SoftSchool
+        fields on the LEFT, a dropdown of the file's headings on the RIGHT
+        (pre-selected by autoMatchImportColumns() wherever it can tell).
+     3. runStudentImport()              — converts every row using the chosen
+        mapping, tidies values (dates, gender, CNIC, class names…) and saves
+        each new student through the same apiSaveStudent() the admission
+        form uses.
    ============================================================ */
+
+/* The SoftSchool fields shown on the left of the mapping screen. `aliases`
+   are the headings the auto-matcher recognises (compared after lower-casing
+   and stripping spaces/punctuation). The first block of aliases also covers
+   the headings used by SoftSchool's own Export file, so old backups still
+   map automatically. */
+const IMPORT_FIELD_GROUPS = [
+    { title: 'Academic & System Details', icon: 'fa-university', fields: [
+        { key: 'regNo', label: 'Registration No.', hint: 'Auto-generated if not matched or left empty',
+          aliases: ['regno', 'registrationno', 'registrationnumber', 'regnumber', 'reg#', 'studentid', 'admissionno', 'admissionnumber', 'grno', 'grnumber'] },
+        { key: 'studentClass', label: 'Class / Grade', required: true,
+          aliases: ['class', 'grade', 'classgrade', 'studentclass', 'currentclass', 'classname', 'standard'] },
+        { key: 'section', label: 'Section',
+          aliases: ['section', 'sec', 'classsection', 'division'] },
+        { key: 'rollNo', label: 'Roll Number', hint: 'Auto-numbered per class if not matched',
+          aliases: ['rollno', 'rollnumber', 'roll', 'roll#'] },
+        { key: 'admissionDate', label: 'Admission Date', hint: "Today's date if not matched",
+          aliases: ['admissiondate', 'dateofadmission', 'doa', 'joiningdate', 'dateofjoining', 'enrolmentdate', 'enrollmentdate'] }
+    ]},
+    { title: 'Personal Information', icon: 'fa-user', fields: [
+        { key: 'fullName', label: 'Student Full Name', required: true,
+          aliases: ['fullname', 'studentname', 'nameofstudent', 'studentfullname', 'name', 'pupilname', 'childname', 'student'] },
+        { key: 'gender', label: 'Gender',
+          aliases: ['gender', 'sex'] },
+        { key: 'dob', label: 'Date of Birth',
+          aliases: ['dateofbirth', 'dob', 'birthdate', 'birthday', 'bday'] },
+        { key: 'studentBform', label: 'Student B-Form / CNIC No.',
+          aliases: ['studentbformno', 'studentbform', 'bform', 'bformno', 'bformnumber', 'formb', 'studentcnic', 'bformcnic', 'bformnumber'] },
+        { key: 'medicalIssues', label: 'Medical Issues / Allergies',
+          aliases: ['medicalissues', 'medical', 'allergies', 'medicalcondition', 'medicalconditions', 'health'] },
+        { key: 'orphanStatus', label: 'Orphan Status',
+          aliases: ['orphanstatus', 'orphan', 'isorphan'] },
+        { key: 'previousSchool', label: 'Previous School Attended',
+          aliases: ['previousschoolattended', 'previousschool', 'lastschool', 'schoolattended', 'formerschool'] },
+        { key: 'previousClass', label: 'Previous Class',
+          aliases: ['previousclass', 'lastclass', 'classattended', 'lastclassattended'] }
+    ]},
+    { title: 'Guardian Information', icon: 'fa-users', fields: [
+        { key: 'guardianName', label: 'Guardian Full Name',
+          aliases: ['fatherguardian', 'guardianname', 'guardianfullname', 'fathername', 'father', 'guardian', 'parentname', 'parent', 'fatherorguardian', 'nameoffather', 'guardiansname'] },
+        { key: 'guardianRole', label: 'Guardian Relation / Role',
+          aliases: ['guardianrole', 'guardianrelation', 'relation', 'relationship', 'guardianrelationship', 'relationwithstudent'] },
+        { key: 'guardianCnic', label: 'Guardian CNIC Number',
+          aliases: ['guardiancnic', 'fathercnic', 'parentcnic', 'cnic', 'guardiannic', 'fathercnicno', 'cnicno', 'cnicnumber', 'fathernic'] }
+    ]},
+    { title: 'Contact & Address', icon: 'fa-phone-alt', fields: [
+        { key: 'phone1', label: 'Primary Phone',
+          aliases: ['phone1', 'primaryphone', 'phone', 'mobile', 'mobileno', 'contactno', 'contact', 'phonenumber', 'mobilenumber', 'cell', 'cellno', 'whatsapp', 'contactnumber'] },
+        { key: 'phone2', label: 'Secondary Phone',
+          aliases: ['phone2', 'secondaryphone', 'alternatephone', 'alternativephone', 'altphone', 'phonealt', 'mobile2', 'contact2', 'othercontact', 'emergencycontact'] },
+        { key: 'permanentAddress', label: 'Permanent Address',
+          aliases: ['permanentaddress', 'address', 'homeaddress', 'residentialaddress', 'residence'] },
+        { key: 'mailingAddress', label: 'Mailing Address', hint: 'Copies Permanent Address if not matched',
+          aliases: ['mailingaddress', 'postaladdress', 'correspondenceaddress', 'currentaddress'] }
+    ]},
+    { title: 'Transport', icon: 'fa-bus', fields: [
+        { key: 'transportMode', label: 'Transport Mode',
+          aliases: ['transportmode', 'transport', 'transportfacility', 'conveyance'] },
+        { key: 'transportType', label: 'Vehicle Type',
+          aliases: ['transporttype', 'vehicletype', 'vehicle'] },
+        { key: 'transportFee', label: 'Transport Monthly Fee',
+          aliases: ['transportfeepkr', 'transportfee', 'transportcharges', 'vanfee', 'busfee', 'transportmonthlyfee'] }
+    ]},
+    { title: 'Fees & Discounts', icon: 'fa-file-invoice-dollar', fields: [
+        { key: 'standardFee', label: 'Standard Tuition Fee', hint: "Uses the class fee from Settings if not matched",
+          aliases: ['monthlytuitionfeepkr', 'tuitionfee', 'monthlyfee', 'standardfee', 'fee', 'fees', 'monthlytuitionfee', 'tuition', 'schoolfee'] },
+        { key: 'admissionFee', label: 'Admission Fee',
+          aliases: ['admissionfee', 'admissioncharges', 'registrationfee'] },
+        { key: 'arrears', label: 'Arrears (Previous Dues)',
+          aliases: ['arrears', 'previousdues', 'dues', 'balance', 'outstanding', 'pendingdues', 'previousbalance'] },
+        { key: 'tuitionDiscount', label: 'Tuition Discount',
+          aliases: ['tuitiondiscountpkr', 'tuitiondiscount', 'discount', 'feediscount', 'concession'] },
+        { key: 'transportDiscount', label: 'Transport Discount',
+          aliases: ['transportdiscountpkr', 'transportdiscount'] },
+        { key: 'siblingDiscount', label: 'Sibling Discount',
+          aliases: ['siblingdiscountpkr', 'siblingdiscount', 'siblingconcession'] }
+    ]}
+];
+const IMPORT_ALL_FIELDS = IMPORT_FIELD_GROUPS.flatMap(g => g.fields);
+
+/* Everything the mapping screen needs, filled in when a file is analyzed. */
+let importState = null;
+
+function _impEsc(v) {
+    return String(v == null ? '' : v)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+function _impNorm(v) {
+    return String(v == null ? '' : v).toLowerCase().replace(/[^a-z0-9#]+/g, '');
+}
+function _impCellText(v) {
+    if (v == null) return '';
+    if (v instanceof Date) return isNaN(v) ? '' : _impToIsoDate(v);
+    return String(v).trim();
+}
+
+/** Step 1 — read the chosen Excel / CSV file and find its headings. */
 function importStudentsFromExcel(event) {
     if (typeof XLSX === 'undefined') {
         showDataIOStatus('Excel library not loaded yet. Please wait a moment and try again.', 'error');
         return;
     }
-
-    const file = event.target.files && event.target.files[0];
+    const input = event.target;
+    const file  = input.files && input.files[0];
     if (!file) return;
 
-    showDataIOStatus('Reading file… please wait.', 'info');
+    if (!/\.(xlsx|xls|csv)$/i.test(file.name)) {
+        showDataIOStatus('Unsupported file type. Please choose an Excel (.xlsx, .xls) or CSV (.csv) file.', 'error');
+        input.value = '';
+        return;
+    }
+
+    showDataIOStatus('Reading file and analyzing its headings… please wait.', 'info');
 
     const reader = new FileReader();
-    reader.onload = async function(e) {
+    reader.onload = function (e) {
         try {
-            const data    = new Uint8Array(e.target.result);
-            const wb      = XLSX.read(data, { type: 'array' });
+            const wb = XLSX.read(new Uint8Array(e.target.result), { type: 'array', cellDates: true });
 
-            /* Expect the first sheet "Student Directory" */
-            const sheetName = wb.SheetNames[0];
-            const ws        = wb.Sheets[sheetName];
-            const rows      = XLSX.utils.sheet_to_json(ws, { defval: '' });
-
-            if (!rows.length) {
-                showDataIOStatus('The file appears to be empty or has no recognisable student rows.', 'error');
+            /* Use the first sheet that actually has data. */
+            let grid = null, sheetName = '';
+            for (const name of wb.SheetNames) {
+                const g = XLSX.utils.sheet_to_json(wb.Sheets[name], { header: 1, defval: '', raw: true, blankrows: false });
+                if (g.some(r => r.some(c => _impCellText(c) !== ''))) { grid = g; sheetName = name; break; }
+            }
+            if (!grid) {
+                showDataIOStatus('The file appears to be empty — no headings or rows were found.', 'error');
                 return;
             }
 
-            /* Map header names back to our student object keys.
-               IMPORTANT: keys here must match what the form saves to the
-               backend, i.e. the HTML input[name] attributes — not display aliases.
-               This list must stay in sync with the `dirHeaders` array in
-               exportStudentsToExcel(); a mismatch here is what causes fields to
-               come back blank (showing "Select…" / "Not Provided") after import. */
-            const colMap = {
-                'Reg No'                      : 'regNo',
-                'Student ID'                  : 'id',
-                'Sibling Group ID'            : 'siblingGroupId',
-                'Full Name'                   : 'fullName',        // form saves as fullName, not name
-                'Father / Guardian'           : 'guardianName',    // form saves as guardianName, not fatherName
-                'Guardian Role'                : 'guardianRole',
-                'Guardian CNIC'                : 'guardianCnic',
-                'Gender'                       : 'gender',
-                'Date of Birth'                : 'dob',
-                'Age'                          : 'age',
-                'Class'                        : 'studentClass',    // form saves as studentClass, not class
-                'Section'                      : 'section',
-                'Roll No'                      : 'rollNo',
-                'Admission Date'               : 'admissionDate',
-                'Phone 1'                      : 'phone1',
-                'Phone 2'                      : 'phone2',
-                'Permanent Address'            : 'permanentAddress', // form saves as permanentAddress, not address
-                'Mailing Address'               : 'mailingAddress',
-                'Student B-Form No.'           : 'studentBform',
-                'Medical Issues'               : 'medicalIssues',
-                'Orphan Status'                : 'orphanStatus',
-                'Previous School Attended'     : 'previousSchool',
-                'Previous Class'               : 'previousClass',
-                'Transport Mode'               : 'transportMode',
-                'Transport Type'               : 'transportType',
-                'Transport Fee (PKR)'          : 'transportFee',
-                'Monthly Tuition Fee (PKR)'    : 'standardFee',
-                'Annual Fund (PKR)'            : 'annualFundAmount',
-                'Annual Fund Month'            : 'annualFundMonth',
-                'Tuition Discount (PKR)'       : 'tuitionDiscount',
-                'Transport Discount (PKR)'     : 'transportDiscount',
-                'Sibling Discount (PKR)'       : 'siblingDiscount',
-                'Discount Valid Until'         : 'discountExpiry',
-                'Net Payable (PKR)'            : 'netPayable',
-                'Sibling Of'                   : 'siblingOf'
-                /* 'Total Discount (PKR)' is a computed display column, not a stored field — skip.
-                   'Discount Type' and 'Has Sibling' need value translation — handled below.
-                   'Student Photo (Link)' / 'B-Form / Cert (Link)' only ever hold a status note in
-                   the export, never the actual image data (that lives in the separate photo-gallery
-                   HTML file), so they're intentionally not mapped back to photo/certData. */
-            };
+            /* The header row = first row with at least 2 filled cells
+               (or the first non-empty row, for one-column files). */
+            const filled = r => r.filter(c => _impCellText(c) !== '').length;
+            let headerIdx = grid.findIndex(r => filled(r) >= 2);
+            if (headerIdx === -1) headerIdx = grid.findIndex(r => filled(r) >= 1);
 
-            const MONTH_NAME_TO_NUM = {
-                january:1, february:2, march:3, april:4, may:5, june:6,
-                july:7, august:8, september:9, october:10, november:11, december:12
-            };
-
-            const existing  = getDatabase();
-            const existingRegNos = new Set(existing.map(s => s.regNo || s.id).filter(Boolean));
-            const newlyAdded = [];
-
-            let added = 0, skipped = 0;
-            rows.forEach(row => {
-                const student = {};
-                Object.entries(colMap).forEach(([header, key]) => {
-                    if (row[header] !== undefined && row[header] !== '') {
-                        student[key] = row[header];
-                    }
-                });
-
-                /* "Annual Fund Month" is exported as a month name (e.g. "January") but the
-                   form's <select> stores it as a number (1-12) — convert back. */
-                if (student.annualFundMonth) {
-                    const num = MONTH_NAME_TO_NUM[String(student.annualFundMonth).toLowerCase().trim()];
-                    if (num) {
-                        student.annualFundMonth = String(num);
-                        student.annualFundEnabled = 'on';
-                    }
-                }
-
-                /* "Discount Type" tells us whether the discount is Lifetime, Temporary or None —
-                   translate that into the isLifetime checkbox + discountExpiry date the form uses. */
-                const discountTypeVal = row['Discount Type'];
-                if (discountTypeVal === 'Lifetime') {
-                    student.isLifetime = 'on';
-                    delete student.discountExpiry; // "Lifetime" text may have leaked into this column — never a real date
-                } else if (student.discountExpiry === 'Lifetime') {
-                    delete student.discountExpiry;
-                }
-
-                /* "Has Sibling" is exported as Yes/No text — translate to the boolean the app expects. */
-                if (row['Has Sibling'] === 'Yes') student.isSibling = true;
-                else if (row['Has Sibling'] === 'No') student.isSibling = false;
-
-                /* Skip rows without a registration number */
-                if (!student.regNo && !student.id) { skipped++; return; }
-
-                const regNo = student.regNo || student.id;
-                if (existingRegNos.has(regNo)) { skipped++; return; }
-
-                /* Ensure both id and regNo are populated */
-                if (!student.id)    student.id    = regNo;
-                if (!student.regNo) student.regNo = regNo;
-                if (!student.fullName && !student.name) { skipped++; return; }
-                /* Normalise: ensure fullName is always set (used throughout the app) */
-                if (!student.fullName && student.name) student.fullName = student.name;
-
-                existing.push(student);
-                existingRegNos.add(regNo);
-                newlyAdded.push(student);
-                added++;
+            const rawHeaders = grid[headerIdx];
+            const seen = {};
+            const headers = rawHeaders.map((h, i) => {
+                let t = _impCellText(h) || `Column ${i + 1}`;
+                if (seen[t]) { seen[t]++; t = `${t} (${seen[t]})`; } else seen[t] = 1;
+                return t;
             });
+            /* Drop trailing columns that have no heading and no data at all. */
+            let lastUsed = headers.length - 1;
+            const dataRows = grid.slice(headerIdx + 1).filter(r => filled(r) > 0);
+            while (lastUsed > 0 && !_impCellText(rawHeaders[lastUsed]) &&
+                   !dataRows.some(r => _impCellText(r[lastUsed]) !== '')) lastUsed--;
+            headers.length = lastUsed + 1;
 
-            /* Push every newly-imported student to the backend (MySQL) via the
-               same apiSaveStudent() path the admission form uses — imports used
-               to only ever land in localStorage and never reached the server. */
-            let failedCount = 0;
-            for (const student of newlyAdded) {
-                try {
-                    const saved = await apiSaveStudent(student);
-                    if (saved) Object.assign(student, saved, { id: student.id });
-                } catch (err) {
-                    failedCount++;
-                    console.error('Backend sync failed (import) for', student.regNo || student.id, err);
-                }
+            if (!dataRows.length) {
+                showDataIOStatus('Headings were found, but the file has no student rows below them.', 'error');
+                return;
             }
 
-            saveDatabase(existing);
-
-            /* Reset file input so same file can be re-imported if needed */
-            event.target.value = '';
-
-            const failureNote = failedCount > 0
-                ? ` ${failedCount} record(s) couldn't be saved to the server — check your connection and re-import if needed.`
-                : '';
-            showDataIOStatus(
-                `Import complete! <strong>${added} new record(s)</strong> added. ${skipped > 0 ? `${skipped} row(s) skipped (already exist or missing required fields).` : ''}${failureNote}`,
-                failedCount > 0 ? 'error' : 'success'
-            );
-
-            /* Refresh counters if visible */
-            if (typeof updateCounters === 'function') updateCounters();
-
+            importState = {
+                fileName: file.name,
+                sheetName,
+                sheetCount: wb.SheetNames.length,
+                headers,
+                rows: dataRows.map(r => headers.map((_, i) => r[i] === undefined ? '' : r[i])),
+                mapping: {},
+                auto: {}
+            };
+            autoMatchImportColumns();
+            openImportMapper();
+            const el = document.getElementById('data-io-status');
+            if (el) el.style.display = 'none';
         } catch (err) {
-            console.error('Import failed', err);
-            showDataIOStatus('Import failed: ' + err.message + '. Make sure the file was exported by SoftSchool.', 'error');
+            console.error('Import: could not read file', err);
+            showDataIOStatus('Could not read this file: ' + _impEsc(err.message) + '. Make sure it is a valid Excel or CSV file.', 'error');
+        } finally {
+            input.value = ''; /* allow choosing the same file again later */
         }
     };
+    reader.onerror = function () {
+        showDataIOStatus('The file could not be read. Please try again.', 'error');
+        input.value = '';
+    };
     reader.readAsArrayBuffer(file);
+}
+
+/** Step 2a — guess which file column belongs to which SoftSchool field. */
+function autoMatchImportColumns() {
+    const st = importState;
+    const normHeaders = st.headers.map(_impNorm);
+    const pairs = [];
+
+    IMPORT_ALL_FIELDS.forEach((f, fi) => {
+        const aliases = [_impNorm(f.label), _impNorm(f.key)].concat(f.aliases.map(_impNorm));
+        normHeaders.forEach((h, hi) => {
+            if (!h) return;
+            let score = 0;
+            aliases.forEach(a => {
+                if (!a) return;
+                if (h === a) score = Math.max(score, 100);
+                else if (a.length >= 5 && h.includes(a)) score = Math.max(score, 50 + a.length);
+                else if (h.length >= 5 && a.includes(h)) score = Math.max(score, 40);
+            });
+            if (score > 0) pairs.push({ fi, hi, score });
+        });
+    });
+
+    /* Best matches claim their column first; a column is only used once. */
+    pairs.sort((a, b) => b.score - a.score || a.fi - b.fi || a.hi - b.hi);
+    const usedField = new Set(), usedCol = new Set();
+    st.mapping = {}; st.auto = {};
+    pairs.forEach(p => {
+        if (usedField.has(p.fi) || usedCol.has(p.hi)) return;
+        usedField.add(p.fi); usedCol.add(p.hi);
+        const key = IMPORT_ALL_FIELDS[p.fi].key;
+        st.mapping[key] = p.hi;
+        st.auto[key] = true;
+    });
+}
+
+/** Step 2b — draw the mapping screen. */
+function openImportMapper() {
+    const st = importState;
+    if (!st) return;
+
+    document.getElementById('imp-file-bar').innerHTML =
+        `<div class="imp-file-icon"><i class="fas fa-file-excel"></i></div>
+         <div class="imp-file-meta">
+            <strong>${_impEsc(st.fileName)}</strong>
+            <span>${st.rows.length} student row${st.rows.length === 1 ? '' : 's'} · ${st.headers.length} column${st.headers.length === 1 ? '' : 's'} found${st.sheetCount > 1 ? ` · sheet “${_impEsc(st.sheetName)}”` : ''}</span>
+         </div>`;
+
+    document.getElementById('imp-detected').innerHTML =
+        `<div class="imp-detected-label"><i class="fas fa-magnifying-glass-chart"></i> Headings detected in your file</div>
+         <div class="imp-chip-row">${st.headers.map(h => `<span class="imp-chip">${_impEsc(h)}</span>`).join('')}</div>`;
+
+    const optionsHtml = sel => '<option value="">— Don’t import —</option>' +
+        st.headers.map((h, i) => `<option value="${i}"${sel === i ? ' selected' : ''}>${_impEsc(h)}</option>`).join('');
+
+    document.getElementById('imp-rows').innerHTML = IMPORT_FIELD_GROUPS.map(g => `
+        <div class="imp-group">
+            <div class="form-section-label"><i class="fas ${g.icon}"></i> ${_impEsc(g.title)}</div>
+            ${g.fields.map(f => `
+            <div class="imp-row" data-key="${f.key}">
+                <div class="imp-left">
+                    <span class="imp-label">${_impEsc(f.label)}${f.required ? '<span class="imp-req" title="Required">*</span>' : ''}</span>
+                    ${f.hint ? `<span class="imp-hint">${_impEsc(f.hint)}</span>` : ''}
+                </div>
+                <i class="fas fa-arrow-right-long imp-arrow"></i>
+                <div class="imp-right">
+                    <select class="imp-select" data-key="${f.key}" onchange="onImportMappingChange(this)">${optionsHtml(st.mapping[f.key])}</select>
+                    <div class="imp-sample" id="imp-sample-${f.key}"></div>
+                </div>
+            </div>`).join('')}
+        </div>`).join('');
+
+    IMPORT_ALL_FIELDS.forEach(f => refreshImportRow(f.key));
+    refreshImportSummary();
+    openModal('import-map-modal');
+}
+
+/** Update one row's sample text + matched/required styling. */
+function refreshImportRow(key) {
+    const st = importState;
+    const row = document.querySelector(`#imp-rows .imp-row[data-key="${key}"]`);
+    if (!row || !st) return;
+    const idx = st.mapping[key];
+    const has = idx !== undefined && idx !== '' && idx !== null;
+    const field = IMPORT_ALL_FIELDS.find(f => f.key === key);
+
+    row.classList.toggle('is-matched', has);
+    row.classList.toggle('is-missing', !has && !!field.required);
+
+    const sampleEl = document.getElementById('imp-sample-' + key);
+    if (!sampleEl) return;
+    if (!has) { sampleEl.innerHTML = ''; return; }
+    const sample = st.rows.map(r => _impCellText(r[idx])).find(v => v !== '');
+    sampleEl.innerHTML =
+        (st.auto[key] ? '<span class="imp-auto-badge"><i class="fas fa-wand-magic-sparkles"></i> Auto-matched</span>' : '') +
+        (sample ? `<span class="imp-sample-text">e.g. ${_impEsc(sample.length > 40 ? sample.slice(0, 40) + '…' : sample)}</span>` : '');
+}
+
+function onImportMappingChange(selectEl) {
+    const st = importState;
+    if (!st) return;
+    const key = selectEl.dataset.key;
+    if (selectEl.value === '') delete st.mapping[key];
+    else st.mapping[key] = parseInt(selectEl.value, 10);
+    st.auto[key] = false; /* the user changed it by hand */
+    refreshImportRow(key);
+    refreshImportSummary();
+}
+
+function refreshImportSummary() {
+    const st = importState;
+    if (!st) return;
+    const matched = IMPORT_ALL_FIELDS.filter(f => st.mapping[f.key] !== undefined).length;
+    const missingReq = IMPORT_ALL_FIELDS.filter(f => f.required && st.mapping[f.key] === undefined);
+    const sum = document.getElementById('imp-summary');
+    const btn = document.getElementById('imp-run-btn');
+    sum.innerHTML = missingReq.length
+        ? `<i class="fas fa-circle-exclamation"></i> Match required field${missingReq.length > 1 ? 's' : ''}: <strong>${missingReq.map(f => _impEsc(f.label)).join(', ')}</strong>`
+        : `<i class="fas fa-circle-check"></i> <strong>${matched}</strong> of ${IMPORT_ALL_FIELDS.length} fields matched`;
+    sum.classList.toggle('imp-summary-warn', missingReq.length > 0);
+    btn.disabled = missingReq.length > 0;
+    btn.querySelector('span').textContent = `Import ${st.rows.length} Student${st.rows.length === 1 ? '' : 's'}`;
+}
+
+function closeImportMapper() {
+    closeModal('import-map-modal');
+    importState = null;
+}
+
+/* ---------- value cleaners used while importing ---------- */
+
+function _impToIsoDate(v) {
+    const pad = n => String(n).padStart(2, '0');
+    const fromDate = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+    if (v == null || v === '') return '';
+    if (v instanceof Date) {
+        if (isNaN(v)) return '';
+        /* +12h makes this immune to the few-seconds / timezone drift SheetJS can introduce. */
+        return fromDate(new Date(v.getTime() + 12 * 3600 * 1000));
+    }
+    if (typeof v === 'number') {
+        if (v < 1000) return '';
+        const d = new Date(Math.round((v - 25569) * 86400000)); /* Excel serial → UTC date */
+        return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}`;
+    }
+    const s = String(v).trim();
+    let m = s.match(/^(\d{4})[-\/.](\d{1,2})[-\/.](\d{1,2})/);
+    if (m) return `${m[1]}-${pad(m[2])}-${pad(m[3])}`;
+    m = s.match(/^(\d{1,2})[-\/.](\d{1,2})[-\/.](\d{2,4})$/); /* day-first (dd/mm/yyyy) */
+    if (m) {
+        let y = parseInt(m[3], 10);
+        if (m[3].length === 2) y += y <= 29 ? 2000 : 1900;
+        let day = parseInt(m[1], 10), mon = parseInt(m[2], 10);
+        if (mon > 12 && day <= 12) { const t = day; day = mon; mon = t; }
+        if (mon >= 1 && mon <= 12 && day >= 1 && day <= 31) return `${y}-${pad(mon)}-${pad(day)}`;
+        return '';
+    }
+    const parsed = new Date(s);
+    return isNaN(parsed) ? '' : fromDate(new Date(parsed.getTime() + 12 * 3600 * 1000));
+}
+
+function _impNumber(v) {
+    if (v === '' || v == null) return 0;
+    const n = parseFloat(String(v).replace(/[^0-9.\-]/g, ''));
+    return isNaN(n) ? 0 : n;
+}
+
+function _impGender(v) {
+    const s = String(v).trim().toLowerCase();
+    if (!s) return '';
+    if (/^(m|male|boy|man|son)$/.test(s)) return 'Male';
+    if (/^(f|female|girl|woman|daughter)$/.test(s)) return 'Female';
+    return 'Other';
+}
+
+function _impGuardianRole(v) {
+    const s = String(v).trim().toLowerCase();
+    if (!s) return '';
+    const table = [
+        [/^(father|dad|baba|abu|walid)$/, 'Father'], [/^(mother|mom|mum|mama|ammi|walida)$/, 'Mother'],
+        [/^(brother|bhai)$/, 'Brother'], [/^(sister|behn|bahan)$/, 'Sister'],
+        [/^(uncle|chacha|mamu|taya|phupha)$/, 'Uncle'],
+        [/^(grand\s?parent|grand\s?father|grand\s?mother|dada|dadi|nana|nani)$/, 'Grandparent'],
+        [/^(legal\s?guardian|guardian)$/, 'Legal Guardian']
+    ];
+    for (const [re, label] of table) if (re.test(s)) return label;
+    return String(v).trim();
+}
+
+function _impCnic(v) {
+    const raw = String(v).trim();
+    const digits = raw.replace(/\D/g, '');
+    return digits.length === 13 ? `${digits.slice(0, 5)}-${digits.slice(5, 12)}-${digits.slice(12)}` : raw;
+}
+
+function _impPhone(v) {
+    const raw = String(v).trim();
+    let digits = raw.replace(/\D/g, '');
+    if (digits.length === 10 && digits[0] === '3') digits = '0' + digits;     /* Excel dropped the leading 0 */
+    if (digits.length === 12 && digits.startsWith('92')) digits = '0' + digits.slice(2);
+    return digits.length === 11 && digits.startsWith('03') ? `${digits.slice(0, 4)}-${digits.slice(4)}` : raw;
+}
+
+/** Match a typed class name ("1", "grade 1", "Class-1", "nursery") to a configured class. */
+function _impMatchClass(v) {
+    const raw = String(v).trim();
+    if (!raw) return { value: '', known: true };
+    const names = getClassConfigs().map(c => c.name);
+    const n = _impNorm(raw);
+    let hit = names.find(x => _impNorm(x) === n);
+    if (!hit) {
+        const num = n.replace(/^(class|grade|std|standard|year)/, '');
+        if (/^\d+$/.test(num)) hit = names.find(x => _impNorm(x) === 'grade' + num || _impNorm(x) === 'class' + num);
+    }
+    return hit ? { value: hit, known: true } : { value: raw, known: names.length === 0 };
+}
+
+function _impMatchSection(className, v) {
+    const raw = String(v).trim();
+    if (!raw) return '';
+    const cfg = getClassConfigMap()[className];
+    const list = cfg && Array.isArray(cfg.sections) ? cfg.sections : [];
+    return list.find(s => _impNorm(s) === _impNorm(raw)) || raw.toUpperCase();
+}
+
+function _impAgeFromDob(iso) {
+    if (!iso) return '';
+    const dob = new Date(iso), today = new Date();
+    if (isNaN(dob)) return '';
+    let age = today.getFullYear() - dob.getFullYear();
+    const m = today.getMonth() - dob.getMonth();
+    if (m < 0 || (m === 0 && today.getDate() < dob.getDate())) age--;
+    return age >= 0 ? age + ' Years' : '';
+}
+
+/** Step 3 — convert every row with the chosen mapping and save the new students. */
+async function runStudentImport() {
+    const st = importState;
+    if (!st) return;
+    const btn = document.getElementById('imp-run-btn');
+    const btnLabel = btn.querySelector('span');
+    const mapped = key => st.mapping[key] !== undefined;
+    const cell = (row, key) => mapped(key) ? _impCellText(row[st.mapping[key]]) : '';
+
+    if (!mapped('fullName') || !mapped('studentClass')) { refreshImportSummary(); return; }
+
+    btn.disabled = true;
+    btnLabel.textContent = 'Preparing…';
+
+    const db = getDatabase();
+    const takenRegNos = new Set(db.flatMap(s => [s.regNo, s.id]).filter(Boolean).map(String));
+    const dupKey = s => [s.fullName, s.guardianName, s.dob, s.studentClass].map(x => _impNorm(x)).join('|');
+    const existingKeys = new Set(db.filter(s => s.fullName && s.dob).map(dupKey));
+
+    /* Highest roll number already used in each class (active students). */
+    const rollMax = {};
+    (window.getActiveDatabase ? window.getActiveDatabase() : db).forEach(s => {
+        const r = parseInt(s.rollNo, 10);
+        if (s.studentClass && !isNaN(r)) rollMax[s.studentClass] = Math.max(rollMax[s.studentClass] || 0, r);
+    });
+
+    /* Plan limit — never import more active students than the plan allows. */
+    const limit = window.getStudentLimit ? window.getStudentLimit() : null;
+    let room = limit === null ? Infinity : Math.max(0, limit - (window.getActiveDatabase ? window.getActiveDatabase().length : db.length));
+
+    const result = { added: 0, dupes: 0, noName: 0, overLimit: 0, failed: 0, firstError: '', unknownClasses: new Set() };
+    const todayIso = _impToIsoDate(new Date());
+
+    /* 1) Build the student objects. */
+    const toSave = [];
+    st.rows.forEach(row => {
+        const s = {};
+        s.fullName = cell(row, 'fullName');
+        if (!s.fullName) { result.noName++; return; }
+
+        const cls = _impMatchClass(cell(row, 'studentClass'));
+        s.studentClass = cls.value;
+        if (cls.value && !cls.known) result.unknownClasses.add(cls.value);
+        s.section = _impMatchSection(s.studentClass, cell(row, 'section'));
+
+        s.gender         = _impGender(cell(row, 'gender'));
+        s.dob            = _impToIsoDate(mapped('dob') ? row[st.mapping.dob] : '');
+        s.age            = _impAgeFromDob(s.dob);
+        s.admissionDate  = _impToIsoDate(mapped('admissionDate') ? row[st.mapping.admissionDate] : '') || todayIso;
+        s.studentBform   = _impCnic(cell(row, 'studentBform'));
+        s.medicalIssues  = cell(row, 'medicalIssues');
+        const orphan     = cell(row, 'orphanStatus').toLowerCase();
+        s.orphanStatus   = /^(orphan|yes|y|true|1)$/.test(orphan) ? 'Orphan' : 'Not Orphan';
+        s.previousSchool = cell(row, 'previousSchool');
+        s.previousClass  = cell(row, 'previousClass');
+
+        s.guardianName   = cell(row, 'guardianName');
+        s.guardianRole   = _impGuardianRole(cell(row, 'guardianRole'));
+        s.guardianCnic   = _impCnic(cell(row, 'guardianCnic'));
+
+        s.phone1           = _impPhone(cell(row, 'phone1'));
+        s.phone2           = _impPhone(cell(row, 'phone2'));
+        s.permanentAddress = cell(row, 'permanentAddress');
+        s.mailingAddress   = cell(row, 'mailingAddress') || s.permanentAddress;
+
+        const tMode = cell(row, 'transportMode').toLowerCase();
+        s.transportMode = /school|provided|yes|y|true/.test(tMode) ? 'School Provided' : 'Private';
+        const tType = cell(row, 'transportType').toLowerCase();
+        s.transportType = /coaster/.test(tType) ? 'Coaster' : /van/.test(tType) ? 'School Van' : /bus/.test(tType) ? 'School Bus' : 'None';
+        s.transportFee  = _impNumber(cell(row, 'transportFee'));
+
+        const feeText = cell(row, 'standardFee');
+        s.standardFee       = feeText !== '' ? _impNumber(feeText) : getStandardFeeForClass(s.studentClass);
+        s.admissionFee      = _impNumber(cell(row, 'admissionFee'));
+        s.arrears           = _impNumber(cell(row, 'arrears'));
+        s.tuitionDiscount   = _impNumber(cell(row, 'tuitionDiscount'));
+        s.transportDiscount = _impNumber(cell(row, 'transportDiscount'));
+        s.siblingDiscount   = _impNumber(cell(row, 'siblingDiscount'));
+        s.netPayable = Math.max(0, (s.standardFee + s.admissionFee + s.transportFee)
+                                 - (s.tuitionDiscount + s.transportDiscount + s.siblingDiscount));
+
+        s.rollNo = cell(row, 'rollNo');
+        s.regNo  = cell(row, 'regNo');
+        s.status = 'active';
+        s.isLifetime = false;
+
+        /* Skip students that are already in the system. */
+        if (s.regNo && takenRegNos.has(s.regNo)) { result.dupes++; return; }
+        if (!s.regNo && s.dob && existingKeys.has(dupKey(s))) { result.dupes++; return; }
+
+        if (room <= 0) { result.overLimit++; return; }
+        room--;
+        if (s.regNo) takenRegNos.add(s.regNo);
+        if (s.dob) existingKeys.add(dupKey(s));
+        toSave.push(s);
+    });
+
+    /* 2) Save them one by one so reg numbers / roll numbers stay in sequence. */
+    for (let i = 0; i < toSave.length; i++) {
+        const s = toSave[i];
+        btnLabel.textContent = `Importing ${i + 1} of ${toSave.length}…`;
+
+        if (!s.regNo) {
+            s.regNo = window.generateNextRegistrationNumber
+                ? window.generateNextRegistrationNumber(s.admissionDate)
+                : 'IMP_' + Date.now() + '_' + i;
+        }
+        if (!s.rollNo) {
+            rollMax[s.studentClass] = (rollMax[s.studentClass] || 0) + 1;
+            s.rollNo = String(rollMax[s.studentClass]);
+        } else {
+            const r = parseInt(s.rollNo, 10);
+            if (!isNaN(r)) rollMax[s.studentClass] = Math.max(rollMax[s.studentClass] || 0, r);
+        }
+        s.id = s.regNo;
+
+        try {
+            const saved = await apiSaveStudent(s);
+            db.push(Object.assign({}, s, saved || {}, { id: s.regNo }));
+            result.added++;
+        } catch (err) {
+            result.failed++;
+            if (!result.firstError) result.firstError = (err && err.message) || String(err);
+            console.error('Import: could not save', s.regNo, err);
+        }
+    }
+    saveDatabase(db);
+
+    /* 3) Report. */
+    closeImportMapper();
+    btn.disabled = false;
+
+    const parts = [];
+    parts.push(`<strong>${result.added} new student${result.added === 1 ? '' : 's'}</strong> imported from <em>${_impEsc(st.fileName)}</em>.`);
+    if (result.dupes)     parts.push(`${result.dupes} row(s) skipped — already in the system.`);
+    if (result.noName)    parts.push(`${result.noName} row(s) skipped — no student name.`);
+    if (result.overLimit) parts.push(`${result.overLimit} row(s) not imported — your plan's active-student limit was reached.`);
+    if (result.failed)    parts.push(`${result.failed} record(s) couldn't be saved to the server — check your connection and import again.`);
+    if (result.unknownClasses.size) {
+        parts.push(`Class name(s) not found in Settings: <strong>${[...result.unknownClasses].map(_impEsc).join(', ')}</strong> — those students were imported but won't appear under a class card until the class exists.`);
+    }
+    showDataIOStatus(parts.join(' '), result.failed ? 'error' : (result.added ? 'success' : 'info'));
+    if (typeof showToast === 'function' && result.added) {
+        showToast('Import Complete', `${result.added} student(s) added.`, 'success');
+    }
+
+    /* Refresh counters + open tables. */
+    if (window.updateDashboardStats) window.updateDashboardStats();
+    if (window.SoftSchoolLiveSync) window.SoftSchoolLiveSync.refreshNow();
 }
 
 async function compressImage(file, maxWidth, quality = 0.7) {
@@ -8584,7 +8993,7 @@ window.toggleVoOrphanFilter = function() {
         btn.innerHTML = '<i class="fas fa-check"></i> Showing Orphans';
     } else {
         btn.classList.remove('active-filter');
-        ftn.setAttribute('aria-pressed', 'false');
+        btn.setAttribute('aria-pressed', 'false');
         btn.innerHTML = '<i class="fas fa-child"></i> Show Orphans Only';
     }
     renderViewOnlyTable();
