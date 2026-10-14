@@ -216,6 +216,11 @@
 .ex-table input.ex-cell.ex-gs-grade { width: 72px; text-transform: uppercase; }
 .ex-table input.ex-cell.ex-gs-min { width: 78px; }
 .ex-table input.ex-cell.ex-gs-remark { width: 100%; min-width: 150px; }
+.ex-table select.ex-cell.ex-gs-res { width: 92px; height: 34px; padding: 0 8px; border-radius: 9px; border: 1px solid var(--border-subtle); background: var(--bg-secondary); font: 600 12.5px 'Inter', sans-serif; cursor: pointer; }
+.ex-table select.ex-gs-res.ok { color: #10b981; border-color: rgba(16, 185, 129, .4); }
+.ex-table select.ex-gs-res.bad { color: #ef4444; border-color: rgba(239, 68, 68, .4); }
+.ex-table select.ex-gs-res option { background: var(--bg-secondary); color: var(--text-primary); }
+.ex-gs-sum { display: flex; flex-direction: column; gap: 8px; font-size: 13px; color: var(--text-primary); margin-bottom: 10px; }
 .ex-gs-pct { margin-left: 4px; color: var(--text-muted); font-size: 12px; font-weight: 600; }
 .ex-gs-result { display: flex; align-items: center; gap: 10px; min-height: 40px; font-size: 13px; color: var(--text-secondary); }
 .ex-gs-result b { font: 700 20px 'Space Grotesk', sans-serif; color: var(--text-primary); }

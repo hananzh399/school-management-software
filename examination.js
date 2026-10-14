@@ -35,16 +35,16 @@
     const QTYPES = ["MCQs", "True / False", "Fill in the Blanks", "Short Questions", "Long Questions"];
     const DEF_MARKS = { "MCQs": 1, "True / False": 1, "Fill in the Blanks": 1, "Short Questions": 2, "Long Questions": 5 };
     const SUBJECT_HINTS = ["English", "Urdu", "Mathematics", "Science", "Islamiyat", "Social Studies", "Computer", "Pak Studies", "General Knowledge"];
-    const DEF_PASS = 40;
     const DEF_SCALE = [
-        { min: 90, grade: "A+", remark: "Outstanding" }, { min: 80, grade: "A", remark: "Excellent" },
-        { min: 70, grade: "B", remark: "Very Good" }, { min: 60, grade: "C", remark: "Good" },
-        { min: 50, grade: "D", remark: "Satisfactory" }, { min: 40, grade: "E", remark: "Needs Improvement" },
-        { min: 0, grade: "F", remark: "Fail" }
+        { min: 90, grade: "A+", remark: "Outstanding", pass: true }, { min: 80, grade: "A", remark: "Excellent", pass: true },
+        { min: 70, grade: "B", remark: "Very Good", pass: true }, { min: 60, grade: "C", remark: "Good", pass: true },
+        { min: 50, grade: "D", remark: "Satisfactory", pass: true }, { min: 40, grade: "E", remark: "Needs Improvement", pass: true },
+        { min: 0, grade: "F", remark: "Fail", pass: false }
     ];
-    let PASS = DEF_PASS;                                   // editable in "Grading Scheme"
-    let SCALE = DEF_SCALE.map(g => Object.assign({}, g)); // editable in "Grading Scheme"
+    let SCALE = DEF_SCALE.map(g => Object.assign({}, g));   // editable in "Grading Scheme" (each grade is Pass or Fail)
     const gradeOf = pct => { for (const s of SCALE) if (pct >= s.min) return s; return SCALE[SCALE.length - 1]; };
+    const isPass = pct => gradeOf(pct).pass !== false;      // pass / fail comes from the grade the mark falls in
+    const passFrom = () => { const p = SCALE.filter(s => s.pass !== false).map(s => s.min); return p.length ? Math.min.apply(null, p) : null; };
 
     /* ───────── session / school ───────── */
     function getSchool() {
@@ -125,11 +125,12 @@
     let db = load();
     function applyGrading() {   // use the school's saved grading scheme, else the defaults
         const g = db.grading;
-        if (g && isFinite(g.pass) && Array.isArray(g.scale) && g.scale.length) {
-            const sc = g.scale.filter(x => x && x.grade && isFinite(x.min)).map(x => ({ min: +x.min, grade: String(x.grade), remark: String(x.remark || "") })).sort((a, b) => b.min - a.min);
-            if (sc.length && sc[sc.length - 1].min <= 0) { SCALE = sc; PASS = +g.pass; return; }
+        if (g && Array.isArray(g.scale) && g.scale.length) {
+            const old = isFinite(g.pass) ? +g.pass : 40;   // schemes saved before per-grade Pass/Fail had one pass mark
+            const sc = g.scale.filter(x => x && x.grade && isFinite(x.min)).map(x => ({ min: +x.min, grade: String(x.grade), remark: String(x.remark || ""), pass: typeof x.pass === "boolean" ? x.pass : +x.min >= old })).sort((a, b) => b.min - a.min);
+            if (sc.length && sc[sc.length - 1].min <= 0) { SCALE = sc; return; }
         }
-        SCALE = DEF_SCALE.map(x => Object.assign({}, x)); PASS = DEF_PASS;
+        SCALE = DEF_SCALE.map(x => Object.assign({}, x));
     }
     applyGrading();
     function save() { try { localStorage.setItem(KEY, JSON.stringify(db)); } catch (e) { /* ignore */ } }
@@ -267,7 +268,7 @@
             ["datesheet", "calendar-days", "#8b5cf6", "Date Sheet", "Plan the exam timetable for every class — dates, timings and rooms — and print it.", up.length + " upcoming", "info"],
             ["cards", "award", "#17716A", "Report Cards", "Result cards with grades, percentage, position and remarks, ready to print.", pubd + " published", ""],
             ["analysis", "chart-column", "#ec4899", "Result Analysis", "Subject averages, grade spread, toppers and students who need attention.", "Charts & insights", ""],
-            ["grading", "ranking-star", "#f59e0b", "Grading Scheme", "Set the passing marks and the grade scale (A+, A, B …) used on marks sheets, report cards and analysis.", SCALE.length + " grades · pass " + PASS + "%", ""]
+            ["grading", "ranking-star", "#f59e0b", "Grading Scheme", "Set the grade scale (A+, A, B …) and choose which grades are Pass or Fail on marks sheets, report cards and analysis.", SCALE.length + " grades · " + SCALE.filter(s => s.pass === false).length + " fail", ""]
         ];
         const recent = db.papers.slice(0, 5);
         ROOT().innerHTML =
@@ -487,7 +488,7 @@
         if (m === "") return { pct: "", grade: "", res: "—", cls: "" };
         if (isAbs(m)) return { pct: "", grade: "Abs", res: "Absent", cls: "warn" };
         if (!isNum(m) || +m < 0 || +m > RS.total) return { pct: "", grade: "", res: "Invalid", cls: "bad" };
-        const pct = +m / RS.total * 100, ok = pct >= PASS;
+        const pct = +m / RS.total * 100, ok = isPass(pct);
         return { pct: pct.toFixed(1) + "%", grade: gradeOf(pct).grade, res: ok ? "Pass" : "Fail", cls: ok ? "ok" : "bad" };
     }
     function vSheet(id) {
@@ -548,7 +549,7 @@
     function sum(ro) {
         const vals = ro.map(s => RS.marks[s.reg]);
         const nums = vals.filter(m => calc(m).pct !== "").map(Number), abs = vals.filter(m => m != null && isAbs(m)).length, bad = vals.filter(m => calc(m).res === "Invalid").length;
-        const pass = nums.filter(m => m / RS.total * 100 >= PASS).length;
+        const pass = nums.filter(m => isPass(m / RS.total * 100)).length;
         $("#ru-sum").innerHTML = [["Entered", nums.length + abs + " / " + ro.length], ["Average", nums.length ? (nums.reduce((a, b) => a + b, 0) / nums.length).toFixed(1) : "—"],
             ["Highest", nums.length ? Math.max.apply(null, nums) : "—"], ["Lowest", nums.length ? Math.min.apply(null, nums) : "—"], ["Pass rate", nums.length ? Math.round(pass / nums.length * 100) + "%" : "—"], ["Errors", bad]]
             .map(x => "<div><b" + (x[0] === "Errors" && bad ? ' style="color:#ef4444"' : "") + ">" + x[1] + "</b><span>" + x[0] + "</span></div>").join("");
@@ -692,7 +693,7 @@
             subs.push({ s: p.subj, m: mk, total: r.total, pct, g: gradeOf(pct).grade });
         });
         const pct = out ? got / out * 100 : 0;
-        return { subs, got, out, pct, g: gradeOf(pct), failed: subs.some(x => x.abs || x.pct < PASS) };
+        return { subs, got, out, pct, g: gradeOf(pct), failed: subs.some(x => x.abs || !isPass(x.pct)) };
     }
     function cardHtml(s, data, ranks, count) {
         const d = cardOf(s, data), pos = ranks[s.reg];
@@ -739,9 +740,9 @@
         data.forEach(({ p, r }) => {
             const ms = ro.filter(s => r.marks[s.reg] != null && isNum(r.marks[s.reg]) && +r.marks[s.reg] <= r.total).map(s => ({ reg: s.reg, name: s.name, m: +r.marks[s.reg] }));
             if (!ms.length) return;
-            const avg = ms.reduce((a, b) => a + b.m, 0) / ms.length / r.total * 100, pass = ms.filter(x => x.m / r.total * 100 >= PASS).length;
+            const avg = ms.reduce((a, b) => a + b.m, 0) / ms.length / r.total * 100, pass = ms.filter(x => isPass(x.m / r.total * 100)).length;
             per.push({ s: p.subj, avg, pass: Math.round(pass / ms.length * 100) });
-            ms.forEach(x => { const pc = x.m / r.total * 100; dist[gradeOf(pc).grade]++; const o = stu[x.reg] || (stu[x.reg] = { name: x.name, got: 0, out: 0, fails: [] }); o.got += x.m; o.out += r.total; if (pc < PASS) o.fails.push(p.subj); });
+            ms.forEach(x => { const pc = x.m / r.total * 100; dist[gradeOf(pc).grade]++; const o = stu[x.reg] || (stu[x.reg] = { name: x.name, got: 0, out: 0, fails: [] }); o.got += x.m; o.out += r.total; if (!isPass(pc)) o.fails.push(p.subj); });
         });
         const list = Object.values(stu).map(o => Object.assign(o, { pct: o.got / o.out * 100 })).sort((a, b) => b.pct - a.pct);
         const needs = list.filter(o => o.fails.length).sort((a, b) => b.fails.length - a.fails.length).slice(0, 6);
@@ -758,12 +759,12 @@
 
 
     /* ============================================================
-       GRADING SCHEME  (passing marks + grade scale, saved in db.grading)
+       GRADING SCHEME  (grade scale with a Pass/Fail setting per grade, saved in db.grading)
        ============================================================ */
     let GS = null;   // working copy while the page is open
     const cleanNum = v => { const n = +v; return Math.round(n * 100) / 100; };
     function gsRows(scale) {   // numeric rows, highest first (for ranges / the live test)
-        return scale.filter(r => String(r.min).trim() !== "" && isFinite(r.min)).map(r => ({ min: +r.min, grade: String(r.grade).trim(), remark: String(r.remark || "").trim() })).sort((a, b) => b.min - a.min);
+        return scale.filter(r => String(r.min).trim() !== "" && isFinite(r.min)).map(r => ({ min: +r.min, grade: String(r.grade).trim(), remark: String(r.remark || "").trim(), pass: r.pass !== false })).sort((a, b) => b.min - a.min);
     }
     function gsRange(i) {
         const m = GS.scale[i].min;
@@ -772,8 +773,6 @@
         return cleanNum(m) + "%" + (higher == null ? " and above" : " to under " + cleanNum(higher) + "%");
     }
     function gsValidate() {
-        const pass = String(GS.pass).trim();
-        if (pass === "" || !isFinite(pass) || +pass < 0 || +pass > 100) return "Passing marks must be a number between 0 and 100.";
         if (!GS.scale.length) return "Add at least one grade.";
         const g = {}, m = {};
         for (const r of GS.scale) {
@@ -785,52 +784,53 @@
             g[name.toLowerCase()] = 1; m[+min] = 1;
         }
         if (!m[0]) return "One grade must start at 0% so every mark gets a grade (normally the fail grade).";
+        if (!GS.scale.some(r => r.pass !== false)) return "Mark at least one grade as Pass.";
         return "";
     }
     function gsRefresh() {
         $$("[data-rng]").forEach(td => { td.textContent = gsRange(+td.dataset.rng); });
+        $$('[data-gs="pass"]').forEach(s => { s.className = "ex-cell ex-gs-res " + (GS.scale[+s.dataset.i].pass !== false ? "ok" : "bad"); });
+        const rows = gsRows(GS.scale), names = p => rows.filter(r => r.pass === p).map(r => esc(r.grade || "?")).join(", ") || "none";
+        const sum = $("#gs-sum"); if (sum) sum.innerHTML = '<div><span class="ex-chip ok">Pass</span> ' + names(true) + '</div><div><span class="ex-chip bad">Fail</span> ' + names(false) + "</div>";
         const out = $("#gs-test-out"), v = $("#gs-test").value.trim();
         if (!out) return;
-        const rows = gsRows(GS.scale), passN = String(GS.pass).trim() !== "" && isFinite(GS.pass) ? +GS.pass : null;
         if (v === "" || !isFinite(v) || +v < 0 || +v > 100 || !rows.length) { out.innerHTML = '<span class="muted">Enter a percentage to preview</span>'; return; }
         const hit = rows.find(r => +v >= r.min) || rows[rows.length - 1];
-        out.innerHTML = "<b>" + esc(hit.grade || "—") + "</b><span>" + esc(hit.remark) + "</span>" + (passN == null ? "" : '<span class="ex-chip ' + (+v >= passN ? "ok" : "bad") + '">' + (+v >= passN ? "Pass" : "Fail") + "</span>");
+        out.innerHTML = "<b>" + esc(hit.grade || "—") + "</b><span>" + esc(hit.remark) + '</span><span class="ex-chip ' + (hit.pass ? "ok" : "bad") + '">' + (hit.pass ? "Pass" : "Fail") + "</span>";
     }
     function vGrading() {
-        GS = { pass: PASS, scale: SCALE.map(g => Object.assign({}, g)) };
+        GS = { scale: SCALE.map(g => Object.assign({}, g)) };
         drawGrading();
     }
     function drawGrading() {
         const rows = GS.scale.map((r, i) => "<tr><td>" +
             '<input class="ex-cell ex-gs-grade" data-gs="grade" data-i="' + i + '" value="' + esc(r.grade) + '" maxlength="4" autocomplete="off"></td><td>' +
             '<input class="ex-cell ex-gs-min" data-gs="min" data-i="' + i + '" value="' + esc(r.min) + '" inputmode="decimal" autocomplete="off"><span class="ex-gs-pct">%</span></td>' +
-            '<td class="muted" data-rng="' + i + '"></td><td><input class="ex-cell ex-gs-remark" data-gs="remark" data-i="' + i + '" value="' + esc(r.remark) + '" maxlength="40" autocomplete="off"></td>' +
+            '<td class="muted" data-rng="' + i + '"></td><td><select class="ex-cell ex-gs-res" data-gs="pass" data-i="' + i + '"><option value="pass"' + (r.pass !== false ? " selected" : "") + '>Pass</option><option value="fail"' + (r.pass === false ? " selected" : "") + '>Fail</option></select></td><td><input class="ex-cell ex-gs-remark" data-gs="remark" data-i="' + i + '" value="' + esc(r.remark) + '" maxlength="40" autocomplete="off"></td>' +
             '<td class="ex-rowact"><button class="ex-icon-btn del" type="button" data-gs-del="' + i + '" title="Remove grade"><i class="fas fa-trash"></i></button></td></tr>').join("");
-        ROOT().innerHTML = head("ranking-star", "Grading <span>Scheme</span>", "Set the passing marks and the grades used on every result.",
+        ROOT().innerHTML = head("ranking-star", "Grading <span>Scheme</span>", "Set the grades and whether each one is a Pass or a Fail.",
             '<button class="ex-btn ghost" id="gs-reset"><i class="fas fa-rotate-left"></i> Reset to default</button><button class="ex-btn" id="gs-save"><i class="fas fa-floppy-disk"></i> Save scheme</button>') +
-            '<div class="ex-two"><div class="ex-panel"><h3><i class="fas fa-circle-check"></i> Passing marks</h3>' +
-            field("Minimum percentage to pass", '<input id="gs-pass" inputmode="decimal" autocomplete="off" value="' + esc(GS.pass) + '">', "") +
-            '<p class="ex-note">A student scoring below this percentage in a subject is marked <b>Fail</b> on marks sheets, report cards and analysis.</p></div>' +
+            '<div class="ex-two"><div class="ex-panel"><h3><i class="fas fa-circle-check"></i> Pass / Fail summary</h3><div class="ex-gs-sum" id="gs-sum"></div>' +
+            '<p class="ex-note">Choose <b>Pass</b> or <b>Fail</b> for each grade below. A student whose mark falls in a Fail grade is marked <b>Fail</b> on marks sheets, report cards and analysis.</p></div>' +
             '<div class="ex-panel"><h3><i class="fas fa-vial"></i> Try a percentage</h3>' +
             field("Percentage", '<input id="gs-test" inputmode="decimal" autocomplete="off" placeholder="e.g. 76">', "") +
             '<div class="ex-gs-result" id="gs-test-out"></div></div></div>' +
             '<div class="ex-panel"><h3><i class="fas fa-list-ol"></i> Grade scale <small>highest grade first</small></h3>' +
-            '<div class="ex-tablewrap"><table class="ex-table"><thead><tr><th>Grade</th><th>From</th><th>Range</th><th>Remark on report card</th><th></th></tr></thead><tbody id="gs-body">' + rows + "</tbody></table></div>" +
+            '<div class="ex-tablewrap"><table class="ex-table"><thead><tr><th>Grade</th><th>From</th><th>Range</th><th>Result</th><th>Remark on report card</th><th></th></tr></thead><tbody id="gs-body">' + rows + "</tbody></table></div>" +
             '<div class="ex-gs-foot"><button class="ex-btn ghost sm" id="gs-add"><i class="fas fa-plus"></i> Add grade</button><span class="ex-note" style="margin:0">One grade must start at <b>0%</b>. Changes apply to all saved marks as soon as you save — no marks are altered.</span></div></div>';
-        $$("[data-gs]").forEach(inp => inp.addEventListener("input", () => { GS.scale[+inp.dataset.i][inp.dataset.gs] = inp.value; gsRefresh(); }));
+        $$("[data-gs]").forEach(inp => inp.addEventListener("input", () => { GS.scale[+inp.dataset.i][inp.dataset.gs] = inp.dataset.gs === "pass" ? inp.value === "pass" : inp.value; gsRefresh(); }));
         $$("[data-gs-del]").forEach(b => b.addEventListener("click", () => {
             if (GS.scale.length <= 1) { toast("Keep at least one grade.", true); return; }
             GS.scale.splice(+b.dataset.gsDel, 1); drawGrading();
         }));
-        $("#gs-pass").addEventListener("input", e => { GS.pass = e.target.value; gsRefresh(); });
         $("#gs-test").addEventListener("input", gsRefresh);
-        $("#gs-add").addEventListener("click", () => { GS.scale.push({ min: "", grade: "", remark: "" }); drawGrading(); const l = $$("[data-gs=grade]"); if (l.length) l[l.length - 1].focus(); });
+        $("#gs-add").addEventListener("click", () => { GS.scale.push({ min: "", grade: "", remark: "", pass: true }); drawGrading(); const l = $$("[data-gs=grade]"); if (l.length) l[l.length - 1].focus(); });
         $("#gs-save").addEventListener("click", () => {
             const err = gsValidate(); if (err) { toast(err, true); return; }
-            db.grading = { pass: +GS.pass, scale: GS.scale.map(r => ({ min: +r.min, grade: String(r.grade).trim(), remark: String(r.remark || "").trim() })).sort((a, b) => b.min - a.min) };
+            db.grading = { scale: GS.scale.map(r => ({ min: +r.min, grade: String(r.grade).trim(), remark: String(r.remark || "").trim(), pass: r.pass !== false })).sort((a, b) => b.min - a.min) };
             applyGrading(); save(); toast("Grading scheme saved"); vGrading();
         });
-        $("#gs-reset").addEventListener("click", () => confirmBox("Reset grading scheme?", "The passing marks and grade scale go back to the default (pass at " + DEF_PASS + "%, A+ to F). Saved marks are not changed.", "Reset", () => {
+        $("#gs-reset").addEventListener("click", () => confirmBox("Reset grading scheme?", "The grade scale goes back to the default (A+ to F, with only F as a Fail). Saved marks are not changed.", "Reset", () => {
             delete db.grading; applyGrading(); save(); toast("Grading scheme reset to default"); vGrading();
         }));
         gsRefresh();
