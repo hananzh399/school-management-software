@@ -244,7 +244,12 @@
                     </div>
                     <h3 class="card-title">Import Data</h3>
                     <p class="card-description">Import students from an Excel, CSV or PDF file and match its columns.</p>
-                    <input type="file" id="import-file-input" accept=".xlsx,.xls,.csv,.pdf" style="display:none" onchange="importStudentsFromExcel(event)" onclick="event.stopPropagation()">
+                    <div class="import-template-links" onclick="event.stopPropagation()">
+                        <span>Need a starting point?</span>
+                        <button type="button" class="imp-link-btn" onclick="downloadImportTemplate('xlsx')"><i class="fas fa-download"></i> Excel template</button>
+                        <button type="button" class="imp-link-btn" onclick="downloadImportTemplate('csv')"><i class="fas fa-download"></i> CSV template</button>
+                    </div>
+                    <input type="file" id="import-file-input" accept=".xlsx,.xlsm,.xls,.ods,.csv,.tsv,.pdf" style="display:none" onchange="importStudentsFromExcel(event)" onclick="event.stopPropagation()">
                 </div>
             </div>
             <!-- Status / feedback area -->
@@ -1042,7 +1047,7 @@
                 <div class="imp-detected" id="imp-detected"></div>
                 <div class="imp-panel" id="imp-class-panel"></div>
                 <div class="imp-panel" id="imp-options"></div>
-                <div class="imp-panel-title imp-fields-title"><i class="fas fa-table-columns"></i> Match each field to a column in your file</div>
+                <div class="imp-panel-title imp-fields-title"><i class="fas fa-table-columns"></i> Match each field to a column in your file <button type="button" class="imp-link-btn imp-reset-btn" onclick="resetImportMapping()"><i class="fas fa-rotate-left"></i> Reset matching</button></div>
                 <div class="imp-colhead">
                     <span>SoftSchool field</span>
                     <span></span>
@@ -1051,10 +1056,11 @@
                 <div id="imp-rows"></div>
                 <div class="imp-panel" id="imp-preview"></div>
             </div>
+            <div class="imp-progress" id="imp-progress" hidden><div class="imp-progress-bar" id="imp-progress-bar"></div></div>
             <div class="modal-sticky-footer imp-footer">
                 <div class="imp-summary" id="imp-summary"></div>
                 <div class="imp-footer-btns">
-                    <button type="button" class="btn-ghost" onclick="closeImportMapper()">Cancel</button>
+                    <button type="button" class="btn-ghost" id="imp-cancel-btn" onclick="closeImportMapper()">Cancel</button>
                     <button type="button" class="btn-primary-submit" id="imp-run-btn" onclick="runStudentImport()">
                         <i class="fas fa-file-import"></i> <span>Import Students</span>
                     </button>
