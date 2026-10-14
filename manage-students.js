@@ -8354,31 +8354,29 @@ async function exportStudentsToExcel() {
 }
 
 /* ============================================================
-   IMPORT — Pick an Excel / CSV file, analyze its headings, let the
-   user match each SoftSchool field to a column, then import.
+   IMPORT — Excel / CSV / PDF → students, saved class by class.
 
-   Flow:
-     1. importStudentsFromExcel(event)  — reads the chosen file, finds the
-        header row, and collects every heading + all data rows.
-     2. openImportMapper()              — shows the mapping screen: SoftSchool
-        fields on the LEFT, a dropdown of the file's headings on the RIGHT
-        (pre-selected by autoMatchImportColumns() wherever it can tell).
-     3. runStudentImport()              — converts every row using the chosen
-        mapping, tidies values (dates, gender, CNIC, class names…) and saves
-        each new student through the same apiSaveStudent() the admission
-        form uses.
+   1. importStudentsFromExcel(event)  reads the file: EVERY sheet that has
+      data, each with its own heading row (auto-detected, adjustable).
+   2. The mapping screen lets the user decide
+        • which sheets to include,
+        • where each student's CLASS comes from — a column in the file,
+          the sheet name (one sheet per class), or one class for everyone,
+        • how every class value in the file maps to a class in Settings,
+        • which file column feeds each SoftSchool field,
+        • what to do with students that already exist, and how to order
+          roll numbers inside each class.
+   3. buildImportPlan() turns all of that into the exact list of students to
+      create / update. The live "Save plan" preview and the real import both
+      use that same plan, so what is previewed is what gets saved.
+   4. runStudentImport() saves the plan class by class.
    ============================================================ */
 
-/* The SoftSchool fields shown on the left of the mapping screen. `aliases`
-   are the headings the auto-matcher recognises (compared after lower-casing
-   and stripping spaces/punctuation). The first block of aliases also covers
-   the headings used by SoftSchool's own Export file, so old backups still
-   map automatically. */
 const IMPORT_FIELD_GROUPS = [
     { title: 'Academic & System Details', icon: 'fa-university', fields: [
         { key: 'regNo', label: 'Registration No.', hint: 'Auto-generated if not matched or left empty',
           aliases: ['regno', 'registrationno', 'registrationnumber', 'regnumber', 'reg#', 'studentid', 'admissionno', 'admissionnumber', 'grno', 'grnumber'] },
-        { key: 'studentClass', label: 'Class / Grade', required: true,
+        { key: 'studentClass', label: 'Class / Grade', required: true, special: 'class',
           aliases: ['class', 'grade', 'classgrade', 'studentclass', 'currentclass', 'classname', 'standard'] },
         { key: 'section', label: 'Section',
           aliases: ['section', 'sec', 'classsection', 'division'] },
@@ -8390,16 +8388,14 @@ const IMPORT_FIELD_GROUPS = [
     { title: 'Personal Information', icon: 'fa-user', fields: [
         { key: 'fullName', label: 'Student Full Name', required: true,
           aliases: ['fullname', 'studentname', 'nameofstudent', 'studentfullname', 'name', 'pupilname', 'childname', 'student'] },
-        { key: 'gender', label: 'Gender',
-          aliases: ['gender', 'sex'] },
+        { key: 'gender', label: 'Gender', aliases: ['gender', 'sex'] },
         { key: 'dob', label: 'Date of Birth',
           aliases: ['dateofbirth', 'dob', 'birthdate', 'birthday', 'bday'] },
         { key: 'studentBform', label: 'Student B-Form / CNIC No.',
-          aliases: ['studentbformno', 'studentbform', 'bform', 'bformno', 'bformnumber', 'formb', 'studentcnic', 'bformcnic', 'bformnumber'] },
+          aliases: ['studentbformno', 'studentbform', 'bform', 'bformno', 'bformnumber', 'formb', 'studentcnic', 'bformcnic'] },
         { key: 'medicalIssues', label: 'Medical Issues / Allergies',
           aliases: ['medicalissues', 'medical', 'allergies', 'medicalcondition', 'medicalconditions', 'health'] },
-        { key: 'orphanStatus', label: 'Orphan Status',
-          aliases: ['orphanstatus', 'orphan', 'isorphan'] },
+        { key: 'orphanStatus', label: 'Orphan Status', aliases: ['orphanstatus', 'orphan', 'isorphan'] },
         { key: 'previousSchool', label: 'Previous School Attended',
           aliases: ['previousschoolattended', 'previousschool', 'lastschool', 'schoolattended', 'formerschool'] },
         { key: 'previousClass', label: 'Previous Class',
@@ -8426,18 +8422,15 @@ const IMPORT_FIELD_GROUPS = [
     { title: 'Transport', icon: 'fa-bus', fields: [
         { key: 'transportMode', label: 'Transport Mode',
           aliases: ['transportmode', 'transport', 'transportfacility', 'conveyance'] },
-        { key: 'transportType', label: 'Vehicle Type',
-          aliases: ['transporttype', 'vehicletype', 'vehicle'] },
+        { key: 'transportType', label: 'Vehicle Type', aliases: ['transporttype', 'vehicletype', 'vehicle'] },
         { key: 'transportFee', label: 'Transport Monthly Fee',
           aliases: ['transportfeepkr', 'transportfee', 'transportcharges', 'vanfee', 'busfee', 'transportmonthlyfee'] }
     ]},
     { title: 'Fees & Discounts', icon: 'fa-file-invoice-dollar', fields: [
-        { key: 'standardFee', label: 'Standard Tuition Fee', hint: "Uses the class fee from Settings if not matched",
+        { key: 'standardFee', label: 'Standard Tuition Fee', hint: 'Uses the class fee from Settings if not matched',
           aliases: ['monthlytuitionfeepkr', 'tuitionfee', 'monthlyfee', 'standardfee', 'fee', 'fees', 'monthlytuitionfee', 'tuition', 'schoolfee'] },
         { key: 'admissionFee', label: 'Admission Fee',
           aliases: ['admissionfee', 'admissioncharges', 'registrationfee'] },
-        { key: 'arrears', label: 'Arrears (Previous Dues)',
-          aliases: ['arrears', 'previousdues', 'dues', 'balance', 'outstanding', 'pendingdues', 'previousbalance'] },
         { key: 'tuitionDiscount', label: 'Tuition Discount',
           aliases: ['tuitiondiscountpkr', 'tuitiondiscount', 'discount', 'feediscount', 'concession'] },
         { key: 'transportDiscount', label: 'Transport Discount',
@@ -8447,8 +8440,9 @@ const IMPORT_FIELD_GROUPS = [
     ]}
 ];
 const IMPORT_ALL_FIELDS = IMPORT_FIELD_GROUPS.flatMap(g => g.fields);
+const IMP_SKIP = '__skip__', IMP_KEEP = '__keep__';
 
-/* Everything the mapping screen needs, filled in when a file is analyzed. */
+/* Everything the mapping screen needs; filled in when a file is analyzed. */
 let importState = null;
 
 function _impEsc(v) {
@@ -8456,92 +8450,355 @@ function _impEsc(v) {
         .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
-function _impNorm(v) {
-    return String(v == null ? '' : v).toLowerCase().replace(/[^a-z0-9#]+/g, '');
-}
+function _impNorm(v) { return String(v == null ? '' : v).toLowerCase().replace(/[^a-z0-9#]+/g, ''); }
 function _impCellText(v) {
     if (v == null) return '';
     if (v instanceof Date) return isNaN(v) ? '' : _impToIsoDate(v);
     return String(v).trim();
 }
+function _impFilled(row) { return row.filter(c => _impCellText(c) !== '').length; }
 
-/** Step 1 — read the chosen Excel / CSV file and find its headings. */
-function importStudentsFromExcel(event) {
-    if (typeof XLSX === 'undefined') {
-        showDataIOStatus('Excel library not loaded yet. Please wait a moment and try again.', 'error');
+/* ---------- 0. PDF SUPPORT ----------
+   A PDF has no real "cells" — only pieces of text at x/y positions. So we
+   rebuild the table from the layout:
+     1. read every text piece with its position (pdf.js, loaded on demand),
+     2. group pieces into lines by their vertical position,
+     3. find the columns from the vertical white gaps that run through all
+        the table rows,
+     4. put every piece into its column, join wrapped cells (e.g. a long
+        address on two lines), drop repeated page headings / footers,
+     5. hand the rebuilt table to the same mapping screen as Excel/CSV.
+   Works for PDFs that contain real (selectable) text. Scanned PDFs are
+   pictures of text and would need OCR, which this page does not do. */
+
+const PDFJS_VERSION = '3.11.174';
+const PDFJS_LIB_URL    = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${PDFJS_VERSION}/pdf.min.js`;
+const PDFJS_WORKER_URL = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${PDFJS_VERSION}/pdf.worker.min.js`;
+let _pdfJsPromise = null;
+
+function _impLoadPdfJs() {
+    if (window.pdfjsLib) {
+        window.pdfjsLib.GlobalWorkerOptions.workerSrc = PDFJS_WORKER_URL;
+        return Promise.resolve(window.pdfjsLib);
+    }
+    if (!_pdfJsPromise) {
+        _pdfJsPromise = new Promise((resolve, reject) => {
+            const s = document.createElement('script');
+            s.src = PDFJS_LIB_URL;
+            s.onload = () => {
+                if (!window.pdfjsLib) { _pdfJsPromise = null; return reject(new Error('The PDF reader did not start correctly.')); }
+                window.pdfjsLib.GlobalWorkerOptions.workerSrc = PDFJS_WORKER_URL;
+                resolve(window.pdfjsLib);
+            };
+            s.onerror = () => { _pdfJsPromise = null; reject(new Error('Could not load the PDF reader. Please check your internet connection and try again.')); };
+            document.head.appendChild(s);
+        });
+    }
+    return _pdfJsPromise;
+}
+
+/** Every text piece of every page: [{ s, x0, x1, y, h }]. */
+async function _impReadPdfPages(file) {
+    const lib = await _impLoadPdfJs();
+    const data = new Uint8Array(await file.arrayBuffer());
+    let pdf;
+    try { pdf = await lib.getDocument({ data }).promise; }
+    catch (err) {
+        if (err && err.name === 'PasswordException') throw new Error('This PDF is password-protected. Remove the password and try again.');
+        throw err;
+    }
+    const pages = [];
+    for (let i = 1; i <= pdf.numPages; i++) {
+        showDataIOStatus(`Reading PDF page ${i} of ${pdf.numPages}…`, 'info');
+        const page = await pdf.getPage(i);
+        const tc = await page.getTextContent();
+        const items = [];
+        tc.items.forEach(it => {
+            if (!it.str || !it.str.trim()) return;
+            const [a, b, , d, e, f] = it.transform;
+            if (Math.abs(b) > Math.abs(a) * 0.5) return;          /* skip rotated text */
+            const h = it.height || Math.abs(d) || 10;
+            const w = it.width > 0 ? it.width : it.str.length * h * 0.5;
+            items.push({ s: it.str.trim(), x0: e, x1: e + w, y: f, h });
+        });
+        pages.push(items);
+    }
+    return pages;
+}
+
+const _pdfMedian = arr => { const a = arr.slice().sort((x, y) => x - y); return a.length ? a[Math.floor(a.length / 2)] : 0; };
+
+function _pdfGroupLines(items) {
+    const sorted = items.slice().sort((a, b) => b.y - a.y || a.x0 - b.x0);
+    const lines = [];
+    sorted.forEach(it => {
+        const last = lines[lines.length - 1];
+        if (last && Math.abs(last.y - it.y) <= Math.max(2, 0.45 * Math.min(last.h, it.h))) {
+            last.items.push(it); last.h = Math.max(last.h, it.h);
+        } else lines.push({ y: it.y, h: it.h, items: [it] });
+    });
+    lines.forEach(l => l.items.sort((a, b) => a.x0 - b.x0));
+    return lines;
+}
+
+/** Pieces closer than a word-space belong to one cell. */
+function _pdfCells(line) {
+    const cells = [];
+    line.items.forEach(it => {
+        const c = cells[cells.length - 1];
+        if (c && it.x0 - c.x1 < 0.6 * line.h) {
+            c.s += (it.x0 - c.x1 > 0.08 * line.h ? ' ' : '') + it.s;
+            c.x1 = Math.max(c.x1, it.x1);
+        } else cells.push({ s: it.s, x0: it.x0, x1: it.x1 });
+    });
+    return cells;
+}
+
+/** Rebuild one page's table into rows of column texts. Returns null if the page has no table. */
+function _pdfPageToRows(items) {
+    const lines = _pdfGroupLines(items);
+    if (!lines.length) return null;
+    lines.forEach(l => { l.cells = _pdfCells(l); });
+
+    /* How many columns does the table have? The most common cell-count among lines with 2+ cells. */
+    const freq = {};
+    lines.forEach(l => { if (l.cells.length >= 2) freq[l.cells.length] = (freq[l.cells.length] || 0) + 1; });
+    const keys = Object.keys(freq).map(Number);
+    if (!keys.length) return null;
+    const big = keys.filter(k => k >= 3);
+    const pool = big.length ? big : keys;
+    const N = pool.reduce((best, k) => (freq[k] > freq[best] || (freq[k] === freq[best] && k > best)) ? k : best, pool[0]);
+    const thr = Math.max(2, Math.round(N * 0.6));
+    lines.forEach(l => { l.isData = l.cells.length >= thr; });
+    const dataLines = lines.filter(l => l.isData);
+    if (dataLines.length < 2) return null;
+
+    /* Column regions = x-ranges covered by text on the table rows; the empty vertical gaps between them are the gutters. */
+    const h = _pdfMedian(dataLines.map(l => l.h));
+    const minGap = Math.max(3, 0.35 * h);
+    const spans = [];
+    dataLines.forEach(l => l.items.forEach(it => spans.push([it.x0, it.x1])));
+    spans.sort((a, b) => a[0] - b[0]);
+    const cols = [];
+    spans.forEach(sp => {
+        const c = cols[cols.length - 1];
+        if (c && sp[0] - c[1] < minGap) c[1] = Math.max(c[1], sp[1]); else cols.push([sp[0], sp[1]]);
+    });
+    const bounds = [];                                   /* boundary between column i and i+1 */
+    for (let i = 0; i < cols.length - 1; i++) bounds.push((cols[i][1] + cols[i + 1][0]) / 2);
+    const colOf = it => { const c = (it.x0 + it.x1) / 2; let i = 0; while (i < bounds.length && c >= bounds[i]) i++; return i; };
+
+    const toRow = line => {
+        const row = new Array(cols.length).fill('');
+        const last = new Array(cols.length).fill(null);
+        line.items.forEach(it => {
+            const i = colOf(it);
+            if (last[i] === null) row[i] = it.s;
+            else row[i] += (it.x0 - last[i] > 0.08 * line.h ? ' ' : '') + it.s;
+            last[i] = it.x1;
+        });
+        return row;
+    };
+
+    /* Row pitch = typical distance between table rows; tighter lines are wrapped text of the row above. */
+    const pitches = [];
+    for (let i = 1; i < dataLines.length; i++) pitches.push(dataLines[i - 1].y - dataLines[i].y);
+    const pitch = _pdfMedian(pitches) || (h * 1.6);
+
+    const rows = [];
+    let started = false, prev = null;
+    const titleLines = [];
+    lines.forEach(l => {
+        if (l.isData) { rows.push(toRow(l)); started = true; }
+        else if (!started) { titleLines.push(l.items.map(i => i.s).join(' ')); }
+        else if (prev && (prev.y - l.y) < 0.9 * pitch && rows.length) {
+            const extra = toRow(l), r = rows[rows.length - 1];
+            extra.forEach((t, i) => { if (t) r[i] = r[i] ? r[i] + ' ' + t : t; });
+        }
+        prev = l;
+    });
+    return { rows, ncols: cols.length, titleLines };
+}
+
+const _pdfIsNumeric = t => /^[\d\s.,\-\/#:]+$/.test(t);
+/** A heading row has words, and none of its cells is a plain number. */
+function _pdfLooksLikeHeader(row) {
+    const filled = row.filter(c => c !== '');
+    if (filled.length < 2) return false;
+    if (filled.some(_pdfIsNumeric)) return false;
+    return filled.filter(c => /[A-Za-z\u0600-\u06FF]/.test(c)).length / filled.length >= 0.7;
+}
+function _pdfSameHeader(a, b) {
+    if (a.length !== b.length) return false;
+    let same = 0, total = 0;
+    a.forEach((t, i) => { if (t || b[i]) { total++; if (_impNorm(t) === _impNorm(b[i])) same++; } });
+    return total > 0 && same / total >= 0.6;
+}
+/** "Class: Grade 2" / "Grade 2" printed above a table → the class name. */
+function _pdfClassFromTitle(titleLines) {
+    for (const line of titleLines) {
+        const cands = [line, line.split(':').pop(), (line.match(/\b(?:class|grade|std|standard)\s*[:\-]?\s*[A-Za-z0-9]+/i) || [''])[0]];
+        for (const c of cands) {
+            if (!c || !c.trim()) continue;
+            const m = _impMatchClass(c.trim());
+            if (m.known && m.value) return m.value;
+        }
+    }
+    return '';
+}
+
+/** All pages → sheets (one per distinct table; repeated headings and continued tables are merged). */
+function _pdfBuildSheets(pages) {
+    const tables = [];
+    pages.forEach((items, pi) => {
+        const pr = _pdfPageToRows(items);
+        if (!pr) return;
+        let rows = pr.rows;
+        const first = rows[0];
+        const headerLike = _pdfLooksLikeHeader(first);
+        const prevTable = tables[tables.length - 1];
+        const titleClass = _pdfClassFromTitle(pr.titleLines) || (prevTable ? prevTable.titleClass : '');
+
+        let target = null;
+        for (const t of tables) {                              /* same heading repeated on a later page */
+            if (t.header && t.ncols === pr.ncols && t.titleClass === titleClass && _pdfSameHeader(t.header, first)) { target = t; rows = rows.slice(1); break; }
+        }
+        if (!target && !headerLike && prevTable && prevTable.ncols === pr.ncols && prevTable.titleClass === titleClass) target = prevTable; /* continued, no heading */
+        if (!target) {
+            if (!headerLike) rows = [first.map((_, i) => `Column ${i + 1}`)].concat(rows);
+            target = { pages: [], rows: [], header: headerLike ? first : null, ncols: pr.ncols, titleClass };
+            tables.push(target);
+        }
+        target.pages.push(pi + 1);
+        target.rows.push(...rows);
+    });
+
+    return tables.map((t, i) => {
+        const span = t.pages.length > 1 ? `Pages ${t.pages[0]}–${t.pages[t.pages.length - 1]}` : `Page ${t.pages[0]}`;
+        const name = t.titleClass || (tables.length === 1 ? 'PDF table' : span);
+        return { name, grid: t.rows, rowOffset: 0, headerRow: null, include: true };
+    });
+}
+
+async function _impReadPdf(file) {
+    const pages = await _impReadPdfPages(file);
+    const pieces = pages.reduce((n, p) => n + p.length, 0);
+    if (pieces < 5) {
+        throw new Error('This PDF has no selectable text — it looks like a scanned picture. Scanned PDFs need OCR, which this page can’t do. Please use the original Excel/CSV file, or export the PDF from the program that created it');
+    }
+    const sheets = _pdfBuildSheets(pages);
+    if (!sheets.length) {
+        throw new Error('No table was found in this PDF. It should contain a heading row followed by student rows, with each column lined up');
+    }
+    return sheets;
+}
+
+/* ---------- 1. READ THE FILE ---------- */
+
+/** Work out the headings + data rows of one sheet (header row auto-detected unless overridden). */
+function _impParseSheet(sheet) {
+    const grid = sheet.grid;
+    let h = sheet.headerRow;
+    if (h == null || h < 0 || h >= grid.length) {
+        h = grid.findIndex(r => _impFilled(r) >= 2);
+        if (h === -1) h = grid.findIndex(r => _impFilled(r) >= 1);
+        if (h === -1) h = 0;
+    }
+    sheet.headerRow = h;
+    const rawHeaders = grid[h] || [];
+    const seen = {};
+    const headers = rawHeaders.map((c, i) => {
+        let t = _impCellText(c) || `Column ${i + 1}`;
+        if (seen[t]) { seen[t]++; t = `${t} (${seen[t]})`; } else seen[t] = 1;
+        return t;
+    });
+    const dataRows = grid.slice(h + 1).filter(r => _impFilled(r) > 0);
+    let last = headers.length - 1;
+    while (last > 0 && !_impCellText(rawHeaders[last]) && !dataRows.some(r => _impCellText(r[last]) !== '')) last--;
+    headers.length = last + 1;
+    sheet.headers = headers;
+    sheet.rows = dataRows.map(r => headers.map((_, i) => r[i] === undefined ? '' : r[i]));
+}
+
+/** Shared start-up once a file (Excel, CSV or PDF) has been turned into sheets of rows. */
+function _impStart(fileName, sheetsIn, source) {
+    const sheets = [];
+    sheetsIn.forEach(s => {
+        _impParseSheet(s);
+        if (s.rows.length) sheets.push(s);
+    });
+    if (!sheets.length) {
+        showDataIOStatus('No student rows were found. Make sure the file has a heading row followed by student rows.', 'error');
         return;
     }
+    importState = {
+        fileName, source, sheets,
+        headers: [], records: [],
+        mapping: {}, auto: {},
+        classMode: 'column', classModeTouched: false,
+        fixedClass: '', fixedSection: '',
+        classMap: {},
+        dupMode: 'skip', order: 'file',
+        plan: null
+    };
+    _impRebuild();
+    _impPickClassMode();
+    renderImportAll();
+    const el = document.getElementById('data-io-status');
+    if (el) el.style.display = 'none';
+}
+
+function importStudentsFromExcel(event) {
     const input = event.target;
     const file  = input.files && input.files[0];
     if (!file) return;
-
-    if (!/\.(xlsx|xls|csv)$/i.test(file.name)) {
-        showDataIOStatus('Unsupported file type. Please choose an Excel (.xlsx, .xls) or CSV (.csv) file.', 'error');
+    if (!/\.(xlsx|xls|csv|pdf)$/i.test(file.name)) {
+        showDataIOStatus('Unsupported file type. Please choose an Excel (.xlsx, .xls), CSV (.csv) or PDF (.pdf) file.', 'error');
         input.value = '';
         return;
     }
 
-    showDataIOStatus('Reading file and analyzing its headings… please wait.', 'info');
+    /* ----- PDF ----- */
+    if (/\.pdf$/i.test(file.name)) {
+        showDataIOStatus('Opening PDF… please wait.', 'info');
+        _impReadPdf(file)
+            .then(sheets => _impStart(file.name, sheets, 'pdf'))
+            .catch(err => {
+                console.error('Import: could not read PDF', err);
+                showDataIOStatus(_impEsc(err && err.message ? err.message : 'The PDF could not be read.') + '.', 'error');
+            })
+            .finally(() => { input.value = ''; });
+        return;
+    }
+
+    /* ----- Excel / CSV ----- */
+    if (typeof XLSX === 'undefined') {
+        showDataIOStatus('Excel library not loaded yet. Please wait a moment and try again.', 'error');
+        input.value = '';
+        return;
+    }
+    showDataIOStatus('Reading file and analyzing its sheets and headings… please wait.', 'info');
 
     const reader = new FileReader();
     reader.onload = function (e) {
         try {
             const wb = XLSX.read(new Uint8Array(e.target.result), { type: 'array', cellDates: true });
-
-            /* Use the first sheet that actually has data. */
-            let grid = null, sheetName = '';
-            for (const name of wb.SheetNames) {
-                const g = XLSX.utils.sheet_to_json(wb.Sheets[name], { header: 1, defval: '', raw: true, blankrows: false });
-                if (g.some(r => r.some(c => _impCellText(c) !== ''))) { grid = g; sheetName = name; break; }
-            }
-            if (!grid) {
-                showDataIOStatus('The file appears to be empty — no headings or rows were found.', 'error');
-                return;
-            }
-
-            /* The header row = first row with at least 2 filled cells
-               (or the first non-empty row, for one-column files). */
-            const filled = r => r.filter(c => _impCellText(c) !== '').length;
-            let headerIdx = grid.findIndex(r => filled(r) >= 2);
-            if (headerIdx === -1) headerIdx = grid.findIndex(r => filled(r) >= 1);
-
-            const rawHeaders = grid[headerIdx];
-            const seen = {};
-            const headers = rawHeaders.map((h, i) => {
-                let t = _impCellText(h) || `Column ${i + 1}`;
-                if (seen[t]) { seen[t]++; t = `${t} (${seen[t]})`; } else seen[t] = 1;
-                return t;
+            const sheets = [];
+            wb.SheetNames.forEach(name => {
+                const ws = wb.Sheets[name];
+                if (!ws || !ws['!ref']) return;
+                const rowOffset = XLSX.utils.decode_range(ws['!ref']).s.r;
+                /* blankrows:true keeps row numbers in line with Excel's own row numbers */
+                const grid = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '', raw: true, blankrows: true });
+                if (!grid.some(r => _impFilled(r) > 0)) return;
+                sheets.push({ name, grid, rowOffset, headerRow: null, include: true });
             });
-            /* Drop trailing columns that have no heading and no data at all. */
-            let lastUsed = headers.length - 1;
-            const dataRows = grid.slice(headerIdx + 1).filter(r => filled(r) > 0);
-            while (lastUsed > 0 && !_impCellText(rawHeaders[lastUsed]) &&
-                   !dataRows.some(r => _impCellText(r[lastUsed]) !== '')) lastUsed--;
-            headers.length = lastUsed + 1;
-
-            if (!dataRows.length) {
-                showDataIOStatus('Headings were found, but the file has no student rows below them.', 'error');
-                return;
-            }
-
-            importState = {
-                fileName: file.name,
-                sheetName,
-                sheetCount: wb.SheetNames.length,
-                headers,
-                rows: dataRows.map(r => headers.map((_, i) => r[i] === undefined ? '' : r[i])),
-                mapping: {},
-                auto: {}
-            };
-            autoMatchImportColumns();
-            openImportMapper();
-            const el = document.getElementById('data-io-status');
-            if (el) el.style.display = 'none';
+            _impStart(file.name, sheets, 'excel');
         } catch (err) {
             console.error('Import: could not read file', err);
             showDataIOStatus('Could not read this file: ' + _impEsc(err.message) + '. Make sure it is a valid Excel or CSV file.', 'error');
         } finally {
-            input.value = ''; /* allow choosing the same file again later */
+            input.value = '';
         }
     };
     reader.onerror = function () {
@@ -8551,16 +8808,36 @@ function importStudentsFromExcel(event) {
     reader.readAsArrayBuffer(file);
 }
 
-/** Step 2a — guess which file column belongs to which SoftSchool field. */
-function autoMatchImportColumns() {
+/** Recompute the combined headings + records from the included sheets, keep valid mappings, auto-match the rest. */
+function _impRebuild() {
+    const st = importState;
+    const inc = st.sheets.filter(s => s.include);
+    const headers = [];
+    inc.forEach(s => s.headers.forEach(h => { if (!headers.includes(h)) headers.push(h); }));
+    st.headers = headers;
+
+    st.records = [];
+    inc.forEach(s => s.rows.forEach(r => {
+        const vals = {};
+        s.headers.forEach((h, i) => { vals[h] = r[i]; });
+        st.records.push({ sheet: s.name, vals });
+    }));
+
+    Object.keys(st.mapping).forEach(k => { if (!headers.includes(st.mapping[k])) { delete st.mapping[k]; delete st.auto[k]; } });
+    _impAutoMatch();
+}
+
+/** Guess which file column belongs to which field. Only fills fields/columns not already mapped. */
+function _impAutoMatch() {
     const st = importState;
     const normHeaders = st.headers.map(_impNorm);
+    const usedCols = new Set(Object.values(st.mapping));
     const pairs = [];
-
     IMPORT_ALL_FIELDS.forEach((f, fi) => {
+        if (st.mapping[f.key] !== undefined) return;
         const aliases = [_impNorm(f.label), _impNorm(f.key)].concat(f.aliases.map(_impNorm));
         normHeaders.forEach((h, hi) => {
-            if (!h) return;
+            if (!h || usedCols.has(st.headers[hi])) return;
             let score = 0;
             aliases.forEach(a => {
                 if (!a) return;
@@ -8571,38 +8848,68 @@ function autoMatchImportColumns() {
             if (score > 0) pairs.push({ fi, hi, score });
         });
     });
-
-    /* Best matches claim their column first; a column is only used once. */
     pairs.sort((a, b) => b.score - a.score || a.fi - b.fi || a.hi - b.hi);
-    const usedField = new Set(), usedCol = new Set();
-    st.mapping = {}; st.auto = {};
+    const usedField = new Set();
     pairs.forEach(p => {
-        if (usedField.has(p.fi) || usedCol.has(p.hi)) return;
-        usedField.add(p.fi); usedCol.add(p.hi);
-        const key = IMPORT_ALL_FIELDS[p.fi].key;
-        st.mapping[key] = p.hi;
-        st.auto[key] = true;
+        const key = IMPORT_ALL_FIELDS[p.fi].key, header = st.headers[p.hi];
+        if (usedField.has(key) || usedCols.has(header)) return;
+        usedField.add(key); usedCols.add(header);
+        st.mapping[key] = header; st.auto[key] = true;
     });
 }
 
-/** Step 2b — draw the mapping screen. */
-function openImportMapper() {
+/** Decide the best default for "where does the class come from?" (until the user picks one). */
+function _impPickClassMode() {
+    const st = importState;
+    if (st.classModeTouched) return;
+    const configs = getClassConfigs();
+    const isKnown = n => configs.some(c => _impMatchClass(n).known && _impMatchClass(n).value === c.name);
+    const inc = st.sheets.filter(s => s.include);
+    const known = inc.filter(s => isKnown(s.name)).length;
+    if (st.mapping.studentClass !== undefined) st.classMode = 'column';
+    /* one sheet per class: at least one sheet is named like a class (others, e.g. "Notes", get skipped) */
+    else if (inc.length > 1 && known >= 1 && known >= inc.length / 2) st.classMode = 'sheet';
+    else if (inc.length === 1 && known === 1) st.classMode = 'sheet';
+    else st.classMode = 'fixed';
+    if (!st.fixedClass && configs.length) st.fixedClass = configs[0].name;
+}
+
+/* ---------- 2. THE MAPPING SCREEN ---------- */
+
+function _impHeaderOptions(selectedHeader) {
+    const st = importState;
+    return '<option value="">— Don’t import —</option>' +
+        st.headers.map((h, i) => `<option value="${i}"${selectedHeader === h ? ' selected' : ''}>${_impEsc(h)}</option>`).join('');
+}
+
+function renderImportAll() {
     const st = importState;
     if (!st) return;
 
+    const total = st.records.length;
     document.getElementById('imp-file-bar').innerHTML =
-        `<div class="imp-file-icon"><i class="fas fa-file-excel"></i></div>
+        `<div class="imp-file-icon${st.source === 'pdf' ? ' is-pdf' : ''}"><i class="fas ${st.source === 'pdf' ? 'fa-file-pdf' : 'fa-file-excel'}"></i></div>
          <div class="imp-file-meta">
             <strong>${_impEsc(st.fileName)}</strong>
-            <span>${st.rows.length} student row${st.rows.length === 1 ? '' : 's'} · ${st.headers.length} column${st.headers.length === 1 ? '' : 's'} found${st.sheetCount > 1 ? ` · sheet “${_impEsc(st.sheetName)}”` : ''}</span>
+            <span>${total} student row${total === 1 ? '' : 's'} · ${st.headers.length} column${st.headers.length === 1 ? '' : 's'} · ${st.sheets.length} sheet${st.sheets.length === 1 ? '' : 's'}</span>
          </div>`;
 
+    renderImportSheets();
+
+    const first = st.sheets.find(s => s.include) || st.sheets[0];
     document.getElementById('imp-detected').innerHTML =
         `<div class="imp-detected-label"><i class="fas fa-magnifying-glass-chart"></i> Headings detected in your file</div>
-         <div class="imp-chip-row">${st.headers.map(h => `<span class="imp-chip">${_impEsc(h)}</span>`).join('')}</div>`;
+         <div class="imp-chip-row">${st.headers.map(h => `<span class="imp-chip">${_impEsc(h)}</span>`).join('')}</div>
+         <details class="imp-peek"${st.source === 'pdf' ? ' open' : ''}>
+            <summary>Preview the first rows${st.source === 'pdf' ? ' read from the PDF' : ''}</summary>
+            <div class="imp-table-wrap"><table class="imp-plan-table imp-peek-table">
+                <thead><tr>${first.headers.map(h => `<th>${_impEsc(h)}</th>`).join('')}</tr></thead>
+                <tbody>${first.rows.slice(0, 5).map(r => `<tr>${r.map(c => `<td>${_impEsc(_impCellText(c))}</td>`).join('')}</tr>`).join('')}</tbody>
+            </table></div>
+         </details>`;
 
-    const optionsHtml = sel => '<option value="">— Don’t import —</option>' +
-        st.headers.map((h, i) => `<option value="${i}"${sel === i ? ' selected' : ''}>${_impEsc(h)}</option>`).join('');
+    renderImportClassPanel();
+    renderImportOptions();
 
     document.getElementById('imp-rows').innerHTML = IMPORT_FIELD_GROUPS.map(g => `
         <div class="imp-group">
@@ -8611,37 +8918,205 @@ function openImportMapper() {
             <div class="imp-row" data-key="${f.key}">
                 <div class="imp-left">
                     <span class="imp-label">${_impEsc(f.label)}${f.required ? '<span class="imp-req" title="Required">*</span>' : ''}</span>
-                    ${f.hint ? `<span class="imp-hint">${_impEsc(f.hint)}</span>` : ''}
+                    <span class="imp-hint" id="imp-hint-${f.key}">${f.hint ? _impEsc(f.hint) : ''}</span>
                 </div>
                 <i class="fas fa-arrow-right-long imp-arrow"></i>
                 <div class="imp-right">
-                    <select class="imp-select" data-key="${f.key}" onchange="onImportMappingChange(this)">${optionsHtml(st.mapping[f.key])}</select>
+                    <select class="imp-select" data-key="${f.key}" onchange="onImportMappingChange(this)">${_impHeaderOptions(st.mapping[f.key])}</select>
                     <div class="imp-sample" id="imp-sample-${f.key}"></div>
                 </div>
             </div>`).join('')}
         </div>`).join('');
 
     IMPORT_ALL_FIELDS.forEach(f => refreshImportRow(f.key));
-    refreshImportSummary();
+    refreshImport();
     openModal('import-map-modal');
 }
 
-/** Update one row's sample text + matched/required styling. */
+/** Sheets panel: choose which sheets to include and where each one's headings are. */
+function renderImportSheets() {
+    const st = importState;
+    const only = st.sheets.length === 1;
+    const pdfNote = st.source === 'pdf'
+        ? `<div class="imp-note"><i class="fas fa-circle-info"></i> The table was rebuilt from the PDF’s layout. Check the preview below; if the headings are on a different line, change <strong>Headings in row</strong>.</div>`
+        : '';
+    document.getElementById('imp-sheets').innerHTML = pdfNote +
+        `<div class="imp-panel-title"><i class="fas fa-layer-group"></i> ${only ? 'Sheet' : 'Sheets in this file'}
+            ${only ? '' : '<span class="imp-panel-sub">Tick the sheets to import. Sheets with the same headings are combined.</span>'}</div>
+         ${st.sheets.map((s, i) => `
+            <div class="imp-sheet-row${s.include ? '' : ' is-off'}">
+                <label class="imp-sheet-name">
+                    <input type="checkbox" ${s.include ? 'checked' : ''} ${only ? 'disabled' : ''} onchange="toggleImportSheet(${i}, this.checked)">
+                    <span>${_impEsc(s.name)}</span>
+                </label>
+                <span class="imp-sheet-meta">${s.rows.length} row${s.rows.length === 1 ? '' : 's'} · ${s.headers.length} columns</span>
+                <label class="imp-sheet-hdr">Headings in row
+                    <input type="number" min="1" value="${s.headerRow + 1 + s.rowOffset}" onchange="setImportHeaderRow(${i}, this.value)">
+                </label>
+            </div>`).join('')}`;
+}
+
+function toggleImportSheet(i, on) {
+    const st = importState;
+    if (!on && st.sheets.filter(s => s.include).length <= 1) { renderImportSheets(); return; } /* keep at least one */
+    st.sheets[i].include = on;
+    _impRebuild(); _impPickClassMode(); renderImportAll();
+}
+
+function setImportHeaderRow(i, value) {
+    const st = importState, sheet = st.sheets[i];
+    const n = parseInt(value, 10);
+    if (isNaN(n)) { renderImportSheets(); return; }
+    const idx = Math.min(Math.max(n - 1 - sheet.rowOffset, 0), sheet.grid.length - 1);
+    sheet.headerRow = idx;
+    _impParseSheet(sheet);
+    /* A different heading row means different columns — forget the guesses, keep nothing stale. */
+    st.mapping = {}; st.auto = {}; st.classMap = {};
+    _impRebuild(); _impPickClassMode(); renderImportAll();
+}
+
+/** "Where does each student's class come from?" + class value matching. */
+function renderImportClassPanel() {
+    const st = importState;
+    const configs = getClassConfigs();
+    const modes = [
+        ['column', 'fa-table-columns', 'A column in the file'],
+        ['sheet',  'fa-layer-group',   'The sheet name'],
+        ['fixed',  'fa-school',        'One class for everyone']
+    ];
+
+    let html = `<div class="imp-panel-title"><i class="fas fa-school"></i> Class — where does it come from?
+                    <span class="imp-panel-sub">Students are saved into their class, with roll numbers numbered per class.</span></div>
+                <div class="imp-seg">${modes.map(([v, ic, label]) =>
+                    `<button type="button" class="imp-seg-btn${st.classMode === v ? ' active' : ''}" onclick="setImportClassMode('${v}')"><i class="fas ${ic}"></i> ${label}</button>`).join('')}</div>`;
+
+    if (st.classMode === 'fixed') {
+        const cfg = getClassConfigMap()[st.fixedClass];
+        const secs = cfg && Array.isArray(cfg.sections) ? cfg.sections : [];
+        html += configs.length
+            ? `<div class="imp-fixed-row">
+                   <label>Class<select class="imp-select" onchange="setImportFixed('class', this.value)">
+                        ${configs.map(c => `<option value="${_impEsc(c.name)}"${c.name === st.fixedClass ? ' selected' : ''}>${_impEsc(c.name)}</option>`).join('')}</select></label>
+                   <label>Section <small>(used when the file has no section)</small>
+                        <select class="imp-select" onchange="setImportFixed('section', this.value)">
+                            <option value="">No section</option>
+                            ${secs.map(s => `<option value="${_impEsc(s)}"${s === st.fixedSection ? ' selected' : ''}>${_impEsc(s)}</option>`).join('')}</select></label>
+               </div>`
+            : `<div class="imp-note imp-note-warn"><i class="fas fa-triangle-exclamation"></i> No classes are set up in Settings yet.</div>`;
+    } else {
+        const distinct = _impDistinctClassValues();
+        if (st.classMode === 'column' && st.mapping.studentClass === undefined) {
+            html += `<div class="imp-note imp-note-warn"><i class="fas fa-triangle-exclamation"></i> Pick the class column below under <strong>Class / Grade</strong>, or choose another option above.</div>`;
+        } else if (!distinct.length) {
+            html += `<div class="imp-note imp-note-warn"><i class="fas fa-triangle-exclamation"></i> No class values were found.</div>`;
+        } else {
+            html += `<div class="imp-classmap-head"><span>${st.classMode === 'sheet' ? 'Sheet name' : 'Class in your file'}</span><span></span><span>Save as (class in Settings)</span></div>`;
+            html += distinct.map(d => {
+                if (!(d.norm in st.classMap)) {
+                    const m = _impMatchClass(d.raw);
+                    if (m.known && m.value) st.classMap[d.norm] = m.value;
+                    else st.classMap[d.norm] = (st.classMode === 'sheet' && distinct.some(x => _impMatchClass(x.raw).known)) ? IMP_SKIP : IMP_KEEP;
+                }
+                const cur = st.classMap[d.norm];
+                const matched = cur !== IMP_KEEP && cur !== IMP_SKIP;
+                return `<div class="imp-classmap-row${cur === IMP_SKIP ? ' is-skip' : matched ? ' is-ok' : ' is-new'}">
+                    <div class="imp-cm-left"><strong>${_impEsc(d.raw)}</strong><span>${d.count} student${d.count === 1 ? '' : 's'}</span></div>
+                    <i class="fas fa-arrow-right-long imp-arrow"></i>
+                    <select class="imp-select" onchange="setImportClassTarget('${_impEsc(d.norm)}', this.value)">
+                        ${configs.map(c => `<option value="${_impEsc(c.name)}"${cur === c.name ? ' selected' : ''}>${_impEsc(c.name)}</option>`).join('')}
+                        <option value="${IMP_KEEP}"${cur === IMP_KEEP ? ' selected' : ''}>Keep as “${_impEsc(d.raw)}” (not in Settings)</option>
+                        <option value="${IMP_SKIP}"${cur === IMP_SKIP ? ' selected' : ''}>Don’t import these students</option>
+                    </select>
+                </div>`;
+            }).join('');
+        }
+    }
+    document.getElementById('imp-class-panel').innerHTML = html;
+}
+
+function renderImportOptions() {
+    const st = importState;
+    const hasReg = st.mapping.regNo !== undefined;
+    document.getElementById('imp-options').innerHTML =
+        `<div class="imp-panel-title"><i class="fas fa-sliders"></i> Import options</div>
+         <div class="imp-fixed-row">
+            <label>If a student already exists
+                <select class="imp-select" onchange="importState.dupMode = this.value; refreshImport();">
+                    <option value="skip"${st.dupMode === 'skip' ? ' selected' : ''}>Skip them</option>
+                    <option value="update"${st.dupMode === 'update' ? ' selected' : ''}${hasReg ? '' : ' disabled'}>Update them (matched by Registration No.)</option>
+                </select>
+                ${hasReg ? '' : '<small>Match the Registration No. column to enable updating.</small>'}
+            </label>
+            <label>Roll numbers inside each class
+                <select class="imp-select" onchange="importState.order = this.value; refreshImport();">
+                    <option value="file"${st.order === 'file' ? ' selected' : ''}>Follow the file’s order</option>
+                    <option value="name"${st.order === 'name' ? ' selected' : ''}>Alphabetical by student name</option>
+                </select>
+            </label>
+         </div>`;
+}
+
+function setImportClassMode(mode) {
+    const st = importState;
+    st.classMode = mode; st.classModeTouched = true;
+    if (mode === 'fixed' && !st.fixedClass && getClassConfigs().length) st.fixedClass = getClassConfigs()[0].name;
+    renderImportClassPanel();
+    refreshImportRow('studentClass');
+    refreshImport();
+}
+function setImportFixed(which, value) {
+    const st = importState;
+    if (which === 'class') { st.fixedClass = value; st.fixedSection = ''; renderImportClassPanel(); }
+    else st.fixedSection = value;
+    refreshImport();
+}
+function setImportClassTarget(norm, value) {
+    importState.classMap[norm] = value;
+    renderImportClassPanel();
+    refreshImport();
+}
+
+/** Distinct class values currently in play (from the class column or the sheet names), with counts. */
+function _impDistinctClassValues() {
+    const st = importState, out = new Map();
+    st.records.forEach(rec => {
+        const raw = st.classMode === 'sheet' ? rec.sheet : _impCell(rec, 'studentClass');
+        if (!raw) return;
+        const norm = _impNorm(raw);
+        if (!out.has(norm)) out.set(norm, { raw, norm, count: 0 });
+        out.get(norm).count++;
+    });
+    return [...out.values()];
+}
+
+/** Update one row's sample text + matched/required/disabled styling. */
 function refreshImportRow(key) {
     const st = importState;
     const row = document.querySelector(`#imp-rows .imp-row[data-key="${key}"]`);
     if (!row || !st) return;
-    const idx = st.mapping[key];
-    const has = idx !== undefined && idx !== '' && idx !== null;
     const field = IMPORT_ALL_FIELDS.find(f => f.key === key);
+    const header = st.mapping[key];
+    const has = header !== undefined;
+    const sel = row.querySelector('select');
+    const hint = document.getElementById('imp-hint-' + key);
 
-    row.classList.toggle('is-matched', has);
-    row.classList.toggle('is-missing', !has && !!field.required);
+    /* The class row is only used when the class comes from a column. */
+    const disabled = field.special === 'class' && st.classMode !== 'column';
+    sel.disabled = disabled;
+    row.classList.toggle('is-disabled', disabled);
+    if (hint && field.special === 'class') {
+        hint.textContent = disabled
+            ? (st.classMode === 'sheet' ? 'Taken from the sheet name (see “Class” above)' : 'Everyone goes into the class chosen above')
+            : '';
+    }
+    row.classList.toggle('is-matched', has && !disabled);
+    row.classList.toggle('is-missing', !has && !!field.required && !disabled);
 
     const sampleEl = document.getElementById('imp-sample-' + key);
     if (!sampleEl) return;
-    if (!has) { sampleEl.innerHTML = ''; return; }
-    const sample = st.rows.map(r => _impCellText(r[idx])).find(v => v !== '');
+    if (!has || disabled) { sampleEl.innerHTML = ''; return; }
+    let sample = '';
+    for (const rec of st.records) { const t = _impCellText(rec.vals[header]); if (t !== '') { sample = t; break; } }
     sampleEl.innerHTML =
         (st.auto[key] ? '<span class="imp-auto-badge"><i class="fas fa-wand-magic-sparkles"></i> Auto-matched</span>' : '') +
         (sample ? `<span class="imp-sample-text">e.g. ${_impEsc(sample.length > 40 ? sample.slice(0, 40) + '…' : sample)}</span>` : '');
@@ -8649,28 +9124,17 @@ function refreshImportRow(key) {
 
 function onImportMappingChange(selectEl) {
     const st = importState;
-    if (!st) return;
     const key = selectEl.dataset.key;
     if (selectEl.value === '') delete st.mapping[key];
-    else st.mapping[key] = parseInt(selectEl.value, 10);
-    st.auto[key] = false; /* the user changed it by hand */
+    else st.mapping[key] = st.headers[parseInt(selectEl.value, 10)];
+    st.auto[key] = false;
     refreshImportRow(key);
-    refreshImportSummary();
-}
-
-function refreshImportSummary() {
-    const st = importState;
-    if (!st) return;
-    const matched = IMPORT_ALL_FIELDS.filter(f => st.mapping[f.key] !== undefined).length;
-    const missingReq = IMPORT_ALL_FIELDS.filter(f => f.required && st.mapping[f.key] === undefined);
-    const sum = document.getElementById('imp-summary');
-    const btn = document.getElementById('imp-run-btn');
-    sum.innerHTML = missingReq.length
-        ? `<i class="fas fa-circle-exclamation"></i> Match required field${missingReq.length > 1 ? 's' : ''}: <strong>${missingReq.map(f => _impEsc(f.label)).join(', ')}</strong>`
-        : `<i class="fas fa-circle-check"></i> <strong>${matched}</strong> of ${IMPORT_ALL_FIELDS.length} fields matched`;
-    sum.classList.toggle('imp-summary-warn', missingReq.length > 0);
-    btn.disabled = missingReq.length > 0;
-    btn.querySelector('span').textContent = `Import ${st.rows.length} Student${st.rows.length === 1 ? '' : 's'}`;
+    if (key === 'studentClass') renderImportClassPanel();
+    if (key === 'regNo') {
+        if (st.mapping.regNo === undefined && st.dupMode === 'update') st.dupMode = 'skip';
+        renderImportOptions();
+    }
+    refreshImport();
 }
 
 function closeImportMapper() {
@@ -8678,7 +9142,16 @@ function closeImportMapper() {
     importState = null;
 }
 
-/* ---------- value cleaners used while importing ---------- */
+/* ---------- 3. VALUE CLEANERS ---------- */
+
+function _impCell(rec, key) {
+    const h = importState.mapping[key];
+    return h === undefined ? '' : _impCellText(rec.vals[h]);
+}
+function _impRaw(rec, key) {
+    const h = importState.mapping[key];
+    return h === undefined ? '' : rec.vals[h];
+}
 
 function _impToIsoDate(v) {
     const pad = n => String(n).padStart(2, '0');
@@ -8686,36 +9159,32 @@ function _impToIsoDate(v) {
     if (v == null || v === '') return '';
     if (v instanceof Date) {
         if (isNaN(v)) return '';
-        /* +12h makes this immune to the few-seconds / timezone drift SheetJS can introduce. */
-        return fromDate(new Date(v.getTime() + 12 * 3600 * 1000));
+        return fromDate(new Date(v.getTime() + 12 * 3600 * 1000)); /* +12h: immune to SheetJS timezone drift */
     }
     if (typeof v === 'number') {
         if (v < 1000) return '';
-        const d = new Date(Math.round((v - 25569) * 86400000)); /* Excel serial → UTC date */
+        const d = new Date(Math.round((v - 25569) * 86400000));
         return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}`;
     }
     const s = String(v).trim();
     let m = s.match(/^(\d{4})[-\/.](\d{1,2})[-\/.](\d{1,2})/);
     if (m) return `${m[1]}-${pad(m[2])}-${pad(m[3])}`;
-    m = s.match(/^(\d{1,2})[-\/.](\d{1,2})[-\/.](\d{2,4})$/); /* day-first (dd/mm/yyyy) */
+    m = s.match(/^(\d{1,2})[-\/.](\d{1,2})[-\/.](\d{2,4})$/); /* day-first */
     if (m) {
         let y = parseInt(m[3], 10);
         if (m[3].length === 2) y += y <= 29 ? 2000 : 1900;
         let day = parseInt(m[1], 10), mon = parseInt(m[2], 10);
         if (mon > 12 && day <= 12) { const t = day; day = mon; mon = t; }
-        if (mon >= 1 && mon <= 12 && day >= 1 && day <= 31) return `${y}-${pad(mon)}-${pad(day)}`;
-        return '';
+        return (mon >= 1 && mon <= 12 && day >= 1 && day <= 31) ? `${y}-${pad(mon)}-${pad(day)}` : '';
     }
     const parsed = new Date(s);
     return isNaN(parsed) ? '' : fromDate(new Date(parsed.getTime() + 12 * 3600 * 1000));
 }
-
 function _impNumber(v) {
     if (v === '' || v == null) return 0;
     const n = parseFloat(String(v).replace(/[^0-9.\-]/g, ''));
     return isNaN(n) ? 0 : n;
 }
-
 function _impGender(v) {
     const s = String(v).trim().toLowerCase();
     if (!s) return '';
@@ -8723,7 +9192,6 @@ function _impGender(v) {
     if (/^(f|female|girl|woman|daughter)$/.test(s)) return 'Female';
     return 'Other';
 }
-
 function _impGuardianRole(v) {
     const s = String(v).trim().toLowerCase();
     if (!s) return '';
@@ -8737,43 +9205,17 @@ function _impGuardianRole(v) {
     for (const [re, label] of table) if (re.test(s)) return label;
     return String(v).trim();
 }
-
 function _impCnic(v) {
-    const raw = String(v).trim();
-    const digits = raw.replace(/\D/g, '');
-    return digits.length === 13 ? `${digits.slice(0, 5)}-${digits.slice(5, 12)}-${digits.slice(12)}` : raw;
+    const raw = String(v).trim(), d = raw.replace(/\D/g, '');
+    return d.length === 13 ? `${d.slice(0, 5)}-${d.slice(5, 12)}-${d.slice(12)}` : raw;
 }
-
 function _impPhone(v) {
     const raw = String(v).trim();
-    let digits = raw.replace(/\D/g, '');
-    if (digits.length === 10 && digits[0] === '3') digits = '0' + digits;     /* Excel dropped the leading 0 */
-    if (digits.length === 12 && digits.startsWith('92')) digits = '0' + digits.slice(2);
-    return digits.length === 11 && digits.startsWith('03') ? `${digits.slice(0, 4)}-${digits.slice(4)}` : raw;
+    let d = raw.replace(/\D/g, '');
+    if (d.length === 10 && d[0] === '3') d = '0' + d;
+    if (d.length === 12 && d.startsWith('92')) d = '0' + d.slice(2);
+    return d.length === 11 && d.startsWith('03') ? `${d.slice(0, 4)}-${d.slice(4)}` : raw;
 }
-
-/** Match a typed class name ("1", "grade 1", "Class-1", "nursery") to a configured class. */
-function _impMatchClass(v) {
-    const raw = String(v).trim();
-    if (!raw) return { value: '', known: true };
-    const names = getClassConfigs().map(c => c.name);
-    const n = _impNorm(raw);
-    let hit = names.find(x => _impNorm(x) === n);
-    if (!hit) {
-        const num = n.replace(/^(class|grade|std|standard|year)/, '');
-        if (/^\d+$/.test(num)) hit = names.find(x => _impNorm(x) === 'grade' + num || _impNorm(x) === 'class' + num);
-    }
-    return hit ? { value: hit, known: true } : { value: raw, known: names.length === 0 };
-}
-
-function _impMatchSection(className, v) {
-    const raw = String(v).trim();
-    if (!raw) return '';
-    const cfg = getClassConfigMap()[className];
-    const list = cfg && Array.isArray(cfg.sections) ? cfg.sections : [];
-    return list.find(s => _impNorm(s) === _impNorm(raw)) || raw.toUpperCase();
-}
-
 function _impAgeFromDob(iso) {
     if (!iso) return '';
     const dob = new Date(iso), today = new Date();
@@ -8784,153 +9226,352 @@ function _impAgeFromDob(iso) {
     return age >= 0 ? age + ' Years' : '';
 }
 
-/** Step 3 — convert every row with the chosen mapping and save the new students. */
+/** Match a typed class name ("1", "grade 1", "Class-1", "nursery") to a class from Settings. */
+function _impMatchClass(v) {
+    const raw = String(v).trim();
+    if (!raw) return { value: '', known: true };
+    const names = getClassConfigs().map(c => c.name);
+    const n = _impNorm(raw);
+    let hit = names.find(x => _impNorm(x) === n);
+    if (!hit) {
+        const num = n.replace(/^(class|grade|std|standard|year|kg)/, '');
+        if (/^\d+$/.test(num)) hit = names.find(x => _impNorm(x) === 'grade' + num || _impNorm(x) === 'class' + num);
+        if (!hit && /^(playgroup|pg)$/.test(n)) hit = names.find(x => /playgroup/.test(_impNorm(x)));
+        if (!hit && /^(prep|preparatory|kg)$/.test(n)) hit = names.find(x => /^(prep|preparatory)/.test(_impNorm(x)));
+    }
+    return hit ? { value: hit, known: true } : { value: raw, known: false };
+}
+function _impMatchSection(className, v) {
+    const raw = String(v).trim();
+    if (!raw) return '';
+    const cfg = getClassConfigMap()[className];
+    const list = cfg && Array.isArray(cfg.sections) ? cfg.sections : [];
+    return list.find(s => _impNorm(s) === _impNorm(raw)) || raw.toUpperCase();
+}
+
+/** Cleaned values for the fields that are mapped AND filled in on this row. */
+function _impCleanRow(rec) {
+    const v = {};
+    const set = (k, val) => { if (val !== '' && val !== undefined && val !== null) v[k] = val; };
+    const t = k => _impCell(rec, k);
+    const num = k => { const x = t(k); return x === '' ? '' : _impNumber(x); };
+
+    set('regNo', t('regNo'));
+    set('fullName', t('fullName'));
+    set('rollNo', t('rollNo'));
+    set('admissionDate', _impToIsoDate(_impRaw(rec, 'admissionDate')));
+    set('gender', _impGender(t('gender')));
+    set('dob', _impToIsoDate(_impRaw(rec, 'dob')));
+    set('studentBform', _impCnic(t('studentBform')));
+    set('medicalIssues', t('medicalIssues'));
+    const orphan = t('orphanStatus');
+    if (orphan) set('orphanStatus', /^(orphan|yes|y|true|1)$/i.test(orphan) ? 'Orphan' : 'Not Orphan');
+    set('previousSchool', t('previousSchool'));
+    set('previousClass', t('previousClass'));
+    set('guardianName', t('guardianName'));
+    set('guardianRole', _impGuardianRole(t('guardianRole')));
+    set('guardianCnic', _impCnic(t('guardianCnic')));
+    set('phone1', _impPhone(t('phone1')));
+    set('phone2', _impPhone(t('phone2')));
+    set('permanentAddress', t('permanentAddress'));
+    set('mailingAddress', t('mailingAddress'));
+    const tm = t('transportMode');
+    if (tm) set('transportMode', /school|provided|^(yes|y|true|1)$/i.test(tm) ? 'School Provided' : 'Private');
+    const tt = t('transportType').toLowerCase();
+    if (tt) set('transportType', /coaster/.test(tt) ? 'Coaster' : /van/.test(tt) ? 'School Van' : /bus/.test(tt) ? 'School Bus' : 'None');
+    set('transportFee', num('transportFee'));
+    set('standardFee', num('standardFee'));
+    set('admissionFee', num('admissionFee'));
+    set('tuitionDiscount', num('tuitionDiscount'));
+    set('transportDiscount', num('transportDiscount'));
+    set('siblingDiscount', num('siblingDiscount'));
+    return v;
+}
+
+/** Decide which class this row belongs to. */
+function _impResolveClass(rec) {
+    const st = importState;
+    if (st.classMode === 'fixed') return st.fixedClass ? { cls: st.fixedClass, known: true } : { empty: true };
+    const raw = st.classMode === 'sheet' ? rec.sheet : _impCell(rec, 'studentClass');
+    if (!raw) return { empty: true };
+    const norm = _impNorm(raw);
+    let target = st.classMap[norm];
+    if (target === undefined) { const m = _impMatchClass(raw); target = m.known && m.value ? m.value : IMP_KEEP; }
+    if (target === IMP_SKIP) return { skip: true };
+    if (target === IMP_KEEP) return { cls: raw.trim(), known: false };
+    return { cls: target, known: true };
+}
+
+function _impBuildNewStudent(vals, cls, section, todayIso) {
+    const s = {
+        fullName: vals.fullName, studentClass: cls, section: section || '',
+        gender: vals.gender || '', dob: vals.dob || '', age: _impAgeFromDob(vals.dob),
+        admissionDate: vals.admissionDate || todayIso,
+        studentBform: vals.studentBform || '', medicalIssues: vals.medicalIssues || '',
+        orphanStatus: vals.orphanStatus || 'Not Orphan',
+        previousSchool: vals.previousSchool || '', previousClass: vals.previousClass || '',
+        guardianName: vals.guardianName || '', guardianRole: vals.guardianRole || '', guardianCnic: vals.guardianCnic || '',
+        phone1: vals.phone1 || '', phone2: vals.phone2 || '',
+        permanentAddress: vals.permanentAddress || '',
+        mailingAddress: vals.mailingAddress || vals.permanentAddress || '',
+        transportMode: vals.transportMode || 'Private', transportType: vals.transportType || 'None',
+        transportFee: vals.transportFee || 0,
+        standardFee: vals.standardFee !== undefined ? vals.standardFee : getStandardFeeForClass(cls),
+        admissionFee: vals.admissionFee || 0,
+        tuitionDiscount: vals.tuitionDiscount || 0, transportDiscount: vals.transportDiscount || 0,
+        siblingDiscount: vals.siblingDiscount || 0,
+        rollNo: vals.rollNo || '', regNo: vals.regNo || '',
+        status: 'active', isLifetime: false
+    };
+    s.netPayable = Math.max(0, (s.standardFee + s.admissionFee + s.transportFee)
+                             - (s.tuitionDiscount + s.transportDiscount + s.siblingDiscount));
+    return s;
+}
+
+/* ---------- 4. THE PLAN (shared by the live preview and the real import) ---------- */
+
+function buildImportPlan() {
+    const st = importState;
+    const db = getDatabase();
+    const active = window.getActiveDatabase ? window.getActiveDatabase() : db;
+    const todayIso = _impToIsoDate(new Date());
+    const classOrder = getClassConfigs().map(c => c.name);
+
+    const byReg = new Map();
+    db.forEach(s => [s.regNo, s.id].forEach(k => { if (k) byReg.set(String(k), s); }));
+    const dupKey = s => [s.fullName, s.guardianName, s.dob, s.studentClass].map(_impNorm).join('|');
+    const existingKeys = new Set(db.filter(s => s.fullName && s.dob).map(dupKey));
+    const seenRegs = new Set();
+
+    const limit = window.getStudentLimit ? window.getStudentLimit() : null;
+    let room = limit === null ? Infinity : Math.max(0, limit - active.length);
+
+    const plan = { create: [], update: [], noName: 0, noClass: 0, skippedClass: 0, dupes: 0, overLimit: 0, unknownClasses: new Set(), perClass: [] };
+    const pending = [];
+
+    st.records.forEach((rec, idx) => {
+        const vals = _impCleanRow(rec);
+        if (!vals.fullName) { plan.noName++; return; }
+
+        const c = _impResolveClass(rec);
+        if (c.skip) { plan.skippedClass++; return; }
+        if (c.empty) { plan.noClass++; return; }
+        if (!c.known) plan.unknownClasses.add(c.cls);
+
+        const secRaw = _impCell(rec, 'section');
+        const section = secRaw ? _impMatchSection(c.cls, secRaw) : (st.classMode === 'fixed' ? st.fixedSection : '');
+
+        const regNo = vals.regNo ? String(vals.regNo) : '';
+        const existing = regNo ? byReg.get(regNo) : null;
+        if (existing || (regNo && seenRegs.has(regNo))) {
+            if (existing && st.dupMode === 'update' && !seenRegs.has(regNo)) {
+                seenRegs.add(regNo);
+                plan.update.push({ existing, vals, cls: c.cls, section });
+            } else plan.dupes++;
+            return;
+        }
+        const probe = { fullName: vals.fullName, guardianName: vals.guardianName, dob: vals.dob, studentClass: c.cls };
+        if (!regNo && vals.dob && existingKeys.has(dupKey(probe))) { plan.dupes++; return; }
+
+        if (room <= 0) { plan.overLimit++; return; }
+        room--;
+        if (regNo) seenRegs.add(regNo);
+        if (vals.dob) existingKeys.add(dupKey(probe));
+        pending.push({ idx, vals, cls: c.cls, known: c.known, section });
+    });
+
+    /* Save class by class: Settings order first (unknown classes last), then section, then name/file order. */
+    const rank = cls => { const i = classOrder.indexOf(cls); return i === -1 ? classOrder.length : i; };
+    pending.sort((a, b) =>
+        rank(a.cls) - rank(b.cls) || a.cls.localeCompare(b.cls, undefined, { numeric: true }) ||
+        (a.section || '').localeCompare(b.section || '') ||
+        (st.order === 'name' ? a.vals.fullName.localeCompare(b.vals.fullName, undefined, { sensitivity: 'base' }) : a.idx - b.idx));
+
+    /* Roll numbers: continue after the highest one already used in each class. */
+    const rollMax = {}, existingCount = {};
+    active.forEach(s => {
+        if (!s.studentClass) return;
+        existingCount[s.studentClass] = (existingCount[s.studentClass] || 0) + 1;
+        const r = parseInt(s.rollNo, 10);
+        if (!isNaN(r)) rollMax[s.studentClass] = Math.max(rollMax[s.studentClass] || 0, r);
+    });
+
+    const perClass = new Map();
+    pending.forEach(p => {
+        const s = _impBuildNewStudent(p.vals, p.cls, p.section, todayIso);
+        if (!s.rollNo) { rollMax[p.cls] = (rollMax[p.cls] || 0) + 1; s.rollNo = String(rollMax[p.cls]); }
+        else { const r = parseInt(s.rollNo, 10); if (!isNaN(r)) rollMax[p.cls] = Math.max(rollMax[p.cls] || 0, r); }
+        plan.create.push(s);
+
+        if (!perClass.has(p.cls)) perClass.set(p.cls, { cls: p.cls, count: 0, sections: {}, known: p.known, existing: existingCount[p.cls] || 0, rolls: [] });
+        const pc = perClass.get(p.cls);
+        pc.count++;
+        const secLabel = p.section || 'No section';
+        pc.sections[secLabel] = (pc.sections[secLabel] || 0) + 1;
+        const r = parseInt(s.rollNo, 10); if (!isNaN(r)) pc.rolls.push(r);
+    });
+    plan.perClass = [...perClass.values()];
+
+    /* Updates: only the fields that were mapped and filled in change. */
+    plan.update.forEach(u => {
+        const changes = Object.assign({}, u.vals);
+        delete changes.regNo;
+        changes.studentClass = u.cls;
+        if (u.section) changes.section = u.section;
+        const merged = Object.assign({}, u.existing, changes);
+        if (changes.dob) changes.age = _impAgeFromDob(changes.dob);
+        if (['standardFee', 'admissionFee', 'transportFee', 'tuitionDiscount', 'transportDiscount', 'siblingDiscount'].some(k => k in changes)) {
+            const n = k => Number(merged[k]) || 0;
+            changes.netPayable = Math.max(0, (n('standardFee') + n('admissionFee') + n('transportFee')) - (n('tuitionDiscount') + n('transportDiscount') + n('siblingDiscount')));
+        }
+        u.changes = changes;
+    });
+    return plan;
+}
+
+/** Live preview: "Students will be saved class-wise" + the footer summary. */
+function refreshImport() {
+    const st = importState;
+    if (!st) return;
+    const plan = st.plan = buildImportPlan();
+
+    const missing = [];
+    if (st.mapping.fullName === undefined) missing.push('Student Full Name');
+    if (st.classMode === 'column' && st.mapping.studentClass === undefined) missing.push('Class / Grade');
+    if (st.classMode === 'fixed' && !st.fixedClass) missing.push('a Class');
+
+    const skipped = plan.noName + plan.noClass + plan.skippedClass + plan.dupes + plan.overLimit;
+    const rows = plan.perClass.map(pc => {
+        const secs = Object.entries(pc.sections).map(([k, v]) => `${_impEsc(k)}: ${v}`).join(' · ');
+        const range = pc.rolls.length ? `${Math.min(...pc.rolls)} – ${Math.max(...pc.rolls)}` : '—';
+        return `<tr>
+            <td><strong>${_impEsc(pc.cls)}</strong>${pc.known ? '' : ' <span class="imp-tag-warn" title="This class is not set up in Settings">not in Settings</span>'}</td>
+            <td class="imp-num">${pc.count}</td>
+            <td>${secs}</td>
+            <td class="imp-num">${range}</td>
+            <td class="imp-num">${pc.existing}</td>
+        </tr>`;
+    }).join('');
+
+    const notes = [];
+    if (plan.update.length)    notes.push(`<span class="imp-pill imp-pill-info"><i class="fas fa-rotate"></i> ${plan.update.length} existing student${plan.update.length === 1 ? '' : 's'} will be updated</span>`);
+    if (plan.dupes)            notes.push(`<span class="imp-pill"><i class="fas fa-clone"></i> ${plan.dupes} already exist — skipped</span>`);
+    if (plan.noName)           notes.push(`<span class="imp-pill imp-pill-warn"><i class="fas fa-user-slash"></i> ${plan.noName} with no name — skipped</span>`);
+    if (plan.noClass)          notes.push(`<span class="imp-pill imp-pill-warn"><i class="fas fa-school-circle-xmark"></i> ${plan.noClass} with no class — skipped</span>`);
+    if (plan.skippedClass)     notes.push(`<span class="imp-pill"><i class="fas fa-ban"></i> ${plan.skippedClass} in classes you chose to skip</span>`);
+    if (plan.overLimit)        notes.push(`<span class="imp-pill imp-pill-warn"><i class="fas fa-lock"></i> ${plan.overLimit} over your plan's student limit — skipped</span>`);
+
+    document.getElementById('imp-preview').innerHTML =
+        `<div class="imp-panel-title"><i class="fas fa-eye"></i> Save plan — what will be saved
+            <span class="imp-panel-sub">Updates as you change the settings above.</span></div>` +
+        (plan.perClass.length
+            ? `<div class="imp-table-wrap"><table class="imp-plan-table">
+                <thead><tr><th>Class</th><th class="imp-num">New students</th><th>By section</th><th class="imp-num">Roll numbers</th><th class="imp-num">Already in class</th></tr></thead>
+                <tbody>${rows}</tbody></table></div>`
+            : '<div class="imp-note">No new students would be added with the current settings.</div>') +
+        (notes.length ? `<div class="imp-pill-row">${notes.join('')}</div>` : '');
+
+    const sum = document.getElementById('imp-summary');
+    const btn = document.getElementById('imp-run-btn');
+    const doing = plan.create.length + plan.update.length;
+    if (missing.length) {
+        sum.innerHTML = `<i class="fas fa-circle-exclamation"></i><span>Still needed: <strong>${_impEsc(missing.join(', '))}</strong></span>`;
+    } else {
+        sum.innerHTML = `<i class="fas fa-circle-check"></i><span><strong>${plan.create.length}</strong> new` +
+            (plan.update.length ? ` · <strong>${plan.update.length}</strong> updated` : '') +
+            ` · <strong>${skipped}</strong> skipped</span>`;
+    }
+    sum.classList.toggle('imp-summary-warn', missing.length > 0);
+    btn.disabled = missing.length > 0 || doing === 0;
+    btn.querySelector('span').textContent = doing ? `Import ${doing} Student${doing === 1 ? '' : 's'}` : 'Nothing to Import';
+}
+
+/* ---------- 5. SAVE ---------- */
+
 async function runStudentImport() {
     const st = importState;
     if (!st) return;
     const btn = document.getElementById('imp-run-btn');
-    const btnLabel = btn.querySelector('span');
-    const mapped = key => st.mapping[key] !== undefined;
-    const cell = (row, key) => mapped(key) ? _impCellText(row[st.mapping[key]]) : '';
-
-    if (!mapped('fullName') || !mapped('studentClass')) { refreshImportSummary(); return; }
+    const label = btn.querySelector('span');
+    const plan = buildImportPlan();
+    if (!plan.create.length && !plan.update.length) return;
 
     btn.disabled = true;
-    btnLabel.textContent = 'Preparing…';
-
     const db = getDatabase();
-    const takenRegNos = new Set(db.flatMap(s => [s.regNo, s.id]).filter(Boolean).map(String));
-    const dupKey = s => [s.fullName, s.guardianName, s.dob, s.studentClass].map(x => _impNorm(x)).join('|');
-    const existingKeys = new Set(db.filter(s => s.fullName && s.dob).map(dupKey));
+    const result = { added: 0, updated: 0, failed: 0, perClass: {}, firstError: '' };
+    const total = plan.create.length + plan.update.length;
+    let done = 0;
 
-    /* Highest roll number already used in each class (active students). */
-    const rollMax = {};
-    (window.getActiveDatabase ? window.getActiveDatabase() : db).forEach(s => {
-        const r = parseInt(s.rollNo, 10);
-        if (s.studentClass && !isNaN(r)) rollMax[s.studentClass] = Math.max(rollMax[s.studentClass] || 0, r);
-    });
-
-    /* Plan limit — never import more active students than the plan allows. */
-    const limit = window.getStudentLimit ? window.getStudentLimit() : null;
-    let room = limit === null ? Infinity : Math.max(0, limit - (window.getActiveDatabase ? window.getActiveDatabase().length : db.length));
-
-    const result = { added: 0, dupes: 0, noName: 0, overLimit: 0, failed: 0, firstError: '', unknownClasses: new Set() };
-    const todayIso = _impToIsoDate(new Date());
-
-    /* 1) Build the student objects. */
-    const toSave = [];
-    st.rows.forEach(row => {
-        const s = {};
-        s.fullName = cell(row, 'fullName');
-        if (!s.fullName) { result.noName++; return; }
-
-        const cls = _impMatchClass(cell(row, 'studentClass'));
-        s.studentClass = cls.value;
-        if (cls.value && !cls.known) result.unknownClasses.add(cls.value);
-        s.section = _impMatchSection(s.studentClass, cell(row, 'section'));
-
-        s.gender         = _impGender(cell(row, 'gender'));
-        s.dob            = _impToIsoDate(mapped('dob') ? row[st.mapping.dob] : '');
-        s.age            = _impAgeFromDob(s.dob);
-        s.admissionDate  = _impToIsoDate(mapped('admissionDate') ? row[st.mapping.admissionDate] : '') || todayIso;
-        s.studentBform   = _impCnic(cell(row, 'studentBform'));
-        s.medicalIssues  = cell(row, 'medicalIssues');
-        const orphan     = cell(row, 'orphanStatus').toLowerCase();
-        s.orphanStatus   = /^(orphan|yes|y|true|1)$/.test(orphan) ? 'Orphan' : 'Not Orphan';
-        s.previousSchool = cell(row, 'previousSchool');
-        s.previousClass  = cell(row, 'previousClass');
-
-        s.guardianName   = cell(row, 'guardianName');
-        s.guardianRole   = _impGuardianRole(cell(row, 'guardianRole'));
-        s.guardianCnic   = _impCnic(cell(row, 'guardianCnic'));
-
-        s.phone1           = _impPhone(cell(row, 'phone1'));
-        s.phone2           = _impPhone(cell(row, 'phone2'));
-        s.permanentAddress = cell(row, 'permanentAddress');
-        s.mailingAddress   = cell(row, 'mailingAddress') || s.permanentAddress;
-
-        const tMode = cell(row, 'transportMode').toLowerCase();
-        s.transportMode = /school|provided|yes|y|true/.test(tMode) ? 'School Provided' : 'Private';
-        const tType = cell(row, 'transportType').toLowerCase();
-        s.transportType = /coaster/.test(tType) ? 'Coaster' : /van/.test(tType) ? 'School Van' : /bus/.test(tType) ? 'School Bus' : 'None';
-        s.transportFee  = _impNumber(cell(row, 'transportFee'));
-
-        const feeText = cell(row, 'standardFee');
-        s.standardFee       = feeText !== '' ? _impNumber(feeText) : getStandardFeeForClass(s.studentClass);
-        s.admissionFee      = _impNumber(cell(row, 'admissionFee'));
-        s.arrears           = _impNumber(cell(row, 'arrears'));
-        s.tuitionDiscount   = _impNumber(cell(row, 'tuitionDiscount'));
-        s.transportDiscount = _impNumber(cell(row, 'transportDiscount'));
-        s.siblingDiscount   = _impNumber(cell(row, 'siblingDiscount'));
-        s.netPayable = Math.max(0, (s.standardFee + s.admissionFee + s.transportFee)
-                                 - (s.tuitionDiscount + s.transportDiscount + s.siblingDiscount));
-
-        s.rollNo = cell(row, 'rollNo');
-        s.regNo  = cell(row, 'regNo');
-        s.status = 'active';
-        s.isLifetime = false;
-
-        /* Skip students that are already in the system. */
-        if (s.regNo && takenRegNos.has(s.regNo)) { result.dupes++; return; }
-        if (!s.regNo && s.dob && existingKeys.has(dupKey(s))) { result.dupes++; return; }
-
-        if (room <= 0) { result.overLimit++; return; }
-        room--;
-        if (s.regNo) takenRegNos.add(s.regNo);
-        if (s.dob) existingKeys.add(dupKey(s));
-        toSave.push(s);
-    });
-
-    /* 2) Save them one by one so reg numbers / roll numbers stay in sequence. */
-    for (let i = 0; i < toSave.length; i++) {
-        const s = toSave[i];
-        btnLabel.textContent = `Importing ${i + 1} of ${toSave.length}…`;
-
+    /* New students — already sorted class by class. */
+    for (const s of plan.create) {
+        done++;
+        label.textContent = `${s.studentClass}: saving ${done} of ${total}…`;
         if (!s.regNo) {
             s.regNo = window.generateNextRegistrationNumber
                 ? window.generateNextRegistrationNumber(s.admissionDate)
-                : 'IMP_' + Date.now() + '_' + i;
-        }
-        if (!s.rollNo) {
-            rollMax[s.studentClass] = (rollMax[s.studentClass] || 0) + 1;
-            s.rollNo = String(rollMax[s.studentClass]);
-        } else {
-            const r = parseInt(s.rollNo, 10);
-            if (!isNaN(r)) rollMax[s.studentClass] = Math.max(rollMax[s.studentClass] || 0, r);
+                : 'IMP_' + Date.now() + '_' + done;
         }
         s.id = s.regNo;
-
         try {
             const saved = await apiSaveStudent(s);
             db.push(Object.assign({}, s, saved || {}, { id: s.regNo }));
             result.added++;
+            result.perClass[s.studentClass] = (result.perClass[s.studentClass] || 0) + 1;
         } catch (err) {
             result.failed++;
             if (!result.firstError) result.firstError = (err && err.message) || String(err);
             console.error('Import: could not save', s.regNo, err);
         }
     }
+
+    /* Existing students being updated. */
+    for (const u of plan.update) {
+        done++;
+        label.textContent = `Updating ${done} of ${total}…`;
+        const payload = Object.assign({}, u.existing, u.changes);
+        delete payload.photo;      /* untouched — the server keeps what it has */
+        delete payload.certData;
+        try {
+            await apiSaveStudent(payload);
+            Object.assign(u.existing, u.changes);
+            result.updated++;
+        } catch (err) {
+            result.failed++;
+            if (!result.firstError) result.firstError = (err && err.message) || String(err);
+            console.error('Import: could not update', u.existing.regNo, err);
+        }
+    }
     saveDatabase(db);
 
-    /* 3) Report. */
+    const fileName = st.fileName;
     closeImportMapper();
     btn.disabled = false;
 
+    const skipped = plan.noName + plan.noClass + plan.skippedClass + plan.dupes + plan.overLimit;
     const parts = [];
-    parts.push(`<strong>${result.added} new student${result.added === 1 ? '' : 's'}</strong> imported from <em>${_impEsc(st.fileName)}</em>.`);
-    if (result.dupes)     parts.push(`${result.dupes} row(s) skipped — already in the system.`);
-    if (result.noName)    parts.push(`${result.noName} row(s) skipped — no student name.`);
-    if (result.overLimit) parts.push(`${result.overLimit} row(s) not imported — your plan's active-student limit was reached.`);
-    if (result.failed)    parts.push(`${result.failed} record(s) couldn't be saved to the server — check your connection and import again.`);
-    if (result.unknownClasses.size) {
-        parts.push(`Class name(s) not found in Settings: <strong>${[...result.unknownClasses].map(_impEsc).join(', ')}</strong> — those students were imported but won't appear under a class card until the class exists.`);
+    if (result.added) {
+        const byClass = Object.entries(result.perClass).map(([c, n]) => `${_impEsc(c)}: ${n}`).join(' · ');
+        parts.push(`<strong>${result.added} new student${result.added === 1 ? '' : 's'}</strong> imported from <em>${_impEsc(fileName)}</em> — ${byClass}.`);
     }
-    showDataIOStatus(parts.join(' '), result.failed ? 'error' : (result.added ? 'success' : 'info'));
-    if (typeof showToast === 'function' && result.added) {
-        showToast('Import Complete', `${result.added} student(s) added.`, 'success');
+    if (result.updated)  parts.push(`<strong>${result.updated}</strong> existing student${result.updated === 1 ? '' : 's'} updated.`);
+    if (!result.added && !result.updated) parts.push(`Nothing was imported from <em>${_impEsc(fileName)}</em>.`);
+    if (skipped) {
+        const why = [];
+        if (plan.dupes) why.push(`${plan.dupes} already existed`);
+        if (plan.noName) why.push(`${plan.noName} had no name`);
+        if (plan.noClass) why.push(`${plan.noClass} had no class`);
+        if (plan.skippedClass) why.push(`${plan.skippedClass} were in skipped classes`);
+        if (plan.overLimit) why.push(`${plan.overLimit} were over your plan's student limit`);
+        parts.push(`${skipped} row(s) skipped (${why.join(', ')}).`);
     }
-
-    /* Refresh counters + open tables. */
+    if (result.failed) parts.push(`${result.failed} record(s) couldn't be saved to the server — check your connection and import again.`);
+    if (plan.unknownClasses.size) {
+        parts.push(`Class name(s) not found in Settings: <strong>${[...plan.unknownClasses].map(_impEsc).join(', ')}</strong> — add them in Settings so these students appear under a class card.`);
+    }
+    showDataIOStatus(parts.join(' '), result.failed ? 'error' : (result.added || result.updated ? 'success' : 'info'));
+    if (typeof showToast === 'function' && (result.added || result.updated)) {
+        showToast('Import Complete', `${result.added} added${result.updated ? `, ${result.updated} updated` : ''}.`, 'success');
+    }
     if (window.updateDashboardStats) window.updateDashboardStats();
     if (window.SoftSchoolLiveSync) window.SoftSchoolLiveSync.refreshNow();
 }

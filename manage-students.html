@@ -224,7 +224,7 @@
                     <i class="fas fa-file-export"></i>
                     <h2 class="cert-page-title">Data Export &amp; Import</h2>
                 </div>
-                <p class="cert-page-subtitle">Export records to Excel or import students from an Excel / CSV file.</p>
+                <p class="cert-page-subtitle">Export records to Excel or import students from an Excel, CSV or PDF file.</p>
             </div>
             <div class="cert-page-grid">
                 <!-- Export Card -->
@@ -243,8 +243,8 @@
                         <i class="fas fa-file-import"></i>
                     </div>
                     <h3 class="card-title">Import Data</h3>
-                    <p class="card-description">Import students from an Excel or CSV file and match its columns.</p>
-                    <input type="file" id="import-file-input" accept=".xlsx,.xls,.csv" style="display:none" onchange="importStudentsFromExcel(event)" onclick="event.stopPropagation()">
+                    <p class="card-description">Import students from an Excel, CSV or PDF file and match its columns.</p>
+                    <input type="file" id="import-file-input" accept=".xlsx,.xls,.csv,.pdf" style="display:none" onchange="importStudentsFromExcel(event)" onclick="event.stopPropagation()">
                 </div>
             </div>
             <!-- Status / feedback area -->
@@ -1038,13 +1038,18 @@
             </div>
             <div class="modal-body-scroll imp-body">
                 <div class="imp-file-bar" id="imp-file-bar"></div>
+                <div class="imp-panel" id="imp-sheets"></div>
                 <div class="imp-detected" id="imp-detected"></div>
+                <div class="imp-panel" id="imp-class-panel"></div>
+                <div class="imp-panel" id="imp-options"></div>
+                <div class="imp-panel-title imp-fields-title"><i class="fas fa-table-columns"></i> Match each field to a column in your file</div>
                 <div class="imp-colhead">
                     <span>SoftSchool field</span>
                     <span></span>
                     <span>Column found in your file</span>
                 </div>
                 <div id="imp-rows"></div>
+                <div class="imp-panel" id="imp-preview"></div>
             </div>
             <div class="modal-sticky-footer imp-footer">
                 <div class="imp-summary" id="imp-summary"></div>
