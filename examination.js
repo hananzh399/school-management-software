@@ -266,10 +266,11 @@
             stat("icon-present-staff", "hourglass-half", waiting, "Results Awaiting") +
             stat("icon-students", "calendar-check", up.length, "Upcoming Papers") +
             stat("icon-present-students", "user-graduate", LIVE.students.length, "Active Students") + "</section>" +
-            '<section class="ex-tiles">' + tiles.map((t, i) =>
-                '<button class="ex-tile" type="button" data-go="' + t[0] + '" style="--tc:' + t[2] + ";animation-delay:" + (0.05 * i).toFixed(2) + 's">' +
-                '<div class="ex-tile-top"><div class="ex-tile-ic"><i class="fas fa-' + t[1] + '"></i></div><span class="ex-chip ' + t[6] + '">' + t[5] + "</span></div>" +
-                "<h3>" + t[3] + "</h3><p>" + t[4] + '</p><div class="ex-tile-foot"><span>Open</span><i class="fas fa-arrow-right"></i></div></button>').join("") + "</section>" +
+            '<section class="ex-fcards">' + tiles.map(t =>
+                '<button class="ex-fcard" type="button" data-go="' + t[0] + '" style="--fc-accent:' + t[2] + '">' +
+                '<div class="ex-fc-glow"></div>' + (t[5] ? '<span class="ex-chip ex-fc-chip ' + t[6] + '">' + t[5] + "</span>" : "") +
+                '<div class="ex-fc-icon"><i class="fas fa-' + t[1] + '"></i></div>' +
+                '<h3 class="ex-fc-title">' + t[3] + '</h3><p class="ex-fc-desc">' + t[4] + "</p></button>").join("") + "</section>" +
             '<section class="ex-two">' +
             '<div class="ex-panel"><h3><i class="fas fa-file-lines"></i> Recent Papers <span class="ex-spacer">' + link("#results", "All results") + "</span></h3>" + (recent.length ?
                 '<div class="ex-tablewrap"><table class="ex-table"><thead><tr><th>Paper</th><th>Class</th><th>Marks</th><th>Results</th></tr></thead><tbody>' +

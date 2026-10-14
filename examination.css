@@ -37,7 +37,7 @@
 /* ── buttons ── */
 .ex-btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 38px; padding: 0 16px; border-radius: 11px; border: 1px solid transparent; background: linear-gradient(135deg, #17716A, #1c8a80); color: #fff; font: 600 13px 'Inter', sans-serif; cursor: pointer; transition: transform .15s, box-shadow .15s, filter .15s; white-space: nowrap; text-decoration: none; box-shadow: 0 4px 14px rgba(23, 113, 106, .25); }
 .ex-btn:hover { filter: brightness(1.08); transform: translateY(-1px); }
-.ex-btn:focus-visible, .ex-icon-btn:focus-visible, .ex-tile:focus-visible, .ex-pcard:focus-visible { outline: 2px solid var(--accent-teaching-light); outline-offset: 2px; }
+.ex-btn:focus-visible, .ex-icon-btn:focus-visible, .ex-fcard:focus-visible, .ex-pcard:focus-visible { outline: 2px solid var(--accent-teaching-light); outline-offset: 2px; }
 .ex-btn.ghost { background: var(--bg-card); color: var(--text-secondary); border-color: var(--border-subtle); box-shadow: none; }
 .ex-btn.ghost:hover { color: var(--text-primary); border-color: var(--border-hover); }
 .ex-btn.light { background: #fff; color: #0f4c47; box-shadow: 0 6px 18px rgba(0, 0, 0, .18); }
@@ -59,18 +59,36 @@
 .ex-alert.warn { border-color: rgba(245, 158, 11, .35); background: rgba(245, 158, 11, .09); }
 .ex-alert.warn > i { color: #f59e0b; }
 
-/* ── hub tiles ── */
-.ex-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 14px; margin-bottom: 20px; }
-.ex-tile { position: relative; display: flex; flex-direction: column; gap: 10px; text-align: left; background: var(--bg-card); border: 1px solid var(--border-subtle); border-radius: 18px; padding: 20px; cursor: pointer; color: var(--text-primary); font-family: inherit; overflow: hidden; transition: transform .2s, border-color .2s, box-shadow .2s; opacity: 0; transform: translateY(12px); animation: cardSlideIn .45s ease-out forwards; }
-.ex-tile::before { content: ""; position: absolute; inset: 0 0 auto 0; height: 3px; background: var(--tc); opacity: .85; }
-.ex-tile:hover { transform: translateY(-4px); border-color: var(--tc); box-shadow: 0 16px 34px rgba(0, 0, 0, .14); }
-.ex-tile-top { display: flex; align-items: center; justify-content: space-between; }
-.ex-tile-ic { width: 46px; height: 46px; border-radius: 14px; display: grid; place-items: center; font-size: 19px; background: color-mix(in srgb, var(--tc) 15%, transparent); color: var(--tc); }
-.ex-tile h3 { margin: 4px 0 0; font: 700 16px 'Space Grotesk', sans-serif; }
-.ex-tile p { margin: 0; font-size: 12.5px; line-height: 1.55; color: var(--text-secondary); flex: 1; }
-.ex-tile-foot { display: flex; align-items: center; justify-content: space-between; font-size: 12.5px; font-weight: 700; color: var(--tc); }
-.ex-tile-foot i { transition: transform .2s; }
-.ex-tile:hover .ex-tile-foot i { transform: translateX(5px); }
+/* ── hub cards (same look as the Fees & Finance "Manage Student Fees" cards) ── */
+.ex-fcards { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 24px; margin: 24px 0 20px; }
+.ex-fcard {
+    --fc-accent: #6366f1;
+    --fc-icon-bg: color-mix(in srgb, var(--fc-accent) 10%, transparent);
+    --fc-border: color-mix(in srgb, var(--fc-accent) 30%, transparent);
+    --fc-shadow: color-mix(in srgb, var(--fc-accent) 14%, transparent);
+    background: var(--bg-card); border: 1px solid var(--border-subtle); border-radius: 16px; padding: 32px 28px 28px;
+    text-align: left; position: relative; cursor: pointer; overflow: hidden; color: var(--text-primary); font-family: inherit;
+    transition: border-color .25s ease, box-shadow .25s ease, transform .25s ease;
+    backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+    display: flex; flex-direction: column; gap: 0; width: 100%;
+}
+/* thin top-edge accent line that slides in on hover */
+.ex-fcard::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px; background: var(--fc-accent); transform: scaleX(0); transform-origin: left center; transition: transform .3s cubic-bezier(.4, 0, .2, 1); z-index: 2; }
+.ex-fcard:hover::before { transform: scaleX(1); }
+.ex-fcard:hover { transform: translateY(-3px); border-color: var(--fc-border); box-shadow: 0 12px 32px -8px var(--fc-shadow); }
+/* flat square icon tile */
+.ex-fc-icon { width: 48px; height: 48px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 20px; margin: 0 0 22px 0; position: relative; z-index: 1; flex-shrink: 0; background: var(--fc-icon-bg); color: var(--fc-accent); transition: transform .25s cubic-bezier(.4, 0, .2, 1); }
+.ex-fcard:hover .ex-fc-icon { transform: scale(1.08); }
+.ex-fc-title { font: 700 15px 'Inter', sans-serif; letter-spacing: -.01em; margin: 0 0 6px; position: relative; z-index: 1; color: var(--text-primary); }
+.ex-fc-desc { font-size: 13px; line-height: 1.5; margin: 0; position: relative; z-index: 1; color: var(--text-secondary); }
+/* status chip (kept from the old tiles) sits in the top-right corner */
+.ex-fc-chip { position: absolute; top: 18px; right: 18px; z-index: 1; }
+/* arrow indicator — appears on hover at bottom-right */
+.ex-fcard::after { content: '\f178'; font-family: 'Font Awesome 6 Free'; font-weight: 900; position: absolute; bottom: 20px; right: 22px; font-size: 13px; color: var(--fc-accent); opacity: 0; transform: translateX(-6px); transition: opacity .25s ease, transform .25s ease; z-index: 1; }
+.ex-fcard:hover::after { opacity: .7; transform: translateX(0); }
+/* subtle background wash on hover */
+.ex-fc-glow { position: absolute; inset: 0; border-radius: 16px; opacity: 0; transition: opacity .3s ease; z-index: 0; pointer-events: none; background: radial-gradient(ellipse at 0% 0%, color-mix(in srgb, var(--fc-accent) 7%, transparent), transparent 65%); }
+.ex-fcard:hover .ex-fc-glow { opacity: 1; }
 .ex-chip { display: inline-block; font-size: 10.5px; font-weight: 700; padding: 3px 9px; border-radius: 99px; background: rgba(148, 163, 184, .16); color: var(--text-secondary); white-space: nowrap; }
 .ex-chip.ok { background: rgba(16, 185, 129, .14); color: #10b981; }
 .ex-chip.warn { background: rgba(245, 158, 11, .15); color: #f59e0b; }
@@ -226,6 +244,18 @@
     .ex-sheetpage { padding: 22px 18px; }
     .ex-bar { grid-template-columns: 80px 1fr 44px; }
     .ex-actions .ex-btn { flex: 1; }
+}
+
+@media (max-width: 768px) {
+    .ex-fcards { grid-template-columns: minmax(0, 1fr); gap: 14px; margin-top: 18px; }
+    .ex-fcard { padding: 22px 20px 20px; }
+    .ex-fcard:hover { transform: none; }
+    .ex-fc-icon { margin-bottom: 14px; width: 44px; height: 44px; }
+    .ex-fcard::after { opacity: .55; transform: none; bottom: 18px; right: 18px; }
+}
+@media (max-width: 480px) {
+    .ex-fcard { padding: 18px 16px; }
+    .ex-fc-title { font-size: 14.5px; }
 }
 
 /* Safety net: if someone presses Ctrl+P on the page itself, print just the content */
