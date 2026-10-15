@@ -1526,6 +1526,13 @@ if (certUploadInput) {
     window.getStudentLimit                 = getStudentLimit;
     window.generateNextRegistrationNumber  = generateNextRegistrationNumber;
     window.updateDashboardStats            = updateDashboardStats;
+    window.SoftSchoolRefreshStudentViews   = function () {
+        updateDashboardStats();
+        if (typeof renderStudentTable === 'function')   renderStudentTable();
+        if (typeof renderViewOnlyTable === 'function')  renderViewOnlyTable();
+        if (typeof updRenderClassCards === 'function')  updRenderClassCards();
+        if (typeof voRenderClassCards === 'function')   voRenderClassCards();
+    };
 
     // ── ARCHIVE HELPERS ──────────────────────────────────────────────────────
     // A student with no `status` (or status "active") is on the live roster.
@@ -8446,6 +8453,9 @@ const IMPORT_FIELD_GROUPS = [
 ];
 const IMPORT_ALL_FIELDS = IMPORT_FIELD_GROUPS.flatMap(g => g.fields);
 const IMP_SKIP = '__skip__', IMP_KEEP = '__keep__';
+/* Limits and required fields copied from the admission form's ADMISSION_SCHEMA, so imported students follow the same rules. */
+const IMP_MAX_LEN = { fullName: 80, guardianName: 80, previousSchool: 120, previousClass: 40, medicalIssues: 300, permanentAddress: 300, mailingAddress: 300 };
+const IMP_FORM_REQUIRED = ['guardianName', 'studentBform', 'guardianCnic', 'phone1', 'permanentAddress', 'dob'];
 
 /* Everything the mapping screen needs; filled in when a file is analyzed. */
 let importState = null;
@@ -9047,11 +9057,14 @@ function _impStart(fileName, sheetsIn, source) {
         sheets.forEach(s => { if (s.hits < 2) s.include = false; });
     }
     importState = {
-        fileName, source, sheets,
+        fileName, source, sheets, step: 1,
         headers: [], records: [], hasGroup: false,
         mapping: {}, auto: {},
-        classMode: 'column', classModeTouched: false, pendingMode: null, restoreTried: false,
-        fixedClass: '', fixedSection: '',
+        /* where the class comes from when the user chooses "use the classes in my file" */
+        fileClassMode: 'column', classModeTouched: false, pendingMode: null, restoreTried: false,
+        /* the question asked first: which class & section are these students for? */
+        target: { mode: 'choose', cls: '', section: '', mismatch: 'import', fromFile: false }, targetTouched: false,
+        classMode: 'fixed', fixedClass: '',
         classMap: {},
         dupMode: 'skip', order: 'file',
         plan: null, importing: false, stop: false
@@ -9061,6 +9074,16 @@ function _impStart(fileName, sheetsIn, source) {
     renderImportAll();
     const el = document.getElementById('data-io-status');
     if (el) el.style.display = 'none';
+}
+
+async function _impEnsureClassConfigs() {
+    /* getClassConfigs() quietly falls back to built-in default classes until Settings has loaded — always pull the
+       school's real classes first, so class matching and the Class dropdown use the right list. */
+    try {
+        if (typeof fetchClassConfigsFromServer === 'function') {
+            await Promise.race([fetchClassConfigsFromServer(), new Promise(r => setTimeout(r, 4000))]);
+        }
+    } catch (e) { /* offline: keep what we have */ }
 }
 
 function importStudentsFromExcel(event) {
@@ -9077,7 +9100,7 @@ function importStudentsFromExcel(event) {
     if (/\.pdf$/i.test(file.name)) {
         showDataIOStatus('Opening PDF… please wait.', 'info');
         _impReadPdf(file)
-            .then(sheets => _impStart(file.name, sheets, 'pdf'))
+            .then(async sheets => { await _impEnsureClassConfigs(); _impStart(file.name, sheets, 'pdf'); })
             .catch(err => {
                 console.error('Import: could not read PDF', err);
                 showDataIOStatus(_impEsc(err && err.message ? err.message : 'The PDF could not be read.') + '.', 'error');
@@ -9095,7 +9118,7 @@ function importStudentsFromExcel(event) {
     showDataIOStatus('Reading file and analyzing its headings… please wait.', 'info');
 
     const reader = new FileReader();
-    reader.onload = function (e) {
+    reader.onload = async function (e) {
         try {
             const bytes = new Uint8Array(e.target.result);
             const sheets = [];
@@ -9116,6 +9139,7 @@ function importStudentsFromExcel(event) {
                     sheets.push({ name, grid, rowOffset, headerRow: null, include: true });
                 });
             }
+            await _impEnsureClassConfigs();
             _impStart(file.name, sheets, isText ? 'csv' : 'excel');
         } catch (err) {
             console.error('Import: could not read file', err);
@@ -9175,11 +9199,14 @@ function _impAutoMatch() {
         if (st.mapping[f.key] !== undefined) return;
         const aliases = [_impNorm(f.label), _impNorm(f.key)].concat(f.aliases.map(_impNorm));
         const isNameField = f.key === 'guardianName' || f.key === 'fullName';
+        const isClassField = f.key === 'studentClass';
         normHeaders.forEach((h, hi) => {
             if (!h || usedCols.has(st.headers[hi])) return;
             let score = 0;
-            /* "CNIC of Guardian", "Father Mobile" are about something else — only an exact alias may claim them as a name */
-            const blocked = isNameField && /cnic|nic|phone|mobile|contact|cell|relation|role|address|occupation|income|email|whatsapp|bform|birth|dob/.test(h);
+            /* "CNIC of Guardian", "Father Mobile" are about something else — only an exact alias may claim them as a name.
+               Likewise "Admission Class", "Previous Class", "Class Teacher" must not be taken for the student's class. */
+            const blocked = (isNameField && /cnic|nic|phone|mobile|contact|cell|relation|role|address|occupation|income|email|whatsapp|bform|birth|dob/.test(h)) ||
+                            (isClassField && /previous|prev|last|old|prior|former|admission|admit|joining|entry|enrol|teacher|incharge|room|rank|position|section/.test(h));
             aliases.forEach(a => {
                 if (!a) return;
                 if (h === a) score = Math.max(score, 100);
@@ -9205,31 +9232,103 @@ function _impAutoMatch() {
         usedField.add(key); usedCols.add(header);
         st.mapping[key] = header; st.auto[key] = true;
     });
+
+    /* Several class-looking columns? Prefer the CURRENT class, then a plain "Class", and only then the ADMISSION class.
+       A "Previous Class" column is the class at an earlier school — never the student's class here. */
+    if (st.mapping.studentClass === undefined) {
+        const taken = new Set(Object.values(st.mapping));
+        const cands = _impClassCandidates().filter(c => !taken.has(c.header));
+        const pick = ['current', 'class', 'admission'].map(r => cands.find(c => c.role === r)).find(Boolean);
+        if (pick) { st.mapping.studentClass = pick.header; st.auto.studentClass = pick.role === 'admission' ? 'admission' : true; }
+    }
     _impInferByContent();
 }
 
+function _impClassRole(header) {
+    const n = _impNorm(header);
+    if (/previous|prev|last|old|prior|former/.test(n)) return 'previous';
+    if (/admission|admit|joining|entry|enrol/.test(n)) return 'admission';
+    if (/current|present|running/.test(n)) return 'current';
+    return 'class';
+}
+const _IMP_ROLE_LABEL = { current: 'Current class', class: 'Class', admission: 'Admission class', previous: 'Previous class (earlier school)' };
+
+/** Columns that look like they hold a class, with what each one probably means. */
+function _impClassCandidates() {
+    const st = importState;
+    return st.headers
+        .filter(h => { const n = _impNorm(h); return /class|grade|standard|std/.test(n) && !/section|teacher|incharge|room|rank|position|result/.test(n); })
+        .map(h => ({ header: h, role: _impClassRole(h) }));
+}
+
+/** What the file says about one student's class: { raw, cls, known, section }. */
+function _impFileClassOf(rec) {
+    let raw = _impCell(rec, 'studentClass');
+    if (!raw && rec.groupClass) raw = rec.groupClass;
+    if (!raw) { const m = _impMatchClass(rec.sheet); if (m.known && m.value) raw = rec.sheet; }   /* a sheet / file named "Grade 2" */
+    if (!raw) return { raw: '', cls: '', known: false, section: '' };
+    const m = _impMatchClass(raw);
+    return { raw, cls: m.known && m.value ? m.value : raw.trim(), known: !!(m.known && m.value), section: m.section || '' };
+}
+function _impFileClassInfo() {
+    const st = importState, counts = new Map(), rows = st.records.map(_impFileClassOf);
+    rows.forEach(fc => {
+        if (!fc.raw) return;
+        if (!counts.has(fc.cls)) counts.set(fc.cls, { cls: fc.cls, known: fc.known, count: 0 });
+        counts.get(fc.cls).count++;
+    });
+    return { rows, distinct: [...counts.values()].sort((a, b) => b.count - a.count) };
+}
+function _impSectionsOf(cls) {
+    const cfg = getClassConfigMap()[cls];
+    return cfg && Array.isArray(cfg.sections) ? cfg.sections : [];
+}
+
+/** Work out how a "use the classes in my file" import would find the class, then decide the starting answer to the
+    first question (one class & section, or the classes in the file). */
 function _impPickClassMode() {
     const st = importState;
-    const configs = getClassConfigs();
-    if (!st.fixedClass && configs.length) st.fixedClass = configs[0].name;
-
     if (st.pendingMode) {
         const pm = st.pendingMode; st.pendingMode = null;
         if ((pm === 'column' && st.mapping.studentClass !== undefined) || pm === 'sheet' || (pm === 'group' && st.hasGroup)) {
-            st.classMode = pm; st.classModeTouched = true; return;
+            st.fileClassMode = pm; st.classModeTouched = true;
         }
     }
-    if (st.classModeTouched && st.classMode === 'group' && !st.hasGroup) st.classModeTouched = false;
-    if (st.classModeTouched) return;
+    if (st.classModeTouched && st.fileClassMode === 'group' && !st.hasGroup) st.classModeTouched = false;
+    if (!st.classModeTouched) {
+        const isKnown = n => { const m = _impMatchClass(n); return m.known && !!m.value; };
+        const inc = st.sheets.filter(s => s.include);
+        const known = inc.filter(s => isKnown(s.name)).length;
+        if (st.mapping.studentClass !== undefined) st.fileClassMode = 'column';
+        else if (st.hasGroup) st.fileClassMode = 'group';
+        else if (inc.length > 1 && known >= 1 && known >= inc.length / 2) st.fileClassMode = 'sheet';
+        else if (inc.length === 1 && known === 1) st.fileClassMode = 'sheet';
+        else st.fileClassMode = 'column';
+    }
+    if (!st.targetTouched) _impInitTarget(); else _impApplyTarget();
+}
 
-    const isKnown = n => { const m = _impMatchClass(n); return m.known && !!m.value; };
-    const inc = st.sheets.filter(s => s.include);
-    const known = inc.filter(s => isKnown(s.name)).length;
-    if (st.mapping.studentClass !== undefined) st.classMode = 'column';
-    else if (st.hasGroup) st.classMode = 'group';
-    else if (inc.length > 1 && known >= 1 && known >= inc.length / 2) st.classMode = 'sheet';
-    else if (inc.length === 1 && known === 1) st.classMode = 'sheet';
-    else st.classMode = 'fixed';
+function _impInitTarget() {
+    const st = importState;
+    const info = _impFileClassInfo();
+    const known = info.distinct.filter(d => d.known);
+    st.target = { mode: 'choose', cls: '', section: '', mismatch: 'import', fromFile: false };
+    if (info.distinct.length > 1 && known.length >= 1) {
+        st.target.mode = 'file';                                   /* the file clearly holds several classes */
+    } else if (info.distinct.length === 1 && known.length === 1) {
+        st.target.cls = known[0].cls; st.target.fromFile = true;   /* the file only mentions one class — suggest it */
+    }
+    _impAutoSection();
+    _impApplyTarget();
+}
+function _impAutoSection() {
+    const t = importState.target;
+    if (t.cls && !_impSectionsOf(t.cls).length) t.section = '__none__';
+}
+function _impApplyTarget() {
+    const st = importState;
+    if (st.target.mode === 'choose') { st.classMode = 'fixed'; st.fixedClass = st.target.cls; }
+    else st.classMode = st.fileClassMode;
 }
 
 /* ---------- 2. THE MAPPING SCREEN ---------- */
@@ -9252,8 +9351,13 @@ function renderImportAll() {
             <span>${total} student row${total === 1 ? '' : 's'} · ${st.headers.length} column${st.headers.length === 1 ? '' : 's'} · ${st.sheets.length} sheet${st.sheets.length === 1 ? '' : 's'}</span>
          </div>`;
 
+    /* step 1 */
+    renderImportTarget();
+    renderImportClassPanel();
     renderImportSheets();
+    renderImportColSummary();
 
+    /* step 2 */
     const first = st.sheets.find(s => s.include) || st.sheets[0];
     document.getElementById('imp-detected').innerHTML =
         `<div class="imp-detected-label"><i class="fas fa-magnifying-glass-chart"></i> Headings detected in your file</div>
@@ -9265,8 +9369,6 @@ function renderImportAll() {
                 <tbody>${first.rows.slice(0, 5).map(r => `<tr>${r.map(c => `<td>${_impEsc(_impCellText(c))}</td>`).join('')}</tr>`).join('')}</tbody>
             </table></div>
          </details>`;
-
-    renderImportClassPanel();
     renderImportOptions();
 
     document.getElementById('imp-rows').innerHTML = IMPORT_FIELD_GROUPS.map(g => `
@@ -9288,6 +9390,7 @@ function renderImportAll() {
 
     IMPORT_ALL_FIELDS.forEach(f => refreshImportRow(f.key));
     refreshImport();
+    setImportStep(st.step || 1, true);
     openModal('import-map-modal');
 }
 
@@ -9336,61 +9439,85 @@ function setImportHeaderRow(i, value) {
 
 function renderImportClassPanel() {
     const st = importState;
+    const panel = document.getElementById('imp-class-panel');
+    panel.hidden = st.target.mode !== 'file';
+    if (st.target.mode !== 'file') { panel.innerHTML = ''; return; }
+
     const configs = getClassConfigs();
     const modes = [['column', 'fa-table-columns', 'A column in the file']];
-    if (st.hasGroup || st.classMode === 'group') modes.push(['group', 'fa-heading', 'Class headings in the sheet']);
-    modes.push(['sheet', 'fa-layer-group', 'The sheet name'], ['fixed', 'fa-school', 'One class for everyone']);
+    if (st.hasGroup || st.fileClassMode === 'group') modes.push(['group', 'fa-heading', 'Class headings in the sheet']);
+    modes.push(['sheet', 'fa-layer-group', 'The sheet name']);
 
-    let html = `<div class="imp-panel-title"><i class="fas fa-school"></i> Class — where does it come from?
-                    <span class="imp-panel-sub">Students are saved into their class, with roll numbers numbered per class.</span></div>
+    let html = `<div class="imp-panel-title"><i class="fas fa-school"></i> Where does the class come from in your file?
+                    <span class="imp-panel-sub">Each student is saved into the class written for them.</span></div>
                 <div class="imp-seg">${modes.map(([v, ic, label]) =>
-                    `<button type="button" class="imp-seg-btn${st.classMode === v ? ' active' : ''}" onclick="setImportClassMode('${v}')"><i class="fas ${ic}"></i> ${label}</button>`).join('')}</div>`;
+                    `<button type="button" class="imp-seg-btn${st.fileClassMode === v ? ' active' : ''}" onclick="setImportClassMode('${v}')"><i class="fas ${ic}"></i> ${label}</button>`).join('')}</div>`;
 
-    if (st.classMode === 'fixed') {
-        const cfg = getClassConfigMap()[st.fixedClass];
-        const secs = cfg && Array.isArray(cfg.sections) ? cfg.sections : [];
-        html += configs.length
-            ? `<div class="imp-fixed-row">
-                   <label>Class<select class="imp-select" onchange="setImportFixed('class', this.value)">
-                        ${configs.map(c => `<option value="${_impEsc(c.name)}"${c.name === st.fixedClass ? ' selected' : ''}>${_impEsc(c.name)}</option>`).join('')}</select></label>
-                   <label>Section <small>(used when the file has no section)</small>
-                        <select class="imp-select" onchange="setImportFixed('section', this.value)">
-                            <option value="">No section</option>
-                            ${secs.map(s => `<option value="${_impEsc(s)}"${s === st.fixedSection ? ' selected' : ''}>${_impEsc(s)}</option>`).join('')}</select></label>
-               </div>`
-            : `<div class="imp-note imp-note-warn"><i class="fas fa-triangle-exclamation"></i> No classes are set up in Settings yet.</div>`;
-    } else {
-        const distinct = _impDistinctClassValues();
-        if (st.classMode === 'column' && st.mapping.studentClass === undefined) {
-            html += `<div class="imp-note imp-note-warn"><i class="fas fa-triangle-exclamation"></i> Pick the class column below under <strong>Class / Grade</strong>, or choose another option above.</div>`;
-        } else if (!distinct.length) {
-            html += `<div class="imp-note imp-note-warn"><i class="fas fa-triangle-exclamation"></i> No class values were found.</div>`;
-        } else {
-            const head = st.classMode === 'sheet' ? 'Sheet name' : st.classMode === 'group' ? 'Class heading' : 'Class in your file';
-            html += `<div class="imp-classmap-head"><span>${head}</span><span></span><span>Save as (class in Settings)</span></div>`;
-            html += distinct.map(d => {
-                if (!(d.norm in st.classMap)) {
-                    const m = _impMatchClass(d.raw);
-                    if (m.known && m.value) st.classMap[d.norm] = m.value;
-                    else st.classMap[d.norm] = (st.classMode === 'sheet' && distinct.some(x => _impMatchClass(x.raw).known)) ? IMP_SKIP : IMP_KEEP;
-                }
-                const cur = st.classMap[d.norm];
-                const matched = cur !== IMP_KEEP && cur !== IMP_SKIP;
-                const m0 = _impMatchClass(d.raw);
-                const secNote = matched && m0.section && m0.value === cur ? ` <em class="imp-sec-hint">+ section ${_impEsc(m0.section)}</em>` : '';
-                return `<div class="imp-classmap-row${cur === IMP_SKIP ? ' is-skip' : matched ? ' is-ok' : ' is-new'}">
-                    <div class="imp-cm-left"><strong>${_impEsc(d.raw)}</strong><span>${d.count} student${d.count === 1 ? '' : 's'}${secNote}</span></div>
-                    <i class="fas fa-arrow-right-long imp-arrow"></i>
-                    <select class="imp-select" onchange="setImportClassTarget('${_impEsc(d.norm)}', this.value)">
-                        ${configs.map(c => `<option value="${_impEsc(c.name)}"${cur === c.name ? ' selected' : ''}>${_impEsc(c.name)}</option>`).join('')}
-                        <option value="${IMP_KEEP}"${cur === IMP_KEEP ? ' selected' : ''}>Keep as “${_impEsc(d.raw)}” (not in Settings)</option>
-                        <option value="${IMP_SKIP}"${cur === IMP_SKIP ? ' selected' : ''}>Don’t import these students</option>
-                    </select>
-                </div>`;
-            }).join('');
-        }
+    if (st.fileClassMode === 'column') {
+        html += `<label class="imp-colpick">Class column in your file ${_impClassColumnPicker()}</label>`;
     }
-    document.getElementById('imp-class-panel').innerHTML = html;
+    const distinct = _impDistinctClassValues();
+    if (st.fileClassMode === 'column' && st.mapping.studentClass === undefined) {
+        html += `<div class="imp-note imp-note-warn"><i class="fas fa-triangle-exclamation"></i> Choose the column that holds the class, or switch to “Into one class &amp; section” above.</div>`;
+    } else if (!distinct.length) {
+        html += `<div class="imp-note imp-note-warn"><i class="fas fa-triangle-exclamation"></i> No class values were found.</div>`;
+    } else {
+        const head = st.fileClassMode === 'sheet' ? 'Sheet name' : st.fileClassMode === 'group' ? 'Class heading' : 'Class in your file';
+        html += `<div class="imp-classmap-head"><span>${head}</span><span></span><span>Save as (class in Settings)</span></div>`;
+        html += distinct.map(d => {
+            if (!(d.norm in st.classMap)) {
+                const m = _impMatchClass(d.raw);
+                if (m.known && m.value) st.classMap[d.norm] = m.value;
+                else st.classMap[d.norm] = (st.fileClassMode === 'sheet' && distinct.some(x => _impMatchClass(x.raw).known)) ? IMP_SKIP : IMP_KEEP;
+            }
+            const cur = st.classMap[d.norm];
+            const matched = cur !== IMP_KEEP && cur !== IMP_SKIP;
+            const m0 = _impMatchClass(d.raw);
+            const secNote = matched && m0.section && m0.value === cur ? ` <em class="imp-sec-hint">+ section ${_impEsc(m0.section)}</em>` : '';
+            return `<div class="imp-classmap-row${cur === IMP_SKIP ? ' is-skip' : matched ? ' is-ok' : ' is-new'}">
+                <div class="imp-cm-left"><strong>${_impEsc(d.raw)}</strong><span>${d.count} student${d.count === 1 ? '' : 's'}${secNote}</span></div>
+                <i class="fas fa-arrow-right-long imp-arrow"></i>
+                <select class="imp-select" onchange="setImportClassTarget('${_impEsc(d.norm)}', this.value)">
+                    ${configs.map(c => `<option value="${_impEsc(c.name)}"${cur === c.name ? ' selected' : ''}>${_impEsc(c.name)}</option>`).join('')}
+                    <option value="${IMP_KEEP}"${cur === IMP_KEEP ? ' selected' : ''}>Keep as “${_impEsc(d.raw)}” (not in Settings)</option>
+                    <option value="${IMP_SKIP}"${cur === IMP_SKIP ? ' selected' : ''}>Don’t import these students</option>
+                </select>
+            </div>`;
+        }).join('');
+    }
+    panel.innerHTML = html;
+}
+
+/** <select> of the file's columns for choosing the class column, with class-like ones labelled (Current / Admission / Previous). */
+function _impClassColumnPicker() {
+    const st = importState;
+    const cands = _impClassCandidates();
+    const candSet = new Set(cands.map(c => c.header));
+    const sel = st.mapping.studentClass;
+    const opt = (h, label) => `<option value="${st.headers.indexOf(h)}"${sel === h ? ' selected' : ''}>${_impEsc(label)}</option>`;
+    return `<select class="imp-select" onchange="setImportClassColumn(this.value)">
+        <option value="">— None —</option>
+        ${cands.length ? `<optgroup label="Columns that look like a class">${cands.map(c => opt(c.header, `${c.header}  —  ${_IMP_ROLE_LABEL[c.role]}`)).join('')}</optgroup>` : ''}
+        <optgroup label="Other columns">${st.headers.filter(h => !candSet.has(h)).map(h => opt(h, h)).join('')}</optgroup>
+    </select>`;
+}
+function setImportClassColumn(value) {
+    const st = importState;
+    if (value === '') delete st.mapping.studentClass; else st.mapping.studentClass = st.headers[parseInt(value, 10)];
+    st.auto.studentClass = false;
+    st.classMap = {};
+    refreshImportRow('studentClass');
+    renderImportClassPanel();
+    refreshImport();
+}
+
+function setImportClassMode(mode) {
+    const st = importState;
+    st.fileClassMode = mode; st.classModeTouched = true; st.targetTouched = true;
+    _impApplyTarget();
+    renderImportClassPanel();
+    refreshImportRow('studentClass');
+    refreshImport();
 }
 
 function renderImportOptions() {
@@ -9415,20 +9542,6 @@ function renderImportOptions() {
          </div>`;
 }
 
-function setImportClassMode(mode) {
-    const st = importState;
-    st.classMode = mode; st.classModeTouched = true;
-    if (mode === 'fixed' && !st.fixedClass && getClassConfigs().length) st.fixedClass = getClassConfigs()[0].name;
-    renderImportClassPanel();
-    refreshImportRow('studentClass');
-    refreshImport();
-}
-function setImportFixed(which, value) {
-    const st = importState;
-    if (which === 'class') { st.fixedClass = value; st.fixedSection = ''; renderImportClassPanel(); }
-    else st.fixedSection = value;
-    refreshImport();
-}
 function setImportClassTarget(norm, value) {
     importState.classMap[norm] = value;
     renderImportClassPanel();
@@ -9457,20 +9570,22 @@ function refreshImportRow(key) {
     const sel = row.querySelector('select');
     const hint = document.getElementById('imp-hint-' + key);
 
-    /* The class row is only used when the class comes from a column. */
-    const disabled = field.special === 'class' && st.classMode !== 'column';
+    /* The class column is only used for placing students when the class comes from a column; the other ways don't need it. */
+    const isClass = field.special === 'class';
+    const disabled = isClass && (st.classMode === 'sheet' || st.classMode === 'group');
     sel.disabled = disabled;
     row.classList.toggle('is-disabled', disabled);
-    if (hint && field.special === 'class') {
-        hint.textContent = !disabled ? ''
-            : st.classMode === 'sheet' ? 'Taken from the sheet name (see “Class” above)'
+    if (hint && isClass) {
+        hint.textContent = st.classMode === 'sheet' ? 'Taken from the sheet name'
             : st.classMode === 'group' ? 'Taken from the class headings in the sheet'
-            : 'Everyone goes into the class chosen above';
+            : st.classMode === 'fixed' ? 'Optional — only used to check which students belong to the class you chose'
+            : '';
     }
     /* A student's name can come from one Full Name column or from First + Last Name columns. */
     const nameOk = key === 'fullName' && (st.mapping.firstName !== undefined);
+    const needed = !!field.required && (!isClass || st.classMode === 'column');
     row.classList.toggle('is-matched', has && !disabled);
-    row.classList.toggle('is-missing', !has && !!field.required && !disabled && !nameOk);
+    row.classList.toggle('is-missing', !has && needed && !disabled && !nameOk);
 
     const sampleEl = document.getElementById('imp-sample-' + key);
     if (!sampleEl) return;
@@ -9480,6 +9595,7 @@ function refreshImportRow(key) {
     const a = st.auto[key];
     const badge = a === 'remembered' ? '<span class="imp-auto-badge"><i class="fas fa-clock-rotate-left"></i> Remembered</span>'
                 : a === 'content'    ? '<span class="imp-auto-badge is-check" title="Guessed from the values in this column"><i class="fas fa-table-list"></i> Matched by content — please check</span>'
+                : a === 'admission'  ? '<span class="imp-auto-badge is-check" title="This looks like the class at admission, not necessarily the current class"><i class="fas fa-door-open"></i> Admission class — please check</span>'
                 : a                  ? '<span class="imp-auto-badge"><i class="fas fa-wand-magic-sparkles"></i> Auto-matched</span>' : '';
     sampleEl.innerHTML = badge +
         (sample ? `<span class="imp-sample-text">e.g. ${_impEsc(sample.length > 40 ? sample.slice(0, 40) + '…' : sample)}</span>` : '');
@@ -9493,7 +9609,7 @@ function onImportMappingChange(selectEl) {
     st.auto[key] = false;
     refreshImportRow(key);
     if (key === 'firstName' || key === 'lastName') refreshImportRow('fullName');
-    if (key === 'studentClass') renderImportClassPanel();
+    if (key === 'studentClass') { st.classMap = {}; renderImportClassPanel(); }
     if (key === 'regNo') {
         if (st.mapping.regNo === undefined && st.dupMode === 'update') st.dupMode = 'skip';
         renderImportOptions();
@@ -9521,6 +9637,138 @@ function resetImportMapping() {
     if (!st || st.importing) return;
     st.mapping = {}; st.auto = {}; st.classMap = {}; st.classModeTouched = false; st.restoreTried = true;
     _impRebuild(); _impPickClassMode(); renderImportAll();
+}
+
+function renderImportTarget() {
+    const st = importState, t = st.target, configs = getClassConfigs();
+    const seg = `<div class="imp-seg">
+        <button type="button" class="imp-seg-btn${t.mode === 'choose' ? ' active' : ''}" onclick="setImportTargetMode('choose')"><i class="fas fa-bullseye"></i> Into one class &amp; section</button>
+        <button type="button" class="imp-seg-btn${t.mode === 'file' ? ' active' : ''}" onclick="setImportTargetMode('file')"><i class="fas fa-shuffle"></i> Use the classes in my file</button>
+    </div>`;
+    let html = `<div class="imp-panel-title imp-target-title"><i class="fas fa-school"></i> Which class and section are these students for?
+        <span class="imp-panel-sub">${t.mode === 'choose' ? 'Everyone will be saved into the class and section you choose.' : 'Each student goes into the class written in your file.'}</span></div>${seg}`;
+
+    if (t.mode === 'choose') {
+        const secs = t.cls ? _impSectionsOf(t.cls) : [];
+        const fileHasSection = st.mapping.section !== undefined || _impFileClassInfo().rows.some(r => r.section);
+        const needSection = !!t.cls && secs.length > 0 && !t.section;
+        const secOpts = !t.cls ? '<option value="">Choose a class first</option>'
+            : !secs.length ? '<option value="__none__">This class has no sections</option>'
+            : `<option value=""${t.section ? '' : ' selected'} disabled>Select section…</option>` +
+              secs.map(s => `<option value="${_impEsc(s)}"${t.section === s ? ' selected' : ''}>${_impEsc(s)}</option>`).join('') +
+              `<option value="__none__"${t.section === '__none__' ? ' selected' : ''}>No section</option>` +
+              (fileHasSection ? `<option value="__file__"${t.section === '__file__' ? ' selected' : ''}>Use the section written in my file</option>` : '');
+        html += `<div class="imp-fixed-row imp-target-row">
+            <label class="${t.cls ? '' : 'is-missing'}"><span>Class <span class="imp-req">*</span></span>
+                <select class="imp-select imp-big-select" onchange="setImportTargetClass(this.value)">
+                    <option value=""${t.cls ? '' : ' selected'} disabled>Select class…</option>
+                    ${configs.map(c => `<option value="${_impEsc(c.name)}"${c.name === t.cls ? ' selected' : ''}>${_impEsc(c.name)}</option>`).join('')}
+                </select>
+                <small>Classes come from Settings. Missing one? <a href="settings.html" target="_blank" rel="noopener">Add it in Settings</a>.</small>
+            </label>
+            <label class="${needSection ? 'is-missing' : ''}"><span>Section ${secs.length ? '<span class="imp-req">*</span>' : ''}</span>
+                <select class="imp-select imp-big-select" ${t.cls && secs.length ? '' : 'disabled'} onchange="setImportTargetSection(this.value)">${secOpts}</select>
+                <small>${t.cls && secs.length ? 'Pick “No section” to leave it blank.' : ' '}</small>
+            </label>
+        </div><div id="imp-target-notes"></div>`;
+    }
+    document.getElementById('imp-target').innerHTML = html;
+}
+
+/** The notices under the class/section choice: the class column picker, a note when the class came from the file,
+    and a warning when some students are listed in a different class in the file. */
+function _impRenderTargetNotes() {
+    const st = importState, el = document.getElementById('imp-target-notes');
+    if (!st || !el) return;
+    const t = st.target;
+    let html = '';
+
+    const cands = _impClassCandidates();
+    if (cands.length) {
+        const real = cands.filter(c => c.role !== 'previous');
+        html += `<div class="imp-notebox">
+            ${real.length > 1 ? `<div class="imp-note imp-note-warn"><i class="fas fa-triangle-exclamation"></i> Your file has more than one class column (${real.map(c => `<strong>${_impEsc(c.header)}</strong> — ${_IMP_ROLE_LABEL[c.role].toLowerCase()}`).join(', ')}). The system keeps <strong>one class per student</strong> (the current class), so choose below which column to read — it is only used to check the file against the class you picked.</div>` : ''}
+            <label class="imp-colpick">Class column in your file <small>(optional check)</small> ${_impClassColumnPicker()}</label>
+        </div>`;
+    }
+
+    if (t.cls && t.fromFile) {
+        const col = st.mapping.studentClass;
+        html += (col && _impClassRole(col) === 'admission')
+            ? `<div class="imp-note imp-note-warn"><i class="fas fa-triangle-exclamation"></i> The only class in your file is <strong>${_impEsc(t.cls)}</strong>, taken from the <strong>${_impEsc(col)}</strong> column. That is the class at <em>admission</em> — it may not be the student’s <em>current</em> class. Please confirm the class above.</div>`
+            : `<div class="imp-note imp-note-ok"><i class="fas fa-circle-check"></i> Your file only lists <strong>${_impEsc(t.cls)}</strong>, so it was selected for you. Change it above if that’s not right.</div>`;
+    }
+
+    if (t.cls) {
+        const info = _impFileClassInfo();
+        const other = info.rows.filter(fc => fc.raw && fc.cls !== t.cls);
+        if (other.length) {
+            const tally = {};
+            other.forEach(fc => { tally[fc.cls] = (tally[fc.cls] || 0) + 1; });
+            const labels = Object.entries(tally).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([c, n]) => `${_impEsc(c)} × ${n}`).join(', ');
+            html += `<div class="imp-note imp-note-warn"><i class="fas fa-triangle-exclamation"></i> <strong>${other.length} of ${st.records.length}</strong> students are listed in a different class in your file (${labels}). What should happen to them?</div>
+                <div class="imp-radio-col">
+                    <label><input type="radio" name="imp-mismatch" ${t.mismatch === 'import' ? 'checked' : ''} onchange="setImportMismatch('import')"> Import them into <strong>${_impEsc(t.cls)}</strong> as well</label>
+                    <label><input type="radio" name="imp-mismatch" ${t.mismatch === 'skip' ? 'checked' : ''} onchange="setImportMismatch('skip')"> Skip them — import only the students listed as <strong>${_impEsc(t.cls)}</strong></label>
+                </div>`;
+        }
+    }
+    el.innerHTML = html;
+}
+
+function renderImportColSummary() {
+    const st = importState;
+    const mapped = IMPORT_ALL_FIELDS.filter(f => st.mapping[f.key] !== undefined);
+    const shown = mapped.slice(0, 10);
+    const nameOk = st.mapping.fullName !== undefined || st.mapping.firstName !== undefined;
+    document.getElementById('imp-colsummary').innerHTML =
+        `<div class="imp-panel-title"><i class="fas fa-table-columns"></i> Columns found in your file
+            <button type="button" class="imp-link-btn imp-reset-btn" onclick="setImportStep(2)">Review &amp; change <i class="fas fa-arrow-right"></i></button></div>
+         ${nameOk ? '' : '<div class="imp-note imp-note-warn"><i class="fas fa-triangle-exclamation"></i> No student name column was found — open <strong>Review &amp; change</strong> and choose it.</div>'}
+         <div class="imp-chip-row">${shown.map(f => `<span class="imp-chip imp-chip-map">${_impEsc(f.label)} <i class="fas fa-arrow-left"></i> ${_impEsc(st.mapping[f.key])}</span>`).join('')}
+            ${mapped.length > shown.length ? `<span class="imp-chip">+ ${mapped.length - shown.length} more</span>` : ''}
+            ${mapped.length === 0 ? '<span class="imp-chip">Nothing matched yet</span>' : ''}</div>`;
+}
+
+function setImportStep(n, silent) {
+    const st = importState;
+    if (!st) return;
+    st.step = n;
+    document.getElementById('imp-step1').hidden = n !== 1;
+    document.getElementById('imp-step2').hidden = n !== 2;
+    document.querySelector('#imp-title span').textContent = n === 1 ? 'Import Students' : 'Match Columns & Review';
+    const sb = document.getElementById('imp-step-btn');
+    sb.innerHTML = n === 1 ? 'Review columns <i class="fas fa-arrow-right"></i>' : '<i class="fas fa-arrow-left"></i> Back';
+    if (!silent) { const body = document.querySelector('#import-map-modal .modal-body-scroll'); if (body) body.scrollTop = 0; }
+}
+function toggleImportStep() { if (importState) setImportStep(importState.step === 1 ? 2 : 1); }
+
+function setImportTargetMode(mode) {
+    const st = importState;
+    st.target.mode = mode; st.targetTouched = true;
+    _impApplyTarget();
+    renderImportTarget();
+    renderImportClassPanel();
+    refreshImportRow('studentClass');
+    refreshImport();
+}
+function setImportTargetClass(value) {
+    const st = importState, t = st.target;
+    t.cls = value; t.section = ''; t.fromFile = false; st.targetTouched = true;
+    _impAutoSection();
+    _impApplyTarget();
+    renderImportTarget();
+    refreshImport();
+}
+function setImportTargetSection(value) {
+    const st = importState;
+    st.target.section = value; st.targetTouched = true;
+    renderImportTarget();
+    refreshImport();
+}
+function setImportMismatch(value) {
+    importState.target.mismatch = value;
+    refreshImport();
 }
 
 /* ---------- 3. VALUE CLEANERS ---------- */
@@ -9705,12 +9953,15 @@ function _impCleanRow(rec) {
     set('tuitionDiscount', num('tuitionDiscount'));
     set('transportDiscount', num('transportDiscount'));
     set('siblingDiscount', num('siblingDiscount'));
+    Object.keys(IMP_MAX_LEN).forEach(k => { if (typeof v[k] === 'string' && v[k].length > IMP_MAX_LEN[k]) v[k] = v[k].slice(0, IMP_MAX_LEN[k]).trim(); });
     return v;
 }
 
 function _impResolveClass(rec) {
     const st = importState;
-    if (st.classMode === 'fixed') return st.fixedClass ? { cls: st.fixedClass, known: true, sectionHint: '' } : { empty: true };
+    if (st.classMode === 'fixed') {
+        return st.fixedClass ? { cls: st.fixedClass, known: getClassConfigs().some(c => c.name === st.fixedClass), sectionHint: '' } : { empty: true };
+    }
     const raw = st.classMode === 'sheet' ? rec.sheet : st.classMode === 'group' ? rec.groupClass : _impCell(rec, 'studentClass');
     if (!raw) return { empty: true };
     const norm = _impNorm(raw);
@@ -9753,7 +10004,7 @@ function _impBuildNewStudent(vals, cls, section, todayIso) {
 function _impRowIssues(rec, vals) {
     const out = [];
     const label = k => (IMPORT_ALL_FIELDS.find(f => f.key === k) || { label: k }).label;
-    const add = (k, problem) => out.push({ field: k, label: label(k), problem, value: _impCell(rec, k), rowNo: rec.rowNo, sheet: rec.sheet, name: vals.fullName });
+    const add = (k, problem, kind) => out.push({ field: k, label: label(k), problem, kind: kind || 'check', value: _impCell(rec, k), rowNo: rec.rowNo, sheet: rec.sheet, name: vals.fullName });
     const given = k => _impCell(rec, k) !== '';
     ['dob', 'admissionDate'].forEach(k => { if (given(k) && !vals[k]) add(k, 'can’t be read as a date'); });
     if (vals.dob) {
@@ -9766,6 +10017,10 @@ function _impRowIssues(rec, vals) {
     ['standardFee', 'admissionFee', 'transportFee', 'tuitionDiscount', 'transportDiscount', 'siblingDiscount'].forEach(k => {
         if (given(k) && !/\d/.test(_impCell(rec, k))) add(k, 'is not a number');
     });
+    /* longer than the admission form allows → it was shortened */
+    Object.keys(IMP_MAX_LEN).forEach(k => { if (_impCell(rec, k).length > IMP_MAX_LEN[k]) add(k, `was longer than ${IMP_MAX_LEN[k]} characters and was shortened`); });
+    /* the admission form requires these — flag what is empty so it can be completed later via Edit Student */
+    IMP_FORM_REQUIRED.forEach(k => { if (!given(k)) add(k, 'is empty', 'missing'); });
     return out;
 }
 
@@ -9775,6 +10030,7 @@ function buildImportPlan() {
     const active = window.getActiveDatabase ? window.getActiveDatabase() : db;
     const todayIso = _impToIsoDate(new Date());
     const classOrder = getClassConfigs().map(c => c.name);
+    const t = st.target;
 
     const byReg = new Map();
     db.forEach(s => [s.regNo, s.id].forEach(k => { if (k) byReg.set(String(k), s); }));
@@ -9785,8 +10041,8 @@ function buildImportPlan() {
     const limit = window.getStudentLimit ? window.getStudentLimit() : null;
     let room = limit === null ? Infinity : Math.max(0, limit - active.length);
 
-    const plan = { create: [], createMeta: [], update: [], skipped: [], issueList: [], issueGroups: [],
-                   noName: 0, noClass: 0, skippedClass: 0, dupes: 0, overLimit: 0, unknownClasses: new Set(), perClass: [] };
+    const plan = { create: [], createMeta: [], update: [], skipped: [], issueList: [], issueGroups: [], missingGroups: [],
+                   noName: 0, noClass: 0, skippedClass: 0, otherClass: 0, dupes: 0, overLimit: 0, unknownClasses: new Set(), perClass: [] };
     const skip = (rec, counter, reason, name) => { plan[counter]++; plan.skipped.push({ rowNo: rec.rowNo, sheet: rec.sheet, name: name || '', reason }); };
     const pending = [];
 
@@ -9799,8 +10055,21 @@ function buildImportPlan() {
         if (c.empty) { skip(rec, 'noClass', 'No class given', vals.fullName); return; }
         if (!c.known) plan.unknownClasses.add(c.cls);
 
-        const secRaw = _impCell(rec, 'section') || c.sectionHint;
-        const section = secRaw ? _impMatchSection(c.cls, secRaw) : (st.classMode === 'fixed' ? st.fixedSection : '');
+        /* Importing into ONE class: the file's own class column may disagree for some rows. */
+        const fc = _impFileClassOf(rec);
+        if (t.mode === 'choose' && t.mismatch === 'skip' && fc.raw && fc.cls !== c.cls) {
+            skip(rec, 'otherClass', `Listed as “${fc.cls}” in the file, not ${c.cls}`, vals.fullName); return;
+        }
+
+        /* Section: the one the user chose (forced), "none", or the one written in the file. */
+        let section = '';
+        if (t.mode === 'choose') {
+            if (t.section === '__file__') { const sr = _impCell(rec, 'section') || fc.section; section = sr ? _impMatchSection(c.cls, sr) : ''; }
+            else if (t.section && t.section !== '__none__') section = t.section;
+        } else {
+            const sr = _impCell(rec, 'section') || c.sectionHint;
+            section = sr ? _impMatchSection(c.cls, sr) : '';
+        }
 
         const regNo = vals.regNo ? String(vals.regNo) : '';
         const existing = regNo ? byReg.get(regNo) : null;
@@ -9873,16 +10142,20 @@ function buildImportPlan() {
     });
 
     /* Group the data-check findings by kind. */
-    const groups = new Map();
-    plan.issueList.forEach(i => {
-        const k = i.field + '|' + i.problem;
-        if (!groups.has(k)) groups.set(k, { label: i.label, problem: i.problem, count: 0, rows: [], examples: [] });
-        const g = groups.get(k);
-        g.count++;
-        if (g.rows.length < 8) g.rows.push(i.rowNo);
-        if (g.examples.length < 2 && i.value && !g.examples.includes(i.value)) g.examples.push(i.value);
-    });
-    plan.issueGroups = [...groups.values()].sort((a, b) => b.count - a.count);
+    const groupUp = list => {
+        const groups = new Map();
+        list.forEach(i => {
+            const k = i.field + '|' + i.problem;
+            if (!groups.has(k)) groups.set(k, { label: i.label, problem: i.problem, count: 0, rows: [], examples: [] });
+            const g = groups.get(k);
+            g.count++;
+            if (g.rows.length < 8) g.rows.push(i.rowNo);
+            if (g.examples.length < 2 && i.value && !g.examples.includes(i.value)) g.examples.push(i.value);
+        });
+        return [...groups.values()].sort((a, b) => b.count - a.count);
+    };
+    plan.issueGroups   = groupUp(plan.issueList.filter(i => i.kind !== 'missing'));
+    plan.missingGroups = groupUp(plan.issueList.filter(i => i.kind === 'missing'));
     return plan;
 }
 
@@ -9890,14 +10163,19 @@ function refreshImport() {
     const st = importState;
     if (!st) return;
     const plan = st.plan = buildImportPlan();
+    const t = st.target;
 
     const missing = [];
-    if (st.mapping.fullName === undefined && st.mapping.firstName === undefined) missing.push('Student Full Name');
-    if (st.classMode === 'column' && st.mapping.studentClass === undefined) missing.push('Class / Grade');
-    if (st.classMode === 'fixed' && !st.fixedClass) missing.push('a Class');
-    if (st.classMode === 'group' && !st.hasGroup) missing.push('class headings');
+    if (st.mapping.fullName === undefined && st.mapping.firstName === undefined) missing.push('Student name column');
+    if (t.mode === 'choose') {
+        if (!t.cls) missing.push('Class');
+        else if (_impSectionsOf(t.cls).length && !t.section) missing.push('Section');
+    } else {
+        if (st.classMode === 'column' && st.mapping.studentClass === undefined) missing.push('Class column');
+        if (st.classMode === 'group' && !st.hasGroup) missing.push('class headings');
+    }
 
-    const skipped = plan.noName + plan.noClass + plan.skippedClass + plan.dupes + plan.overLimit;
+    const skipped = plan.noName + plan.noClass + plan.skippedClass + plan.otherClass + plan.dupes + plan.overLimit;
     const rows = plan.perClass.map(pc => {
         const secs = Object.entries(pc.sections).map(([k, v]) => `${_impEsc(k)}: ${v}`).join(' · ');
         const range = pc.rolls.length ? `${Math.min(...pc.rolls)} – ${Math.max(...pc.rolls)}` : '—';
@@ -9915,6 +10193,7 @@ function refreshImport() {
     if (plan.dupes)            notes.push(`<span class="imp-pill"><i class="fas fa-clone"></i> ${plan.dupes} already exist — skipped</span>`);
     if (plan.noName)           notes.push(`<span class="imp-pill imp-pill-warn"><i class="fas fa-user-slash"></i> ${plan.noName} with no name — skipped</span>`);
     if (plan.noClass)          notes.push(`<span class="imp-pill imp-pill-warn"><i class="fas fa-school-circle-xmark"></i> ${plan.noClass} with no class — skipped</span>`);
+    if (plan.otherClass)       notes.push(`<span class="imp-pill"><i class="fas fa-filter"></i> ${plan.otherClass} listed in another class — skipped</span>`);
     if (plan.skippedClass)     notes.push(`<span class="imp-pill"><i class="fas fa-ban"></i> ${plan.skippedClass} in classes you chose to skip</span>`);
     if (plan.overLimit)        notes.push(`<span class="imp-pill imp-pill-warn"><i class="fas fa-lock"></i> ${plan.overLimit} over your plan's student limit — skipped</span>`);
 
@@ -9925,12 +10204,18 @@ function refreshImport() {
                 <span class="imp-check-rows">Row${g.rows.length > 1 ? 's' : ''} ${g.rows.join(', ')}${g.count > g.rows.length ? '…' : ''}</span></div>
             </div>`).join('') +
           (plan.issueGroups.length > 6 ? `<div class="imp-check-more">+ ${plan.issueGroups.length - 6} more kinds of problems — see the report.</div>` : '')
-        : '<div class="imp-check imp-check-ok"><i class="fas fa-circle-check"></i><div>No problems found in the data.</div></div>';
+        : '<div class="imp-check imp-check-ok"><i class="fas fa-circle-check"></i><div>No wrong or unreadable values found.</div></div>';
+    const missingHtml = plan.missingGroups.length
+        ? `<div class="imp-check imp-check-info"><i class="fas fa-circle-info"></i>
+             <div><strong>Not in your file, but required by the admission form:</strong>
+             ${plan.missingGroups.map(g => `${_impEsc(g.label)} (${g.count})`).join(' · ')}
+             <span class="imp-check-rows">These students are still imported. Complete the details later with Edit Student.</span></div></div>`
+        : '';
     const hasReport = plan.skipped.length || plan.issueList.length;
 
     document.getElementById('imp-preview').innerHTML =
         `<div class="imp-panel-title"><i class="fas fa-eye"></i> Save plan — what will be saved
-            <span class="imp-panel-sub">Updates as you change the settings above.</span></div>` +
+            <span class="imp-panel-sub">Updates as you change the settings.</span></div>` +
         (plan.perClass.length
             ? `<div class="imp-table-wrap"><table class="imp-plan-table">
                 <thead><tr><th>Class</th><th class="imp-num">New students</th><th>By section</th><th class="imp-num">Roll numbers</th><th class="imp-num">Already in class</th></tr></thead>
@@ -9939,7 +10224,7 @@ function refreshImport() {
         (notes.length ? `<div class="imp-pill-row">${notes.join('')}</div>` : '') +
         `<div class="imp-checks-head"><span><i class="fas fa-clipboard-check"></i> Data checks</span>
             ${hasReport ? '<button type="button" class="imp-link-btn" onclick="downloadImportReport()"><i class="fas fa-download"></i> Download report (CSV)</button>' : ''}</div>
-         ${checks}`;
+         ${checks}${missingHtml}`;
 
     const sum = document.getElementById('imp-summary');
     const btn = document.getElementById('imp-run-btn');
@@ -9947,13 +10232,17 @@ function refreshImport() {
     if (missing.length) {
         sum.innerHTML = `<i class="fas fa-circle-exclamation"></i><span>Still needed: <strong>${_impEsc(missing.join(', '))}</strong></span>`;
     } else {
+        const where = t.mode === 'choose' && t.cls
+            ? ` → <strong>${_impEsc(t.cls)}${t.section && t.section !== '__none__' && t.section !== '__file__' ? ' / ' + _impEsc(t.section) : ''}</strong>` : '';
         sum.innerHTML = `<i class="fas fa-circle-check"></i><span><strong>${plan.create.length}</strong> new` +
             (plan.update.length ? ` · <strong>${plan.update.length}</strong> updated` : '') +
-            ` · <strong>${skipped}</strong> skipped</span>`;
+            ` · <strong>${skipped}</strong> skipped${where}</span>`;
     }
     sum.classList.toggle('imp-summary-warn', missing.length > 0);
     btn.disabled = missing.length > 0 || doing === 0 || st.importing;
     btn.querySelector('span').textContent = doing ? `Import ${doing} Student${doing === 1 ? '' : 's'}` : 'Nothing to Import';
+
+    _impRenderTargetNotes();
 }
 
 /* ---------- 5. SAVE ---------- */
@@ -9976,14 +10265,14 @@ async function runStudentImport() {
     prog.hidden = false; bar.style.width = '0%';
 
     const db = getDatabase();
-    const result = { added: 0, updated: 0, failed: 0, perClass: {} };
+    const result = { added: 0, updated: 0, failed: 0, perClass: {}, sec: {} };
     const extra = [];                 /* failed / not-done rows for the report */
     const total = plan.create.length + plan.update.length;
-    let done = 0, stoppedAt = -1;
+    let done = 0;
 
     /* New students — already sorted class by class. */
     for (let i = 0; i < plan.create.length; i++) {
-        if (st.stop) { stoppedAt = done; break; }
+        if (st.stop) break;
         const s = plan.create[i], meta = plan.createMeta[i];
         done++;
         label.textContent = `${s.studentClass}: saving ${done} of ${total}…`;
@@ -9999,6 +10288,8 @@ async function runStudentImport() {
             db.push(Object.assign({}, s, saved || {}, { id: s.regNo }));
             result.added++;
             result.perClass[s.studentClass] = (result.perClass[s.studentClass] || 0) + 1;
+            const sk = s.section || 'No section';
+            (result.sec[s.studentClass] = result.sec[s.studentClass] || {})[sk] = ((result.sec[s.studentClass] || {})[sk] || 0) + 1;
         } catch (err) {
             result.failed++;
             extra.push({ rowNo: meta.rowNo, sheet: meta.sheet, name: meta.name, status: 'Failed', reason: 'Could not be saved: ' + ((err && err.message) || err) });
@@ -10007,8 +10298,8 @@ async function runStudentImport() {
     }
 
     /* Existing students being updated. */
-    for (let i = 0; i < plan.update.length && stoppedAt === -1; i++) {
-        if (st.stop) { stoppedAt = done; break; }
+    for (let i = 0; i < plan.update.length; i++) {
+        if (st.stop) break;
         const u = plan.update[i];
         done++;
         label.textContent = `Updating ${done} of ${total}…`;
@@ -10026,15 +10317,14 @@ async function runStudentImport() {
             console.error('Import: could not update', u.existing.regNo, err);
         }
     }
-    const notDone = total - done + (stoppedAt !== -1 && st.stop ? 0 : 0);
-    if (st.stop) {
+    const wasStopped = st.stop;
+    if (wasStopped) {
         plan.createMeta.slice(Math.min(done, plan.create.length)).forEach(m => extra.push({ rowNo: m.rowNo, sheet: m.sheet, name: m.name, status: 'Not imported', reason: 'You stopped the import before this student was saved' }));
         plan.update.slice(Math.max(0, done - plan.create.length)).forEach(u => extra.push({ rowNo: u.rec.rowNo, sheet: u.rec.sheet, name: u.vals.fullName, status: 'Not imported', reason: 'You stopped the import before this student was updated' }));
     }
     saveDatabase(db);
     bar.style.width = '100%';
 
-    const wasStopped = st.stop;
     const fileName = st.fileName;
     if (result.added || result.updated) _impSaveMapping(st);   /* remember the matching for next time */
     st.importing = false;
@@ -10043,10 +10333,13 @@ async function runStudentImport() {
     closeImportMapper();
     btn.disabled = false;
 
-    const skipped = plan.noName + plan.noClass + plan.skippedClass + plan.dupes + plan.overLimit;
+    const skipped = plan.noName + plan.noClass + plan.skippedClass + plan.otherClass + plan.dupes + plan.overLimit;
     const parts = [];
     if (result.added) {
-        const byClass = Object.entries(result.perClass).map(([c, n]) => `${_impEsc(c)}: ${n}`).join(' · ');
+        const byClass = Object.entries(result.perClass).map(([c, n]) => {
+            const secs = Object.entries(result.sec[c] || {}).filter(([k]) => k !== 'No section');
+            return `${_impEsc(c)}${secs.length ? ' (' + secs.map(([k, v]) => `${_impEsc(k)}: ${v}`).join(', ') + ')' : ''}: ${n}`;
+        }).join(' · ');
         parts.push(`<strong>${result.added} new student${result.added === 1 ? '' : 's'}</strong> imported from <em>${_impEsc(fileName)}</em> — ${byClass}.`);
     }
     if (result.updated)  parts.push(`<strong>${result.updated}</strong> existing student${result.updated === 1 ? '' : 's'} updated.`);
@@ -10057,6 +10350,7 @@ async function runStudentImport() {
         if (plan.dupes) why.push(`${plan.dupes} already existed`);
         if (plan.noName) why.push(`${plan.noName} had no name`);
         if (plan.noClass) why.push(`${plan.noClass} had no class`);
+        if (plan.otherClass) why.push(`${plan.otherClass} were listed in another class`);
         if (plan.skippedClass) why.push(`${plan.skippedClass} were in skipped classes`);
         if (plan.overLimit) why.push(`${plan.overLimit} were over your plan's student limit`);
         parts.push(`${skipped} row(s) skipped (${why.join(', ')}).`);
@@ -10073,7 +10367,9 @@ async function runStudentImport() {
     if (typeof showToast === 'function' && (result.added || result.updated)) {
         showToast('Import Complete', `${result.added} added${result.updated ? `, ${result.updated} updated` : ''}.`, 'success');
     }
-    if (window.updateDashboardStats) window.updateDashboardStats();
+    /* Refresh every student view right away (works even if the server can't be reached), then re-sync. */
+    if (window.SoftSchoolRefreshStudentViews) window.SoftSchoolRefreshStudentViews();
+    else if (window.updateDashboardStats) window.updateDashboardStats();
     if (window.SoftSchoolLiveSync) window.SoftSchoolLiveSync.refreshNow();
 }
 

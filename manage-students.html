@@ -1038,29 +1038,40 @@
     <div id="import-map-modal" class="modal-overlay" style="z-index: 5000;">
         <div class="modal-container wider">
             <div class="modal-header">
-                <h3><i class="fas fa-table-columns"></i> Match Columns to Import</h3>
+                <h3 id="imp-title"><i class="fas fa-file-import"></i> <span>Import Students</span></h3>
                 <button class="close-modal-btn" onclick="closeImportMapper()">&times;</button>
             </div>
             <div class="modal-body-scroll imp-body">
                 <div class="imp-file-bar" id="imp-file-bar"></div>
-                <div class="imp-panel" id="imp-sheets"></div>
-                <div class="imp-detected" id="imp-detected"></div>
-                <div class="imp-panel" id="imp-class-panel"></div>
-                <div class="imp-panel" id="imp-options"></div>
-                <div class="imp-panel-title imp-fields-title"><i class="fas fa-table-columns"></i> Match each field to a column in your file <button type="button" class="imp-link-btn imp-reset-btn" onclick="resetImportMapping()"><i class="fas fa-rotate-left"></i> Reset matching</button></div>
-                <div class="imp-colhead">
-                    <span>SoftSchool field</span>
-                    <span></span>
-                    <span>Column found in your file</span>
+
+                <!-- STEP 1 — which class & section? (+ sheets, columns found) -->
+                <div id="imp-step1">
+                    <div class="imp-panel imp-target" id="imp-target"></div>
+                    <div class="imp-panel" id="imp-class-panel" hidden></div>
+                    <div class="imp-panel" id="imp-sheets"></div>
+                    <div class="imp-panel" id="imp-colsummary"></div>
                 </div>
-                <div id="imp-rows"></div>
-                <div class="imp-panel" id="imp-preview"></div>
+
+                <!-- STEP 2 — match every column, options, save plan, data checks -->
+                <div id="imp-step2" hidden>
+                    <div class="imp-detected" id="imp-detected"></div>
+                    <div class="imp-panel" id="imp-options"></div>
+                    <div class="imp-panel-title imp-fields-title"><i class="fas fa-table-columns"></i> Match each field to a column in your file <button type="button" class="imp-link-btn imp-reset-btn" onclick="resetImportMapping()"><i class="fas fa-rotate-left"></i> Reset matching</button></div>
+                    <div class="imp-colhead">
+                        <span>SoftSchool field</span>
+                        <span></span>
+                        <span>Column found in your file</span>
+                    </div>
+                    <div id="imp-rows"></div>
+                    <div class="imp-panel" id="imp-preview"></div>
+                </div>
             </div>
             <div class="imp-progress" id="imp-progress" hidden><div class="imp-progress-bar" id="imp-progress-bar"></div></div>
             <div class="modal-sticky-footer imp-footer">
                 <div class="imp-summary" id="imp-summary"></div>
                 <div class="imp-footer-btns">
                     <button type="button" class="btn-ghost" id="imp-cancel-btn" onclick="closeImportMapper()">Cancel</button>
+                    <button type="button" class="btn-ghost" id="imp-step-btn" onclick="toggleImportStep()">Review columns</button>
                     <button type="button" class="btn-primary-submit" id="imp-run-btn" onclick="runStudentImport()">
                         <i class="fas fa-file-import"></i> <span>Import Students</span>
                     </button>

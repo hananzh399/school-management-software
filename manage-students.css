@@ -6217,3 +6217,38 @@ select option {
     .imp-sheet-row { grid-template-columns: 1fr; }
     .imp-reset-btn { margin-left: 0; }
 }
+
+
+/* ============================================================
+   IMPORT v5 — two steps, "which class & section?" question, class column picker
+   ============================================================ */
+#imp-step1[hidden], #imp-step2[hidden], #imp-class-panel[hidden] { display: none !important; }
+
+.imp-target { border-color: rgba(59, 130, 246, 0.35); }
+.imp-target-title { font-size: 15px; }
+.imp-target .imp-seg { margin-bottom: 4px; }
+.imp-target-row { margin-top: 16px; }
+.imp-big-select { padding: 12px 14px; font-size: 14.5px; font-weight: 600; }
+.imp-target-row label.is-missing .imp-big-select { border-color: rgba(239, 68, 68, 0.6); box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.12); }
+.imp-target-row label small a { color: var(--accent-primary-light); }
+.imp-select:disabled { opacity: .55; cursor: not-allowed; }
+
+.imp-notebox { margin-top: 14px; display: flex; flex-direction: column; gap: 10px; }
+.imp-notebox .imp-note { margin-top: 0; }
+.imp-colpick { display: flex; flex-direction: column; gap: 6px; font-size: 12.5px; font-weight: 600; color: var(--text-secondary); margin-top: 12px; }
+.imp-colpick small { font-weight: 500; color: var(--text-muted); }
+.imp-note-ok { color: var(--accent-secondary-light); background: rgba(16, 185, 129, 0.1); }
+.imp-note strong { color: var(--text-primary); }
+.imp-radio-col { display: flex; flex-direction: column; gap: 8px; margin: 10px 2px 0; }
+.imp-radio-col label { display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--text-secondary); cursor: pointer; }
+.imp-radio-col input { accent-color: var(--accent-primary); }
+
+.imp-chip-map i { font-size: 10px; opacity: .6; margin: 0 4px; }
+#imp-colsummary .imp-panel-title { align-items: center; }
+.imp-check-info { background: rgba(59, 130, 246, 0.08); }
+.imp-check-info > i { color: var(--accent-primary-light); }
+
+@media (max-width: 720px) {
+    .imp-footer-btns { flex-wrap: wrap; }
+    #imp-step-btn { order: 3; flex-basis: 100%; }
+}
