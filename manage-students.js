@@ -7978,141 +7978,340 @@ function _buildPhotoGalleryHTML(students) {
 </html>`;
 }
 
-async function exportStudentsToExcel() {
-    if (typeof XLSX === 'undefined') {
-        showDataIOStatus('Excel library not loaded yet. Please wait a moment and try again.', 'error');
-        return;
-    }
+/* ============================================================
+   EXPORT — 1) choose the format (Excel or CSV)
+            2) choose the class and section (or "All classes" / "All sections")
+            3) download
 
-    // PERFORMANCE FIX follow-up — the roster this page holds in memory no
-    // longer carries photo/certData inline (they are lazy-loaded by URL; see
-    // LIST_API_BASE). The Excel export and its companion photo-gallery HTML
-    // genuinely need those blobs EMBEDDED, and every check below tests for a
-    // "data:" prefix, so this one path fetches the complete records on
-    // demand. Export is a rare, deliberate action where a few seconds of
-    // waiting is acceptable — unlike simply opening the page, which is what
-    // the lazy loading was introduced to fix.
-    let students = getDatabase();
-    if (!students.length) {
+   openExportDialog()        opens the two-step dialog (the Export card calls it)
+   _expSelected()            the students that match the current choice — used for
+                             the live count AND for the real export
+   _exportExcelFile / _exportCsvFile  build and download the file
+   ============================================================ */
+
+const _EXP = { fmt: '', cls: 'ALL', section: 'ALL', archived: false, gallery: true, busy: false, step: 1 };
+const _EXP_NOCLASS = '__noclass__', _EXP_NOSEC = '__none__';
+
+function _expIsActive(s) { return !s.status || s.status === 'active'; }
+function _expClassOf(s)  { return String(s.studentClass || s.class || '').trim(); }
+function _expSecOf(s)    { return String(s.section || '').trim(); }
+
+/** Everyone who could be exported: active students, plus graduated/dropped ones if the box is ticked. */
+function _expBase() {
+    const all = getDatabase();
+    return _EXP.archived ? all.slice() : all.filter(_expIsActive);
+}
+function _expMatchClass(s) {
+    if (_EXP.cls === 'ALL') return true;
+    if (_EXP.cls === _EXP_NOCLASS) return !_expClassOf(s);
+    return _expClassOf(s) === _EXP.cls;
+}
+function _expMatchSection(s) {
+    if (_EXP.section === 'ALL') return true;
+    if (_EXP.section === _EXP_NOSEC) return !_expSecOf(s);
+    return _expSecOf(s) === _EXP.section;
+}
+function _expSelected() { return _expBase().filter(s => _expMatchClass(s) && _expMatchSection(s)); }
+
+/** Classes for the dropdown: those in Settings (in order), then any other class found on students, with counts. */
+function _expClassOptions() {
+    const base = _expBase();
+    const configured = getClassConfigs().map(c => c.name);
+    const counts = new Map();
+    base.forEach(s => { const k = _expClassOf(s) || _EXP_NOCLASS; counts.set(k, (counts.get(k) || 0) + 1); });
+    const names = configured.slice();
+    [...counts.keys()].filter(k => k !== _EXP_NOCLASS && !configured.includes(k)).sort().forEach(k => names.push(k));
+    const opts = names.map(n => ({ value: n, label: n, count: counts.get(n) || 0, extra: !configured.includes(n) }));
+    if (counts.get(_EXP_NOCLASS)) opts.push({ value: _EXP_NOCLASS, label: '(No class)', count: counts.get(_EXP_NOCLASS) });
+    return { total: base.length, opts };
+}
+/** Sections for the dropdown, for the chosen class (or across all classes), with counts. */
+function _expSectionOptions() {
+    const base = _expBase().filter(_expMatchClass);
+    const counts = new Map();
+    base.forEach(s => { const k = _expSecOf(s) || _EXP_NOSEC; counts.set(k, (counts.get(k) || 0) + 1); });
+    const specific = _EXP.cls !== 'ALL' && _EXP.cls !== _EXP_NOCLASS;
+    const configured = specific ? _impSectionsOf(_EXP.cls) : [];
+    const names = configured.slice();
+    [...counts.keys()].filter(k => k !== _EXP_NOSEC && !configured.includes(k))
+        .sort((a, b) => a.localeCompare(b, undefined, { numeric: true })).forEach(k => names.push(k));
+    const opts = names.filter(n => specific || counts.get(n))
+        .map(n => ({ value: n, label: `Section ${n}`, count: counts.get(n) || 0 }));
+    if (counts.get(_EXP_NOSEC)) opts.push({ value: _EXP_NOSEC, label: 'No section', count: counts.get(_EXP_NOSEC) });
+    return { total: base.length, opts };
+}
+
+function _expClassLabel() {
+    return _EXP.cls === 'ALL' ? 'All classes' : _EXP.cls === _EXP_NOCLASS ? '(No class)' : _EXP.cls;
+}
+function _expSectionLabel() {
+    return _EXP.section === 'ALL' ? 'All sections' : _EXP.section === _EXP_NOSEC ? 'No section' : `Section ${_EXP.section}`;
+}
+function _expFileBase() {
+    let name = 'SoftSchool (Student Data)';
+    if (_EXP.cls !== 'ALL') name += ' - ' + (_EXP.cls === _EXP_NOCLASS ? 'No class' : _EXP.cls);
+    if (_EXP.section !== 'ALL') name += ' - ' + (_EXP.section === _EXP_NOSEC ? 'No section' : 'Section ' + _EXP.section);
+    return name.replace(/[\\\/:*?"<>|]+/g, '-').replace(/\s+/g, ' ').trim();
+}
+
+/* ---------- the dialog ---------- */
+
+async function openExportDialog() {
+    if (!getDatabase().length) {
         showDataIOStatus('No student records found to export.', 'error');
         return;
     }
+    Object.assign(_EXP, { fmt: '', cls: 'ALL', section: 'ALL', archived: false, gallery: true, busy: false, step: 1 });
+    await _impEnsureClassConfigs();          /* make sure the Class list is the school's real one */
+    _expShowStep(1);
+    openModal('export-modal');
+}
+function exportStudentsToExcel() { return openExportDialog(); }   /* old name, still works */
 
-    // ── Confirmation before exporting ──
-    const ok = await ssConfirm(
-        `Export ${students.length} student record(s) to Excel?\n\n` +
-        `This will download:\n` +
-        `  • SoftSchool (Student Data).xlsx — full directory & discount breakdown\n` +
-        `  • SoftSchool (Student Photos).html — photos & B-Form images (if any)`,
-        { title: 'Export to Excel', confirmLabel: 'Export', danger: false }
-    );
-    if (!ok) {
-        showDataIOStatus('Export cancelled.', 'info');
-        return;
+function closeExportDialog() {
+    if (_EXP.busy) return;
+    closeModal('export-modal');
+}
+
+function _expShowStep(n) {
+    _EXP.step = n;
+    document.getElementById('exp-step1').hidden = n !== 1;
+    document.getElementById('exp-step2').hidden = n !== 2;
+    document.getElementById('exp-back-btn').hidden = n !== 2;
+    document.getElementById('exp-run-btn').hidden = n !== 2;
+    document.querySelector('#exp-title span').textContent = n === 1 ? 'Export Students' : 'Choose Class & Section';
+    if (n === 1) {
+        const total = _expBase().length;
+        document.getElementById('exp-summary').innerHTML = `<i class="fas fa-users"></i><span>${total} active student${total === 1 ? '' : 's'}</span>`;
+        document.getElementById('exp-summary').classList.remove('imp-summary-warn');
+    } else {
+        _expRenderStep2();
+    }
+    const body = document.querySelector('#export-modal .modal-body-scroll');
+    if (body) body.scrollTop = 0;
+}
+
+function exportPickFormat(fmt) {
+    _EXP.fmt = fmt;
+    _expShowStep(2);
+}
+function exportBack() { if (!_EXP.busy) _expShowStep(1); }
+
+function exportSetClass(v)   { _EXP.cls = v; _EXP.section = 'ALL'; _expRenderStep2(); }
+function exportSetSection(v) { _EXP.section = v; _expRenderStep2(); }
+function exportSetOption(key, on) {
+    _EXP[key] = !!on;
+    if (key === 'archived') {                       /* options (counts) change — drop picks that no longer exist */
+        const c = _expClassOptions();
+        if (_EXP.cls !== 'ALL' && !c.opts.some(o => o.value === _EXP.cls)) { _EXP.cls = 'ALL'; _EXP.section = 'ALL'; }
+        const s = _expSectionOptions();
+        if (_EXP.section !== 'ALL' && !s.opts.some(o => o.value === _EXP.section)) _EXP.section = 'ALL';
+    }
+    _expRenderStep2();
+}
+
+function _expRenderStep2() {
+    const isXlsx = _EXP.fmt === 'xlsx';
+    const c = _expClassOptions(), s = _expSectionOptions();
+    const selected = _expSelected();
+    const archivedCount = getDatabase().filter(x => !_expIsActive(x)).length;
+
+    const opt = (value, label, count, current) =>
+        `<option value="${_impEsc(value)}"${current === value ? ' selected' : ''}>${_impEsc(label)} (${count})</option>`;
+
+    /* A quick breakdown of what will be exported */
+    let breakdown = '';
+    if (selected.length) {
+        const tally = new Map();
+        const byClass = _EXP.cls === 'ALL';
+        selected.forEach(x => {
+            const k = byClass ? (_expClassOf(x) || '(No class)') : (_expSecOf(x) ? `Section ${_expSecOf(x)}` : 'No section');
+            tally.set(k, (tally.get(k) || 0) + 1);
+        });
+        const entries = [...tally.entries()];
+        breakdown = `<div class="exp-breakdown"><span class="exp-breakdown-label">${byClass ? 'By class' : 'By section'}</span>` +
+            entries.slice(0, 14).map(([k, n]) => `<span class="imp-chip">${_impEsc(k)} · ${n}</span>`).join('') +
+            (entries.length > 14 ? `<span class="imp-chip">+ ${entries.length - 14} more</span>` : '') + '</div>';
     }
 
-    showDataIOStatus('Preparing Excel file… please wait.', 'info');
+    document.getElementById('exp-step2').innerHTML = `
+        <div class="exp-formatpill">
+            <span><i class="fas ${isXlsx ? 'fa-file-excel' : 'fa-file-csv'}"></i> Exporting as <strong>${isXlsx ? 'Excel (.xlsx)' : 'CSV (.csv)'}</strong></span>
+            <button type="button" class="imp-link-btn" onclick="exportBack()">Change</button>
+        </div>
+        <div class="imp-panel exp-panel">
+            <div class="imp-panel-title"><i class="fas fa-school"></i> Which students?
+                <span class="imp-panel-sub">Choose one class and one section, or export everyone.</span></div>
+            <div class="imp-fixed-row">
+                <label><span>Class</span>
+                    <select class="imp-select imp-big-select" onchange="exportSetClass(this.value)">
+                        ${opt('ALL', 'All classes', c.total, _EXP.cls)}
+                        ${c.opts.map(o => opt(o.value, o.label + (o.extra ? ' — not in Settings' : ''), o.count, _EXP.cls)).join('')}
+                    </select>
+                </label>
+                <label><span>Section</span>
+                    <select class="imp-select imp-big-select" onchange="exportSetSection(this.value)">
+                        ${opt('ALL', 'All sections', s.total, _EXP.section)}
+                        ${s.opts.map(o => opt(o.value, o.label, o.count, _EXP.section)).join('')}
+                    </select>
+                </label>
+            </div>
+            ${breakdown}
+        </div>
+        <div class="imp-panel exp-panel">
+            <div class="imp-panel-title"><i class="fas fa-sliders"></i> Options</div>
+            <label class="exp-check"><input type="checkbox" ${_EXP.archived ? 'checked' : ''} onchange="exportSetOption('archived', this.checked)">
+                <span>Also include graduated &amp; dropped students <small>${archivedCount} in the archive</small></span></label>
+            ${isXlsx ? `<label class="exp-check"><input type="checkbox" ${_EXP.gallery ? 'checked' : ''} onchange="exportSetOption('gallery', this.checked)">
+                <span>Also download the photo &amp; B-Form gallery (HTML) <small>A second file with each student’s photo and documents. Takes longer.</small></span></label>` : ''}
+        </div>`;
 
-    // Swap the lean in-memory roster for complete records, so photo and
-    // certData are present as inline data: URIs for every `startsWith('data:')`
-    // check and every embedded <img> further down. See the note at the top of
-    // this function.
-    const fullStudents = await fetchFullStudents();
-    if (Array.isArray(fullStudents) && fullStudents.length) {
-        const fullByRegNo = new Map(fullStudents.map(s => [String(s.regNo || s.id || ''), s]));
-        students = students.map(s => {
-            const full = fullByRegNo.get(String(s.regNo || s.id || ''));
-            // Local object wins for frontend-only fields; the server copy
-            // supplies the two blobs it is the only source of.
-            return full ? Object.assign({}, s, { photo: full.photo, certData: full.certData }) : s;
-        });
+    const sum = document.getElementById('exp-summary');
+    const btn = document.getElementById('exp-run-btn');
+    const n = selected.length;
+    sum.innerHTML = n
+        ? `<i class="fas fa-circle-check"></i><span><strong>${n}</strong> student${n === 1 ? '' : 's'} · ${_impEsc(_expClassLabel())} · ${_impEsc(_expSectionLabel())}</span>`
+        : `<i class="fas fa-circle-exclamation"></i><span>No students match this choice</span>`;
+    sum.classList.toggle('imp-summary-warn', n === 0);
+    btn.disabled = n === 0 || _EXP.busy;
+    btn.querySelector('span').textContent = n ? `Export ${n} Student${n === 1 ? '' : 's'}` : 'Nothing to Export';
+}
+
+/* ---------- building the files ---------- */
+
+/** Headings + rows of the full student directory — the same columns for the Excel sheet and the CSV file. */
+function _expBuildDirectory(students, mode) {
+    const csv = mode === 'csv';
+    const headers = [
+        'Reg No', 'Sibling Group ID', 'Full Name', 'Father / Guardian', 'Guardian Role',
+        'Guardian CNIC', 'Gender', 'Date of Birth', 'Age', 'Class', 'Section', 'Roll No',
+        'Admission Date', 'Phone 1', 'Phone 2', 'Permanent Address', 'Mailing Address',
+        'Student B-Form No.', 'Medical Issues',
+        'Orphan Status', 'Previous School Attended', 'Previous Class',
+        'Transport Mode', 'Transport Type', 'Transport Fee (PKR)',
+        'Monthly Tuition Fee (PKR)', 'Annual Fund (PKR)', 'Annual Fund Month',
+        'Tuition Discount (PKR)', 'Transport Discount (PKR)', 'Sibling Discount (PKR)',
+        'Total Discount (PKR)', 'Discount Type', 'Discount Valid Until',
+        'Net Payable (PKR)', 'Has Sibling', 'Sibling Of',
+        csv ? 'Has Student Photo' : 'Student Photo (Link)',
+        csv ? 'Has B-Form / Certificate' : 'B-Form / Cert (Link)',
+        'Status'
+    ];
+    const MONTH_NAMES = ['', 'January', 'February', 'March', 'April', 'May', 'June',
+                         'July', 'August', 'September', 'October', 'November', 'December'];
+    const rows = students.map(s => {
+        const tuitionDisc   = Number(s.tuitionDiscount)   || 0;
+        const transportDisc = Number(s.transportDiscount) || 0;
+        const siblingDisc   = Number(s.siblingDiscount)   || 0;
+        const totalDiscount = tuitionDisc + transportDisc + siblingDisc;
+
+        const annualFundEnabled = s.annualFundEnabled === 'on' || s.annualFundEnabled === true;
+        const annualFund = annualFundEnabled
+            ? (s.annualFundAmount != null && s.annualFundAmount !== '' ? Number(s.annualFundAmount) : '')
+            : 0;
+        const annualFundMonth = annualFundEnabled && s.annualFundMonth
+            ? (MONTH_NAMES[Number(s.annualFundMonth)] || s.annualFundMonth)
+            : '';
+        const discountType = (s.isLifetime === 'on' || s.isLifetime === true)
+            ? 'Lifetime'
+            : (s.discountExpiry ? 'Temporary' : 'None');
+
+        const hasPhoto = !!storedStudentFileSrc(s, 'photo');
+        const hasBform = !!storedStudentFileSrc(s, 'bform');
+        const status = s.status === 'graduated' ? 'Graduated' : s.status === 'dropped' ? 'Dropped' : 'Active';
+
+        return [
+            s.regNo                         || '',
+            s.isSibling && s.siblingGroupId ? s.siblingGroupId : '',
+            s.fullName  || s.name           || '',
+            s.guardianName || s.fatherName  || '',
+            s.guardianRole                  || '',
+            s.guardianCnic                  || '',
+            s.gender                        || '',
+            s.dob                           || '',
+            s.age                           || '',
+            s.studentClass || s.class       || '',
+            s.section                       || '',
+            s.rollNo                        || '',
+            s.admissionDate                 || '',
+            s.phone1                        || '',
+            s.phone2                        || '',
+            s.permanentAddress || s.address || '',
+            s.mailingAddress                || '',
+            s.studentBform                  || '',
+            s.medicalIssues                 || '',
+            s.orphanStatus                  || '',
+            s.previousSchool                || '',
+            s.previousClass                 || '',
+            s.transportMode                 || '',
+            s.transportType                 || '',
+            s.transportFee != null && s.transportFee !== '' ? Number(s.transportFee) : 0,
+            s.standardFee  != null && s.standardFee  !== '' ? Number(s.standardFee)  : '',
+            annualFund,
+            annualFundMonth,
+            tuitionDisc,
+            transportDisc,
+            siblingDisc,
+            totalDiscount,
+            discountType,
+            s.discountExpiry || (discountType === 'Lifetime' ? 'Lifetime' : ''),
+            s.netPayable != null && s.netPayable !== '' ? Number(s.netPayable) : '',
+            s.isSibling ? 'Yes' : 'No',
+            s.siblingOf || '',
+            csv ? (hasPhoto ? 'Yes' : 'No') : (hasPhoto ? '✔ Saved (see Photo Gallery HTML)' : '✘ Not uploaded'),
+            csv ? (hasBform ? 'Yes' : 'No') : (hasBform ? '✔ Saved (see Photo Gallery HTML)' : '✘ Not uploaded'),
+            status
+        ];
+    });
+    return { headers, rows };
+}
+
+/** One CSV cell. Text that a spreadsheet could run as a formula (=, +, -, @ …) is defused with a leading apostrophe —
+    a student called "=HYPERLINK(...)" must not become a live formula when the file is opened in Excel. */
+function _expCsvCell(v) {
+    if (v == null) return '';
+    if (typeof v === 'number') return String(v);
+    let s = String(v);
+    if (/^[=+\-@\t\r]/.test(s) && !/^[+\-]?[\d\s().\-]+$/.test(s)) s = "'" + s;
+    return /[",\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+}
+
+function _exportCsvFile(students, opts) {
+    try {
+        const { headers, rows } = _expBuildDirectory(students, 'csv');
+        /* BOM + CRLF so Excel opens Urdu / accented names correctly */
+        const text = '\uFEFF' + [headers].concat(rows).map(r => r.map(_expCsvCell).join(',')).join('\r\n');
+        _impDownloadText(text, opts.fileName + '.csv', 'text/csv;charset=utf-8');
+        return { ok: true, file: opts.fileName + '.csv', count: students.length, galleryCount: 0 };
+    } catch (err) {
+        console.error('CSV export failed', err);
+        return { ok: false, error: err.message };
+    }
+}
+
+async function _exportExcelFile(selected, opts) {
+    if (typeof XLSX === 'undefined') {
+        return { ok: false, error: 'Excel library not loaded yet. Please wait a moment and try again.' };
+    }
+    let students = selected;
+
+    /* The photo gallery needs the complete records (photo + certData inline). Only fetch them when it was asked for. */
+    if (opts.gallery) {
+        const fullStudents = await fetchFullStudents();
+        if (Array.isArray(fullStudents) && fullStudents.length) {
+            const fullByRegNo = new Map(fullStudents.map(s => [String(s.regNo || s.id || ''), s]));
+            students = students.map(s => {
+                const full = fullByRegNo.get(String(s.regNo || s.id || ''));
+                return full ? Object.assign({}, s, { photo: full.photo, certData: full.certData }) : s;
+            });
+        }
     }
 
     try {
         const wb = XLSX.utils.book_new();
 
         /* ── Sheet 1: Full Student Directory (all fields) ── */
-        const dirHeaders = [
-            'Reg No', 'Sibling Group ID', 'Full Name', 'Father / Guardian', 'Guardian Role',
-            'Guardian CNIC', 'Gender', 'Date of Birth', 'Age', 'Class', 'Section', 'Roll No',
-            'Admission Date', 'Phone 1', 'Phone 2', 'Permanent Address', 'Mailing Address',
-            'Student B-Form No.', 'Medical Issues',
-            'Orphan Status', 'Previous School Attended', 'Previous Class',
-            'Transport Mode', 'Transport Type', 'Transport Fee (PKR)',
-            'Monthly Tuition Fee (PKR)', 'Annual Fund (PKR)', 'Annual Fund Month',
-            'Tuition Discount (PKR)', 'Transport Discount (PKR)', 'Sibling Discount (PKR)',
-            'Total Discount (PKR)', 'Discount Type', 'Discount Valid Until',
-            'Net Payable (PKR)', 'Has Sibling', 'Sibling Of',
-            'Student Photo (Link)', 'B-Form / Cert (Link)'
-        ];
-
-        const dirRows = students.map(s => {
-            const tuitionDisc   = Number(s.tuitionDiscount)   || 0;
-            const transportDisc = Number(s.transportDiscount) || 0;
-            const siblingDisc   = Number(s.siblingDiscount)   || 0;
-            const totalDiscount = tuitionDisc + transportDisc + siblingDisc;
-
-            const annualFundEnabled = s.annualFundEnabled === 'on' || s.annualFundEnabled === true;
-            const annualFund = annualFundEnabled
-                ? (s.annualFundAmount != null && s.annualFundAmount !== '' ? Number(s.annualFundAmount) : '')
-                : 0;
-
-            const MONTH_NAMES = ['','January','February','March','April','May','June',
-                                  'July','August','September','October','November','December'];
-            const annualFundMonth = annualFundEnabled && s.annualFundMonth
-                ? (MONTH_NAMES[Number(s.annualFundMonth)] || s.annualFundMonth)
-                : '';
-
-            const discountType = (s.isLifetime === 'on' || s.isLifetime === true)
-                ? 'Lifetime'
-                : (s.discountExpiry ? 'Temporary' : 'None');
-
-            // Student photo — embed note if it exists
-            const hasPhoto = !!storedStudentFileSrc(s, 'photo');
-            const hasBform = !!storedStudentFileSrc(s, 'bform');
-
-            return [
-                s.regNo                         || '',
-                s.isSibling && s.siblingGroupId ? s.siblingGroupId : '',
-                s.fullName  || s.name           || '',
-                s.guardianName || s.fatherName  || '',
-                s.guardianRole                  || '',
-                s.guardianCnic                  || '',
-                s.gender                        || '',
-                s.dob                           || '',
-                s.age                           || '',
-                s.studentClass || s.class       || '',
-                s.section                       || '',
-                s.rollNo                        || '',
-                s.admissionDate                 || '',
-                s.phone1                        || '',
-                s.phone2                        || '',
-                s.permanentAddress || s.address || '',
-                s.mailingAddress                || '',
-                s.studentBform                  || '',
-                s.medicalIssues                 || '',
-                s.orphanStatus                  || '',
-                s.previousSchool                || '',
-                s.previousClass                 || '',
-                s.transportMode                 || '',
-                s.transportType                 || '',
-                s.transportFee != null && s.transportFee !== '' ? Number(s.transportFee) : 0,
-                s.standardFee  != null && s.standardFee  !== '' ? Number(s.standardFee)  : '',
-                annualFund,
-                annualFundMonth,
-                tuitionDisc,
-                transportDisc,
-                siblingDisc,
-                totalDiscount,
-                discountType,
-                s.discountExpiry || (discountType === 'Lifetime' ? 'Lifetime' : ''),
-                s.netPayable != null && s.netPayable !== '' ? Number(s.netPayable) : '',
-                s.isSibling ? 'Yes' : 'No',
-                s.siblingOf || '',
-                hasPhoto ? '✔ Saved (see Photo Gallery HTML)' : '✘ Not uploaded',
-                hasBform ? '✔ Saved (see Photo Gallery HTML)' : '✘ Not uploaded'
-            ];
-        });
+        const { headers: dirHeaders, rows: dirRows } = _expBuildDirectory(students, 'xlsx');
 
         const dirData = [dirHeaders, ...dirRows];
         const wsDir   = XLSX.utils.aoa_to_sheet(dirData);
@@ -8127,7 +8326,7 @@ async function exportStudentsToExcel() {
             { wch: 22 }, { wch: 24 }, { wch: 22 },
             { wch: 20 }, { wch: 16 }, { wch: 22 },
             { wch: 18 }, { wch: 12 }, { wch: 30 },
-            { wch: 28 }, { wch: 28 }
+            { wch: 28 }, { wch: 28 }, { wch: 12 }
         ];
         XLSX.utils.book_append_sheet(wb, wsDir, 'Student Directory');
 
@@ -8306,6 +8505,9 @@ async function exportStudentsToExcel() {
             ['School', 'ST. LAWRENCE INTERNATIONAL SCHOOL'],
             ['Exported On', exportedOn],
             ['Total Students', students.length],
+            ['Class', opts.clsLabel || 'All classes'],
+            ['Section', opts.secLabel || 'All sections'],
+            ['Includes graduated / dropped students', opts.archived ? 'Yes' : 'No'],
             ['Students with Photos', studentsWithPhotos],
             ['Students with B-Form / Certificate', studentsWithBforms],
             ['Students with Active Discounts', studentsWithDiscount],
@@ -8322,42 +8524,80 @@ async function exportStudentsToExcel() {
         XLSX.utils.book_append_sheet(wb, wsMeta, 'Export Info');
 
         /* ── Trigger Excel download ── */
-        XLSX.writeFile(wb, 'SoftSchool (Student Data).xlsx');
+        XLSX.writeFile(wb, opts.fileName + '.xlsx');
 
-        /* ── Generate & download the Photo Gallery HTML ── */
-        const studentsWithAnyMedia = students.filter(s =>
-            storedStudentFileSrc(s, 'photo') ||
-            storedStudentFileSrc(s, 'bform')
-        );
-
-        if (studentsWithAnyMedia.length > 0) {
-            const galleryHtml = _buildPhotoGalleryHTML(students);
-            const blob = new Blob([galleryHtml], { type: 'text/html;charset=utf-8' });
-            const url  = URL.createObjectURL(blob);
-            const a    = document.createElement('a');
-            a.href     = url;
-            a.download = 'SoftSchool (Student Photos).html';
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            setTimeout(() => URL.revokeObjectURL(url), 2000);
-
-            showDataIOStatus(
-                `✓ Export successful! <strong>${students.length} student record(s)</strong> saved to <em>SoftSchool (Student Data).xlsx</em> with full discount breakdown. ` +
-                `A companion <em>SoftSchool (Student Photos).html</em> file was also downloaded containing photos and B-Form images for <strong>${studentsWithAnyMedia.length}</strong> student(s). Check your Downloads folder.`,
-                'success'
+        /* ── Photo Gallery HTML (optional) ── */
+        let galleryCount = 0;
+        if (opts.gallery) {
+            const studentsWithAnyMedia = students.filter(s =>
+                storedStudentFileSrc(s, 'photo') ||
+                storedStudentFileSrc(s, 'bform')
             );
-        } else {
-            showDataIOStatus(
-                `✓ Export successful! <strong>${students.length} student record(s)</strong> saved to <em>SoftSchool (Student Data).xlsx</em> with full discount breakdown. No student photos or B-Form images found (none uploaded yet). Check your Downloads folder.`,
-                'success'
-            );
+            galleryCount = studentsWithAnyMedia.length;
+            if (galleryCount > 0) {
+                const galleryHtml = _buildPhotoGalleryHTML(students);
+                const blob = new Blob([galleryHtml], { type: 'text/html;charset=utf-8' });
+                const url  = URL.createObjectURL(blob);
+                const a    = document.createElement('a');
+                a.href     = url;
+                a.download = opts.fileName.replace('(Student Data)', '(Student Photos)') + '.html';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                setTimeout(() => URL.revokeObjectURL(url), 2000);
+            }
         }
+        return { ok: true, file: opts.fileName + '.xlsx', count: students.length, galleryCount };
 
     } catch (err) {
         console.error('Export failed', err);
-        showDataIOStatus('Export failed: ' + err.message, 'error');
+        return { ok: false, error: err.message };
     }
+}
+
+/** The "Export" button of the dialog. */
+async function runExport() {
+    if (_EXP.busy) return;
+    const selected = _expSelected();
+    if (!selected.length) return;
+
+    const btn = document.getElementById('exp-run-btn');
+    const label = btn.querySelector('span');
+    _EXP.busy = true;
+    btn.disabled = true;
+    document.getElementById('exp-back-btn').disabled = true;
+    label.textContent = _EXP.fmt === 'xlsx' && _EXP.gallery ? 'Preparing files…' : 'Preparing file…';
+
+    const opts = {
+        fileName: _expFileBase(), gallery: _EXP.gallery, archived: _EXP.archived,
+        clsLabel: _expClassLabel(), secLabel: _expSectionLabel()
+    };
+    const scope = `${_impEsc(_expClassLabel())} · ${_impEsc(_expSectionLabel())}`;
+    let result;
+    try {
+        result = _EXP.fmt === 'csv' ? _exportCsvFile(selected, opts) : await _exportExcelFile(selected, opts);
+    } catch (err) {
+        result = { ok: false, error: err && err.message ? err.message : String(err) };
+    }
+
+    _EXP.busy = false;
+    document.getElementById('exp-back-btn').disabled = false;
+    closeExportDialog();
+
+    if (!result.ok) {
+        showDataIOStatus('Export failed: ' + _impEsc(result.error), 'error');
+        return;
+    }
+    let msg = `✓ Export successful! <strong>${result.count} student record(s)</strong> (${scope}) saved to <em>${_impEsc(result.file)}</em>.`;
+    if (_EXP.fmt === 'xlsx') {
+        msg += ' It includes the directory, discount breakdown, class summary, fee overview and photo index.';
+        if (_EXP.gallery) {
+            msg += result.galleryCount > 0
+                ? ` A companion photo gallery (HTML) was also downloaded for <strong>${result.galleryCount}</strong> student(s).`
+                : ' No student photos or B-Form images were found, so no gallery was created.';
+        }
+    }
+    showDataIOStatus(msg + ' Check your Downloads folder.', 'success');
 }
 
 /* ============================================================
@@ -8940,41 +9180,294 @@ function downloadLastImportReport() {
     if (window._impLastReportCsv) _impDownloadText(window._impLastReportCsv, 'import-report.csv', 'text/csv;charset=utf-8');
 }
 
-/** A ready-to-fill template whose headings the importer recognises exactly. */
-function downloadImportTemplate(kind) {
+/* ============================================================
+   TEMPLATES — "Download template" on the Import and Export cards.
+
+   Both cards open the same small dialog (Excel or CSV). What gets downloaded:
+     • IMPORT template  – the columns the importer accepts, 2 example rows, a field guide
+                          and instructions on how to import.
+     • EXPORT template  – the real export layout (same columns, same order as an export),
+                          2 example rows, a field guide and a description of what an
+                          export contains.
+   Everything is generated from TEMPLATE_FIELDS so the guide always matches the code.
+   Example rows start with "#" in the first cell; the importer ignores rows like that.
+   ============================================================ */
+
+/* col = heading in the Excel export · csvCol = heading in the CSV export (when different)
+   imp / exp = used by the importer / present in the export
+   req = how important it is when importing · fmt (or fmtImp / fmtExp) = format · impNote = what happens when empty
+   src = where an exported value comes from · back = can an exported value be imported again */
+const TEMPLATE_FIELDS = [
+    { col: 'Reg No', imp: true, exp: true, req: 'Optional', fmt: 'Text, e.g. PSC_26_1',
+      impNote: 'Empty → a Registration No. is created for you. When you choose “Update them” while importing, it is used to find the existing student.',
+      src: 'The registration number saved on the student', back: 'Yes' },
+    { col: 'Sibling Group ID', exp: true, fmt: 'Text', src: 'Shared by brothers and sisters who are linked as siblings', back: 'No — links are kept by the system' },
+    { col: 'Full Name', imp: true, exp: true, req: 'Required', fmt: 'Text, up to 80 characters',
+      impNote: 'Rows without a name are skipped. (You may use separate First Name and Last Name columns instead.)', src: 'The student’s full name', back: 'Yes' },
+    { col: 'Father / Guardian', imp: true, exp: true, req: 'Recommended', fmt: 'Text, up to 80 characters',
+      impNote: 'The admission form requires it — students without it are listed in the data checks.', src: 'The guardian’s name', back: 'Yes' },
+    { col: 'Guardian Role', imp: true, exp: true, req: 'Optional', fmt: 'Father, Mother, Brother, Sister, Uncle, Grandparent or Legal Guardian',
+      impNote: 'Common words such as Dad, Mom or Guardian are understood.', src: 'The guardian’s relation to the student', back: 'Yes' },
+    { col: 'Guardian CNIC', imp: true, exp: true, req: 'Recommended', fmt: '13 digits, written 17101-1234567-1 (dashes are added for you)',
+      impNote: 'A value that does not have 13 digits is flagged in the data checks.', src: 'The guardian’s CNIC number', back: 'Yes' },
+    { col: 'Gender', imp: true, exp: true, req: 'Optional', fmt: 'Male or Female (M / F also understood)', impNote: 'Empty → left blank.', src: 'Gender', back: 'Yes' },
+    { col: 'Date of Birth', imp: true, exp: true, req: 'Recommended',
+      fmtImp: 'Day/Month/Year, e.g. 14/03/2015 (2015-03-14 also works)', fmtExp: 'Year-Month-Day, e.g. 2015-03-14',
+      impNote: 'Impossible dates such as 31/02/2015 are flagged and left empty.', src: 'Date of birth', back: 'Yes' },
+    { col: 'Age', exp: true, fmt: 'Years, e.g. 11 Years', src: 'Calculated from the Date of Birth', back: 'No — calculated automatically' },
+    { col: 'Class', imp: true, exp: true, req: 'Required (or choose the class while importing)',
+      fmt: 'A class from Settings, e.g. Grade 2',
+      impNote: 'Also understood: 2, 2nd, Class Two, II, Grade 2-A. You can instead pick one class and section on the first import screen.', src: 'The student’s current class', back: 'Yes' },
+    { col: 'Section', imp: true, exp: true, req: 'Optional', fmt: 'A section of that class, e.g. A', impNote: 'Can also be chosen on the first import screen.', src: 'The student’s section', back: 'Yes' },
+    { col: 'Roll No', imp: true, exp: true, req: 'Optional', fmt: 'Number', impNote: 'Empty → numbered automatically after the last roll number in the class.', src: 'Roll number in the class', back: 'Yes' },
+    { col: 'Admission Date', imp: true, exp: true, req: 'Optional',
+      fmtImp: 'Day/Month/Year, e.g. 01/04/2024', fmtExp: 'Year-Month-Day, e.g. 2024-04-01', impNote: 'Empty → today’s date.', src: 'Date of admission', back: 'Yes' },
+    { col: 'Phone 1', imp: true, exp: true, req: 'Recommended', fmt: 'Mobile number, e.g. 0300-1234567', impNote: 'Numbers Excel shortened (3001234567) get their leading 0 back.', src: 'Primary phone number', back: 'Yes' },
+    { col: 'Phone 2', imp: true, exp: true, req: 'Optional', fmt: 'Mobile number, e.g. 0312-1112233', impNote: 'Empty → left blank.', src: 'Secondary phone number', back: 'Yes' },
+    { col: 'Permanent Address', imp: true, exp: true, req: 'Recommended', fmt: 'Text, up to 300 characters', impNote: 'The admission form requires it — empty values are listed in the data checks.', src: 'Permanent address', back: 'Yes' },
+    { col: 'Mailing Address', imp: true, exp: true, req: 'Optional', fmt: 'Text, up to 300 characters', impNote: 'Empty → the Permanent Address is used.', src: 'Mailing address', back: 'Yes' },
+    { col: 'Student B-Form No.', imp: true, exp: true, req: 'Recommended', fmt: '13 digits, written 17101-1234567-1', impNote: 'The admission form requires it — empty values are listed in the data checks.', src: 'Student’s B-Form / CNIC number', back: 'Yes' },
+    { col: 'Medical Issues', imp: true, exp: true, req: 'Optional', fmt: 'Text, up to 300 characters, e.g. None or Asthma', impNote: 'Empty → left blank.', src: 'Medical issues / allergies', back: 'Yes' },
+    { col: 'Orphan Status', imp: true, exp: true, req: 'Optional', fmt: 'Orphan or Not Orphan (Yes / No also understood)', impNote: 'Empty → Not Orphan.', src: 'Orphan status', back: 'Yes' },
+    { col: 'Previous School Attended', imp: true, exp: true, req: 'Optional', fmt: 'Text, up to 120 characters', impNote: 'Empty → left blank.', src: 'The school the student came from', back: 'Yes' },
+    { col: 'Previous Class', imp: true, exp: true, req: 'Optional', fmt: 'Text, up to 40 characters — the class at the PREVIOUS school, not the current class', impNote: 'Empty → left blank.', src: 'Class at the previous school', back: 'Yes' },
+    { col: 'Transport Mode', imp: true, exp: true, req: 'Optional', fmt: 'Private or School Provided', impNote: 'Empty → Private.', src: 'Transport mode', back: 'Yes' },
+    { col: 'Transport Type', imp: true, exp: true, req: 'Optional', fmt: 'None, School Bus, School Van or Coaster', impNote: 'Empty → None.', src: 'Vehicle type', back: 'Yes' },
+    { col: 'Transport Fee (PKR)', imp: true, exp: true, req: 'Optional', fmt: 'Monthly amount, a number', impNote: 'Empty → 0.', src: 'Monthly transport fee', back: 'Yes' },
+    { col: 'Monthly Tuition Fee (PKR)', imp: true, exp: true, req: 'Optional', fmt: 'Monthly amount, a number', impNote: 'Empty → the class fee from Settings.', src: 'Standard monthly tuition fee', back: 'Yes' },
+    { col: 'Admission Fee (PKR)', imp: true, req: 'Optional', fmt: 'One-time amount, a number', impNote: 'Empty → 0. (Not part of an export.)' },
+    { col: 'Annual Fund (PKR)', exp: true, fmt: 'Amount, a number (0 when the annual fund is off)', src: 'Annual fund amount', back: 'No — not imported' },
+    { col: 'Annual Fund Month', exp: true, fmt: 'Month name, e.g. April', src: 'Month the annual fund is charged', back: 'No — not imported' },
+    { col: 'Tuition Discount (PKR)', imp: true, exp: true, req: 'Optional', fmt: 'Amount, a number', impNote: 'Empty → 0.', src: 'Discount on tuition', back: 'Yes' },
+    { col: 'Transport Discount (PKR)', imp: true, exp: true, req: 'Optional', fmt: 'Amount, a number', impNote: 'Empty → 0.', src: 'Discount on transport', back: 'Yes' },
+    { col: 'Sibling Discount (PKR)', imp: true, exp: true, req: 'Optional', fmt: 'Amount, a number', impNote: 'Empty → 0.', src: 'Discount for siblings', back: 'Yes' },
+    { col: 'Total Discount (PKR)', exp: true, fmt: 'Amount, a number', src: 'Calculated: the three discounts added together', back: 'No — calculated automatically' },
+    { col: 'Discount Type', exp: true, fmt: 'Lifetime, Temporary or None', src: 'Whether the discount lasts for ever or ends on a date', back: 'No — not imported' },
+    { col: 'Discount Valid Until', exp: true, fmt: 'A date, or the word Lifetime', src: 'End date of a temporary discount', back: 'No — not imported' },
+    { col: 'Net Payable (PKR)', exp: true, fmt: 'Amount, a number', src: 'Calculated by the system from the fee and discount columns', back: 'No — calculated automatically' },
+    { col: 'Has Sibling', exp: true, fmt: 'Yes or No', src: 'Whether the student is linked to a sibling', back: 'No — not imported' },
+    { col: 'Sibling Of', exp: true, fmt: 'Text', src: 'The sibling this student is linked to', back: 'No — not imported' },
+    { col: 'Student Photo (Link)', csvCol: 'Has Student Photo', exp: true, fmt: 'Excel: “✔ Saved” or “✘ Not uploaded”. CSV: Yes or No', src: 'Whether a student photo is saved (the photo itself is in the optional photo gallery file)', back: 'No — photos cannot be imported' },
+    { col: 'B-Form / Cert (Link)', csvCol: 'Has B-Form / Certificate', exp: true, fmt: 'Excel: “✔ Saved” or “✘ Not uploaded”. CSV: Yes or No', src: 'Whether a B-Form / certificate scan is saved', back: 'No — scans cannot be imported' },
+    { col: 'Status', exp: true, fmt: 'Active, Graduated or Dropped', src: 'Where the student is in the school', back: 'No — imported students are Active' }
+];
+
+/** Example values for two students. Dates are written the way that file type uses them. */
+function _tplExamples(which, mode) {
     const configs = getClassConfigs();
-    const cls = configs.length ? configs[0].name : 'Grade 1';
-    const sec = (configs[0] && Array.isArray(configs[0].sections) && configs[0].sections[0]) || 'A';
-    const cls2 = configs.length > 1 ? configs[1].name : cls;
-    const headers = ['Student Full Name', 'Class / Grade', 'Section', 'Gender', 'Date of Birth', 'Guardian Full Name',
-                     'Guardian Relation / Role', 'Guardian CNIC Number', 'Primary Phone', 'Permanent Address', 'Standard Tuition Fee'];
-    const examples = [
-        ['Ali Khan', cls, sec, 'Male', '14/03/2015', 'Imran Khan', 'Father', '17101-1234567-1', '0300-1234567', 'House 5, Street 2, Abbottabad', ''],
-        ['Sara Bibi', cls2, sec, 'Female', '02/11/2014', 'Gul Zaman', 'Father', '17101-7654321-3', '0345-7654321', 'Mohalla Qazian, Abbottabad', '']
-    ];
-    if (kind === 'csv') {
-        const csv = '\uFEFF' + [headers].concat(examples).map(r => r.map(_impCsvCell).join(',')).join('\r\n');
-        _impDownloadText(csv, 'students-import-template.csv', 'text/csv;charset=utf-8');
-        return;
-    }
-    if (typeof XLSX === 'undefined') { showDataIOStatus('Excel library not loaded yet. Please try again in a moment.', 'error'); return; }
-    const wb = XLSX.utils.book_new();
-    const ws = XLSX.utils.aoa_to_sheet([headers].concat(examples));
-    ws['!cols'] = headers.map(h => ({ wch: Math.max(14, h.length + 2) }));
-    XLSX.utils.book_append_sheet(wb, ws, 'Students');
-    const notes = XLSX.utils.aoa_to_sheet([
-        ['How to use this template'],
-        ['1. Replace the two example rows with your students (one row per student).'],
-        ['2. Only Student Full Name and Class / Grade are required — delete any column you do not need.'],
-        ['3. Dates can be written like 14/03/2015 (day/month/year). Phone numbers like 0300-1234567.'],
-        ['4. Class must match a class in Settings (e.g. ' + cls + '). You can also use one sheet per class, named after the class.'],
-        ['5. Save, then use Import Data and pick this file.']
-    ]);
-    ws2Width(notes);
-    XLSX.utils.book_append_sheet(wb, notes, 'Instructions');
-    XLSX.writeFile(wb, 'students-import-template.xlsx');
-    function ws2Width(s) { s['!cols'] = [{ wch: 100 }]; }
+    const cls1 = configs.length ? configs[0].name : 'Grade 1';
+    const cls2 = configs.length > 1 ? configs[1].name : cls1;
+    const secs = configs.length ? _impSectionsOf(cls1) : [];
+    const sec = secs[0] || 'A';
+    const date = (y, m, d) => which === 'import'
+        ? `${String(d).padStart(2, '0')}/${String(m).padStart(2, '0')}/${y}`
+        : `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+    const dob1 = date(2015, 3, 14), dob2 = date(2014, 11, 2);
+    const iso = (y, m, d) => `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+    const csv = mode === 'csv';
+    return {
+        'Reg No': ['#EXAMPLE-1', '#EXAMPLE-2'], 'Sibling Group ID': ['', ''],
+        'Full Name': ['Ali Khan', 'Sara Bibi'], 'Father / Guardian': ['Imran Khan', 'Gul Zaman'],
+        'Guardian Role': ['Father', 'Father'], 'Guardian CNIC': ['17101-1234567-1', '17101-7654321-3'],
+        'Gender': ['Male', 'Female'], 'Date of Birth': [dob1, dob2],
+        'Age': [_impAgeFromDob(iso(2015, 3, 14)), _impAgeFromDob(iso(2014, 11, 2))],
+        'Class': [cls1, cls2], 'Section': [sec, sec], 'Roll No': [1, 1],
+        'Admission Date': [date(2024, 4, 1), date(2024, 4, 1)],
+        'Phone 1': ['0300-1234567', '0345-7654321'], 'Phone 2': ['', '0312-1112233'],
+        'Permanent Address': ['House 5, Street 2, Abbottabad', 'Mohalla Qazian, Abbottabad'],
+        'Mailing Address': ['House 5, Street 2, Abbottabad', which === 'import' ? '' : 'Mohalla Qazian, Abbottabad'],
+        'Student B-Form No.': ['17101-5555555-5', '17101-6666666-6'],
+        'Medical Issues': ['None', 'Asthma'], 'Orphan Status': ['Not Orphan', 'Not Orphan'],
+        'Previous School Attended': ['Little Stars School', ''], 'Previous Class': ['KG', ''],
+        'Transport Mode': ['Private', 'School Provided'], 'Transport Type': ['None', 'School Van'],
+        'Transport Fee (PKR)': [0, 1500], 'Monthly Tuition Fee (PKR)': [2500, 2500], 'Admission Fee (PKR)': [5000, 5000],
+        'Annual Fund (PKR)': [0, 1000], 'Annual Fund Month': ['', 'April'],
+        'Tuition Discount (PKR)': [0, 500], 'Transport Discount (PKR)': [0, 0], 'Sibling Discount (PKR)': [0, 0],
+        'Total Discount (PKR)': [0, 500], 'Discount Type': ['None', 'Lifetime'], 'Discount Valid Until': ['', 'Lifetime'],
+        'Net Payable (PKR)': [2500, 3500], 'Has Sibling': ['No', 'No'], 'Sibling Of': ['', ''],
+        'Student Photo (Link)': csv ? ['Yes', 'No'] : ['✔ Saved (see Photo Gallery HTML)', '✘ Not uploaded'],
+        'B-Form / Cert (Link)': csv ? ['No', 'No'] : ['✘ Not uploaded', '✘ Not uploaded'],
+        'Status': ['Active', 'Active']
+    };
 }
+
+/** The columns of a template, in order, with their heading for this file type. */
+function _tplColumns(which, mode) {
+    return TEMPLATE_FIELDS
+        .filter(f => which === 'import' ? f.imp : f.exp)
+        .map(f => Object.assign({}, f, { heading: (which === 'export' && mode === 'csv' && f.csvCol) ? f.csvCol : f.col }));
+}
+
+function _tplGuideRows(which, cols, ex) {
+    const fmtOf = f => which === 'import' ? (f.fmtImp || f.fmt) : (f.fmtExp || f.fmt);
+    const example = f => { const v = (ex[f.col] || [''])[0]; return v === '' ? '(empty)' : v; };
+    if (which === 'import') {
+        return { head: ['Column heading', 'Required?', 'Format / allowed values', 'Example', 'If left empty / notes'],
+                 rows: cols.map(f => [f.heading, f.req, fmtOf(f), example(f), f.impNote || '']) };
+    }
+    return { head: ['Column heading', 'Format in the file', 'Example', 'Where the value comes from', 'Can it be imported back?'],
+             rows: cols.map(f => [f.heading, fmtOf(f), example(f), f.src || '', f.back || '']) };
+}
+
+function _tplInstructions(which) {
+    if (which === 'import') return [
+        'HOW TO IMPORT STUDENTS WITH THIS FILE',
+        '',
+        '1. Fill in one row per student under the headings. The two example rows start with # in the first column — the importer ignores them, so you can leave or delete them.',
+        '2. Keep the headings as written (the importer also recognises many other spellings). You may delete columns you do not need — only Full Name is required (and Class, unless you choose the class while importing).',
+        '3. In SoftSchool open Data Export & Import → Import Data and choose this file (Excel .xlsx / .xls, CSV .csv or PDF).',
+        '4. The first screen asks which class and section the students are for. Choose “Into one class & section”, or “Use the classes in my file” if the Class column lists several classes.',
+        '5. Click Review columns to check how every heading was matched, then read the Save plan and Data checks and click Import.',
+        '',
+        'FORMATS',
+        '• Dates: day/month/year, e.g. 14/03/2015.   • Mobile numbers: 0300-1234567.   • CNIC and B-Form: 13 digits, e.g. 17101-1234567-1.',
+        '• Fees and discounts: plain numbers (no “Rs”).   • Class and section must match the names in Settings.',
+        '',
+        'GOOD TO KNOW',
+        '• Several classes in one file: use a Class column, OR one sheet per class named after the class (e.g. a sheet called Grade 2), OR rows containing only “Class 1”, “Class 2” above each group of students.',
+        '• Instead of one Full Name column you can use a First Name and a Last Name column.',
+        '• Empty cells are fine. Details the admission form requires (guardian, CNIC, B-Form, phone, address, date of birth) are listed after the import so you can complete them with Edit Student.',
+        '• Students that already exist are skipped (or updated, if you choose that and the file has a Registration No.).',
+        '• Photos and B-Form / certificate scans cannot be imported.',
+        '• A row whose first cell starts with # is treated as a note and ignored.',
+        '',
+        'MAXIMUM LENGTHS: names 80 characters · addresses and medical issues 300 · previous school 120 · previous class 40. Longer text is shortened and reported.'
+    ];
+    return [
+        'HOW EXPORTING WORKS — AND WHAT AN EXPORT LOOKS LIKE',
+        '',
+        '1. In SoftSchool open Data Export & Import → Export Data.',
+        '2. Choose the format: Excel (.xlsx) or CSV (.csv).',
+        '3. Choose the class and section: any one class, any one section, or All classes / All sections.',
+        '4. Click Export. The file is named after your choice, e.g. “SoftSchool (Student Data) - Grade 2 - Section B.xlsx”.',
+        '',
+        'EXCEL EXPORT — one workbook with these sheets (see the “Export Contents” sheet):',
+        '• Student Directory — one row per student with every column described in the Field Guide (this is the sheet you can import back).',
+        '• Discount Breakdown, Class Summary, Fee Overview, Photo Index and Export Info — summaries of the same students.',
+        '• Optionally a second file, the Photo Gallery (HTML), with each student’s photo and B-Form / certificate.',
+        '',
+        'CSV EXPORT — one file with the same columns as the Student Directory. The two photo columns show Yes / No. The file is UTF-8 with a BOM so Urdu and accented names open correctly in Excel.',
+        '',
+        'GOOD TO KNOW',
+        '• Only active students are exported, unless you tick “Also include graduated & dropped students” (the Status column then shows who is who).',
+        '• Dates are written Year-Month-Day (2015-03-14). Amounts are plain numbers.',
+        '• To import an exported file again, use Import Data. The columns are recognised automatically; columns marked “No” in the Field Guide are calculated or not imported and are ignored.',
+        '• In a CSV, text that starts with =, +, - or @ gets a leading apostrophe so a spreadsheet cannot run it as a formula.',
+        '• Rows starting with # in this template are examples only.'
+    ];
+}
+
+/** What the other sheets of a real Excel export contain (used by the export template). */
+function _tplExportSheets() {
+    return [
+        ['Sheet', 'What it shows', 'Columns'],
+        ['Student Directory', 'One row per student with every detail (the Field Guide describes each column).', 'See the Student Directory sheet of this template'],
+        ['Discount Breakdown', 'Fees and discounts of each student.', 'Reg No, Student Name, Class, Standard Fee (PKR), Transport Fee (PKR), Tuition Discount (PKR), Transport Discount (PKR), Sibling Discount (PKR), Total Discount (PKR), Total Discount (%), Net Monthly Payable (PKR), Discount Type, Valid Until'],
+        ['Class Summary', 'Number of students per class, split by gender, with a total.', 'Class, Total Students, Male, Female'],
+        ['Fee Overview', 'Monthly and annual amounts of each student.', 'Reg No, Student Name, Class, Monthly Tuition (PKR), Annual Fund (PKR), Tuition Disc., Transport Disc., Sibling Disc., Net Monthly (PKR), Total Annual (PKR)'],
+        ['Photo Index', 'Which students have a photo and a B-Form / certificate saved.', '#, Reg No, Student Name, Class, Has Student Photo, Has B-Form / Certificate, Document Type'],
+        ['Export Info', 'When the file was made and what it contains (class, section, totals).', 'Item, Value']
+    ];
+}
+
+function _tplFileName(which, kind) {
+    return which === 'import' ? `students-import-template.${kind}` : `students-export-template.${kind}`;
+}
+
+function _tplBuildXlsx(which) {
+    const cols = _tplColumns(which, 'xlsx');
+    const ex = _tplExamples(which, 'xlsx');
+    const wb = XLSX.utils.book_new();
+    const heads = cols.map(c => c.heading);
+    const data = [heads, cols.map(c => (ex[c.col] || ['', ''])[0]), cols.map(c => (ex[c.col] || ['', ''])[1])];
+    const ws = XLSX.utils.aoa_to_sheet(data);
+    ws['!cols'] = cols.map((c, i) => ({ wch: Math.min(42, Math.max(12, c.heading.length + 2, ...data.slice(1).map(r => String(r[i]).length + 2))) }));
+    XLSX.utils.book_append_sheet(wb, ws, which === 'import' ? 'Students' : 'Student Directory');
+
+    const g = _tplGuideRows(which, cols, ex);
+    const wsGuide = XLSX.utils.aoa_to_sheet([g.head].concat(g.rows));
+    wsGuide['!cols'] = which === 'import'
+        ? [{ wch: 28 }, { wch: 30 }, { wch: 60 }, { wch: 30 }, { wch: 80 }]
+        : [{ wch: 28 }, { wch: 60 }, { wch: 30 }, { wch: 60 }, { wch: 34 }];
+    XLSX.utils.book_append_sheet(wb, wsGuide, 'Field Guide');
+
+    if (which === 'export') {
+        const wsSheets = XLSX.utils.aoa_to_sheet(_tplExportSheets());
+        wsSheets['!cols'] = [{ wch: 22 }, { wch: 60 }, { wch: 110 }];
+        XLSX.utils.book_append_sheet(wb, wsSheets, 'Export Contents');
+    }
+    const wsHow = XLSX.utils.aoa_to_sheet(_tplInstructions(which).map(l => [l]));
+    wsHow['!cols'] = [{ wch: 140 }];
+    XLSX.utils.book_append_sheet(wb, wsHow, 'Instructions');
+    XLSX.writeFile(wb, _tplFileName(which, 'xlsx'));
+    return { cols: cols.length };
+}
+
+/** CSV has no second sheet, so the guide is written as note lines starting with # — the importer ignores them. */
+function _tplBuildCsv(which) {
+    const cols = _tplColumns(which, 'csv');
+    const ex = _tplExamples(which, 'csv');
+    const g = _tplGuideRows(which, cols, ex);
+    const rows = [cols.map(c => c.heading), cols.map(c => (ex[c.col] || ['', ''])[0]), cols.map(c => (ex[c.col] || ['', ''])[1])];
+    const note = t => [t === '' ? '#' : '# ' + t];
+    _tplInstructions(which).forEach(l => rows.push(note(l)));
+    rows.push(note(''), note(which === 'import' ? 'FIELD GUIDE  (column | required? | format | example | if left empty / notes)' : 'FIELD GUIDE  (column | format | example | where it comes from | can it be imported back?)'));
+    g.rows.forEach(r => rows.push(note(r.join(' | '))));
+    if (which === 'export') {
+        rows.push(note(''), note('OTHER SHEETS OF AN EXCEL EXPORT'));
+        _tplExportSheets().slice(1).forEach(r => rows.push(note(`${r[0]} — ${r[1]} (${r[2]})`)));
+    }
+    const text = '\uFEFF' + rows.map(r => r.map(_impCsvCell).join(',')).join('\r\n');
+    _impDownloadText(text, _tplFileName(which, 'csv'), 'text/csv;charset=utf-8');
+    return { cols: cols.length };
+}
+
+/* ---------- the chooser dialog ---------- */
+const _TPL = { which: 'import' };
+
+async function openTemplateDialog(which) {
+    _TPL.which = which;
+    await _impEnsureClassConfigs();                  /* so the example Class / Section are real ones */
+    const imp = which === 'import';
+    const nCols = _tplColumns(which, 'xlsx').length;
+    document.querySelector('#tpl-title span').textContent = imp ? 'Import Template' : 'Export Template';
+    document.getElementById('tpl-lead').textContent = imp
+        ? 'Download a file that shows how to prepare data for importing — which fields to use, their format, and examples. Which type do you want?'
+        : 'Download a file that shows what an export looks like — the fields, their order and format, and what each one means. Which type do you want?';
+    document.getElementById('tpl-xlsx-desc').textContent = imp
+        ? `A “Students” sheet with ${nCols} headings and 2 example rows, a “Field Guide” sheet (format and meaning of every column) and an “Instructions” sheet.`
+        : `A “Student Directory” sheet with the ${nCols} exported columns and 2 example rows, a “Field Guide”, an “Export Contents” sheet describing every sheet of an export, and “Instructions”.`;
+    document.getElementById('tpl-csv-desc').textContent = imp
+        ? `One file with the ${nCols} headings and 2 example rows. The field guide and instructions are written underneath as note lines starting with # — the importer ignores them.`
+        : `One file with the ${nCols} exported columns and 2 example rows. The field guide and a description of the export are written underneath as note lines starting with #.`;
+    document.getElementById('tpl-summary').innerHTML = `<i class="fas fa-circle-info"></i><span>Rows starting with <strong>#</strong> are notes — they are never imported.</span>`;
+    openModal('template-modal');
+}
+function closeTemplateDialog() { closeModal('template-modal'); }
+
+function downloadTemplate(which, kind) {
+    try {
+        if (kind === 'xlsx' && typeof XLSX === 'undefined') {
+            showDataIOStatus('The Excel library has not loaded yet. Please try again in a moment.', 'error');
+            return false;
+        }
+        const r = kind === 'csv' ? _tplBuildCsv(which) : _tplBuildXlsx(which);
+        const file = _tplFileName(which, kind);
+        showDataIOStatus(
+            `✓ Template downloaded: <em>${_impEsc(file)}</em> — ${which === 'import' ? 'import' : 'export'} format with <strong>${r.cols}</strong> fields, example rows and a field guide. Check your Downloads folder.`,
+            'success');
+        return true;
+    } catch (err) {
+        console.error('Template download failed', err);
+        showDataIOStatus('Could not create the template: ' + _impEsc(err.message), 'error');
+        return false;
+    }
+}
+function pickTemplateFormat(kind) {
+    closeTemplateDialog();
+    downloadTemplate(_TPL.which, kind);
+}
+function downloadImportTemplate(kind) { return downloadTemplate('import', kind); }   /* old name, still works */
 
 /* ---------- 1. READ THE FILE ---------- */
 
@@ -9016,11 +9509,14 @@ function _impParseSheet(sheet) {
     }
 
     const rows = [], rowNums = [], groups = [];
-    let current = sheet.titleClass || '';
+    let current = sheet.titleClass || '', noteRows = 0;
     for (let gi = firstData; gi < grid.length; gi++) {
         const r = grid[gi];
         const f = _impFilled(r);
         if (f === 0) continue;
+        /* A row whose first cell starts with # is a note or an example row (like the ones in our templates) — ignore it. */
+        const lead = r.map(_impCellText).find(t => t !== '');
+        if (lead && lead.charAt(0) === '#') { noteRows++; continue; }
         /* A row with a single cell like "Class 1" is a class heading for the students below it. */
         if (f === 1 && headers.length >= 3) {
             const txt = r.map(_impCellText).find(t => t !== '');
@@ -9034,6 +9530,7 @@ function _impParseSheet(sheet) {
         groups.push(current);
     }
 
+    sheet.noteRows = noteRows;
     let last = headers.length - 1;
     while (last > 0 && (noHeader || !_impCellText(rawHeaders[last])) && !rows.some(r => _impCellText(r[last]) !== '')) last--;
     headers.length = last + 1;
@@ -9044,17 +9541,30 @@ function _impParseSheet(sheet) {
 }
 
 function _impStart(fileName, sheetsIn, source) {
+    /* The documentation sheets of our templates and exports hold no students — never treat them as data. */
+    const realSheets = sheetsIn.filter(s => !/^(field guide|instructions|export contents|export info)$/i.test(String(s.name).trim()));
+    if (realSheets.length) sheetsIn = realSheets;
     const sheets = [];
     sheetsIn.forEach(s => {
         _impParseSheet(s);
         if (s.rows.length) sheets.push(s);
     });
-    if (!sheets.length) {
-        showDataIOStatus('No student rows were found. Make sure the file has a heading row followed by student rows.', 'error');
+    /* A sheet with real student headings but no students (e.g. an untouched template) must not fall back to its
+       Field Guide / Instructions sheets — tell the user there is nothing to import yet. */
+    const bestHits = Math.max(0, ...sheetsIn.map(s => s.hits || 0));
+    if (!sheets.length || (bestHits >= 2 && !sheets.some(s => s.hits >= 2))) {
+        sheets.length = 0;
+        const notes = sheetsIn.reduce((n, s) => n + (s.noteRows || 0), 0);
+        showDataIOStatus(notes
+            ? `This file only has example or note rows (rows starting with #) — there are no students to import yet. Add your students under the headings and try again.`
+            : 'No student rows were found. Make sure the file has a heading row followed by student rows.', 'error');
         return;
     }
     if (sheets.length > 1 && sheets.some(s => s.hits >= 2)) {
-        sheets.forEach(s => { if (s.hits < 2) s.include = false; });
+        /* Notes / instruction sheets have no recognisable headings; the summary sheets of an export (Discount Breakdown,
+           Fee Overview …) share only a few headings with the student sheet — start with just the main student sheet(s) ticked. */
+        const maxHits = Math.max(...sheets.map(s => s.hits));
+        sheets.forEach(s => { if (s.hits < 2 || (maxHits >= 6 && s.hits < maxHits * 0.5)) s.include = false; });
     }
     importState = {
         fileName, source, sheets, step: 1,
@@ -9410,7 +9920,7 @@ function renderImportSheets() {
                     <input type="checkbox" ${s.include ? 'checked' : ''} ${only ? 'disabled' : ''} onchange="toggleImportSheet(${i}, this.checked)">
                     <span>${_impEsc(s.name)}</span>
                 </label>
-                <span class="imp-sheet-meta">${s.rows.length} row${s.rows.length === 1 ? '' : 's'} · ${s.headers.length} columns</span>
+                <span class="imp-sheet-meta">${s.rows.length} row${s.rows.length === 1 ? '' : 's'} · ${s.headers.length} columns${s.noteRows ? ` · ${s.noteRows} note row${s.noteRows === 1 ? '' : 's'} (#) ignored` : ''}</span>
                 <label class="imp-sheet-hdr"><input type="checkbox" class="imp-cb" ${s.noHeader ? 'checked' : ''} onchange="setImportNoHeader(${i}, this.checked)"> No headings</label>
                 <label class="imp-sheet-hdr${s.noHeader ? ' is-off' : ''}">Headings in row
                     <input type="number" min="1" ${s.noHeader ? 'disabled' : ''} value="${s.headerRow + 1 + s.rowOffset}" onchange="setImportHeaderRow(${i}, this.value)">
@@ -10042,7 +10552,8 @@ function buildImportPlan() {
     let room = limit === null ? Infinity : Math.max(0, limit - active.length);
 
     const plan = { create: [], createMeta: [], update: [], skipped: [], issueList: [], issueGroups: [], missingGroups: [],
-                   noName: 0, noClass: 0, skippedClass: 0, otherClass: 0, dupes: 0, overLimit: 0, unknownClasses: new Set(), perClass: [] };
+                   noName: 0, noClass: 0, skippedClass: 0, otherClass: 0, dupes: 0, overLimit: 0, unknownClasses: new Set(), perClass: [],
+                   noteRows: st.sheets.filter(s => s.include).reduce((n, s) => n + (s.noteRows || 0), 0) };
     const skip = (rec, counter, reason, name) => { plan[counter]++; plan.skipped.push({ rowNo: rec.rowNo, sheet: rec.sheet, name: name || '', reason }); };
     const pending = [];
 
@@ -10196,6 +10707,7 @@ function refreshImport() {
     if (plan.otherClass)       notes.push(`<span class="imp-pill"><i class="fas fa-filter"></i> ${plan.otherClass} listed in another class — skipped</span>`);
     if (plan.skippedClass)     notes.push(`<span class="imp-pill"><i class="fas fa-ban"></i> ${plan.skippedClass} in classes you chose to skip</span>`);
     if (plan.overLimit)        notes.push(`<span class="imp-pill imp-pill-warn"><i class="fas fa-lock"></i> ${plan.overLimit} over your plan's student limit — skipped</span>`);
+    if (plan.noteRows)         notes.push(`<span class="imp-pill"><i class="fas fa-note-sticky"></i> ${plan.noteRows} note / example row${plan.noteRows === 1 ? '' : 's'} (starting with #) ignored</span>`);
 
     const checks = plan.issueGroups.length
         ? plan.issueGroups.slice(0, 6).map(g => `

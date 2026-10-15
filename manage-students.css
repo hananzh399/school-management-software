@@ -6252,3 +6252,67 @@ select option {
     .imp-footer-btns { flex-wrap: wrap; }
     #imp-step-btn { order: 3; flex-basis: 100%; }
 }
+
+
+/* ============================================================
+   EXPORT DIALOG — format cards, class & section, options
+   ============================================================ */
+#exp-step1[hidden], #exp-step2[hidden], #export-modal [hidden] { display: none !important; }
+#export-modal .imp-body { padding: 24px 28px; }
+.exp-lead { margin: 0 0 16px; font-size: 14px; color: var(--text-secondary); }
+
+.exp-format-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 16px; }
+.exp-format-card {
+    display: flex; flex-direction: column; align-items: flex-start; gap: 6px; text-align: left;
+    padding: 22px 20px; border-radius: var(--radius-md); cursor: pointer;
+    background: var(--bg-card); border: 1px solid var(--border-subtle); color: var(--text-primary);
+    font-family: 'Inter', sans-serif; transition: all var(--transition);
+}
+.exp-format-card:hover { border-color: var(--accent-primary); transform: translateY(-2px); box-shadow: 0 8px 24px var(--accent-primary-glow); }
+.exp-format-card strong { font-size: 18px; }
+.exp-format-ext { font-size: 12px; font-weight: 700; color: var(--text-muted); letter-spacing: .5px; margin-top: -4px; }
+.exp-format-card small { font-size: 12.5px; line-height: 1.55; color: var(--text-secondary); margin-top: 4px; }
+.exp-format-icon {
+    width: 50px; height: 50px; border-radius: 14px; display: flex; align-items: center; justify-content: center;
+    font-size: 24px; margin-bottom: 6px;
+}
+.exp-format-icon.is-xlsx { color: var(--accent-secondary-light); background: var(--accent-secondary-glow); }
+.exp-format-icon.is-csv  { color: var(--accent-primary-light);   background: var(--accent-primary-glow); }
+
+.exp-formatpill {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    padding: 10px 16px; border-radius: var(--radius-sm); font-size: 13px; color: var(--text-secondary);
+    background: var(--bg-card); border: 1px solid var(--border-subtle);
+}
+.exp-formatpill strong { color: var(--text-primary); }
+.exp-formatpill i { margin-right: 6px; color: var(--accent-secondary-light); }
+.exp-panel { margin-top: 16px; }
+.exp-panel .imp-fixed-row { margin-top: 0; }
+.exp-breakdown { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 16px; }
+.exp-breakdown-label { font-size: 11.5px; font-weight: 800; letter-spacing: .5px; text-transform: uppercase; color: var(--text-muted); margin-right: 4px; }
+.exp-check { display: flex; align-items: flex-start; gap: 12px; padding: 8px 2px; font-size: 13.5px; color: var(--text-primary); cursor: pointer; }
+.exp-check input { margin-top: 3px; accent-color: var(--accent-primary); }
+.exp-check small { display: block; margin-top: 2px; font-size: 12px; font-weight: 500; color: var(--text-muted); }
+#exp-step2 .imp-fixed-row label { display: flex; flex-direction: column; gap: 6px; font-size: 12.5px; font-weight: 600; color: var(--text-secondary); }
+#exp-back-btn i { margin-right: 6px; }
+
+@media (max-width: 720px) {
+    #export-modal .imp-body { padding: 18px 16px; }
+}
+
+
+/* ============================================================
+   TEMPLATE BUTTON (Import / Export cards) + dialog
+   ============================================================ */
+.card-template-action { display: flex; justify-content: center; margin-top: 16px; }
+.tpl-btn {
+    display: inline-flex; align-items: center; gap: 9px; cursor: pointer;
+    padding: 9px 18px; border-radius: 999px;
+    font-family: 'Inter', sans-serif; font-size: 13px; font-weight: 600;
+    color: var(--accent-primary-light); background: var(--accent-primary-glow);
+    border: 1px solid rgba(59, 130, 246, 0.35); transition: all var(--transition);
+}
+.tpl-btn:hover { background: var(--accent-primary); color: #fff; border-color: var(--accent-primary); transform: translateY(-1px); }
+#template-modal .imp-body { padding: 24px 28px; }
+#template-modal [hidden] { display: none !important; }
+@media (max-width: 720px) { #template-modal .imp-body { padding: 18px 16px; } }

@@ -224,17 +224,20 @@
                     <i class="fas fa-file-export"></i>
                     <h2 class="cert-page-title">Data Export &amp; Import</h2>
                 </div>
-                <p class="cert-page-subtitle">Export records to Excel or import students from an Excel, CSV or PDF file.</p>
+                <p class="cert-page-subtitle">Export students as Excel or CSV, or import them from an Excel, CSV or PDF file.</p>
             </div>
             <div class="cert-page-grid">
                 <!-- Export Card -->
-                <div class="manage-card data-export-card cert-page-card" onclick="exportStudentsToExcel()">
+                <div class="manage-card data-export-card cert-page-card" onclick="openExportDialog()">
                     <div class="card-glow"></div>
                     <div class="m-icon-wrapper data-export-icon">
                         <i class="fas fa-file-excel"></i>
                     </div>
                     <h3 class="card-title">Export Data</h3>
-                    <p class="card-description">Download all records as an Excel file, plus a photo gallery.</p>
+                    <p class="card-description">Export student records as Excel or CSV — all classes, or just one class and section.</p>
+                    <div class="card-template-action" onclick="event.stopPropagation()">
+                        <button type="button" class="tpl-btn" onclick="openTemplateDialog('export')"><i class="fas fa-file-arrow-down"></i> Download template</button>
+                    </div>
                 </div>
                 <!-- Import Card -->
                 <div class="manage-card data-import-card cert-page-card" onclick="document.getElementById('import-file-input').click()">
@@ -244,10 +247,8 @@
                     </div>
                     <h3 class="card-title">Import Data</h3>
                     <p class="card-description">Import students from an Excel, CSV or PDF file and match its columns.</p>
-                    <div class="import-template-links" onclick="event.stopPropagation()">
-                        <span>Need a starting point?</span>
-                        <button type="button" class="imp-link-btn" onclick="downloadImportTemplate('xlsx')"><i class="fas fa-download"></i> Excel template</button>
-                        <button type="button" class="imp-link-btn" onclick="downloadImportTemplate('csv')"><i class="fas fa-download"></i> CSV template</button>
+                    <div class="card-template-action" onclick="event.stopPropagation()">
+                        <button type="button" class="tpl-btn" onclick="openTemplateDialog('import')"><i class="fas fa-file-arrow-down"></i> Download template</button>
                     </div>
                     <input type="file" id="import-file-input" accept=".xlsx,.xlsm,.xls,.ods,.csv,.tsv,.pdf" style="display:none" onchange="importStudentsFromExcel(event)" onclick="event.stopPropagation()">
                 </div>
@@ -1074,6 +1075,77 @@
                     <button type="button" class="btn-ghost" id="imp-step-btn" onclick="toggleImportStep()">Review columns</button>
                     <button type="button" class="btn-primary-submit" id="imp-run-btn" onclick="runStudentImport()">
                         <i class="fas fa-file-import"></i> <span>Import Students</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- TEMPLATE DIALOG: shared by the Import and Export cards — choose Excel or CSV, then it downloads -->
+    <div id="template-modal" class="modal-overlay" style="z-index: 5000;">
+        <div class="modal-container">
+            <div class="modal-header">
+                <h3 id="tpl-title"><i class="fas fa-file-arrow-down"></i> <span>Download Template</span></h3>
+                <button class="close-modal-btn" onclick="closeTemplateDialog()">&times;</button>
+            </div>
+            <div class="modal-body-scroll imp-body">
+                <p class="exp-lead" id="tpl-lead"></p>
+                <div class="exp-format-grid">
+                    <button type="button" class="exp-format-card" onclick="pickTemplateFormat('xlsx')">
+                        <span class="exp-format-icon is-xlsx"><i class="fas fa-file-excel"></i></span>
+                        <strong>Excel</strong><span class="exp-format-ext">.xlsx</span>
+                        <small id="tpl-xlsx-desc"></small>
+                    </button>
+                    <button type="button" class="exp-format-card" onclick="pickTemplateFormat('csv')">
+                        <span class="exp-format-icon is-csv"><i class="fas fa-file-csv"></i></span>
+                        <strong>CSV</strong><span class="exp-format-ext">.csv</span>
+                        <small id="tpl-csv-desc"></small>
+                    </button>
+                </div>
+            </div>
+            <div class="modal-sticky-footer imp-footer">
+                <div class="imp-summary" id="tpl-summary"></div>
+                <div class="imp-footer-btns">
+                    <button type="button" class="btn-ghost" onclick="closeTemplateDialog()">Cancel</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- EXPORT DIALOG: 1) choose Excel or CSV  2) choose class & section  3) download -->
+    <div id="export-modal" class="modal-overlay" style="z-index: 5000;">
+        <div class="modal-container">
+            <div class="modal-header">
+                <h3 id="exp-title"><i class="fas fa-file-export"></i> <span>Export Students</span></h3>
+                <button class="close-modal-btn" onclick="closeExportDialog()">&times;</button>
+            </div>
+            <div class="modal-body-scroll imp-body">
+                <!-- STEP 1 — format -->
+                <div id="exp-step1">
+                    <p class="exp-lead">How would you like to export the student records?</p>
+                    <div class="exp-format-grid">
+                        <button type="button" class="exp-format-card" onclick="exportPickFormat('xlsx')">
+                            <span class="exp-format-icon is-xlsx"><i class="fas fa-file-excel"></i></span>
+                            <strong>Excel</strong><span class="exp-format-ext">.xlsx</span>
+                            <small>A full workbook: student directory, discount breakdown, class summary, fee overview and photo index. Optional photo gallery.</small>
+                        </button>
+                        <button type="button" class="exp-format-card" onclick="exportPickFormat('csv')">
+                            <span class="exp-format-icon is-csv"><i class="fas fa-file-csv"></i></span>
+                            <strong>CSV</strong><span class="exp-format-ext">.csv</span>
+                            <small>One simple file with every student detail. Opens in Excel, Google Sheets and other programs, and can be imported back.</small>
+                        </button>
+                    </div>
+                </div>
+                <!-- STEP 2 — class & section (rendered by JS) -->
+                <div id="exp-step2" hidden></div>
+            </div>
+            <div class="modal-sticky-footer imp-footer">
+                <div class="imp-summary" id="exp-summary"></div>
+                <div class="imp-footer-btns">
+                    <button type="button" class="btn-ghost" id="exp-back-btn" onclick="exportBack()" hidden><i class="fas fa-arrow-left"></i> Back</button>
+                    <button type="button" class="btn-ghost" id="exp-cancel-btn" onclick="closeExportDialog()">Cancel</button>
+                    <button type="button" class="btn-primary-submit" id="exp-run-btn" onclick="runExport()" hidden>
+                        <i class="fas fa-file-export"></i> <span>Export</span>
                     </button>
                 </div>
             </div>
