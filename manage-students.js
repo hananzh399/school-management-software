@@ -1722,6 +1722,11 @@ if (certUploadInput) {
     // each imported row to the backend. Without this it also failed with
     // "apiSaveStudent is not defined" the moment an import was run.
     window.apiSaveStudent = apiSaveStudent;
+    // Sibling helpers the importer (outside this closure) reuses so import
+    // and the manual "Mark as Sibling" flow always follow the same rules.
+    window.isActiveStudent                  = isActiveStudent;
+    window.buildSiblingOfString             = buildSiblingOfString;
+    window.normalizeSiblingFieldsFromServer = normalizeSiblingFieldsFromServer;
 
     /** Remove a student on the backend (StudentController does a soft delete — status -> "dropped"). */
     async function apiDeleteStudent(regNo) {
@@ -10600,6 +10605,108 @@ function _impRowIssues(rec, vals) {
     return out;
 }
 
+/* ---------- 4b. SIBLINGS — same guardian = same family ----------
+   Uses the SAME rule as the admission form's findGuardianMatch(): Guardian Name + Guardian CNIC +
+   Permanent Address + Guardian Role must all match, and only ACTIVE students count (graduated /
+   dropped students are never linked). A row missing any of the four is never auto-linked, so two
+   blanks can't look like "the same guardian". Only families that contain at least one student from
+   THIS import are touched. The family shares one 00X code (siblingGroupId), exactly like the manual
+   "Mark as Sibling" flow. */
+
+function _impIsActive(s) { return window.isActiveStudent ? window.isActiveStudent(s) : (!s.status || s.status === 'active'); }
+
+function _impSiblingKey(s) {
+    const clean = v => String(v == null ? '' : v).toLowerCase().replace(/\s+/g, ' ').trim();
+    const name = clean(s.guardianName), addr = clean(s.permanentAddress), role = clean(s.guardianRole);
+    const cnic = String(s.guardianCnic == null ? '' : s.guardianCnic).replace(/\D/g, '');   /* 12345-1234567-1 and 1234512345671 are the same */
+    if (!name || !addr || !role || !cnic || /^0+$/.test(cnic)) return '';
+    return [name, cnic, addr, role].join('|');
+}
+
+function _impSiblingList(s) {
+    let a = s.hasSiblings;
+    if (typeof a === 'string') { try { a = JSON.parse(a || '[]'); } catch (e) { a = []; } }
+    return Array.isArray(a) ? a : [];
+}
+
+function _impMaxGroupNo(students) {
+    let max = 0;
+    students.forEach(s => {
+        const m = String(s.siblingGroupId || '').match(/^00(\d+)$/);
+        if (m) max = Math.max(max, parseInt(m[1], 10));
+    });
+    return max;
+}
+
+/** Returns [{ groupId, members }] — groupId is '' when the family has no 00X code yet. */
+function _impFindSiblingFamilies(students, isNew) {
+    const act = students.filter(_impIsActive);
+    const byKey = new Map();
+    act.forEach(s => {
+        const k = _impSiblingKey(s);
+        if (!k) return;
+        if (!byKey.has(k)) byKey.set(k, []);
+        byKey.get(k).push(s);
+    });
+    const out = [];
+    byKey.forEach(list => {
+        if (list.length < 2 || !list.some(isNew)) return;
+        /* Family already has a code (a sibling was linked before) → reuse it. */
+        const coded = list.find(m => m.siblingGroupId);
+        const groupId = coded ? String(coded.siblingGroupId) : '';
+        const members = list.filter(m => !m.siblingGroupId || String(m.siblingGroupId) === groupId);
+        /* Also include members already in that group whose details differ slightly (e.g. linked by hand). */
+        if (groupId) act.forEach(x => { if (String(x.siblingGroupId || '') === groupId && !members.includes(x)) members.push(x); });
+        if (members.length < 2 || !members.some(isNew)) return;
+        out.push({ groupId, members });
+    });
+    return out;
+}
+
+/** Runs after the import has saved: links every family that contains a newly imported student. */
+async function _impLinkSiblings(newRegs, out, extra) {
+    const cur = getDatabase();
+    const families = _impFindSiblingFamilies(cur, s => newRegs.has(String(s.regNo)));
+    if (!families.length) return;
+    let groupNo = _impMaxGroupNo(cur);
+
+    for (const fam of families) {
+        const groupId = fam.groupId || `${SIBLING_PREFIX}${++groupNo}`;   /* 001, 002, 003 … */
+        const members = fam.members;
+        const jobs = [];
+        members.forEach(m => {
+            const others = members.filter(x => x !== m);
+            const list = _impSiblingList(m).slice();
+            others.forEach(o => { if (!list.some(e => e && String(e.regNo) === String(o.regNo))) list.push({ name: o.fullName, regNo: o.regNo }); });
+            const names = others.map(o => o.fullName);
+            const siblingOf = typeof window.buildSiblingOfString === 'function' ? window.buildSiblingOfString(names) : names.join(', ');
+            const same = m.isSibling && String(m.siblingGroupId || '') === groupId && (m.siblingOf || '') === siblingOf && _impSiblingList(m).length === list.length;
+            if (!same) jobs.push({ m, patch: { isSibling: true, siblingGroupId: groupId, siblingOf, hasSiblings: list } });
+        });
+
+        let saved = 0;
+        for (const { m, patch } of jobs) {
+            const payload = Object.assign({}, m, patch);
+            delete payload.photo;       /* untouched — the server keeps what it has */
+            delete payload.certData;
+            try {
+                const res = await apiSaveStudent(payload);
+                const back = Object.assign({}, res || {});
+                if (window.normalizeSiblingFieldsFromServer) window.normalizeSiblingFieldsFromServer(back);
+                Object.keys(back).forEach(k => { if ((back[k] === null || back[k] === '') && payload[k] !== undefined && payload[k] !== '') delete back[k]; });
+                Object.assign(m, patch, back, { id: m.id });
+                saved++;
+                if (newRegs.has(String(m.regNo))) out.linked++; else out.existingLinked++;
+            } catch (err) {
+                out.failed++;
+                extra.push({ rowNo: '', sheet: '', name: m.fullName, status: 'Sibling link failed', reason: 'Saved, but could not be linked as a sibling: ' + ((err && err.message) || err) });
+                console.error('Import: could not link sibling', m.regNo, err);
+            }
+        }
+        if (saved) { out.families++; out.ids.push(groupId); }
+    }
+}
+
 function buildImportPlan() {
     const st = importState;
     const db = getDatabase();
@@ -10721,6 +10828,14 @@ function buildImportPlan() {
         u.changes = changes;
     });
 
+    /* Siblings: new students whose guardian matches (name + CNIC + address + role) another active student. */
+    {
+        const newSet = new Set(plan.create);
+        const fams = _impFindSiblingFamilies(db.concat(plan.create), s => newSet.has(s));
+        plan.siblingFamilies = fams.length;
+        plan.siblingStudents = fams.reduce((n, f) => n + f.members.filter(m => newSet.has(m)).length, 0);
+    }
+
     /* Group the data-check findings by kind. */
     const groupUp = list => {
         const groups = new Map();
@@ -10770,6 +10885,7 @@ function refreshImport() {
 
     const notes = [];
     if (plan.update.length)    notes.push(`<span class="imp-pill imp-pill-info"><i class="fas fa-rotate"></i> ${plan.update.length} existing student${plan.update.length === 1 ? '' : 's'} will be updated</span>`);
+    if (plan.siblingStudents)  notes.push(`<span class="imp-pill imp-pill-info"><i class="fas fa-people-roof"></i> ${plan.siblingStudents} new student${plan.siblingStudents === 1 ? '' : 's'} will be linked as siblings (${plan.siblingFamilies} ${plan.siblingFamilies === 1 ? 'family' : 'families'})</span>`);
     if (plan.dupes)            notes.push(`<span class="imp-pill"><i class="fas fa-clone"></i> ${plan.dupes} already exist — skipped</span>`);
     if (plan.noName)           notes.push(`<span class="imp-pill imp-pill-warn"><i class="fas fa-user-slash"></i> ${plan.noName} with no name — skipped</span>`);
     if (plan.noClass)          notes.push(`<span class="imp-pill imp-pill-warn"><i class="fas fa-school-circle-xmark"></i> ${plan.noClass} with no class — skipped</span>`);
@@ -10848,6 +10964,7 @@ async function runStudentImport() {
     const db = getDatabase();
     const result = { added: 0, updated: 0, failed: 0, perClass: {}, sec: {} };
     const extra = [];                 /* failed / not-done rows for the report */
+    const savedNewRegs = new Set();   /* regNos of the NEW students that were really saved (used for sibling linking) */
     const total = plan.create.length + plan.update.length;
     let done = 0;
 
@@ -10883,6 +11000,7 @@ async function runStudentImport() {
             Object.keys(back).forEach(k => { if ((back[k] === null || back[k] === '') && s[k] !== undefined && s[k] !== '') delete back[k]; });
             db.push(Object.assign({}, s, back, { id: s.regNo }));
             result.added++;
+            savedNewRegs.add(String(s.regNo));
             result.perClass[s.studentClass] = (result.perClass[s.studentClass] || 0) + 1;
             const sk = s.section || 'No section';
             (result.sec[s.studentClass] = result.sec[s.studentClass] || {})[sk] = ((result.sec[s.studentClass] || {})[sk] || 0) + 1;
@@ -10923,6 +11041,15 @@ async function runStudentImport() {
         db.forEach(s => { if (!cur.some(x => String(x.regNo) === String(s.regNo))) cur.push(s); });
         saveDatabase(cur);
     }
+
+    /* Sibling linking: students from this file who share a guardian (name + CNIC + address + role) with another
+       active student get the same 00X sibling-group code, "Sibling of …" text and hasSiblings list. */
+    const sibling = { families: 0, linked: 0, existingLinked: 0, failed: 0, ids: [] };
+    if (savedNewRegs.size) {
+        label.textContent = 'Linking siblings…';
+        try { await _impLinkSiblings(savedNewRegs, sibling, extra); }
+        catch (err) { console.error('Import: sibling linking failed', err); }
+    }
     bar.style.width = '100%';
 
     const fileName = st.fileName;
@@ -10943,6 +11070,8 @@ async function runStudentImport() {
         parts.push(`<strong>${result.added} new student${result.added === 1 ? '' : 's'}</strong> imported from <em>${_impEsc(fileName)}</em> — ${byClass}.`);
     }
     if (result.updated)  parts.push(`<strong>${result.updated}</strong> existing student${result.updated === 1 ? '' : 's'} updated.`);
+    if (sibling.linked)  parts.push(`<strong>${sibling.linked}</strong> new student${sibling.linked === 1 ? '' : 's'} linked as siblings in <strong>${sibling.families}</strong> famil${sibling.families === 1 ? 'y' : 'ies'} (Sibling ID: ${sibling.ids.map(_impEsc).join(', ')})${sibling.existingLinked ? `, together with <strong>${sibling.existingLinked}</strong> already-enrolled student${sibling.existingLinked === 1 ? '' : 's'}` : ''}.`);
+    if (sibling.failed)  parts.push(`${sibling.failed} sibling link(s) couldn't be saved — open the student and use Edit Student, or see the report.`);
     if (!result.added && !result.updated) parts.push(`Nothing was imported from <em>${_impEsc(fileName)}</em>.`);
     if (wasStopped)      parts.push(`Import stopped — ${total - done} student${total - done === 1 ? '' : 's'} not imported.`);
     if (skipped) {
@@ -10963,9 +11092,9 @@ async function runStudentImport() {
     if (window._impLastReportCsv) {
         parts.push(`<a href="#" class="imp-report-link" onclick="downloadLastImportReport(); return false;"><i class="fas fa-download"></i> Download report</a>`);
     }
-    showDataIOStatus(parts.join(' '), result.failed ? 'error' : (result.added || result.updated ? 'success' : 'info'));
+    showDataIOStatus(parts.join(' '), (result.failed || sibling.failed) ? 'error' : (result.added || result.updated ? 'success' : 'info'));
     if (typeof showToast === 'function' && (result.added || result.updated)) {
-        showToast('Import Complete', `${result.added} added${result.updated ? `, ${result.updated} updated` : ''}.`, 'success');
+        showToast('Import Complete', `${result.added} added${result.updated ? `, ${result.updated} updated` : ''}${sibling.linked ? `, ${sibling.linked} linked as siblings` : ''}.`, 'success');
     }
     /* Refresh every student view right away (works even if the server can't be reached), then re-sync. */
     if (window.SoftSchoolRefreshStudentViews) window.SoftSchoolRefreshStudentViews();
