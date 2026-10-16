@@ -8684,7 +8684,7 @@ const IMPORT_FIELD_GROUPS = [
         { key: 'phone2', label: 'Secondary Phone',
           aliases: ['phone2', 'secondaryphone', 'alternatephone', 'alternativephone', 'altphone', 'phonealt', 'mobile2', 'contact2', 'othercontact', 'emergencycontact'] },
         { key: 'permanentAddress', label: 'Permanent Address',
-          aliases: ['permanentaddress', 'address', 'homeaddress', 'residentialaddress', 'residence'] },
+          aliases: ['permanentaddress', 'permanentadd', 'address', 'addresses', 'homeaddress', 'residentialaddress', 'residence', 'presentaddress', 'residentaddress', 'fulladdress', 'studentaddress', 'addressline1', 'address1', 'addr', 'homeadd', 'resadd'] },
         { key: 'mailingAddress', label: 'Mailing Address', hint: 'Copies Permanent Address if not matched',
           aliases: ['mailingaddress', 'postaladdress', 'correspondenceaddress', 'currentaddress'] }
     ]},
@@ -9536,6 +9536,14 @@ function _impParseSheet(sheet) {
         /* A row whose first cell starts with # is a note or an example row (like the ones in our templates) — ignore it. */
         const lead = r.map(_impCellText).find(t => t !== '');
         if (lead && lead.charAt(0) === '#') { noteRows++; continue; }
+        /* A row that is itself made of column headings (a second heading line, a repeated heading on a new page,
+           or the heading row picked one row too low) is never a student. */
+        if (!noHeader && f >= 2) {
+            const hits = _impRowHeaderHits(r);
+            const sameAsHeader = r.filter((c, ci) => _impCellText(c) !== '' && _impNorm(_impCellText(c)) === _impNorm(_impCellText(rawHeaders[ci]))).length;
+            if (hits >= 2 && hits >= f * 0.5) { noteRows++; continue; }
+            if (sameAsHeader >= 2 && sameAsHeader >= f * 0.5) { noteRows++; continue; }
+        }
         /* A row with a single cell like "Class 1" is a class heading for the students below it. */
         if (f === 1 && headers.length >= 3) {
             const txt = r.map(_impCellText).find(t => t !== '');
@@ -9769,6 +9777,12 @@ function _impAutoMatch() {
         const cands = _impClassCandidates().filter(c => !taken.has(c.header));
         const pick = ['current', 'class', 'admission'].map(r => cands.find(c => c.role === r)).find(Boolean);
         if (pick) { st.mapping.studentClass = pick.header; st.auto.studentClass = pick.role === 'admission' ? 'admission' : true; }
+    }
+    /* No address heading matched exactly? Take an unused column whose heading is clearly about an address. */
+    if (st.mapping.permanentAddress === undefined) {
+        const taken = new Set(Object.values(st.mapping));
+        const h = st.headers.find(x => !taken.has(x) && /addr|resid|village|mohalla|domicile|location/.test(_impNorm(x)) && !/email|mail\b/.test(_impNorm(x)));
+        if (h) { st.mapping.permanentAddress = h; st.auto.permanentAddress = true; }
     }
     _impInferByContent();
 }
@@ -10330,7 +10344,13 @@ function _impToIsoDate(v) {
         const d = new Date(Math.round((v - 25569) * 86400000));
         return valid(d.getUTCFullYear(), d.getUTCMonth() + 1, d.getUTCDate());
     }
-    const s = String(v).trim();
+    let s = String(v).trim();
+    /* tidy: drop a trailing time ("14/03/2015 00:00:00", "… 12:30 PM"), spaces around separators, "14th" → "14" */
+    s = s.replace(/[\sT]+\d{1,2}:\d{2}(:\d{2})?(\.\d+)?\s*(am|pm)?\s*(z|[+-]\d{2}:?\d{2})?$/i, '')
+         .replace(/\s*([-\/.])\s*/g, '$1')
+         .replace(/(\d)(st|nd|rd|th)\b/gi, '$1')
+         .replace(/,/g, ' ').replace(/\s+/g, ' ').trim();
+    if (/^\d{5}(\.\d+)?$/.test(s)) return _impToIsoDate(parseFloat(s));   /* an Excel date number saved as text */
     let m = s.match(/^(\d{4})[-\/.](\d{1,2})[-\/.](\d{1,2})/);
     if (m) return valid(+m[1], +m[2], +m[3]);
     m = s.match(/^(\d{1,2})[-\/.](\d{1,2})[-\/.](\d{2,4})$/);     /* day-first, like Pakistan */
@@ -10361,17 +10381,24 @@ function _impGender(v) {
     return 'Other';
 }
 function _impGuardianRole(v) {
-    const s = String(v).trim().toLowerCase();
-    if (!s) return '';
-    const table = [
-        [/^(father|dad|baba|abu|walid)$/, 'Father'], [/^(mother|mom|mum|mama|ammi|walida)$/, 'Mother'],
-        [/^(brother|bhai)$/, 'Brother'], [/^(sister|behn|bahan)$/, 'Sister'],
-        [/^(uncle|chacha|mamu|taya|phupha)$/, 'Uncle'],
-        [/^(grand\s?parent|grand\s?father|grand\s?mother|dada|dadi|nana|nani)$/, 'Grandparent'],
-        [/^(legal\s?guardian|guardian)$/, 'Legal Guardian']
-    ];
-    for (const [re, label] of table) if (re.test(s)) return label;
-    return String(v).trim();
+    const raw = String(v == null ? '' : v).trim();
+    if (!raw) return '';
+    /* lower-case, punctuation removed: "S/O", "Son-of", "Father's" → "so", "son of", "fathers" */
+    const s = raw.toLowerCase().replace(/[\/.\-_,()]+/g, ' ').replace(/['’`]s\b/g, '').replace(/\s+/g, ' ').trim();
+    const has = re => re.test(s);
+    /* Order matters: "grandfather" must not become Father, "step mother" is a Mother, … */
+    if (has(/\b(grand\s?(parent|parents|father|mother|pa|ma)|dada|dadi|nana|nani)\b/)) return 'Grandparent';
+    if (has(/\b(legal\s?guardian|guardian|gardian|custodian)\b/)) return 'Legal Guardian';
+    if (has(/\b(mother|mom|mum|mama|mummy|ammi|ami|amma|maa|walida|walidah|mother\s?in\s?law)\b/)) return 'Mother';
+    if (has(/\b(father|dad|daddy|baba|abu|abbu|abba|walid|papa|pita|abbo|baap)\b/)) return 'Father';
+    if (has(/\b(brother|bro|bhai|bhaijan|bhaiya)\b/)) return 'Brother';
+    if (has(/\b(sister|sis|behn|behen|bahan|baji|api|aapa)\b/)) return 'Sister';
+    if (has(/\b(uncle|chacha|chachu|mamu|mamoo|taya|tayya|phupha|phuphi|khala|fufa|khalu)\b/)) return 'Uncle';
+    /* The file says how the STUDENT relates to the guardian ("Son", "Daughter", "S/O", "D/O") —
+       that means the guardian is the father. */
+    if (has(/^(s o|d o|w o|so|do|wo)$/) || has(/\b(son|daughter|beta|beti|child|student|boy|girl|sibling)\b/) ||
+        has(/\b(son|daughter) of\b/) || has(/\b(s o|d o)\b/)) return 'Father';
+    return raw;
 }
 function _impCnic(v) {
     const raw = String(v).trim(), d = raw.replace(/\D/g, '');
@@ -10469,9 +10496,27 @@ function _impCleanRow(rec) {
     set('guardianName', t('guardianName'));
     set('guardianRole', _impGuardianRole(t('guardianRole')));
     set('guardianCnic', _impCnic(t('guardianCnic')));
-    set('phone1', _impPhone(t('phone1')));
-    set('phone2', _impPhone(t('phone2')));
-    set('permanentAddress', t('permanentAddress'));
+    /* Contact numbers: "0300-1234567 | 0311-7654321" → before the bar = primary, after the bar = secondary.
+       Only one number (no bar) → it is saved as BOTH the primary and the secondary contact number. */
+    {
+        const BAR = /\s*[|｜¦]\s*/;
+        const c1 = t('phone1'), c2 = t('phone2');
+        let p1 = '', p2 = '';
+        const src = c1 || c2;
+        if (BAR.test(src)) {
+            const parts = src.split(BAR).map(x => x.trim()).filter(Boolean);
+            p1 = parts[0] || '';
+            p2 = parts[1] || '';
+            if (c1 && c2 && !BAR.test(c2) && !p2) p2 = c2;
+        } else {
+            p1 = c1 || c2;
+            p2 = (c1 && c2) ? c2 : p1;
+        }
+        if (!p2) p2 = p1;
+        set('phone1', _impPhone(p1));
+        set('phone2', _impPhone(p2));
+    }
+    set('permanentAddress', t('permanentAddress') || t('mailingAddress'));
     set('mailingAddress', t('mailingAddress'));
     const tm = t('transportMode');
     if (tm) set('transportMode', /school|provided|^(yes|y|true|1)$/i.test(tm) ? 'School Provided' : 'Private');
@@ -10544,14 +10589,14 @@ function _impRowIssues(rec, vals) {
     }
     if (given('gender') && vals.gender === 'Other' && !/^(o|other|transgender|trans)$/i.test(_impCell(rec, 'gender'))) add('gender', 'is not recognised (saved as Other)');
     ['studentBform', 'guardianCnic'].forEach(k => { if (given(k) && _impCell(rec, k).replace(/\D/g, '').length !== 13) add(k, 'should have 13 digits'); });
-    ['phone1', 'phone2'].forEach(k => { if (given(k) && !/^03\d{2}-\d{7}$/.test(vals[k] || '')) add(k, 'doesn’t look like a mobile number'); });
+    ['phone1', 'phone2'].forEach(k => { if (vals[k] && !/^03\d{2}-\d{7}$/.test(vals[k])) add(k, 'doesn’t look like a mobile number'); });
     ['standardFee', 'admissionFee', 'transportFee', 'tuitionDiscount', 'transportDiscount', 'siblingDiscount'].forEach(k => {
         if (given(k) && !/\d/.test(_impCell(rec, k))) add(k, 'is not a number');
     });
     /* longer than the admission form allows → it was shortened */
     Object.keys(IMP_MAX_LEN).forEach(k => { if (_impCell(rec, k).length > IMP_MAX_LEN[k]) add(k, `was longer than ${IMP_MAX_LEN[k]} characters and was shortened`); });
     /* the admission form requires these — flag what is empty so it can be completed later via Edit Student */
-    IMP_FORM_REQUIRED.forEach(k => { if (!given(k)) add(k, 'is empty', 'missing'); });
+    IMP_FORM_REQUIRED.forEach(k => { if (!given(k) && !(k === 'permanentAddress' && vals.permanentAddress)) add(k, 'is empty', 'missing'); });
     return out;
 }
 
@@ -10806,6 +10851,24 @@ async function runStudentImport() {
     const total = plan.create.length + plan.update.length;
     let done = 0;
 
+    /* Give EVERY new student a unique Registration No. up front. Doing it one by one while saving could hand the
+       same number to two students (when the student list refreshed from the server in between), and the server
+       then overwrote the earlier student with the later one — so fewer students were saved than were counted. */
+    {
+        const live = getDatabase();
+        const temps = [];
+        const reserve = r => { const t = { regNo: r, id: r, _impTemp: true }; live.push(t); temps.push(t); };
+        plan.create.forEach(s => { if (s.regNo) reserve(String(s.regNo)); });
+        plan.create.forEach((s, i) => {
+            if (s.regNo) return;
+            s.regNo = window.generateNextRegistrationNumber
+                ? window.generateNextRegistrationNumber(s.admissionDate)
+                : 'IMP_' + Date.now() + '_' + (i + 1);
+            reserve(s.regNo);
+        });
+        temps.forEach(t => { const k = live.indexOf(t); if (k !== -1) live.splice(k, 1); });
+    }
+
     /* New students — already sorted class by class. */
     for (let i = 0; i < plan.create.length; i++) {
         if (st.stop) break;
@@ -10813,15 +10876,12 @@ async function runStudentImport() {
         done++;
         label.textContent = `${s.studentClass}: saving ${done} of ${total}…`;
         bar.style.width = Math.round((done - 1) / total * 100) + '%';
-        if (!s.regNo) {
-            s.regNo = window.generateNextRegistrationNumber
-                ? window.generateNextRegistrationNumber(s.admissionDate)
-                : 'IMP_' + Date.now() + '_' + done;
-        }
         s.id = s.regNo;
         try {
             const saved = await apiSaveStudent(s);
-            db.push(Object.assign({}, s, saved || {}, { id: s.regNo }));
+            const back = Object.assign({}, saved || {});
+            Object.keys(back).forEach(k => { if ((back[k] === null || back[k] === '') && s[k] !== undefined && s[k] !== '') delete back[k]; });
+            db.push(Object.assign({}, s, back, { id: s.regNo }));
             result.added++;
             result.perClass[s.studentClass] = (result.perClass[s.studentClass] || 0) + 1;
             const sk = s.section || 'No section';
@@ -10858,7 +10918,11 @@ async function runStudentImport() {
         plan.createMeta.slice(Math.min(done, plan.create.length)).forEach(m => extra.push({ rowNo: m.rowNo, sheet: m.sheet, name: m.name, status: 'Not imported', reason: 'You stopped the import before this student was saved' }));
         plan.update.slice(Math.max(0, done - plan.create.length)).forEach(u => extra.push({ rowNo: u.rec.rowNo, sheet: u.rec.sheet, name: u.vals.fullName, status: 'Not imported', reason: 'You stopped the import before this student was updated' }));
     }
-    saveDatabase(db);
+    {   /* merge into the CURRENT list (it may have been refreshed from the server while saving) */
+        const cur = getDatabase();
+        db.forEach(s => { if (!cur.some(x => String(x.regNo) === String(s.regNo))) cur.push(s); });
+        saveDatabase(cur);
+    }
     bar.style.width = '100%';
 
     const fileName = st.fileName;
