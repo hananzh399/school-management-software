@@ -1930,7 +1930,7 @@ if (certUploadInput) {
             // and a fraction of the memory.
             const snapshot = serverStudents.length + '|' + serverStudents.map(s => [
                 s.regNo, s.status, s.fullName, s.studentClass, s.section,
-                s.rollNo, s.netPayable, s.arrears, s.siblingGroupId, s.droppedDate
+                s.rollNo, s.netPayable, s.arrears, s.siblingGroupId, s.isSibling, s.siblingOf, s.droppedDate
             ].join('\u0001')).join('\u0002');
             if (snapshot === lastServerSnapshot) return;
             lastServerSnapshot = snapshot;
@@ -2136,7 +2136,8 @@ if (certUploadInput) {
     window.SoftSchoolLiveSync = {
         start: startLiveSync,
         stop: stopLiveSync,
-        refreshNow: () => syncWithBackend(false)
+        refreshNow: () => syncWithBackend(false),
+        isBusy: () => isSyncing      // lets the importer wait for an in-flight poll
     };
 
     // Refresh immediately the moment the tab regains focus/visibility or the
@@ -10663,6 +10664,13 @@ function _impFindSiblingFamilies(students, isNew) {
     return out;
 }
 
+/** Write fields onto the record that is in the page's CURRENT student list. A background sync can swap that list
+    for fresh copies at any moment, so a reference taken earlier may no longer be the one the tables read. */
+function _impApplyToLive(regNo, fields) {
+    const t = getDatabase().find(s => String(s.regNo) === String(regNo));
+    if (t) Object.assign(t, fields);
+}
+
 /** Runs after the import has saved: links every family that contains a newly imported student. */
 async function _impLinkSiblings(newRegs, out, extra) {
     const cur = getDatabase();
@@ -10694,7 +10702,11 @@ async function _impLinkSiblings(newRegs, out, extra) {
                 const back = Object.assign({}, res || {});
                 if (window.normalizeSiblingFieldsFromServer) window.normalizeSiblingFieldsFromServer(back);
                 Object.keys(back).forEach(k => { if ((back[k] === null || back[k] === '') && payload[k] !== undefined && payload[k] !== '') delete back[k]; });
-                Object.assign(m, patch, back, { id: m.id });
+                delete back.photo; delete back.certData; delete back.id;   /* never touch the photo / B-Form / local id */
+                const fields = Object.assign({}, patch, back);
+                Object.assign(m, fields);
+                out.applied.push({ regNo: m.regNo, fields });
+                _impApplyToLive(m.regNo, fields);
                 saved++;
                 if (newRegs.has(String(m.regNo))) out.linked++; else out.existingLinked++;
             } catch (err) {
@@ -11044,11 +11056,19 @@ async function runStudentImport() {
 
     /* Sibling linking: students from this file who share a guardian (name + CNIC + address + role) with another
        active student get the same 00X sibling-group code, "Sibling of …" text and hasSiblings list. */
-    const sibling = { families: 0, linked: 0, existingLinked: 0, failed: 0, ids: [] };
+    const sibling = { families: 0, linked: 0, existingLinked: 0, failed: 0, ids: [], applied: [] };
+    sibling.applied = [];
     if (savedNewRegs.size) {
         label.textContent = 'Linking siblings…';
+        /* Pause the background sync while links are saved: a poll that lands in the middle replaces the student list
+           with copies, which made the already-enrolled students lose their new sibling link on screen. */
+        const live = window.SoftSchoolLiveSync;
+        if (live && live.stop) live.stop();
+        for (let w = 0; w < 100 && live && live.isBusy && live.isBusy(); w++) await new Promise(r => setTimeout(r, 100));
         try { await _impLinkSiblings(savedNewRegs, sibling, extra); }
         catch (err) { console.error('Import: sibling linking failed', err); }
+        sibling.applied.forEach(a => _impApplyToLive(a.regNo, a.fields));   /* make sure every linked student shows it */
+        if (live && live.start) live.start();
     }
     bar.style.width = '100%';
 
