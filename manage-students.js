@@ -1569,7 +1569,7 @@ if (certUploadInput) {
      */
     const API_STUDENT_FIELDS = [
         'regNo', 'schoolId', 'fullName', 'rollNo', 'studentClass', 'section',
-        'admissionDate', 'gender', 'dob', 'age', 'studentBform',
+        'admissionClass', 'admissionDate', 'gender', 'dob', 'age', 'studentBform',
         'medicalIssues', 'orphanStatus', 'previousSchool', 'previousClass',
         'guardianName', 'guardianRole', 'guardianCnic', 'phone1', 'phone2',
         'permanentAddress', 'mailingAddress', 'standardFee', 'admissionFee',
@@ -2211,6 +2211,14 @@ if (certUploadInput) {
             return;
         }
         Object.assign(studentData, admissionCheck.values);
+
+        // ADMISSION CLASS — a brand-new student's selected class is saved as BOTH
+        // the current class and the Admission Class. Editing never touches an
+        // existing Admission Class (it is not a form field, so the saved value
+        // is kept); promotion changes only the current class.
+        if (!studentData['_editRegNo']) {
+            studentData.admissionClass = studentData.studentClass || '';
+        }
 
         // Standardize properties
         delete studentData['_editRegNo'];
@@ -3303,6 +3311,7 @@ if (certUploadInput) {
                 <div class="rec-field"><span class="rec-flabel">Orphan Status:</span><span class="rec-fvalue">${safeVal(s.orphanStatus)}</span></div>
                 <div class="rec-field"><span class="rec-flabel">Previous School:</span><span class="rec-fvalue">${safeVal(s.previousSchool)}</span></div>
                 <div class="rec-field"><span class="rec-flabel">Previous Class:</span><span class="rec-fvalue">${safeVal(s.previousClass)}</span></div>
+                <div class="rec-field"><span class="rec-flabel">Admission Class:</span><span class="rec-fvalue">${safeVal(s.admissionClass)}</span></div>
                 <div class="rec-field" style="grid-column: span 2;"><span class="rec-flabel">Medical Conditions:</span><span class="rec-fvalue">${safeVal(s.medicalIssues)}</span></div>
                 ${certNoticeHtml}
             </div>
@@ -5288,6 +5297,9 @@ ${pagesHtml}
             if (selectedRegNos.includes(s.regNo)) {
                 const nextClass = getNextClass(s.studentClass);
                 if (nextClass) {
+                    // Keep the Admission Class fixed; students admitted before this
+                    // feature get it filled in from the class they are leaving.
+                    if (!s.admissionClass) s.admissionClass = s.studentClass;
                     s.studentClass = nextClass;
                     s.rollNo = generateClassRollNumber(nextClass);
                     s.promoted = true;
@@ -5661,6 +5673,7 @@ ${pagesHtml}
         let feesUpdatedCount = 0;
         toMove.forEach(s => {
             const classChanged = s.studentClass !== destClass;
+            if (classChanged && !s.admissionClass) s.admissionClass = s.studentClass;   // Admission Class never changes on a move
             if (classChanged) {
                 maxRoll += 1;
                 s.rollNo = String(maxRoll);
@@ -6434,6 +6447,7 @@ ${pagesHtml}
                 <div class="detail-item"><label>Orphan Status</label><span>${safeVal(s.orphanStatus)}</span></div>
                 <div class="detail-item"><label>Previous School Attended</label><span>${safeVal(s.previousSchool)}</span></div>
                 <div class="detail-item"><label>Previous Class</label><span>${safeVal(s.previousClass)}</span></div>
+                <div class="detail-item"><label>Admission Class</label><span>${safeVal(s.admissionClass)}</span></div>
             </div>
 
             <div class="profile-section-title">Guardian & Contact</div>
@@ -8185,7 +8199,7 @@ function _expBuildDirectory(students, mode) {
     const headers = [
         'Reg No', 'Sibling Group ID', 'Full Name', 'Father / Guardian', 'Guardian Role',
         'Guardian CNIC', 'Gender', 'Date of Birth', 'Age', 'Class', 'Section', 'Roll No',
-        'Admission Date', 'Phone 1', 'Phone 2', 'Permanent Address', 'Mailing Address',
+        'Admission Class', 'Admission Date', 'Phone 1', 'Phone 2', 'Permanent Address', 'Mailing Address',
         'Student B-Form No.', 'Medical Issues',
         'Orphan Status', 'Previous School Attended', 'Previous Class',
         'Transport Mode', 'Transport Type', 'Transport Fee (PKR)',
@@ -8233,6 +8247,7 @@ function _expBuildDirectory(students, mode) {
             s.studentClass || s.class       || '',
             s.section                       || '',
             s.rollNo                        || '',
+            s.admissionClass                || '',
             s.admissionDate                 || '',
             s.phone1                        || '',
             s.phone2                        || '',
@@ -8318,7 +8333,7 @@ async function _exportExcelFile(selected, opts) {
         wsDir['!cols'] = [
             { wch: 12 }, { wch: 14 }, { wch: 26 }, { wch: 26 }, { wch: 16 },
             { wch: 18 }, { wch: 10 }, { wch: 14 }, { wch: 7  }, { wch: 14 },
-            { wch: 10 }, { wch: 10 }, { wch: 16 }, { wch: 16 }, { wch: 16 },
+            { wch: 10 }, { wch: 10 }, { wch: 16 }, { wch: 16 }, { wch: 16 }, { wch: 16 },
             { wch: 30 }, { wch: 30 }, { wch: 20 }, { wch: 22 },
             { wch: 16 }, { wch: 26 }, { wch: 16 },
             { wch: 16 }, { wch: 14 }, { wch: 18 },
@@ -8625,6 +8640,8 @@ const IMPORT_FIELD_GROUPS = [
           aliases: ['regno', 'registrationno', 'registrationnumber', 'regnumber', 'reg#', 'studentid', 'admissionno', 'admissionnumber', 'grno', 'grnumber'] },
         { key: 'studentClass', label: 'Class / Grade', required: true, special: 'class',
           aliases: ['class', 'grade', 'classgrade', 'studentclass', 'currentclass', 'classname', 'standard'] },
+        { key: 'admissionClass', label: 'Admission Class', hint: 'The class the student was first admitted in — saved as Admission Class',
+          aliases: ['admissionclass', 'classatadmission', 'classofadmission', 'admittedclass', 'admittedinclass', 'joiningclass', 'classatjoining', 'entryclass', 'enrolmentclass', 'enrollmentclass', 'admissiongrade'] },
         { key: 'section', label: 'Section',
           aliases: ['section', 'sec', 'classsection', 'division'] },
         { key: 'rollNo', label: 'Roll Number', hint: 'Auto-numbered per class if not matched',
@@ -8694,7 +8711,7 @@ const IMPORT_FIELD_GROUPS = [
 const IMPORT_ALL_FIELDS = IMPORT_FIELD_GROUPS.flatMap(g => g.fields);
 const IMP_SKIP = '__skip__', IMP_KEEP = '__keep__';
 /* Limits and required fields copied from the admission form's ADMISSION_SCHEMA, so imported students follow the same rules. */
-const IMP_MAX_LEN = { fullName: 80, guardianName: 80, previousSchool: 120, previousClass: 40, medicalIssues: 300, permanentAddress: 300, mailingAddress: 300 };
+const IMP_MAX_LEN = { fullName: 80, guardianName: 80, previousSchool: 120, previousClass: 40, admissionClass: 40, medicalIssues: 300, permanentAddress: 300, mailingAddress: 300 };
 const IMP_FORM_REQUIRED = ['guardianName', 'studentBform', 'guardianCnic', 'phone1', 'permanentAddress', 'dob'];
 
 /* Everything the mapping screen needs; filled in when a file is analyzed. */
@@ -9220,6 +9237,7 @@ const TEMPLATE_FIELDS = [
       impNote: 'Also understood: 2, 2nd, Class Two, II, Grade 2-A. You can instead pick one class and section on the first import screen.', src: 'The student’s current class', back: 'Yes' },
     { col: 'Section', imp: true, exp: true, req: 'Optional', fmt: 'A section of that class, e.g. A', impNote: 'Can also be chosen on the first import screen.', src: 'The student’s section', back: 'Yes' },
     { col: 'Roll No', imp: true, exp: true, req: 'Optional', fmt: 'Number', impNote: 'Empty → numbered automatically after the last roll number in the class.', src: 'Roll number in the class', back: 'Yes' },
+    { col: 'Admission Class', imp: true, exp: true, req: 'Optional', fmt: 'Class name, e.g. Grade 1 — the class the student was first admitted in', impNote: 'Empty → left blank. Saved as the student’s Admission Class (the current Class is not changed).', src: 'Class at admission', back: 'Yes' },
     { col: 'Admission Date', imp: true, exp: true, req: 'Optional',
       fmtImp: 'Day/Month/Year, e.g. 01/04/2024', fmtExp: 'Year-Month-Day, e.g. 2024-04-01', impNote: 'Empty → today’s date.', src: 'Date of admission', back: 'Yes' },
     { col: 'Phone 1', imp: true, exp: true, req: 'Recommended', fmt: 'Mobile number, e.g. 0300-1234567', impNote: 'Numbers Excel shortened (3001234567) get their leading 0 back.', src: 'Primary phone number', back: 'Yes' },
@@ -9272,6 +9290,7 @@ function _tplExamples(which, mode) {
         'Gender': ['Male', 'Female'], 'Date of Birth': [dob1, dob2],
         'Age': [_impAgeFromDob(iso(2015, 3, 14)), _impAgeFromDob(iso(2014, 11, 2))],
         'Class': [cls1, cls2], 'Section': [sec, sec], 'Roll No': [1, 1],
+        'Admission Class': [cls1, cls2],
         'Admission Date': [date(2024, 4, 1), date(2024, 4, 1)],
         'Phone 1': ['0300-1234567', '0345-7654321'], 'Phone 2': ['', '0312-1112233'],
         'Permanent Address': ['House 5, Street 2, Abbottabad', 'Mohalla Qazian, Abbottabad'],
@@ -10437,6 +10456,7 @@ function _impCleanRow(rec) {
     set('regNo', t('regNo'));
     set('fullName', t('fullName') || [t('firstName'), t('lastName')].filter(Boolean).join(' '));
     set('rollNo', t('rollNo'));
+    set('admissionClass', (() => { const raw = t('admissionClass'); if (!raw) return ''; const m = _impMatchClass(raw); return m.known && m.value ? m.value : raw.trim(); })());
     set('admissionDate', _impToIsoDate(_impRaw(rec, 'admissionDate')));
     set('gender', _impGender(t('gender')));
     set('dob', _impToIsoDate(_impRaw(rec, 'dob')));
@@ -10486,6 +10506,7 @@ function _impResolveClass(rec) {
 function _impBuildNewStudent(vals, cls, section, todayIso) {
     const s = {
         fullName: vals.fullName, studentClass: cls, section: section || '',
+        admissionClass: vals.admissionClass || cls,
         gender: vals.gender || '', dob: vals.dob || '', age: _impAgeFromDob(vals.dob),
         admissionDate: vals.admissionDate || todayIso,
         studentBform: vals.studentBform || '', medicalIssues: vals.medicalIssues || '',
@@ -10641,6 +10662,9 @@ function buildImportPlan() {
     plan.update.forEach(u => {
         const changes = Object.assign({}, u.vals);
         delete changes.regNo;
+        if (!changes.admissionClass && !u.existing.admissionClass && u.existing.studentClass && u.existing.studentClass !== u.cls) {
+            changes.admissionClass = u.existing.studentClass;   // class is changing — remember where they were admitted
+        }
         changes.studentClass = u.cls;
         if (u.section) changes.section = u.section;
         const merged = Object.assign({}, u.existing, changes);
