@@ -566,6 +566,23 @@
                     </div>
                 </div>
 
+                <!-- SECTION 3B: FATHER DETAILS
+                     Only shown when the Guardian Relation is something other than "Father".
+                     When the guardian IS the father, the guardian name/CNIC are saved as the father's. -->
+                <div id="father-details-section" style="display:none;">
+                    <div class="form-section-label"><i class="fas fa-user-tie"></i> Father Details</div>
+                    <div class="form-input-grid">
+                        <div class="form-input-group">
+                            <label>Father Full Name</label>
+                            <input type="text" name="fatherFullName" placeholder="Enter father's legal name">
+                        </div>
+                        <div class="form-input-group">
+                            <label>Father CNIC Number</label>
+                            <input type="text" name="fatherCnic" class="mask-cnic" placeholder="XXXXX-XXXXXXX-X">
+                        </div>
+                    </div>
+                </div>
+
                 <!-- SECTION 4: CONTACTS & DOCUMENTS -->
                 <div class="form-section-label"><i class="fas fa-phone-alt"></i> Contact &amp; Documentation</div>
                 <div class="form-input-grid">

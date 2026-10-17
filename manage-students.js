@@ -614,6 +614,22 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // UI References: Admission Form Elements
     const admissionForm    = document.getElementById('student-admission-form');
+
+    /* Father Details: hidden when the Guardian Relation is "Father" (the guardian's name/CNIC are used
+       as the father's on save); shown when a different relation (Mother, Uncle, …) is chosen. */
+    function syncFatherSection() {
+        const sec  = document.getElementById('father-details-section');
+        const role = admissionForm && admissionForm.querySelector('[name="guardianRole"]');
+        if (!sec || !role) return;
+        const show = !!role.value && role.value !== 'Father';
+        sec.style.display = show ? '' : 'none';
+    }
+    if (admissionForm) {
+        const roleSel = admissionForm.querySelector('[name="guardianRole"]');
+        if (roleSel) roleSel.addEventListener('change', syncFatherSection);
+        admissionForm.addEventListener('reset', () => setTimeout(syncFatherSection, 0));
+        syncFatherSection();
+    }
     const editIdHidden     = document.getElementById('edit-student-id');
     const previewImg       = document.getElementById('student-img-preview');
     const studentPhotoInput= document.getElementById('student-photo');
@@ -1476,8 +1492,11 @@ if (certUploadInput) {
     }
 
     /**
-     * Check if the new student's guardian details match an existing record.
-     * Match criteria: Guardian Name, Guardian CNIC, Permanent Address, Guardian Role.
+     * Check if the new student is a sibling of an existing record.
+     * Match criteria: Father Full Name + Father CNIC ONLY. Guardian name/CNIC/role and
+     * address are deliberately NOT used. Father details must be filled in on BOTH
+     * records and be identical — a blank father name/CNIC never matches, so students
+     * without father details are never offered as siblings.
      *
      * A graduated or dropped-out student is intentionally excluded from this
      * search: once a student has left the school (status !== 'active'), a
@@ -1485,13 +1504,23 @@ if (certUploadInput) {
      * sibling link to them. Siblings should only ever be connected while
      * both records are on the live/active roster.
      */
+    function fatherCnicDigits(value) {
+        return (value || "").toString().replace(/\D/g, "");
+    }
+
+    function fatherDetailsMatch(a, b) {
+        const nameA = normalizeForCompare(a.fatherFullName).replace(/\s+/g, " ");
+        const nameB = normalizeForCompare(b.fatherFullName).replace(/\s+/g, " ");
+        const cnicA = fatherCnicDigits(a.fatherCnic);
+        const cnicB = fatherCnicDigits(b.fatherCnic);
+        if (!nameA || !nameB || !cnicA || !cnicB) return false;
+        return nameA === nameB && cnicA === cnicB;
+    }
+
     function findGuardianMatch(newData, db) {
         return db.find(s =>
             isActiveStudent(s) &&
-            normalizeForCompare(s.guardianName)    === normalizeForCompare(newData.guardianName)    &&
-            normalizeForCompare(s.guardianCnic)    === normalizeForCompare(newData.guardianCnic)    &&
-            normalizeForCompare(s.permanentAddress)=== normalizeForCompare(newData.permanentAddress) &&
-            normalizeForCompare(s.guardianRole)    === normalizeForCompare(newData.guardianRole)
+            fatherDetailsMatch(s, newData)
         ) || null;
     }
 
@@ -1571,7 +1600,8 @@ if (certUploadInput) {
         'regNo', 'schoolId', 'fullName', 'rollNo', 'studentClass', 'section',
         'admissionClass', 'admissionDate', 'gender', 'dob', 'age', 'studentBform',
         'medicalIssues', 'orphanStatus', 'previousSchool', 'previousClass',
-        'guardianName', 'guardianRole', 'guardianCnic', 'phone1', 'phone2',
+        'guardianName', 'guardianRole', 'guardianCnic', 'fatherFullName', 'fatherCnic',
+        'phone1', 'phone2',
         'permanentAddress', 'mailingAddress', 'standardFee', 'admissionFee',
         'tuitionDiscount', 'transportDiscount', 'siblingDiscount',
         'transportMode', 'transportType', 'transportFee', 'netPayable',
@@ -2169,6 +2199,8 @@ if (certUploadInput) {
         guardianName:      SSValidate.rules.name({ required: true, maxLength: 80, label: "Guardian name" }),
         studentBform:      SSValidate.rules.text({ required: true, maxLength: 15, pattern: /^\d{5}-\d{7}-\d$/, patternMessage: "B-Form number must look like XXXXX-XXXXXXX-X.", label: "Student B-Form number" }),
         guardianCnic:      SSValidate.rules.text({ required: true, maxLength: 15, pattern: /^\d{5}-\d{7}-\d$/, patternMessage: "Guardian CNIC must look like XXXXX-XXXXXXX-X.", label: "Guardian CNIC" }),
+        fatherFullName:    SSValidate.rules.name({ required: false, maxLength: 80, label: "Father name" }),
+        fatherCnic:        SSValidate.rules.text({ required: false, maxLength: 15, pattern: /^\d{5}-\d{7}-\d$/, patternMessage: "Father CNIC must look like XXXXX-XXXXXXX-X.", label: "Father CNIC" }),
         medicalIssues:     SSValidate.rules.note({ required: false, maxLength: 300, label: "Medical issues" }),
         previousSchool:    SSValidate.rules.name({ required: false, maxLength: 120, label: "Previous school" }),
         previousClass:     SSValidate.rules.text({ required: false, maxLength: 40, label: "Previous class" }),
@@ -2204,6 +2236,13 @@ if (certUploadInput) {
         const db         = getDatabase();
         const formData   = new FormData(admissionForm);
         const studentData= Object.fromEntries(formData);
+
+        // Guardian IS the father → no separate father fields are shown, so the guardian's
+        // name/CNIC are saved as the father's (this is what sibling detection compares).
+        if (studentData.guardianRole === 'Father') {
+            studentData.fatherFullName = studentData.guardianName || '';
+            studentData.fatherCnic     = studentData.guardianCnic  || '';
+        }
 
         // SECURITY: validate + canonicalize every free-typed field
         // before it touches storage/API/DOM. Rejects the submission
@@ -2454,6 +2493,8 @@ if (certUploadInput) {
            markup (stored/reflected XSS defense). */
         const safeStudentName = SSValidate.escapeHtml(studentData.fullName);
         const safeMatchedName = SSValidate.escapeHtml(matchedName);
+        const safeFatherName  = SSValidate.escapeHtml((matchedStudent && matchedStudent.fatherFullName) || studentData.fatherFullName || '—');
+        const safeFatherCnic  = SSValidate.escapeHtml((matchedStudent && matchedStudent.fatherCnic) || studentData.fatherCnic || '—');
         overlay.innerHTML = `
             <div class="sibling-dialog-box">
                 <div class="sibling-dialog-icon">
@@ -2461,12 +2502,15 @@ if (certUploadInput) {
                 </div>
                 <h3 class="sibling-dialog-title">Sibling Detected</h3>
                 <p class="sibling-dialog-body">
-                    The guardian details for <strong>${safeStudentName}</strong> match an existing record for:
+                    The father details for <strong>${safeStudentName}</strong> match an existing record for:
                 </p>
                 <div class="sibling-match-card">
                     <i class="fas fa-user-graduate"></i>
                     <span>${safeMatchedName}</span>
                 </div>
+                <p class="sibling-dialog-body" style="font-size:0.85rem;margin:6px 0 10px;">
+                    Father: <strong>${safeFatherName}</strong> &nbsp;·&nbsp; CNIC: <strong>${safeFatherCnic}</strong>
+                </p>
                 <p class="sibling-dialog-question">
                     Would you like to register <strong>${safeStudentName}</strong>
                     as a sibling of <strong>${safeMatchedName}</strong>?
@@ -2973,7 +3017,9 @@ if (certUploadInput) {
                     <div class="panel-title">Guardian Details</div>
                     <div class="field" style="margin-bottom:7px;"><span class="f-label">Name:</span><span class="f-value">${esc(studentData.guardianName)}</span></div>
                     <div class="field" style="margin-bottom:7px;"><span class="f-label">Relation:</span><span class="f-value">${esc(studentData.guardianRole)}</span></div>
-                    <div class="field"><span class="f-label">CNIC:</span><span class="f-value">${esc(studentData.guardianCnic)}</span></div>
+                    <div class="field" style="margin-bottom:7px;"><span class="f-label">CNIC:</span><span class="f-value">${esc(studentData.guardianCnic)}</span></div>
+                    <div class="field" style="margin-bottom:7px;"><span class="f-label">Father Name:</span><span class="f-value">${esc(studentData.fatherFullName || '—')}</span></div>
+                    <div class="field"><span class="f-label">Father CNIC:</span><span class="f-value">${esc(studentData.fatherCnic || '—')}</span></div>
                 </div>
                 <div class="panel">
                     <div class="panel-title">Contact Information</div>
@@ -3330,7 +3376,9 @@ if (certUploadInput) {
                     <div class="rec-panel-title">Guardian Details</div>
                     <div class="rec-field" style="margin-bottom:7px;"><span class="rec-flabel">Name:</span><span class="rec-fvalue">${safeVal(s.guardianName)}</span></div>
                     <div class="rec-field" style="margin-bottom:7px;"><span class="rec-flabel">Relation:</span><span class="rec-fvalue">${safeVal(s.guardianRole)}</span></div>
-                    <div class="rec-field"><span class="rec-flabel">CNIC:</span><span class="rec-fvalue">${safeVal(s.guardianCnic)}</span></div>
+                    <div class="rec-field" style="margin-bottom:7px;"><span class="rec-flabel">CNIC:</span><span class="rec-fvalue">${safeVal(s.guardianCnic)}</span></div>
+                    <div class="rec-field" style="margin-bottom:7px;"><span class="rec-flabel">Father Name:</span><span class="rec-fvalue">${safeVal(s.fatherFullName)}</span></div>
+                    <div class="rec-field"><span class="rec-flabel">Father CNIC:</span><span class="rec-fvalue">${safeVal(s.fatherCnic)}</span></div>
                 </div>
                 <div class="rec-panel">
                     <div class="rec-panel-title">Contact Information</div>
@@ -3490,7 +3538,7 @@ if (certUploadInput) {
         });
 
         const rowsHtml = list.length === 0
-            ? `<tr><td colspan="7" class="sl-empty">No student records found for this selection.</td></tr>`
+            ? `<tr><td colspan="9" class="sl-empty">No student records found for this selection.</td></tr>`
             : list.map((s, idx) => {
                 const classSection = `${s.studentClass || '—'}${s.section ? '-' + s.section : ''}`;
                 return `
@@ -3501,6 +3549,8 @@ if (certUploadInput) {
                     <td class="sl-center"><span class="sl-chip">${esc(classSection)}</span></td>
                     <td class="sl-mono">${esc(s.studentBform || '—')}</td>
                     <td class="sl-mono">${esc(s.guardianCnic || '—')}</td>
+                    <td>${esc(s.fatherFullName || '—')}</td>
+                    <td class="sl-mono">${esc(s.fatherCnic || '—')}</td>
                     <td class="sl-mono">${esc(s.phone1 || '—')}</td>
                 </tr>`;
             }).join('');
@@ -3620,6 +3670,8 @@ if (certUploadInput) {
                     <th class="sl-center">Class-Section</th>
                     <th>B-Form / CNIC No.</th>
                     <th>Guardian CNIC</th>
+                    <th>Father Name</th>
+                    <th>Father CNIC</th>
                     <th>Contact No.</th>
                 </tr>
             </thead>
@@ -6017,6 +6069,8 @@ ${pagesHtml}
         }
     });
 
+    syncFatherSection();
+
     // The Lifetime Discount checkbox only dims/enables the expiry-date field
     // via its 'change' listener — setting .checked programmatically above
     // doesn't fire that event, so sync the visual state explicitly here too.
@@ -6461,6 +6515,8 @@ ${pagesHtml}
                 <div class="detail-item"><label>Guardian Name</label><span>${safeVal(s.guardianName)}</span></div>
                 <div class="detail-item"><label>Relation</label><span>${safeVal(s.guardianRole)}</span></div>
                 <div class="detail-item"><label>Guardian CNIC</label><span>${safeVal(s.guardianCnic)}</span></div>
+                <div class="detail-item"><label>Father Name</label><span>${safeVal(s.fatherFullName)}</span></div>
+                <div class="detail-item"><label>Father CNIC</label><span>${safeVal(s.fatherCnic)}</span></div>
                 <div class="detail-item"><label>Contact 1</label><span>${safeVal(s.phone1)}</span></div>
                 <div class="detail-item"><label>Contact 2</label><span>${safeVal(s.phone2)}</span></div>
                 <div class="detail-item full-width-detail"><label>Permanent Address</label><span>${safeVal(s.permanentAddress)}</span></div>
@@ -6780,6 +6836,8 @@ ${pagesHtml}
             line('Age',          s.age) +
             line('Guardian',     s.guardianName) +
             line('Relation',     s.guardianRole) +
+            line('Father Name',  s.fatherFullName) +
+            line('Father CNIC',  s.fatherCnic) +
             line('Contact',      s.phone1) +
             line('Address',      s.permanentAddress) +
             `────────────────────────────────────────\n` +
@@ -8204,7 +8262,7 @@ function _expBuildDirectory(students, mode) {
     const csv = mode === 'csv';
     const headers = [
         'Reg No', 'Sibling Group ID', 'Full Name', 'Father / Guardian', 'Guardian Role',
-        'Guardian CNIC', 'Gender', 'Date of Birth', 'Age', 'Class', 'Section', 'Roll No',
+        'Guardian CNIC', 'Father Name', 'Father CNIC', 'Gender', 'Date of Birth', 'Age', 'Class', 'Section', 'Roll No',
         'Admission Class', 'Admission Date', 'Phone 1', 'Phone 2', 'Permanent Address', 'Mailing Address',
         'Student B-Form No.', 'Medical Issues',
         'Orphan Status', 'Previous School Attended', 'Previous Class',
@@ -8247,6 +8305,8 @@ function _expBuildDirectory(students, mode) {
             s.guardianName || s.fatherName  || '',
             s.guardianRole                  || '',
             s.guardianCnic                  || '',
+            s.fatherFullName                || '',
+            s.fatherCnic                    || '',
             s.gender                        || '',
             s.dob                           || '',
             s.age                           || '',
@@ -8338,7 +8398,7 @@ async function _exportExcelFile(selected, opts) {
         const wsDir   = XLSX.utils.aoa_to_sheet(dirData);
         wsDir['!cols'] = [
             { wch: 12 }, { wch: 14 }, { wch: 26 }, { wch: 26 }, { wch: 16 },
-            { wch: 18 }, { wch: 10 }, { wch: 14 }, { wch: 7  }, { wch: 14 },
+            { wch: 18 }, { wch: 26 }, { wch: 18 }, { wch: 10 }, { wch: 14 }, { wch: 7  }, { wch: 14 },
             { wch: 10 }, { wch: 10 }, { wch: 16 }, { wch: 16 }, { wch: 16 }, { wch: 16 },
             { wch: 30 }, { wch: 30 }, { wch: 20 }, { wch: 22 },
             { wch: 16 }, { wch: 26 }, { wch: 16 },
@@ -8677,12 +8737,18 @@ const IMPORT_FIELD_GROUPS = [
     ]},
     { title: 'Guardian Information', icon: 'fa-users', fields: [
         { key: 'guardianName', label: 'Guardian Full Name',
-          aliases: ['fatherguardian', 'guardianname', 'guardianfullname', 'fathername', 'father', 'guardian', 'parentname', 'parent', 'fatherorguardian', 'nameoffather', 'guardiansname', 'fathersname', 'fatherguardianname', 'fname'] },
+          aliases: ['fatherguardian', 'guardianname', 'guardianfullname', 'father', 'guardian', 'parentname', 'parent', 'fatherorguardian', 'guardiansname', 'fatherguardianname', 'fname'] },
         { key: 'guardianRole', label: 'Guardian Relation / Role',
           aliases: ['guardianrole', 'guardianrelation', 'relation', 'relationship', 'guardianrelationship', 'relationwithstudent'] },
         { key: 'guardianCnic', label: 'Guardian CNIC Number',
-          aliases: ['guardiancnic', 'fathercnic', 'parentcnic', 'cnic', 'guardiannic', 'fathercnicno', 'cnicno', 'cnicnumber', 'fathernic',
-                    'cnicofguardian', 'cnicofparent', 'cnicoffather', 'cnicguardian', 'cnicfather', 'guardianscnic', 'fatherscnic', 'guardiancnicno'] }
+          aliases: ['guardiancnic', 'parentcnic', 'cnic', 'guardiannic', 'cnicno', 'cnicnumber',
+                    'cnicofguardian', 'cnicofparent', 'cnicguardian', 'guardianscnic', 'guardiancnicno'] }
+    ]},
+    { title: 'Father Details', icon: 'fa-user-tie', fields: [
+        { key: 'fatherFullName', label: 'Father Full Name', hint: 'Used to detect siblings',
+          aliases: ['fatherfullname', 'fathername', 'nameoffather', 'fathersname', 'fatherlegalname', 'fatherdetailsname'] },
+        { key: 'fatherCnic', label: 'Father CNIC Number', hint: 'Used to detect siblings',
+          aliases: ['fathercnic', 'fathercnicnumber', 'fathercnicno', 'fathernic', 'cnicoffather', 'cnicfather', 'fatherscnic', 'fatherdetailscnic'] }
     ]},
     { title: 'Contact & Address', icon: 'fa-phone-alt', fields: [
         { key: 'phone1', label: 'Primary Phone',
@@ -8717,7 +8783,7 @@ const IMPORT_FIELD_GROUPS = [
 const IMPORT_ALL_FIELDS = IMPORT_FIELD_GROUPS.flatMap(g => g.fields);
 const IMP_SKIP = '__skip__', IMP_KEEP = '__keep__';
 /* Limits and required fields copied from the admission form's ADMISSION_SCHEMA, so imported students follow the same rules. */
-const IMP_MAX_LEN = { fullName: 80, guardianName: 80, previousSchool: 120, previousClass: 40, admissionClass: 40, medicalIssues: 300, permanentAddress: 300, mailingAddress: 300 };
+const IMP_MAX_LEN = { fullName: 80, guardianName: 80, fatherFullName: 80, previousSchool: 120, previousClass: 40, admissionClass: 40, medicalIssues: 300, permanentAddress: 300, mailingAddress: 300 };
 const IMP_FORM_REQUIRED = ['guardianName', 'studentBform', 'guardianCnic', 'phone1', 'permanentAddress', 'dob'];
 
 /* Everything the mapping screen needs; filled in when a file is analyzed. */
@@ -9233,6 +9299,10 @@ const TEMPLATE_FIELDS = [
       impNote: 'Common words such as Dad, Mom or Guardian are understood.', src: 'The guardian’s relation to the student', back: 'Yes' },
     { col: 'Guardian CNIC', imp: true, exp: true, req: 'Recommended', fmt: '13 digits, written 17101-1234567-1 (dashes are added for you)',
       impNote: 'A value that does not have 13 digits is flagged in the data checks.', src: 'The guardian’s CNIC number', back: 'Yes' },
+    { col: 'Father Name', imp: true, exp: true, req: 'Recommended', fmt: 'Text, up to 80 characters',
+      impNote: 'Siblings are detected ONLY from Father Name + Father CNIC. Empty → the student is never linked as a sibling. If Father / Guardian is empty, this name is used for it.', src: 'The father’s name', back: 'Yes' },
+    { col: 'Father CNIC', imp: true, exp: true, req: 'Recommended', fmt: '13 digits, written 17101-1234567-1 (dashes are added for you)',
+      impNote: 'A value that does not have 13 digits is flagged in the data checks. Empty → the student is never linked as a sibling.', src: 'The father’s CNIC number', back: 'Yes' },
     { col: 'Gender', imp: true, exp: true, req: 'Optional', fmt: 'Male or Female (M / F also understood)', impNote: 'Empty → left blank.', src: 'Gender', back: 'Yes' },
     { col: 'Date of Birth', imp: true, exp: true, req: 'Recommended',
       fmtImp: 'Day/Month/Year, e.g. 14/03/2015 (2015-03-14 also works)', fmtExp: 'Year-Month-Day, e.g. 2015-03-14',
@@ -9293,6 +9363,7 @@ function _tplExamples(which, mode) {
         'Reg No': ['#EXAMPLE-1', '#EXAMPLE-2'], 'Sibling Group ID': ['', ''],
         'Full Name': ['Ali Khan', 'Sara Bibi'], 'Father / Guardian': ['Imran Khan', 'Gul Zaman'],
         'Guardian Role': ['Father', 'Father'], 'Guardian CNIC': ['17101-1234567-1', '17101-7654321-3'],
+        'Father Name': ['Imran Khan', 'Gul Zaman'], 'Father CNIC': ['17101-1234567-1', '17101-7654321-3'],
         'Gender': ['Male', 'Female'], 'Date of Birth': [dob1, dob2],
         'Age': [_impAgeFromDob(iso(2015, 3, 14)), _impAgeFromDob(iso(2014, 11, 2))],
         'Class': [cls1, cls2], 'Section': [sec, sec], 'Roll No': [1, 1],
@@ -10499,9 +10570,11 @@ function _impCleanRow(rec) {
     if (orphan) set('orphanStatus', /^(orphan|yes|y|true|1)$/i.test(orphan) ? 'Orphan' : 'Not Orphan');
     set('previousSchool', t('previousSchool'));
     set('previousClass', t('previousClass'));
-    set('guardianName', t('guardianName'));
+    set('guardianName', t('guardianName') || t('fatherFullName'));
     set('guardianRole', _impGuardianRole(t('guardianRole')));
-    set('guardianCnic', _impCnic(t('guardianCnic')));
+    set('guardianCnic', _impCnic(t('guardianCnic') || t('fatherCnic')));
+    set('fatherFullName', t('fatherFullName'));
+    set('fatherCnic', _impCnic(t('fatherCnic')));
     /* Contact numbers: "0300-1234567 | 0311-7654321" → before the bar = primary, after the bar = secondary.
        Only one number (no bar) → it is saved as BOTH the primary and the secondary contact number. */
     {
@@ -10564,6 +10637,7 @@ function _impBuildNewStudent(vals, cls, section, todayIso) {
         orphanStatus: vals.orphanStatus || 'Not Orphan',
         previousSchool: vals.previousSchool || '', previousClass: vals.previousClass || '',
         guardianName: vals.guardianName || '', guardianRole: vals.guardianRole || '', guardianCnic: vals.guardianCnic || '',
+        fatherFullName: vals.fatherFullName || '', fatherCnic: vals.fatherCnic || '',
         phone1: vals.phone1 || '', phone2: vals.phone2 || '',
         permanentAddress: vals.permanentAddress || '',
         mailingAddress: vals.mailingAddress || vals.permanentAddress || '',
@@ -10594,7 +10668,7 @@ function _impRowIssues(rec, vals) {
         if (y > now || y < now - 30) add('dob', `looks unusual (year ${y})`);
     }
     if (given('gender') && vals.gender === 'Other' && !/^(o|other|transgender|trans)$/i.test(_impCell(rec, 'gender'))) add('gender', 'is not recognised (saved as Other)');
-    ['studentBform', 'guardianCnic'].forEach(k => { if (given(k) && _impCell(rec, k).replace(/\D/g, '').length !== 13) add(k, 'should have 13 digits'); });
+    ['studentBform', 'guardianCnic', 'fatherCnic'].forEach(k => { if (given(k) && _impCell(rec, k).replace(/\D/g, '').length !== 13) add(k, 'should have 13 digits'); });
     ['phone1', 'phone2'].forEach(k => { if (vals[k] && !/^03\d{2}-\d{7}$/.test(vals[k])) add(k, 'doesn’t look like a mobile number'); });
     ['standardFee', 'admissionFee', 'transportFee', 'tuitionDiscount', 'transportDiscount', 'siblingDiscount'].forEach(k => {
         if (given(k) && !/\d/.test(_impCell(rec, k))) add(k, 'is not a number');
@@ -10606,11 +10680,11 @@ function _impRowIssues(rec, vals) {
     return out;
 }
 
-/* ---------- 4b. SIBLINGS — same guardian = same family ----------
-   Uses the SAME rule as the admission form's findGuardianMatch(): Guardian Name + Guardian CNIC +
-   Permanent Address + Guardian Role must all match, and only ACTIVE students count (graduated /
-   dropped students are never linked). A row missing any of the four is never auto-linked, so two
-   blanks can't look like "the same guardian". Only families that contain at least one student from
+/* ---------- 4b. SIBLINGS — same father = same family ----------
+   Uses the SAME rule as the admission form's findGuardianMatch(): Father Full Name + Father CNIC
+   must match (guardian details and address are NOT used), and only ACTIVE students count (graduated /
+   dropped students are never linked). A row missing either is never auto-linked, so two
+   blanks can't look like "the same father". Only families that contain at least one student from
    THIS import are touched. The family shares one 00X code (siblingGroupId), exactly like the manual
    "Mark as Sibling" flow. */
 
@@ -10618,10 +10692,10 @@ function _impIsActive(s) { return window.isActiveStudent ? window.isActiveStuden
 
 function _impSiblingKey(s) {
     const clean = v => String(v == null ? '' : v).toLowerCase().replace(/\s+/g, ' ').trim();
-    const name = clean(s.guardianName), addr = clean(s.permanentAddress), role = clean(s.guardianRole);
-    const cnic = String(s.guardianCnic == null ? '' : s.guardianCnic).replace(/\D/g, '');   /* 12345-1234567-1 and 1234512345671 are the same */
-    if (!name || !addr || !role || !cnic || /^0+$/.test(cnic)) return '';
-    return [name, cnic, addr, role].join('|');
+    const name = clean(s.fatherFullName);
+    const cnic = String(s.fatherCnic == null ? '' : s.fatherCnic).replace(/\D/g, '');   /* 12345-1234567-1 and 1234512345671 are the same */
+    if (!name || !cnic || /^0+$/.test(cnic)) return '';
+    return [name, cnic].join('|');
 }
 
 function _impSiblingList(s) {
