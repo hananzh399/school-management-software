@@ -116,19 +116,36 @@ const SCHOOL_API_BASE_URL = "https://167-86-120-247.sslip.io/api/school";
     const username = session && session.school && session.school.username;
     if (!username) return;
 
+    function invalidate() {
+      clearSession();
+      if (typeof onInvalid === "function") onInvalid();
+    }
+
     fetch(SCHOOL_API_BASE_URL + "/status?username=" + encodeURIComponent(username))
       .then(function (res) {
-        if (res.status === 404) throw new Error("not_found");
-        return res.json();
+        /* Only a 404 definitively means "this school account no longer exists". */
+        if (res.status === 404) return { __invalid: true };
+        /* BUGFIX: any other non-OK reply (429 rate-limited, 500, 502, 503 ...)
+           is a TEMPORARY server problem, not "logged out". It used to be parsed
+           like a real school record and saved over the session, which wiped
+           schoolId and made every page show 0 students / "no logged-in school"
+           until the next login. Keep the working session and try again on the
+           next page load. */
+        if (!res.ok) return null;
+        return res.json().catch(function () { return null; });
       })
       .then(function (school) {
-        if (school.status === "blocked") throw new Error("blocked");
-        // Keep the cached session fresh (locks/limits/plan may have changed).
-        setSession(school);
+        if (!school) return;                              // temporary failure: keep the current session
+        if (school.__invalid) { invalidate(); return; }   // account deleted
+        if (!school.schoolId) return;                     // not a real school record: never store it
+        if (school.status === "blocked") { invalidate(); return; }
+        /* Keep the cached session fresh (locks/limits/plan may have changed). */
+        const cached = getCurrentSchool() || {};
+        setSession(Object.assign({}, cached, school));
       })
       .catch(function () {
-        clearSession();
-        if (typeof onInvalid === "function") onInvalid();
+        /* Network error / offline / server restarting: this is NOT a reason to
+           log anyone out. Keep the session and re-check on the next load. */
       });
   }
 
@@ -270,8 +287,18 @@ const SCHOOL_API_BASE_URL = "https://167-86-120-247.sslip.io/api/school";
   if (!isPublicPage) {
     const session = getSession();
 
-    /* Not logged in at all -> send to the login page. */
-    if (!session || (!session.school && !session.schoolId)) {
+    /* Not logged in at all -> send to the login page.
+       Also treat a session that has a "school" object but no schoolId as
+       not logged in: the old revalidateSession bug could leave
+       {school: {error: "Too many requests..."}} behind, which passed this
+       guard but made every page load with no school (0 students). Sending
+       the person to login repairs it; "Remember me" signs them back in. */
+    const hasUsableSchool = !!(session && (
+      (session.school && session.school.schoolId) ||
+      (!session.school && session.schoolId)
+    ));
+    if (!hasUsableSchool) {
+      clearSession();
       window.location.href = "index.html";
       return;
     }
