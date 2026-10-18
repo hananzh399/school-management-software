@@ -573,3 +573,7 @@
     font-weight: 700;
     color: #17716A;
 }
+
+/* Performance fix: disable blur/glow effects for smoother pages */
+* { backdrop-filter: none !important; }
+.glow-spot { display: none !important; }

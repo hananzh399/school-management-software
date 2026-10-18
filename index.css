@@ -2519,3 +2519,7 @@ section[id], div[id] { scroll-margin-top: 96px; }
 #registerModal .btn-login {
   margin-top: 0.4rem;
 }
+
+/* Performance fix: disable blur/glow effects for smoother pages */
+* { backdrop-filter: none !important; }
+.glow-spot { display: none !important; }

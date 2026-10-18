@@ -1631,3 +1631,7 @@ body, .table-card, .save-bar, .attn-stat-card, .choice-card, .class-card, .kpi-c
 .search-wrap input, .section-trigger, .bulk-btn, .filter-btn {
     transition-property: background-color, border-color, color, box-shadow, transform, filter, opacity;
 }
+
+/* Performance fix: disable blur/glow effects for smoother pages */
+* { backdrop-filter: none !important; }
+.glow-spot { display: none !important; }

@@ -151,3 +151,7 @@ body.am-page .main-header{margin-bottom:10px;padding:10px 0;flex-shrink:0}
   .am-tool span,.am-title h2 span{display:none}
   body.am-page .main-header{padding:6px 0}
 }
+
+/* Performance fix: disable blur/glow effects for smoother pages */
+* { backdrop-filter: none !important; }
+.glow-spot { display: none !important; }

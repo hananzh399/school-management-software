@@ -258,3 +258,7 @@
     body.ex-page .main-content { margin: 0 !important; padding: 0 !important; }
     body.ex-page { background: #fff !important; }
 }
+
+/* Performance fix: disable blur/glow effects for smoother pages */
+* { backdrop-filter: none !important; }
+.glow-spot { display: none !important; }

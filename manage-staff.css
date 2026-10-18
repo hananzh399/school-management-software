@@ -4388,3 +4388,7 @@ body { min-height: 100vh; min-height: 100dvh; }
     .class-assign-row.subject-assign-row .assign-add-btn { grid-column: 1 / -1; }
     .subject-group-name { min-width: 100%; }
 }
+
+/* Performance fix: disable blur/glow effects for smoother pages */
+* { backdrop-filter: none !important; }
+.glow-spot { display: none !important; }

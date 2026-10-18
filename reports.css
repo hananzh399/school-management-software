@@ -1282,3 +1282,7 @@ body.sl-no-scroll { overflow: hidden; }
 @media (prefers-reduced-motion: reduce) {
     .sl-overlay, .sl-modal { transition: none; }
 }
+
+/* Performance fix: disable blur/glow effects for smoother pages */
+* { backdrop-filter: none !important; }
+.glow-spot { display: none !important; }

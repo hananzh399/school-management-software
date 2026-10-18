@@ -451,3 +451,7 @@ table.sa-table { width: 100%; border-collapse: collapse; }
   margin-top: 16px; background: #E0922B; color: #fff; border: none; padding: 11px 22px;
   border-radius: 10px; font-weight: 700; cursor: pointer; font-size: 0.9rem;
 }
+
+/* Performance fix: disable blur/glow effects for smoother pages */
+* { backdrop-filter: none !important; }
+.glow-spot { display: none !important; }

@@ -8684,3 +8684,7 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 
 /* Pending-fees cell: amount on top, short "Paid" note underneath */
 .fee-pending-line { flex-direction: column; align-items: flex-start; gap: 1px; }
+
+/* Performance fix: disable blur/glow effects for smoother pages */
+* { backdrop-filter: none !important; }
+.glow-spot { display: none !important; }
