@@ -4152,7 +4152,7 @@ function _resolveFeeMonthPlan(student, requestedMonthKey) {
  * fee tables already trust for arrears/fines/discounts — so nothing about
  * the underlying calculation logic changes.
  */
-async function getFeeRowFinance(student, monthKey) {
+async function getFeeRowFinance(student, monthKey, localOnly) {
     // BUGFIX — "arrears of past months not working properly": computeFeeBreakdown()
     // always computes the CURRENT fee-billing month's total (it has no month
     // parameter). Every branch below used to run for ANY requested monthKey,
@@ -4186,7 +4186,14 @@ async function getFeeRowFinance(student, monthKey) {
         };
     }
 
-    const finance = await syncStudentFineFromBackend(student, monthKey);
+    // localOnly = draw the row INSTANTLY from data already in the browser
+    // (the status-all cache that is refreshed in the background, plus local
+    // fee computation) instead of waiting for a network round-trip per
+    // student. The caller then re-runs this WITHOUT localOnly in the
+    // background and updates the row if the backend says anything different.
+    const finance = localOnly
+        ? ((_studentFeeStatusMonthKey === monthKey && _studentFeeStatusCache[student.regNo || student.id]) || null)
+        : await syncStudentFineFromBackend(student, monthKey);
 
     // BUGFIX — "Pending Fees row reverts to the OLD fee right after
     // Generate Voucher": Generate Voucher (recordVoucherGeneration) is a
@@ -4370,51 +4377,62 @@ async function renderFees(className) {
         return;
     }
 
-    // Fetch one page of students' fresh backend status in parallel.
-    const fetchPage = (from) => Promise.all(
-        filtered.slice(from, from + FEE_TABLE_PAGE_SIZE).map(st =>
+    const stale = () => myToken !== _feeRenderToken;
+    const tag = (html, idx) => html.replace('<tr', `<tr data-fee-idx="${idx}"`);
+
+    // ---- PHASE 1: draw rows INSTANTLY from local data (no network wait) ----
+    // First 25 appear at once, the rest follow 25 per animation frame.
+    const rowHtmlCache = new Array(filtered.length);
+    for (let from = 0; from < filtered.length; from += FEE_TABLE_PAGE_SIZE) {
+        const to = Math.min(from + FEE_TABLE_PAGE_SIZE, filtered.length);
+        const parts = new Array(to - from);
+        for (let i = from; i < to; i++) {
+            let res;
+            try { res = { ok: true, value: await getFeeRowFinance(filtered[i], monthKey, true) }; }
+            catch (error) { res = { ok: false, error }; }
+            rowHtmlCache[i] = tag(_feeRowHtml(filtered[i], res, monthKey, isAllView), i);
+            parts[i - from] = rowHtmlCache[i];
+        }
+        if (stale()) return;
+
+        const oldFooter = document.getElementById('fee-loading-more-row');
+        if (oldFooter) oldFooter.remove();
+        let html = parts.join('');
+        if (to < filtered.length) {
+            html += `<tr id="fee-loading-more-row"><td colspan="6" style="text-align:center; padding:12px; color:#94a3b8; font-size:0.85rem;">
+                <i class="fas fa-spinner fa-spin"></i> Loading more students... (${to} of ${filtered.length})</td></tr>`;
+        }
+        if (from === 0) tbody.innerHTML = html;
+        else            tbody.insertAdjacentHTML('beforeend', html);
+        filterFeeTable();
+
+        if (to < filtered.length) await new Promise(r => requestAnimationFrame(() => r()));
+        if (stale()) return;
+    }
+
+    // ---- PHASE 2: quietly confirm with the MySQL backend in the background ----
+    // Rows are already on screen; each one is only replaced if the backend's
+    // answer actually changes what it shows (paid amount, fine, status...).
+    const BG_BATCH = 10;
+    for (let from = 0; from < filtered.length; from += BG_BATCH) {
+        const slice = filtered.slice(from, from + BG_BATCH);
+        const results = await Promise.all(slice.map(st =>
             getFeeRowFinance(st, monthKey).then(
                 value => ({ ok: true, value }),
                 error => ({ ok: false, error })
             )
-        )
-    );
-
-    let pending = fetchPage(0);
-    let firstPage = true;
-
-    for (let from = 0; from < filtered.length; from += FEE_TABLE_PAGE_SIZE) {
-        const results = await pending;
-        if (myToken !== _feeRenderToken) return;   // a newer render took over
-
-        // Start fetching the NEXT page now, so it loads while this one draws.
-        const nextFrom = from + FEE_TABLE_PAGE_SIZE;
-        pending = nextFrom < filtered.length ? fetchPage(nextFrom) : null;
-
-        const parts = new Array(results.length);
-        for (let i = 0; i < results.length; i++) {
-            parts[i] = _feeRowHtml(filtered[from + i], results[i], monthKey, isAllView);
+        ));
+        if (stale()) return;
+        let changed = false;
+        for (let j = 0; j < results.length; j++) {
+            const i = from + j;
+            const newHtml = tag(_feeRowHtml(filtered[i], results[j], monthKey, isAllView), i);
+            if (newHtml === rowHtmlCache[i]) continue;
+            rowHtmlCache[i] = newHtml;
+            const oldRow = tbody.querySelector(`tr[data-fee-idx="${i}"]`);
+            if (oldRow) { oldRow.outerHTML = newHtml; changed = true; }
         }
-
-        // Drop the previous "loading more" footer (if any) before appending.
-        const oldFooter = document.getElementById('fee-loading-more-row');
-        if (oldFooter) oldFooter.remove();
-
-        let html = parts.join('');
-        const loadedSoFar = Math.min(nextFrom, filtered.length);
-        if (loadedSoFar < filtered.length) {
-            html += `<tr id="fee-loading-more-row"><td colspan="6" style="text-align:center; padding:12px; color:#94a3b8; font-size:0.85rem;">
-                <i class="fas fa-spinner fa-spin"></i> Loading more students... (${loadedSoFar} of ${filtered.length})</td></tr>`;
-        }
-
-        if (firstPage) { tbody.innerHTML = html; firstPage = false; }
-        else           { tbody.insertAdjacentHTML('beforeend', html); }
-
-        // Keep search text / status filter / chip counts correct as rows arrive.
-        filterFeeTable();
-
-        // Let the browser paint this page before starting on the next one.
-        if (pending) await new Promise(r => requestAnimationFrame(() => r()));
+        if (changed) filterFeeTable();
     }
 }
 
