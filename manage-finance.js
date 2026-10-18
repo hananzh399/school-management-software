@@ -2808,6 +2808,7 @@ function backToClassSelection() {
     document.getElementById('class-selection-view').style.display = 'block';
     document.getElementById('class-student-list-view').style.display = 'none';
     currentFeeClassName = null;
+    _feeRenderToken++;   // stop any still-loading fee pages
 
     // Restore the page-wide monthly totals now that we're back at the
     // class-grid level (no single class is selected anymore).
@@ -4246,18 +4247,116 @@ async function getFeeRowFinance(student, monthKey) {
     };
 }
 
+// PERFORMANCE — progressive loading of the Student Fees table.
+// Same idea as the Manage Students tables: instead of waiting for EVERY
+// student's fee status to come back from the backend before drawing anything
+// (which made big classes / "All Classes" sit on "Syncing with MySQL
+// Database..." for a long time), the table is filled in pages:
+//   first 25 students -> shown immediately,
+//   next 25           -> appended right after (total 50),
+//   ... and so on until every student is on screen.
+// While page N is being drawn, the backend requests for page N+1 are already
+// in flight, so the list keeps growing smoothly without pauses.
+const FEE_TABLE_PAGE_SIZE = 25;
+// Bumped on every renderFees() call (and when leaving the class view) so an
+// older, still-running render can notice it is stale and stop quietly instead
+// of appending rows of the wrong class into the table.
+let _feeRenderToken = 0;
+
+function _feeRowHtml(s, res, monthKey, isAllView) {
+    const studentIdentifier = s.regNo || s.id;
+    try {
+        if (!res || !res.ok) throw (res && res.error) || new Error('Failed to load fee record');
+        const finance = res.value;
+
+        const isPaid = finance.paymentStatus === "Paid";
+        const hasUnpaidFine = finance.fineAmount > 0 && !isMonthlyFeePaid(finance);
+
+        const statusClass = isPaid ? 'fee-paid' : (finance.paidAmount > 0 ? 'fee-pending' : 'fee-overdue');
+
+        const billable = isStudentBillable(s);
+        const voucherRec = getVoucherRecord(studentIdentifier, monthKey);
+
+        let actionsHtml;
+        if (!billable) {
+            actionsHtml = `<span class="fee-status-badge fee-inactive"><i class="fas fa-ban"></i> ${escapeHtml(studentStatusLabel(s))}</span>`;
+        } else if (!voucherRec) {
+            actionsHtml = `
+                <button class="btn-tiny btn-generate-voucher" onclick="handleGenerateSingleVoucher('${escapeForAttr(studentIdentifier)}', '${escapeForAttr(s.fullName)}')">
+                    <i class="fas fa-file-invoice"></i> Generate Voucher
+                </button>`;
+        } else {
+            actionsHtml = `
+                <button class="btn-tiny" onclick="viewVoucher('${finance.regNo}', '${escapeForAttr(finance.studentName)}', ${isPaid})">
+                    <i class="fas fa-eye"></i> View Voucher
+                </button>
+                ${!isPaid ? `
+                    <button class="btn-tiny btn-add-fees" onclick="openAddFeesModal('${finance.regNo}', '${escapeForAttr(finance.studentName)}')">
+                        <i class="fas fa-money-bill-wave"></i> Pay Bill
+                    </button>
+                ` : ''}`;
+        }
+
+        const rowStatus = !voucherRec ? 'notgenerated' : (isPaid ? 'paid' : (finance.paidAmount > 0 ? 'partial' : 'pending'));
+        return `
+            <tr data-fee-status="${rowStatus}">
+                <td><span class="hrk-id-badge">${finance.regNo}</span></td>
+                <td class="fee-name-cell">
+                    <div class="fee-name-line">
+                        <strong title="${escapeHtml(finance.studentName)}">${escapeHtml(finance.studentName)}</strong>
+                        ${isAllView ? `<span class="fee-class-tag">${escapeHtml(_classDisplayLabel(s.studentClass || ''))}${s.section ? ' \u00b7 ' + escapeHtml(s.section) : ''}</span>` : ''}
+                    </div>
+                    ${hasUnpaidFine ? `<div class="fee-fine-line"><i class="fas fa-exclamation-triangle"></i> Unpaid Fine: Rs. ${finance.fineAmount}</div>` : ''}
+                </td>
+                <td class="fee-guardian-cell" title="${escapeHtml(finance.guardianName || '')}">${escapeHtml(finance.guardianName || '-')}</td>
+                <td>
+                    <div class="fee-pending-line">
+                        ${isPaid
+                            ? `<strong style="color:#27ae60">0</strong>`
+                            : `<strong style="color:#c2410c">Rs. ${finance.remainingBalance.toLocaleString()}</strong>
+                               ${finance.paidAmount > 0 ? `<span class="fee-paid-so-far">Paid: Rs. ${Number(finance.paidAmount).toLocaleString()}</span>` : ''}`}
+                    </div>
+                </td>
+                <td>
+                    <span class="fee-status-badge ${statusClass}">${voucherRec ? finance.paymentStatus : 'Not Generated'}</span>
+                    ${(voucherRec && isPaid && getFeePaidDateLabel(s, monthKey))
+                        ? `<div class="fee-paid-date" title="Date this fee was paid"><i class="fas fa-calendar-check"></i> ${escapeHtml(getFeePaidDateLabel(s, monthKey))}</div>`
+                        : ''}
+                </td>
+                <td class="fee-actions-cell">
+                    ${actionsHtml}
+                </td>
+            </tr>
+        `;
+    } catch (err) {
+        console.error("Failed to load row for " + studentIdentifier, err);
+        return `
+            <tr>
+                <td><span class="hrk-id-badge">${escapeHtml(String(studentIdentifier))}</span></td>
+                <td><strong>${escapeHtml(s.fullName || '')}</strong></td>
+                <td colspan="4" style="color:#ef4444; font-size: 0.8rem;">
+                    <i class="fas fa-exclamation-circle"></i> Error loading this student's fee record.
+                </td>
+            </tr>`;
+    }
+}
+
 async function renderFees(className) {
     updateClassFeeStats(className);
 
     const students = getRealStudents();
     const tbody = document.getElementById('fee-table-body');
-    const monthKey = getCurrentFeeMonthKey(); 
-    
+    const monthKey = getCurrentFeeMonthKey();
+
     if(!tbody) return;
-    
-    // Show loading state while syncing with database
+
+    // Any render that was still loading pages for a previous class/refresh
+    // is now stale — this token makes it stop.
+    const myToken = ++_feeRenderToken;
+
+    // Brief loading state — only until the FIRST page of students arrives.
     tbody.innerHTML = "<tr><td colspan='6' style='text-align:center; padding:20px;'><i class='fas fa-spinner fa-spin'></i> Syncing with MySQL Database...</td></tr>";
-    
+
     // BUGFIX — dropped-out/graduated/suspended students were still showing
     // up as rows in the Fees table (just with an "Inactive"-style badge
     // instead of action buttons). They should not appear here at all —
@@ -4267,107 +4366,56 @@ async function renderFees(className) {
 
     if(filtered.length === 0) {
         tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; padding:40px;">No active students found enrolled in <strong>${escapeHtml(feeClassTitle(className))}</strong>.</td></tr>`;
+        _updateFeeFilterChips();
         return;
     }
 
-    let rowsHtml = "";
+    // Fetch one page of students' fresh backend status in parallel.
+    const fetchPage = (from) => Promise.all(
+        filtered.slice(from, from + FEE_TABLE_PAGE_SIZE).map(st =>
+            getFeeRowFinance(st, monthKey).then(
+                value => ({ ok: true, value }),
+                error => ({ ok: false, error })
+            )
+        )
+    );
 
-    // Fetch every student's fresh backend status in small parallel batches
-    // (one at a time was fine for a single class but far too slow for the
-    // All Classes list). Rows are still rendered in the original order.
-    const financeResults = new Array(filtered.length);
-    const BATCH = 8;
-    for (let i = 0; i < filtered.length; i += BATCH) {
-        await Promise.all(filtered.slice(i, i + BATCH).map(async (st, j) => {
-            try { financeResults[i + j] = { ok: true, value: await getFeeRowFinance(st, monthKey) }; }
-            catch (err) { financeResults[i + j] = { ok: false, error: err }; }
-        }));
-    }
+    let pending = fetchPage(0);
+    let firstPage = true;
 
-    // Loop through filtered students and render each with its fetched status
-    for (let idx = 0; idx < filtered.length; idx++) {
-        const s = filtered[idx];
-        const studentIdentifier = s.regNo || s.id;
+    for (let from = 0; from < filtered.length; from += FEE_TABLE_PAGE_SIZE) {
+        const results = await pending;
+        if (myToken !== _feeRenderToken) return;   // a newer render took over
 
-        try {
-            const res = financeResults[idx];
-            if (!res || !res.ok) throw (res && res.error) || new Error('Failed to load fee record');
-            const finance = res.value;
+        // Start fetching the NEXT page now, so it loads while this one draws.
+        const nextFrom = from + FEE_TABLE_PAGE_SIZE;
+        pending = nextFrom < filtered.length ? fetchPage(nextFrom) : null;
 
-            const isPaid = finance.paymentStatus === "Paid";
-            const hasUnpaidFine = finance.fineAmount > 0 && !isMonthlyFeePaid(finance);
-
-            const statusClass = isPaid ? 'fee-paid' : (finance.paidAmount > 0 ? 'fee-pending' : 'fee-overdue');
-
-            const billable = isStudentBillable(s);
-            const voucherRec = getVoucherRecord(studentIdentifier, monthKey);
-
-            let actionsHtml;
-            if (!billable) {
-                actionsHtml = `<span class="fee-status-badge fee-inactive"><i class="fas fa-ban"></i> ${escapeHtml(studentStatusLabel(s))}</span>`;
-            } else if (!voucherRec) {
-                actionsHtml = `
-                    <button class="btn-tiny btn-generate-voucher" onclick="handleGenerateSingleVoucher('${escapeForAttr(studentIdentifier)}', '${escapeForAttr(s.fullName)}')">
-                        <i class="fas fa-file-invoice"></i> Generate Voucher
-                    </button>`;
-            } else {
-                actionsHtml = `
-                    <button class="btn-tiny" onclick="viewVoucher('${finance.regNo}', '${escapeForAttr(finance.studentName)}', ${isPaid})">
-                        <i class="fas fa-eye"></i> View Voucher
-                    </button>
-                    ${!isPaid ? `
-                        <button class="btn-tiny btn-add-fees" onclick="openAddFeesModal('${finance.regNo}', '${escapeForAttr(finance.studentName)}')">
-                            <i class="fas fa-money-bill-wave"></i> Pay Bill
-                        </button>
-                    ` : ''}`;
-            }
-
-            const rowStatus = !voucherRec ? 'notgenerated' : (isPaid ? 'paid' : (finance.paidAmount > 0 ? 'partial' : 'pending'));
-            rowsHtml += `
-                <tr data-fee-status="${rowStatus}">
-                    <td><span class="hrk-id-badge">${finance.regNo}</span></td>
-                    <td class="fee-name-cell">
-                        <div class="fee-name-line">
-                            <strong title="${escapeHtml(finance.studentName)}">${escapeHtml(finance.studentName)}</strong>
-                            ${isAllView ? `<span class="fee-class-tag">${escapeHtml(_classDisplayLabel(s.studentClass || ''))}${s.section ? ' \u00b7 ' + escapeHtml(s.section) : ''}</span>` : ''}
-                        </div>
-                        ${hasUnpaidFine ? `<div class="fee-fine-line"><i class="fas fa-exclamation-triangle"></i> Unpaid Fine: Rs. ${finance.fineAmount}</div>` : ''}
-                    </td>
-                    <td class="fee-guardian-cell" title="${escapeHtml(finance.guardianName || '')}">${escapeHtml(finance.guardianName || '-')}</td>
-                    <td>
-                        <div class="fee-pending-line">
-                            ${isPaid
-                                ? `<strong style="color:#27ae60">0</strong>`
-                                : `<strong style="color:#c2410c">Rs. ${finance.remainingBalance.toLocaleString()}</strong>
-                                   ${finance.paidAmount > 0 ? `<span class="fee-paid-so-far">Paid: Rs. ${Number(finance.paidAmount).toLocaleString()}</span>` : ''}`}
-                        </div>
-                    </td>
-                    <td>
-                        <span class="fee-status-badge ${statusClass}">${voucherRec ? finance.paymentStatus : 'Not Generated'}</span>
-                        ${(voucherRec && isPaid && getFeePaidDateLabel(s, monthKey))
-                            ? `<div class="fee-paid-date" title="Date this fee was paid"><i class="fas fa-calendar-check"></i> ${escapeHtml(getFeePaidDateLabel(s, monthKey))}</div>`
-                            : ''}
-                    </td>
-                    <td class="fee-actions-cell">
-                        ${actionsHtml}
-                    </td>
-                </tr>
-            `;
-        } catch (err) {
-            console.error("Failed to load row for " + studentIdentifier, err);
-            rowsHtml += `
-                <tr>
-                    <td><span class="hrk-id-badge">${studentIdentifier}</span></td>
-                    <td><strong>${s.fullName}</strong></td>
-                    <td colspan="4" style="color:#ef4444; font-size: 0.8rem;">
-                        <i class="fas fa-exclamation-circle"></i> Error loading this student's fee record.
-                    </td>
-                </tr>`;
+        const parts = new Array(results.length);
+        for (let i = 0; i < results.length; i++) {
+            parts[i] = _feeRowHtml(filtered[from + i], results[i], monthKey, isAllView);
         }
+
+        // Drop the previous "loading more" footer (if any) before appending.
+        const oldFooter = document.getElementById('fee-loading-more-row');
+        if (oldFooter) oldFooter.remove();
+
+        let html = parts.join('');
+        const loadedSoFar = Math.min(nextFrom, filtered.length);
+        if (loadedSoFar < filtered.length) {
+            html += `<tr id="fee-loading-more-row"><td colspan="6" style="text-align:center; padding:12px; color:#94a3b8; font-size:0.85rem;">
+                <i class="fas fa-spinner fa-spin"></i> Loading more students... (${loadedSoFar} of ${filtered.length})</td></tr>`;
+        }
+
+        if (firstPage) { tbody.innerHTML = html; firstPage = false; }
+        else           { tbody.insertAdjacentHTML('beforeend', html); }
+
+        // Keep search text / status filter / chip counts correct as rows arrive.
+        filterFeeTable();
+
+        // Let the browser paint this page before starting on the next one.
+        if (pending) await new Promise(r => requestAnimationFrame(() => r()));
     }
-    
-    tbody.innerHTML = rowsHtml;
-    filterFeeTable();
 }
 
 // Status chips (All / Paid / Partial / Pending) shown next to the search box
@@ -4408,9 +4456,12 @@ function filterFeeTable() {
     const rows = tbody.querySelectorAll('tr');
     let visible = 0;
     rows.forEach(r => {
-        // skip the "no students" placeholder row
+        // skip the "no students" / "loading more" placeholder rows
         if (r.children.length < 2) { return; }
-        const text = r.innerText.toLowerCase();
+        // Row text is cached (rows are rebuilt on every render, so the cache
+        // can never go stale) — keeps filtering cheap while the table grows
+        // page by page.
+        const text = (r._feeText || (r._feeText = r.textContent.toLowerCase()));
         const statusOk = statusFilter === 'all' || r.getAttribute('data-fee-status') === statusFilter;
         const match = statusOk && (!q || text.includes(q));
         r.style.display = match ? '' : 'none';
