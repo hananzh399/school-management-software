@@ -1856,10 +1856,10 @@ if (certUploadInput) {
             studentMediaLoaded = true;
 
             if (changed) {
-                withScrollPreserved('student-list-tbody', () => {
+                if (ssIsModalShown('view-modal')) withScrollPreserved('student-list-tbody', () => {
                     if (typeof renderStudentTable === 'function') renderStudentTable();
                 });
-                withScrollPreserved('vo-student-tbody', () => {
+                if (ssIsModalShown('view-only-modal')) withScrollPreserved('vo-student-tbody', () => {
                     if (typeof renderViewOnlyTable === 'function') renderViewOnlyTable();
                 });
             }
@@ -2067,10 +2067,12 @@ if (certUploadInput) {
             saveDatabase(merged);
             updateDashboardStats();
 
-            withScrollPreserved('student-list-tbody', () => {
+            // Only redraw a table that is actually on screen; each one is
+            // rebuilt from scratch the moment its modal/stage is opened.
+            if (ssIsModalShown('view-modal')) withScrollPreserved('student-list-tbody', () => {
                 if (typeof renderStudentTable === 'function') renderStudentTable();
             });
-            withScrollPreserved('vo-student-tbody', () => {
+            if (ssIsModalShown('view-only-modal')) withScrollPreserved('vo-student-tbody', () => {
                 if (typeof renderViewOnlyTable === 'function') renderViewOnlyTable();
             });
 
@@ -4010,117 +4012,74 @@ if (certUploadInput) {
     let _studentTableVisibleCount = STUDENT_TABLE_PAGE_SIZE;
     let _studentTableFilterKey = '';
 
-    window.showMoreStudents = function() {
-        _studentTableVisibleCount += STUDENT_TABLE_PAGE_SIZE;
-        window.renderStudentTable();
-    };
-
-    window.renderStudentTable = function() {
-    const db = getActiveDatabase(); 
-    const tbody = document.getElementById('student-list-tbody');
-    if (!tbody) return;
-
-    tbody.innerHTML = "";
-
-    // Determine filter context
-    const useTabFilter = (updActiveClass !== null && updActiveClass !== ALL_STUDENTS_KEY);
-    const qUnified = (document.getElementById('upd-search-input') ? document.getElementById('upd-search-input').value : '').toLowerCase().trim();
-
-    let filtered = db;
-
-    // 1. Filter by Class
-    if (useTabFilter && updActiveClass) {
-        filtered = filtered.filter(s => s.studentClass === updActiveClass);
+    // PERFORMANCE — shared helpers for the two big tables (Edit + View-only).
+    //
+    // 1. Rows are now built into an ARRAY and written to the DOM with ONE
+    //    innerHTML assignment. The old `tbody.innerHTML += row` re-parsed the
+    //    whole growing table once per student (quadratic) — that is what made
+    //    "All Students" slow to open, and it grows worse with every student.
+    // 2. "Show more" no longer redraws the rows already on screen: it only
+    //    appends the next page with insertAdjacentHTML.
+    // 3. The "Show more" row is watched by an IntersectionObserver, so the next
+    //    100 students load by themselves as you scroll near the bottom (the
+    //    button stays as a fallback).
+    // 4. Typing in the search box is debounced so every keystroke doesn't
+    //    rebuild the table.
+    function ssDebounce(fn, ms) {
+        let t = null;
+        return function () {
+            const args = arguments, ctx = this;
+            clearTimeout(t);
+            t = setTimeout(() => fn.apply(ctx, args), ms);
+        };
+    }
+    function ssIsModalShown(id) {
+        const m = document.getElementById(id);
+        return !!(m && m.style.display && m.style.display !== 'none');
+    }
+    function ssMoreRowHtml(rowId, colCount, remaining, onclick) {
+        return `<tr id="${rowId}"><td colspan="${colCount}" style="text-align:center;padding:18px;">
+            <button type="button" class="btn btn-secondary" onclick="${onclick}()" style="padding:8px 20px;font-size:13px;">
+                Show ${Math.min(remaining, STUDENT_TABLE_PAGE_SIZE)} more <span style="opacity:.65;">(${remaining} remaining)</span>
+            </button></td></tr>`;
+    }
+    const _moreObservers = {};
+    function ssWatchMoreRow(key, rowId, loadFn) {
+        if (_moreObservers[key]) { _moreObservers[key].disconnect(); _moreObservers[key] = null; }
+        const row = document.getElementById(rowId);
+        if (!row || typeof IntersectionObserver === 'undefined') return;
+        const obs = new IntersectionObserver(entries => {
+            if (entries.some(e => e.isIntersecting)) {
+                obs.disconnect();
+                _moreObservers[key] = null;
+                loadFn();
+            }
+        }, { rootMargin: '400px 0px' });
+        obs.observe(row);
+        _moreObservers[key] = obs;
     }
 
-    // 2. Filter by Section
-    if (useTabFilter && updActiveSection && updActiveSection !== 'ALL') {
-        filtered = filtered.filter(s => s.section === updActiveSection);
-    }
+    // ----- Edit table (student-list-tbody) -----
+    let _updState = null;   // { filtered, showClassCol, promoteMode } of the last render
 
-    // 3. Filter by Orphan Status (New Feature)
-    if (updOrphanFilterActive) {
-        filtered = filtered.filter(s => s.orphanStatus === 'Orphan');
-    }
-
-    // 4. Filter by Search Query (Name, ID, Guardian)
-    if (qUnified) {
-        filtered = filtered.filter(s => studentMatchesSearch(s, qUnified));
-    }
-
-    // 5. Sort by Roll Number
-    filtered.sort((a, b) => (parseInt(a.rollNo) || 0) - (parseInt(b.rollNo) || 0));
-
-    // UI Adjustments for Headers
-    const showClassCol = (updActiveClass === ALL_STUDENTS_KEY);
-    const updClassColHeader = document.getElementById('upd-class-col-header');
-    if (updClassColHeader) updClassColHeader.textContent = showClassCol ? 'Class' : 'Section';
-
-    const promoteMode = document.body.classList.contains('promote-mode-active');
-
-    // Reset the visible window whenever the filter context changes, so a new
-    // search or class tab always starts from its first page of results
-    // instead of inheriting however far the previous list had been expanded.
-    const filterKey = [updActiveClass, updActiveSection, updOrphanFilterActive, qUnified, promoteMode].join('|');
-    if (filterKey !== _studentTableFilterKey) {
-        _studentTableFilterKey = filterKey;
-        _studentTableVisibleCount = STUDENT_TABLE_PAGE_SIZE;
-    }
-
-    // Handle Empty State
-    if (filtered.length === 0) {
-        const colCount = promoteMode ? 11 : 10;
-        const emptyMsg = updOrphanFilterActive
-            ? '<i class="fas fa-child" style="font-size:22px;display:block;margin-bottom:10px;opacity:0.6;"></i>No orphan records found.'
-            : 'No matching records found.';
-        tbody.innerHTML = `<tr><td colspan="${colCount}" style="text-align:center;padding:50px;color:#94a3b8;">${emptyMsg}</td></tr>`;
-        return;
-    }
-
-    // Render Rows
-    // Promote mode renders the FULL list on purpose — see the note on
-    // STUDENT_TABLE_PAGE_SIZE above.
-    const totalMatches = filtered.length;
-    const visible = promoteMode ? filtered : filtered.slice(0, _studentTableVisibleCount);
-    visible.forEach((s, idx) => {
+    function updRowHtml(s, idx, showClassCol, promoteMode) {
         const displayId = s.regNo || s.id;
-        // SECURITY: escape at render time (see note above render loop).
+        // SECURITY: escape at render time.
         const siblingTag = (s.isSibling && s.siblingOf)
             ? `<br><span class="sibling-tag"><i class="fas fa-user-friends"></i> Sibling of ${SSValidate.escapeHtml(s.siblingOf)}</span>`
             : '';
-
-        // Checkbox for Promotion Mode
-        // BUGFIX: this used to default to checked only when `!s.promoted`.
-        // `promoted` is set to true the first time a student is promoted and
-        // is never reset afterwards, so in every LATER promotion cycle (e.g.
-        // the following year) every returning student's box started
-        // unchecked — silently excluding them unless the admin happened to
-        // notice and re-check each one by hand. Promote mode should default
-        // to "select everyone currently listed" every time it's opened; the
-        // "Promoted"/"Not Promoted" badge below still shows prior status.
+        // Promote mode defaults to "everyone listed is selected" every time.
         const checkboxCell = promoteMode
             ? `<td><input type="checkbox" class="promote-checkbox" data-regno="${s.regNo}" checked style="width:18px;height:18px;"></td>`
             : '';
-
-        // Status Badge for Promotion Mode
         const statusCell = promoteMode
             ? `<td>${s.promoted
                     ? '<span class="promotion-status-badge promoted"><i class="fas fa-check-circle"></i> Promoted</span>'
                     : '<span class="promotion-status-badge pending"><i class="fas fa-hourglass-half"></i> Not Promoted</span>'}</td>`
             : '';
-
         const classSectionCell = showClassCol
             ? `${s.studentClass || '—'}${s.section ? ' ' + s.section : ''}`
             : (s.section || '—');
-
-        // SECURITY: every value below originates from stored student
-        // records (typed in via the admission form, possibly edited
-        // long before this file's validation existed). HTML-escape
-        // each one at render time — this is the actual XSS defense
-        // (output encoding), independent of whatever validation ran
-        // when the record was created. regNo additionally goes inside
-        // an onclick="...('...')" attribute, so it's also stripped of
-        // quote characters that could break out of that attribute.
         const safeFullName     = SSValidate.escapeHtml(s.fullName);
         const safeGuardianName = SSValidate.escapeHtml(s.guardianName);
         const safeDisplayId    = SSValidate.escapeHtml(displayId);
@@ -4128,8 +4087,7 @@ if (certUploadInput) {
         const safeClassSection = SSValidate.escapeHtml(classSectionCell);
         const safeGender       = SSValidate.escapeHtml(s.gender);
         const safeRegNoAttr    = String(s.regNo || '').replace(/['"\\]/g, '');
-
-        const row = `
+        return `
             <tr class="${s.orphanStatus === 'Orphan' ? 'orphan-highlight' : ''}">
                 ${checkboxCell}
                 <td class="msc-sr-cell">${idx + 1}</td>
@@ -4151,33 +4109,87 @@ if (certUploadInput) {
                         <button class="btn-icon delete" onclick="deleteRecord('${safeRegNoAttr}')" title="Delete"><i class="fas fa-trash-alt"></i></button>
                     </div>
                 </td>
-            </tr>
-        `;
-        tbody.innerHTML += row;
-    });
-
-    // PERFORMANCE FIX — the loop above appends with `tbody.innerHTML += row`,
-    // which makes the browser re-parse and re-build the ENTIRE table body
-    // once per student. That is quadratic work: 100 rows means 100 reparses
-    // of a growing string. Windowing the row count (above) caps how bad that
-    // can get; the remaining append cost is now bounded by the page size.
-
-    // "Show more" footer — only when results were actually truncated.
-    if (!promoteMode && totalMatches > visible.length) {
-        const remaining = totalMatches - visible.length;
-        const colCount = 10;
-        tbody.innerHTML += `
-            <tr>
-                <td colspan="${colCount}" style="text-align:center;padding:18px;">
-                    <button type="button" class="btn btn-secondary" onclick="showMoreStudents()"
-                            style="padding:8px 20px;font-size:13px;">
-                        Show ${Math.min(remaining, STUDENT_TABLE_PAGE_SIZE)} more
-                        <span style="opacity:.65;">(${remaining} remaining)</span>
-                    </button>
-                </td>
             </tr>`;
     }
-};
+
+    window.showMoreStudents = function() {
+        const tbody = document.getElementById('student-list-tbody');
+        if (!tbody || !_updState || _updState.promoteMode) return;
+        const filtered = _updState.filtered;
+        const from = Math.min(_studentTableVisibleCount, filtered.length);
+        _studentTableVisibleCount += STUDENT_TABLE_PAGE_SIZE;
+        const to = Math.min(_studentTableVisibleCount, filtered.length);
+
+        const oldRow = document.getElementById('upd-more-row');
+        if (oldRow) oldRow.remove();
+
+        let html = '';
+        for (let i = from; i < to; i++) html += updRowHtml(filtered[i], i, _updState.showClassCol, false);
+        if (to < filtered.length) html += ssMoreRowHtml('upd-more-row', 10, filtered.length - to, 'showMoreStudents');
+        tbody.insertAdjacentHTML('beforeend', html);
+        if (to < filtered.length) ssWatchMoreRow('upd', 'upd-more-row', window.showMoreStudents);
+    };
+
+    window.renderStudentTable = function() {
+        const db = getActiveDatabase();
+        const tbody = document.getElementById('student-list-tbody');
+        if (!tbody) return;
+
+        const useTabFilter = (updActiveClass !== null && updActiveClass !== ALL_STUDENTS_KEY);
+        const qUnified = (document.getElementById('upd-search-input') ? document.getElementById('upd-search-input').value : '').toLowerCase().trim();
+
+        let filtered = db;
+        if (useTabFilter && updActiveClass) {
+            filtered = filtered.filter(s => s.studentClass === updActiveClass);
+        }
+        if (useTabFilter && updActiveSection && updActiveSection !== 'ALL') {
+            filtered = filtered.filter(s => s.section === updActiveSection);
+        }
+        if (updOrphanFilterActive) {
+            filtered = filtered.filter(s => s.orphanStatus === 'Orphan');
+        }
+        if (qUnified) {
+            filtered = filtered.filter(s => studentMatchesSearch(s, qUnified));
+        }
+        filtered.sort((a, b) => (parseInt(a.rollNo) || 0) - (parseInt(b.rollNo) || 0));
+
+        const showClassCol = (updActiveClass === ALL_STUDENTS_KEY);
+        const updClassColHeader = document.getElementById('upd-class-col-header');
+        if (updClassColHeader) updClassColHeader.textContent = showClassCol ? 'Class' : 'Section';
+
+        const promoteMode = document.body.classList.contains('promote-mode-active');
+
+        // Reset the visible window whenever the filter context changes.
+        const filterKey = [updActiveClass, updActiveSection, updOrphanFilterActive, qUnified, promoteMode].join('|');
+        if (filterKey !== _studentTableFilterKey) {
+            _studentTableFilterKey = filterKey;
+            _studentTableVisibleCount = STUDENT_TABLE_PAGE_SIZE;
+        }
+
+        if (_moreObservers.upd) { _moreObservers.upd.disconnect(); _moreObservers.upd = null; }
+        _updState = { filtered, showClassCol, promoteMode };
+
+        if (filtered.length === 0) {
+            const colCount = promoteMode ? 11 : 10;
+            const emptyMsg = updOrphanFilterActive
+                ? '<i class="fas fa-child" style="font-size:22px;display:block;margin-bottom:10px;opacity:0.6;"></i>No orphan records found.'
+                : 'No matching records found.';
+            tbody.innerHTML = `<tr><td colspan="${colCount}" style="text-align:center;padding:50px;color:#94a3b8;">${emptyMsg}</td></tr>`;
+            return;
+        }
+
+        // Promote mode renders the FULL list on purpose (the promotion flow
+        // reads every .promote-checkbox from the DOM) — but now in one pass.
+        const shown = promoteMode ? filtered.length : Math.min(_studentTableVisibleCount, filtered.length);
+        const parts = new Array(shown);
+        for (let i = 0; i < shown; i++) parts[i] = updRowHtml(filtered[i], i, showClassCol, promoteMode);
+        let html = parts.join('');
+        if (!promoteMode && shown < filtered.length) {
+            html += ssMoreRowHtml('upd-more-row', 10, filtered.length - shown, 'showMoreStudents');
+        }
+        tbody.innerHTML = html;
+        if (!promoteMode && shown < filtered.length) ssWatchMoreRow('upd', 'upd-more-row', window.showMoreStudents);
+    };
 
 
     // ── VIEW-ONLY TABLE (read-only directory with class/section tabs) ─────────
@@ -4345,72 +4357,19 @@ if (certUploadInput) {
     voShowStage('classes');
 };
 
-    window.renderViewOnlyTable = function() {
-    // Refresh the teacher badge if logic exists
-    try { if(typeof voRefreshTeacherBadge === 'function') voRefreshTeacherBadge(); } catch(e) {}
-    
-    const db = getActiveDatabase();
-    const tbody = document.getElementById('vo-student-tbody');
-    if (!tbody) return;
+    // ----- View-only table (vo-student-tbody) — now paginated like the edit table -----
+    let _voVisibleCount = STUDENT_TABLE_PAGE_SIZE;
+    let _voFilterKey = '';
+    let _voState = null;
 
-    tbody.innerHTML = '';
-
-    const qName = (document.getElementById('vo-search-name') ? document.getElementById('vo-search-name').value : '').toLowerCase().trim();
-
-    let filtered = db;
-
-    // 1. Filter by Class
-    if (voActiveClass && voActiveClass !== ALL_STUDENTS_KEY) {
-        filtered = filtered.filter(s => s.studentClass === voActiveClass);
-
-        // 2. Filter by Section
-        if (voActiveSection && voActiveSection !== 'ALL') {
-            filtered = filtered.filter(s => s.section === voActiveSection);
-        }
-    }
-
-    // 3. Filter by Orphan Status (New Feature)
-    if (voOrphanFilterActive) {
-        filtered = filtered.filter(s => s.orphanStatus === 'Orphan');
-    }
-
-    // 4. Filter by Search Query
-    if (qName) {
-        filtered = filtered.filter(s => studentMatchesSearch(s, qName));
-    }
-
-    const voPromoteMode = document.body.classList.contains('vo-promote-mode-active');
-
-    // Handle Empty State
-    if (filtered.length === 0) {
-        const emptyMsg = voOrphanFilterActive
-            ? '<i class="fas fa-child" style="font-size:22px;display:block;margin-bottom:10px;opacity:0.6;"></i>No orphan records found.'
-            : 'No matching records found.';
-        tbody.innerHTML = `<tr><td colspan="${voPromoteMode ? 10 : 8}" style="text-align:center;padding:50px;color:#94a3b8;">${emptyMsg}</td></tr>`;
-        return;
-    }
-
-    // 5. Sort by Roll Number
-    filtered.sort((a, b) => (parseInt(a.rollNo) || 0) - (parseInt(b.rollNo) || 0));
-
-    // UI Adjustments for Headers
-    const showClassCol = (voActiveClass === ALL_STUDENTS_KEY);
-    const voClassColHeader = document.getElementById('vo-class-col-header');
-    if (voClassColHeader) voClassColHeader.textContent = showClassCol ? 'Class' : 'Section';
-
-    // Render Rows
-    filtered.forEach((s, idx) => {
+    function voRowHtml(s, idx, showClassCol, voPromoteMode) {
         const displayId = s.regNo || s.id;
-        // SECURITY: escape at render time (see note above render loop).
         const siblingTag = (s.isSibling && s.siblingOf)
             ? `<br><span class="sibling-tag"><i class="fas fa-user-friends"></i> Sibling of ${SSValidate.escapeHtml(s.siblingOf)}</span>`
             : '';
-        
         const classSectionCell = showClassCol
             ? `${s.studentClass || '—'}${s.section ? ' ' + s.section : ''}`
             : (s.section || '—');
-
-        // SECURITY: same output-encoding as the main table render above.
         const safeFullName     = SSValidate.escapeHtml(s.fullName);
         const safeGuardianName = SSValidate.escapeHtml(s.guardianName);
         const safeDisplayId    = SSValidate.escapeHtml(displayId);
@@ -4418,9 +4377,6 @@ if (certUploadInput) {
         const safeClassSection = SSValidate.escapeHtml(classSectionCell);
         const safeGender       = SSValidate.escapeHtml(s.gender);
         const safeRegNoAttr    = String(s.regNo || '').replace(/['"\\]/g, '');
-
-        // Promote mode (same behaviour as Update Records): every listed
-        // student starts ticked, plus a Promoted / Not Promoted badge.
         const voCheckboxCell = voPromoteMode
             ? `<td><input type="checkbox" class="vo-promote-checkbox" data-regno="${safeRegNoAttr}" checked style="width:18px;height:18px;"></td>`
             : '';
@@ -4429,8 +4385,7 @@ if (certUploadInput) {
                     ? '<span class="promotion-status-badge promoted"><i class="fas fa-check-circle"></i> Promoted</span>'
                     : '<span class="promotion-status-badge pending"><i class="fas fa-hourglass-half"></i> Not Promoted</span>'}</td>`
             : '';
-
-        tbody.innerHTML += `
+        return `
             <tr class="${s.orphanStatus === 'Orphan' ? 'orphan-highlight' : ''}">
                 ${voCheckboxCell}
                 <td class="msc-sr-cell">${idx + 1}</td>
@@ -4452,15 +4407,94 @@ if (certUploadInput) {
                     </div>
                 </td>
             </tr>`;
-    });
-};
+    }
+
+    window.showMoreViewOnlyStudents = function() {
+        const tbody = document.getElementById('vo-student-tbody');
+        if (!tbody || !_voState || _voState.voPromoteMode) return;
+        const filtered = _voState.filtered;
+        const from = Math.min(_voVisibleCount, filtered.length);
+        _voVisibleCount += STUDENT_TABLE_PAGE_SIZE;
+        const to = Math.min(_voVisibleCount, filtered.length);
+
+        const oldRow = document.getElementById('vo-more-row');
+        if (oldRow) oldRow.remove();
+
+        let html = '';
+        for (let i = from; i < to; i++) html += voRowHtml(filtered[i], i, _voState.showClassCol, false);
+        if (to < filtered.length) html += ssMoreRowHtml('vo-more-row', 8, filtered.length - to, 'showMoreViewOnlyStudents');
+        tbody.insertAdjacentHTML('beforeend', html);
+        if (to < filtered.length) ssWatchMoreRow('vo', 'vo-more-row', window.showMoreViewOnlyStudents);
+    };
+
+    window.renderViewOnlyTable = function() {
+        try { if (typeof voRefreshTeacherBadge === 'function') voRefreshTeacherBadge(); } catch(e) {}
+
+        const db = getActiveDatabase();
+        const tbody = document.getElementById('vo-student-tbody');
+        if (!tbody) return;
+
+        const qName = (document.getElementById('vo-search-name') ? document.getElementById('vo-search-name').value : '').toLowerCase().trim();
+
+        let filtered = db;
+        if (voActiveClass && voActiveClass !== ALL_STUDENTS_KEY) {
+            filtered = filtered.filter(s => s.studentClass === voActiveClass);
+            if (voActiveSection && voActiveSection !== 'ALL') {
+                filtered = filtered.filter(s => s.section === voActiveSection);
+            }
+        }
+        if (voOrphanFilterActive) {
+            filtered = filtered.filter(s => s.orphanStatus === 'Orphan');
+        }
+        if (qName) {
+            filtered = filtered.filter(s => studentMatchesSearch(s, qName));
+        }
+
+        const voPromoteMode = document.body.classList.contains('vo-promote-mode-active');
+
+        if (_moreObservers.vo) { _moreObservers.vo.disconnect(); _moreObservers.vo = null; }
+
+        if (filtered.length === 0) {
+            _voState = null;
+            const emptyMsg = voOrphanFilterActive
+                ? '<i class="fas fa-child" style="font-size:22px;display:block;margin-bottom:10px;opacity:0.6;"></i>No orphan records found.'
+                : 'No matching records found.';
+            tbody.innerHTML = `<tr><td colspan="${voPromoteMode ? 10 : 8}" style="text-align:center;padding:50px;color:#94a3b8;">${emptyMsg}</td></tr>`;
+            return;
+        }
+
+        filtered.sort((a, b) => (parseInt(a.rollNo) || 0) - (parseInt(b.rollNo) || 0));
+
+        const showClassCol = (voActiveClass === ALL_STUDENTS_KEY);
+        const voClassColHeader = document.getElementById('vo-class-col-header');
+        if (voClassColHeader) voClassColHeader.textContent = showClassCol ? 'Class' : 'Section';
+
+        // Reset the visible window whenever the filter context changes.
+        const filterKey = [voActiveClass, voActiveSection, voOrphanFilterActive, qName, voPromoteMode].join('|');
+        if (filterKey !== _voFilterKey) {
+            _voFilterKey = filterKey;
+            _voVisibleCount = STUDENT_TABLE_PAGE_SIZE;
+        }
+        _voState = { filtered, showClassCol, voPromoteMode };
+
+        // Promote mode must render everyone (it reads checkboxes from the DOM).
+        const shown = voPromoteMode ? filtered.length : Math.min(_voVisibleCount, filtered.length);
+        const parts = new Array(shown);
+        for (let i = 0; i < shown; i++) parts[i] = voRowHtml(filtered[i], i, showClassCol, voPromoteMode);
+        let html = parts.join('');
+        if (!voPromoteMode && shown < filtered.length) {
+            html += ssMoreRowHtml('vo-more-row', 8, filtered.length - shown, 'showMoreViewOnlyStudents');
+        }
+        tbody.innerHTML = html;
+        if (!voPromoteMode && shown < filtered.length) ssWatchMoreRow('vo', 'vo-more-row', window.showMoreViewOnlyStudents);
+    };
     // Wire view-only search to re-render
     const voSearchEl = document.getElementById('vo-search-name');
-    if (voSearchEl) voSearchEl.addEventListener('input', renderViewOnlyTable);
+    if (voSearchEl) voSearchEl.addEventListener('input', ssDebounce(() => window.renderViewOnlyTable(), 150));
 
     // Wire update-database search bar
     const updSearchEl = document.getElementById('upd-search-input');
-    if (updSearchEl) updSearchEl.addEventListener('input', renderStudentTable);
+    if (updSearchEl) updSearchEl.addEventListener('input', ssDebounce(() => window.renderStudentTable(), 150));
 
     // NOTE: class-card re-rendering when Settings changes classes (even from
     // another tab/device) already happens via refreshClassUI(), called from

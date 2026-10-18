@@ -112,8 +112,6 @@ body {
     width: var(--sidebar-width);
     height: 100vh;
     background: var(--bg-sidebar);
-    backdrop-filter: blur(20px);
-    -webkit-backdrop-filter: blur(20px);
     border-right: 1px solid var(--border-subtle);
     z-index: 100;
     display: flex;
@@ -298,37 +296,34 @@ body {
     position: relative;
 }
 
-/* --- Decorative Glow Spots --- */
+/* --- Decorative Glow Spots ---
+   PERFORMANCE: these used to be `filter: blur(120px)` circles animated forever
+   (glowFloat). Because blurred/backdrop-filtered glass panels sit above them,
+   the browser had to re-blur the whole screen every frame, even while idle,
+   and every modal made it worse. A radial-gradient looks the same soft glow but
+   costs nothing: no filter, no animation, painted once. */
 .glow-spot {
     position: fixed;
     border-radius: 50%;
-    filter: blur(120px);
     pointer-events: none;
     z-index: 0;
-    opacity: 0.5;
+    opacity: 0.6;
 }
 
 .glow-1 {
-    width: 400px;
-    height: 400px;
-    background: var(--accent-primary-glow);
-    top: -100px;
-    right: 10%;
-    animation: glowFloat 8s ease-in-out infinite alternate;
+    width: 640px;
+    height: 640px;
+    background: radial-gradient(circle, var(--accent-primary-glow) 0%, transparent 68%);
+    top: -220px;
+    right: 2%;
 }
 
 .glow-2 {
-    width: 350px;
-    height: 350px;
-    background: var(--accent-secondary-glow);
-    bottom: -80px;
-    left: 30%;
-    animation: glowFloat 10s ease-in-out infinite alternate-reverse;
-}
-
-@keyframes glowFloat {
-    0%   { transform: translate(0, 0) scale(1); }
-    100% { transform: translate(30px, -20px) scale(1.15); }
+    width: 580px;
+    height: 580px;
+    background: radial-gradient(circle, var(--accent-secondary-glow) 0%, transparent 68%);
+    bottom: -200px;
+    left: 24%;
 }
 
 
@@ -707,8 +702,6 @@ body {
     display: flex;
     align-items: center;
     gap: 12px;
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
     transition: all var(--transition);
 }
 
@@ -833,8 +826,6 @@ body {
     cursor: pointer;
     overflow: hidden;
     transition: border-color 0.25s ease, box-shadow 0.25s ease, transform 0.25s ease;
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
     display: flex;
     flex-direction: column;
     gap: 0;
@@ -1030,8 +1021,7 @@ body {
     position: fixed;
     top: 0; left: 0;
     width: 100%; height: 100%;
-    background: rgba(0, 0, 0, 0.65);
-    backdrop-filter: blur(6px);
+    background: rgba(0, 0, 0, 0.78);
     z-index: 2000;
     align-items: flex-start;
     justify-content: center;
@@ -1922,7 +1912,6 @@ select option {
     border-radius: 50px;
     font-size: 0.8rem;
     font-weight: 600;
-    backdrop-filter: blur(4px);
 }
 
 .profile-card-header .hrk-id-badge {
@@ -2214,7 +2203,6 @@ select option {
     top: 0; left: 0;
     width: 100%; height: 100%;
     background: rgba(0, 0, 0, 0.88);
-    backdrop-filter: blur(8px);
     /* Must stack above the profile/slc/character modals (inline z-index: 5000 in the HTML),
        since the B-Form/Certificate viewer is opened FROM WITHIN those modals and needs to
        sit on top of them. Kept below the toast (9999) and sibling dialog (9998) so those
@@ -2345,7 +2333,6 @@ select option {
     top: 0; left: 0;
     width: 100%; height: 100%;
     background: rgba(0, 0, 0, 0.88);
-    backdrop-filter: blur(8px);
     z-index: 6000;
     flex-direction: column;
     align-items: center;
@@ -2400,7 +2387,6 @@ select option {
     top: 0; left: 0;
     width: 100%; height: 100%;
     background: rgba(0, 0, 0, 0.88);
-    backdrop-filter: blur(8px);
     z-index: 6500; /* above the view-only modal, same family as cert/photo viewers */
     align-items: center;
     justify-content: center;
@@ -3134,7 +3120,6 @@ select option {
     position: fixed;
     top: 0; left: 0; width: 100%; height: 100%;
     background: rgba(0, 0, 0, 0.7);
-    backdrop-filter: blur(6px);
     z-index: 9998;
     display: flex;
     align-items: center;
@@ -3278,7 +3263,6 @@ select option {
     position: fixed;
     top: 0; left: 0; width: 100%; height: 100%;
     background: rgba(0, 0, 0, 0.7);
-    backdrop-filter: blur(6px);
     z-index: 9999;
     display: flex;
     align-items: center;
@@ -5382,7 +5366,7 @@ select option {
     .sidebar { width: min(var(--sidebar-width), 86vw); }
 
     /* ---------- Decorative glow: heavy blur = janky scrolling on phones ---------- */
-    .glow-spot { width: 240px; height: 240px; filter: blur(80px); animation: none; }
+    .glow-spot { width: 320px; height: 320px; }
 
     /* ---------- Header ---------- */
     .main-header { gap: 10px; padding: 14px 0; margin-bottom: 18px; }
