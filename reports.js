@@ -244,6 +244,26 @@ function _getSchoolId() {
 
 const REPORTS_BACKEND_ORIGIN = 'https://167-86-120-247.sslip.io';
 
+// MEDIA TOKEN — photos stored as files (photos/uuid.jpg) are shown through
+// GET /api/students/{regNo}/photo. An <img> cannot send the login header, so
+// the server issues a short-lived, school-bound token that is appended as
+// ?mt=… (see SchoolSessionService#issueMediaToken on the backend).
+let _reportsMediaToken = '';
+async function _reportsRefreshMediaToken() {
+    const schoolId = _getSchoolId();
+    if (!schoolId) return _reportsMediaToken;
+    try {
+        const res = await fetch(`${REPORTS_BACKEND_ORIGIN}/api/students/media-token?schoolId=${encodeURIComponent(schoolId)}`);
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const data = await res.json();
+        if (data && data.token) _reportsMediaToken = data.token;
+    } catch (e) {
+        console.warn('[media] token unavailable:', e && e.message ? e.message : e);
+    }
+    return _reportsMediaToken;
+}
+setInterval(() => { _reportsRefreshMediaToken(); }, 40 * 60 * 1000);
+
 function _reportsArray(data, keys = []) {
     if (Array.isArray(data)) return data;
     if (!data || typeof data !== 'object') return [];
@@ -440,6 +460,7 @@ function _reportsAttendanceMap(data) {
 
 async function loadReportsDataFromBackend() {
     const months = _reportsMonthKeys();
+    _reportsRefreshMediaToken(); // photo URLs need the token; runs in parallel, never blocks
     const [
         studentsData,
         staffData,
@@ -1678,7 +1699,14 @@ function _stuPick(s, keys) {
 }
 function _stuPhoto(s) {
     const p = s.photo || s.image || s.avatar || s.picture || s.profilePic || s.profilePhoto;
-    return (typeof p === 'string' && /^(data:image|https?:\/\/|\/)/.test(p)) ? p : '';
+    if (typeof p !== 'string') return '';
+    // Stored as a file on the server -> tokenised image URL.
+    if (/^photos\//.test(p) && (s.regNo || s.id)) {
+        let url = `${REPORTS_BACKEND_ORIGIN}/api/students/${encodeURIComponent(s.regNo || s.id)}/photo?schoolId=${encodeURIComponent(_getSchoolId())}`;
+        if (_reportsMediaToken) url += '&mt=' + encodeURIComponent(_reportsMediaToken);
+        return url;
+    }
+    return /^(data:image|https?:\/\/|\/)/.test(p) ? p : '';
 }
 function _stuPrettyKey(k) {
     return k.replace(/([a-z0-9])([A-Z])/g, '$1 $2').replace(/[_-]+/g, ' ')

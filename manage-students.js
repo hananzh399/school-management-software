@@ -261,6 +261,84 @@ const SYNC_API_BASE = `${BACKEND_ORIGIN}/api/students/sync`;
 // caches on disk so a second visit costs no network at all.
 const LIST_API_BASE = `${BACKEND_ORIGIN}/api/students/list`;
 
+// ── MEDIA TOKEN ────────────────────────────────────────────────────────────
+// An <img src="…/api/students/{regNo}/photo"> request is made by the browser
+// itself and CANNOT carry the Authorization header that the patched fetch()
+// adds to every API call, so the server answered 401 and every photo stayed
+// blank once photos lived in files instead of inline base64. The server now
+// gives this page a short-lived, school-bound "media token"
+// (GET /api/students/media-token, authenticated normally) that is appended as
+// ?mt=… to the two image URLs. It is refreshed in the background before it
+// expires. If the endpoint is unavailable, URLs are simply left as they were.
+let SS_MEDIA_TOKEN = '';
+let SS_MEDIA_TOKEN_PROMISE = null;
+
+async function ssRefreshMediaToken() {
+    const schoolId = getCurrentSchoolId();
+    if (!schoolId) return SS_MEDIA_TOKEN;
+    try {
+        const res = await fetch(`${API_BASE}/media-token?schoolId=${encodeURIComponent(schoolId)}`);
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const data = await res.json();
+        if (data && data.token) SS_MEDIA_TOKEN = data.token;
+    } catch (e) {
+        console.warn('[media] token unavailable:', e && e.message ? e.message : e);
+    }
+    return SS_MEDIA_TOKEN;
+}
+
+function ssEnsureMediaToken() {
+    if (SS_MEDIA_TOKEN) return Promise.resolve(SS_MEDIA_TOKEN);
+    if (!SS_MEDIA_TOKEN_PROMISE) {
+        SS_MEDIA_TOKEN_PROMISE = ssRefreshMediaToken().finally(() => { SS_MEDIA_TOKEN_PROMISE = null; });
+    }
+    return SS_MEDIA_TOKEN_PROMISE;
+}
+
+// Tokens last 60 minutes on the server; renew every 40.
+setInterval(() => { ssRefreshMediaToken(); }, 40 * 60 * 1000);
+document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') ssRefreshMediaToken();
+});
+
+/** Adds / replaces ?mt= on our own photo & B-Form URLs. Anything else is returned unchanged. */
+function ssWithMediaToken(url) {
+    if (!SS_MEDIA_TOKEN || typeof url !== 'string') return url;
+    if (!/\/api\/students\/[^/?#]+\/(photo|bform)(\?|$)/.test(url)) return url;
+    try {
+        const u = new URL(url, window.location.href);
+        u.searchParams.set('mt', SS_MEDIA_TOKEN);
+        return u.toString();
+    } catch (e) {
+        return url;
+    }
+}
+
+function ssDataUriToBlob(dataUri) {
+    const comma = dataUri.indexOf(',');
+    const mime = ((dataUri.slice(0, comma).match(/^data:([^;,]+)/)) || [])[1] || 'application/octet-stream';
+    const bin = atob(dataUri.slice(comma + 1));
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    return new Blob([bytes], { type: mime });
+}
+
+/** Uploads one file to /files/photo or /files/bform and returns the stored relative path. */
+async function ssUploadStudentFile(fileOrBlob, kind /* 'photo' | 'bform' */, filename) {
+    const schoolId = getCurrentSchoolId();
+    if (!schoolId) throw new Error('No school session.');
+    const fd = new FormData();
+    fd.append('file', fileOrBlob, filename);
+    const res = await fetch(`${API_BASE}/files/${kind}?schoolId=${encodeURIComponent(schoolId)}`, {
+        method: 'POST',
+        body: fd
+    });
+    if (!res.ok) throw new Error(`Upload failed (HTTP ${res.status})`);
+    const data = await res.json();
+    if (!data || !data.path) throw new Error('Upload returned no path.');
+    return data.path;
+}
+
 /**
  * URL of one student's photo, served as real image bytes by
  * StudentController#getStudentPhoto (not base64 text in a JSON payload).
@@ -312,7 +390,7 @@ function studentBformUrl(student, schoolId) {
     if (!student) return '';
     const regNo = student.regNo || student.id;
     if (!regNo) return '';
-    return `${API_BASE}/${encodeURIComponent(regNo)}/bform?schoolId=${encodeURIComponent(schoolId || '')}`;
+    return ssWithMediaToken(`${API_BASE}/${encodeURIComponent(regNo)}/bform?schoolId=${encodeURIComponent(schoolId || '')}`);
 }
 
 /**
@@ -328,12 +406,17 @@ function studentBformUrl(student, schoolId) {
  */
 function resolveStoredFileSrc(rawValue, regNo, schoolId, kind /* 'photo' | 'bform' */) {
     if (!rawValue) return '';
-    if (rawValue.startsWith('data:') || rawValue.startsWith('http://') || rawValue.startsWith('https://')) {
+    if (rawValue.startsWith('data:')) {
         return rawValue;
+    }
+    if (rawValue.startsWith('http://') || rawValue.startsWith('https://')) {
+        // Our own /photo and /bform URLs get the current media token (a token
+        // baked into an older stored URL is replaced, never reused).
+        return ssWithMediaToken(rawValue);
     }
     if (!regNo) return '';
     const endpoint = kind === 'bform' ? 'bform' : 'photo';
-    return `${API_BASE}/${encodeURIComponent(regNo)}/${endpoint}?schoolId=${encodeURIComponent(schoolId || '')}`;
+    return ssWithMediaToken(`${API_BASE}/${encodeURIComponent(regNo)}/${endpoint}?schoolId=${encodeURIComponent(schoolId || '')}`);
 }
 
 /**
@@ -747,6 +830,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // used to come from localStorage, which Settings no longer writes to).
     // Then start polling in the background so this page never needs a manual
     // browser reload to pick up changes made elsewhere (see startLiveSync()).
+    ssEnsureMediaToken(); // photo/B-Form URLs need it; runs in parallel, never blocks the page
     Promise.all([syncWithBackend(), fetchClassConfigsFromServer(), fetchStaffFromServer()]).then(() => {
         refreshClassUI();
         startLiveSync();
@@ -1218,13 +1302,20 @@ document.addEventListener('DOMContentLoaded', () => {
             const compressedBase64 = await compressImage(file, 500, 0.8);
             previewImg.src = compressedBase64; // local preview
 
-            // REVERTED — BASE64 STORAGE: the compressed image IS what gets
-            // sent as Student.photo now, no disk upload involved. Kept the
-            // same "uploadedPath" dataset flag/name so the rest of the save
-            // flow below (which only checks whether it's present) needs no
-            // further changes.
-            previewImg.dataset.uploadedPath = compressedBase64;
-            showToast("Photo Ready", "Photo attached.", "success");
+            // FILE STORAGE: upload the compressed image to the server and
+            // keep only the returned short path ("photos/uuid.jpg") as
+            // Student.photo. If the upload fails for any reason, fall back to
+            // sending the inline base64 exactly like before, so saving a
+            // student is never blocked and no photo is ever lost.
+            try {
+                const photoBlob = ssDataUriToBlob(compressedBase64);
+                previewImg.dataset.uploadedPath = await ssUploadStudentFile(photoBlob, 'photo', 'photo.jpg');
+                showToast("Photo Ready", "Photo attached.", "success");
+            } catch (uploadErr) {
+                console.warn('Photo upload failed, keeping inline copy:', uploadErr);
+                previewImg.dataset.uploadedPath = compressedBase64;
+                showToast("Photo Ready", "Photo attached (saved inline).", "success");
+            }
         })();
     });
 }
@@ -1243,19 +1334,30 @@ if (certUploadInput) {
             }
             showToast("Processing", "Optimizing document...", "info");
 
-            // REVERTED — BASE64 STORAGE: certData is the file's own base64
-            // content again, not a relative server path. Images are
-            // compressed the same way as before (1600px keeps B-Form text
-            // sharp); PDFs can't go through a canvas so they're read as
-            // base64 as-is via fileToDataUri.
+            // FILE STORAGE: the compressed image (1600px keeps B-Form text
+            // sharp) or the PDF is uploaded as a real file and only the
+            // returned path ("bforms/uuid.pdf") is saved as certData. If the
+            // upload fails, the inline base64 is used instead (old behaviour)
+            // so the document is never lost.
             try {
-                let dataUri;
-                if (file.type !== 'application/pdf') {
-                    dataUri = await compressImage(file, 1600, 0.7);
-                } else {
-                    dataUri = await fileToDataUri(file);
+                let dataUri = null;
+                let storedValue;
+                const isPdfFile = file.type === 'application/pdf';
+                try {
+                    if (isPdfFile) {
+                        storedValue = await ssUploadStudentFile(file, 'bform', 'bform.pdf');
+                    } else {
+                        dataUri = await compressImage(file, 1600, 0.7);
+                        storedValue = await ssUploadStudentFile(ssDataUriToBlob(dataUri), 'bform', 'bform.jpg');
+                    }
+                } catch (uploadErr) {
+                    console.warn('B-Form upload failed, keeping inline copy:', uploadErr);
+                    if (!dataUri) {
+                        dataUri = isPdfFile ? await fileToDataUri(file) : await compressImage(file, 1600, 0.7);
+                    }
+                    storedValue = dataUri;
                 }
-                certDataHidden.value = dataUri;
+                certDataHidden.value = storedValue;
                 // A new file was just attached — the "already on file" note now
                 // refers to a stale/replaced document, so hide it.
                 if (certUploadStatus) certUploadStatus.style.display = 'none';
@@ -8404,6 +8506,40 @@ function _exportCsvFile(students, opts) {
     }
 }
 
+/** Replaces stored file paths/URLs on photo + certData with embedded data: URIs (5 downloads at a time). */
+async function ssInlineMediaForExport(students) {
+    const schoolId = getCurrentSchoolId();
+    const toDataUri = async (url) => {
+        try {
+            const res = await fetch(url);
+            if (!res.ok) return '';
+            const blob = await res.blob();
+            return await fileToDataUri(blob);
+        } catch (e) {
+            return '';
+        }
+    };
+    const out = students.map(s => Object.assign({}, s));
+    let next = 0;
+    const worker = async () => {
+        while (next < out.length) {
+            const s = out[next++];
+            const regNo = s.regNo || s.id;
+            if (!regNo) continue;
+            const base = `${API_BASE}/${encodeURIComponent(regNo)}`;
+            const q = `?schoolId=${encodeURIComponent(schoolId || '')}`;
+            if (s.photo && !String(s.photo).startsWith('data:')) {
+                s.photo = await toDataUri(`${base}/photo${q}`);
+            }
+            if (s.certData && !String(s.certData).startsWith('data:')) {
+                s.certData = await toDataUri(`${base}/bform${q}`);
+            }
+        }
+    };
+    await Promise.all(Array.from({ length: 5 }, worker));
+    return out;
+}
+
 async function _exportExcelFile(selected, opts) {
     if (typeof XLSX === 'undefined') {
         return { ok: false, error: 'Excel library not loaded yet. Please wait a moment and try again.' };
@@ -8420,6 +8556,12 @@ async function _exportExcelFile(selected, opts) {
                 return full ? Object.assign({}, s, { photo: full.photo, certData: full.certData }) : s;
             });
         }
+    }
+
+    /* The downloaded gallery .html is opened later, offline, from the user's disk, so its images must be
+       EMBEDDED. Photos / B-Forms stored as files are fetched (authenticated) and inlined here. */
+    if (opts.gallery) {
+        students = await ssInlineMediaForExport(students);
     }
 
     try {

@@ -3752,14 +3752,55 @@ function computeFeeBreakdown(s) {
 //     opened before the background prefetch finishes still gets a photo.
 // financePhotoUrl() itself just returns whatever real value has landed on
 // s.photo (base64 or a legacy http(s) URL) — never a /photo URL.
+// MEDIA TOKEN — once a photo lives in a file on the server (photos/uuid.jpg)
+// instead of inline base64, the voucher's <img> must load it from
+// GET /api/students/{regNo}/photo. A plain <img> cannot send the login
+// header, so the server hands out a short-lived, school-bound token
+// (GET /api/students/media-token) that is appended as ?mt=… . See
+// SchoolSessionService#issueMediaToken on the backend.
+let _finMediaToken = '';
+let _finMediaTokenPromise = null;
+async function _finRefreshMediaToken() {
+    const schoolId = getCurrentSchoolId();
+    if (!schoolId) return _finMediaToken;
+    try {
+        const res = await fetch(`${STUDENTS_API_BASE}/media-token?schoolId=${encodeURIComponent(schoolId)}`);
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const data = await res.json();
+        if (data && data.token) _finMediaToken = data.token;
+    } catch (e) {
+        console.warn('[media] token unavailable:', e && e.message ? e.message : e);
+    }
+    return _finMediaToken;
+}
+function _finEnsureMediaToken() {
+    if (_finMediaToken) return Promise.resolve(_finMediaToken);
+    if (!_finMediaTokenPromise) {
+        _finMediaTokenPromise = _finRefreshMediaToken().finally(() => { _finMediaTokenPromise = null; });
+    }
+    return _finMediaTokenPromise;
+}
+setInterval(() => { _finRefreshMediaToken(); }, 40 * 60 * 1000);
+
 function financePhotoUrl(s) {
-    return (s && s.photo) ? s.photo : '';
+    const p = s && s.photo;
+    if (!p) return '';
+    // Stored as a file on the server: build the (tokenised) image URL.
+    if (/^(photos|bforms)\//.test(p)) {
+        const regNo = s.regNo || s.id;
+        if (!regNo) return '';
+        let url = `${STUDENTS_API_BASE}/${encodeURIComponent(regNo)}/photo?schoolId=${encodeURIComponent(getCurrentSchoolId())}`;
+        if (_finMediaToken) url += '&mt=' + encodeURIComponent(_finMediaToken);
+        return url;
+    }
+    return p; // legacy base64 data URI or http(s) URL — unchanged
 }
 
 let _financePhotosLoaded = false;
 let _financePhotosLoading = false;
 async function loadFinancePhotosInBackground() {
     if (_financePhotosLoaded || _financePhotosLoading) return;
+    _finEnsureMediaToken(); // in parallel with the roster fetch below
     const schoolId = getCurrentSchoolId();
     if (!schoolId) return;
     _financePhotosLoading = true;
@@ -3791,6 +3832,7 @@ async function loadFinancePhotosInBackground() {
 // the same GET /{regNo}?schoolId=... endpoint Manage Students' "View"
 // already uses, not the whole roster.
 async function ensureStudentPhotoLoaded(student) {
+    await _finEnsureMediaToken(); // a stored-file photo needs the token to render
     if (!student || student.photo) return; // already have something usable
     const regNo = student.regNo || student.id;
     if (!regNo) return;
