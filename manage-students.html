@@ -812,6 +812,57 @@
                         <button id="vo-orphan-filter-btn" class="btn-secondary btn-sm-upd" onclick="toggleVoOrphanFilter()" aria-pressed="false" title="Show only students with orphan status">
         <i class="fas fa-child"></i> Show Orphans Only
     </button>
+
+                        <!-- SORT BY: button + small pop-up section with multi-select options -->
+                        <div class="vo-sort-wrap" id="vo-sort-wrap">
+                            <button type="button" id="vo-sort-btn" class="btn-secondary btn-sm-upd" onclick="toggleVoSortPanel(event)" aria-haspopup="true" aria-expanded="false" aria-controls="vo-sort-panel" title="Sort / filter students by gender, age or record status">
+                                <i class="fas fa-arrow-down-wide-short"></i> Sort By
+                                <span id="vo-sort-count" class="vo-sort-count" hidden>0</span>
+                                <i class="fas fa-chevron-down vo-sort-caret"></i>
+                            </button>
+                            <div id="vo-sort-panel" class="vo-sort-panel" hidden role="group" aria-label="Sort students">
+                                <div class="vo-sort-group">
+                                    <div class="vo-sort-group-title"><i class="fas fa-venus-mars"></i> Gender</div>
+                                    <label class="vo-sort-opt"><input type="checkbox" id="vo-gender-toggle" onchange="voSortChanged()"><span>Sort by gender</span></label>
+                                    <!-- Appears only while "Sort by gender" is ticked — pick ONE -->
+                                    <div class="vo-sort-sub vo-sort-sub--blue" id="vo-gender-sub" hidden>
+                                        <div class="vo-sort-sub-title">Choose one</div>
+                                        <div class="vo-sort-sub-grid">
+                                            <label class="vo-sort-opt"><input type="radio" name="vo-gender-pick" data-group="gender" value="Male" onchange="voSortChanged()"><span><i class="fas fa-mars"></i> Male</span></label>
+                                            <label class="vo-sort-opt"><input type="radio" name="vo-gender-pick" data-group="gender" value="Female" onchange="voSortChanged()"><span><i class="fas fa-venus"></i> Female</span></label>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="vo-sort-group">
+                                    <div class="vo-sort-group-title"><i class="fas fa-cake-candles"></i> Age (years)</div>
+                                    <div class="vo-sort-age-grid">
+                                        <label class="vo-sort-opt"><input type="checkbox" data-group="age" value="0-5" onchange="voSortChanged()"><span>0 – 5</span></label>
+                                        <label class="vo-sort-opt"><input type="checkbox" data-group="age" value="5-10" onchange="voSortChanged()"><span>5 – 10</span></label>
+                                        <label class="vo-sort-opt"><input type="checkbox" data-group="age" value="10-15" onchange="voSortChanged()"><span>10 – 15</span></label>
+                                        <label class="vo-sort-opt"><input type="checkbox" data-group="age" value="15+" onchange="voSortChanged()"><span>15 +</span></label>
+                                    </div>
+                                </div>
+                                <div class="vo-sort-group">
+                                    <div class="vo-sort-group-title"><i class="fas fa-clipboard-check"></i> Record Status</div>
+                                    <label class="vo-sort-opt"><input type="checkbox" data-group="record" value="missing" onchange="voSortChanged()"><span>Missing details</span></label>
+                                    <!-- Appears only while "Missing details" is ticked -->
+                                    <div class="vo-sort-sub" id="vo-missing-sub" hidden>
+                                        <div class="vo-sort-sub-title">Which pictures are missing?</div>
+                                        <div class="vo-sort-sub-grid">
+                                            <label class="vo-sort-opt"><input type="checkbox" data-group="missingFields" value="photo" onchange="voSortChanged()"><span>Photo</span></label>
+                                            <label class="vo-sort-opt"><input type="checkbox" data-group="missingFields" value="certData" onchange="voSortChanged()"><span>B-Form Picture</span></label>
+                                        </div>
+                                        <div class="vo-sort-sub-note">Leave both unticked to show students missing either one.</div>
+                                    </div>
+                                    <label class="vo-sort-opt"><input type="checkbox" data-group="record" value="incorrect" onchange="voSortChanged()"><span>Incorrect details</span></label>
+                                </div>
+                                <div class="vo-sort-footer">
+                                    <span class="vo-sort-hint">Options in different groups are combined.</span>
+                                    <button type="button" class="vo-sort-clear" onclick="voClearSort()"><i class="fas fa-rotate-left"></i> Clear all</button>
+                                </div>
+                            </div>
+                        </div>
+
                         <div id="vo-promote-actions-bar" style="display:none; align-items:center; gap:10px;">
                             <button onclick="toggleVoPromoteMode()" class="btn-ghost"><i class="fas fa-times"></i> Cancel</button>
                             <button onclick="confirmPromotion('vo')" class="btn-primary-submit"><i class="fas fa-check"></i> Confirm</button>

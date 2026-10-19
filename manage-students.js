@@ -616,6 +616,338 @@ let updOrphanFilterActive = false;
 let voOrphanFilterActive = false;
 
 /* ══════════════════════════════════════════════════════════════
+   MANAGE RECORDS — "SORT BY" (gender / age range / record status)
+   Declared at script scope (like the orphan filter above) so both the
+   DOMContentLoaded closure and the window.* handlers can reach it.
+   Rules: options ticked inside ONE group are OR-ed (Male OR Female),
+   options from DIFFERENT groups are AND-ed (Female AND age 5–10).
+   ══════════════════════════════════════════════════════════════ */
+const voSortState = { gender: new Set(), age: new Set(), record: new Set(), missingFields: new Set() };
+
+/* Age buckets: lower bound inclusive, upper bound exclusive (so a 5-year-old is in "5-10"). */
+const VO_AGE_BUCKETS = [
+    { key: '0-5',   min: 0,  max: 5 },
+    { key: '5-10',  min: 5,  max: 10 },
+    { key: '10-15', min: 10, max: 15 },
+    { key: '15+',   min: 15, max: Infinity }
+];
+
+/* "Missing details" now means the two pictures only: the student photo and the B-Form picture.
+   (To count more fields as missing again, push them onto `missing` / `missingKeys` in voGetRecordIssues.) */
+
+function voAgeFromDob(dob) {
+    if (!dob) return null;
+    const d = new Date(dob);
+    if (isNaN(d.getTime())) return null;
+    const t = new Date();
+    let age = t.getFullYear() - d.getFullYear();
+    const m = t.getMonth() - d.getMonth();
+    if (m < 0 || (m === 0 && t.getDate() < d.getDate())) age--;
+    return age;
+}
+
+/* ── "Incorrect details" rules ─────────────────────────────────────────────
+   Each check returns a short reason (or '') so the table can say WHY a value looks wrong. */
+const VO_PLACEHOLDER_RE = /^(n\/?a|na|nil|none|null|unknown|unk|test|testing|dummy|abc+|xyz+|asdf+|qwerty+|x+|\.+|-+|\?+|no)$/i;
+const VO_CLASS_TYPICAL_AGE = { montessori: 3, nursery: 4, prep: 5 };   // "Grade N" is typically N + 5
+const VO_AGE_TOLERANCE = 4;                                            // years away from the class's typical age
+const VO_MALE_RELATIONS = ['Father', 'Brother', 'Uncle'];
+const VO_FEMALE_RELATIONS = ['Mother', 'Sister'];
+
+/** '' when the digit string looks real, otherwise why it looks fake (same digits, 1234567, repeating pattern). */
+function voDigitsLookFake(d) {
+    if (!d || d.length < 4) return '';
+    if (/^(\d)\1+$/.test(d)) return 'all digits are the same';
+    let up = true, down = true;
+    for (let i = 1; i < d.length; i++) {
+        const diff = (Number(d[i]) - Number(d[i - 1]) + 10) % 10;
+        if (diff !== 1) up = false;
+        if (diff !== 9) down = false;
+    }
+    if (up || down) return 'sequential digits (like 1234567)';
+    if (d.length >= 7 && new Set(d).size <= 2) return 'only repeats one or two digits';
+    return '';
+}
+
+/** Pakistani mobile number check. Returns a reason string, or '' if it looks fine. */
+function voPhoneProblem(raw) {
+    let d = String(raw).replace(/\D/g, '');
+    if (d.length === 12 && d.startsWith('92')) d = '0' + d.slice(2);   // +92 3xx xxxxxxx
+    else if (d.length === 10 && d.startsWith('3')) d = '0' + d;         // 3xx xxxxxxx
+    if (!/^03\d{9}$/.test(d)) return 'is not a valid mobile number (should be 03XX-XXXXXXX)';
+    if (Number(d[2]) > 5) return `has an unknown network code (03${d[2]}…)`;
+    const fake = voDigitsLookFake(d.slice(4)) || (/^(\d)\1+$/.test(d) ? 'all digits are the same' : '');
+    return fake ? `looks fake — ${fake}` : '';
+}
+
+/** 13-digit CNIC / B-Form check (format + obviously fake numbers). */
+function voCnicProblem(raw) {
+    const d = String(raw).replace(/\D/g, '');
+    if (/[A-Za-z]/.test(String(raw)) || d.length !== 13) return `must have 13 digits (has ${d.length})`;
+    if (d[0] === '0') return 'starts with 0, which is not a valid area code';
+    const fake = voDigitsLookFake(d) || voDigitsLookFake(d.slice(5, 12));
+    return fake ? `looks fake — ${fake}` : '';
+}
+
+/** Name check: numbers, symbols, too short, placeholder words, repeated letters. */
+function voNameProblem(raw) {
+    const v = String(raw).trim();
+    if (/\d/.test(v)) return 'contains numbers';
+    if (/[^\p{L}\p{M}\s.'’\-]/u.test(v)) return 'contains symbols';
+    if (v.replace(/[\s.'’\-]/g, '').length < 3) return 'is too short';
+    if (VO_PLACEHOLDER_RE.test(v)) return 'looks like a placeholder';
+    if (/(.)\1{3,}/i.test(v)) return 'has repeated letters';
+    return '';
+}
+
+function voAddressProblem(raw) {
+    const v = String(raw).trim();
+    if (v.length < 5) return 'is too short to be an address';
+    if (/^[\d\s\-.,\/]+$/.test(v)) return 'has only numbers';
+    if (VO_PLACEHOLDER_RE.test(v)) return 'looks like a placeholder';
+    if (/(.)\1{4,}/i.test(v)) return 'has repeated characters';
+    return '';
+}
+
+/** Returns { missing, missingKeys, incorrect, incorrectDetails } for one student record.
+    incorrect = field labels; incorrectDetails = [{ key, label, reason }] (one reason per field). */
+function voGetRecordIssues(s) {
+    const missing = [], missingKeys = [], incorrect = [], incorrectDetails = [];
+    const val = k => String(s[k] == null ? '' : s[k]).trim();
+    const digits = k => val(k).replace(/\D/g, '');
+    const seen = new Set();
+    const flag = (key, label, reason) => {
+        if (!reason || seen.has(key)) return;           // one reason per field is enough
+        seen.add(key);
+        incorrect.push(label);
+        incorrectDetails.push({ key, label, reason });
+    };
+
+    // Missing pictures. The list endpoint only says whether a photo exists; the B-Form picture
+    // (certData) arrives in a background load, so it is only judged once that has finished.
+    const hasPhoto = s.hasPhoto === true || !!val('photoPath') || (!!val('photo') && !/placeholder\.com/i.test(val('photo')));
+    if (!hasPhoto) { missing.push('Photo'); missingKeys.push('photo'); }
+    const mediaReady = typeof window.ssStudentMediaReady !== 'function' || window.ssStudentMediaReady();
+    if (mediaReady && !val('certData')) { missing.push('B-Form Picture'); missingKeys.push('certData'); }
+
+    // Names
+    [['fullName', 'Name'], ['guardianName', 'Guardian Name'], ['fatherFullName', 'Father Name']].forEach(([k, label]) => {
+        if (val(k)) flag(k, label, voNameProblem(val(k)));
+    });
+
+    // Gender
+    if (val('gender') && !['Male', 'Female', 'Other'].includes(val('gender'))) flag('gender', 'Gender', 'is not Male, Female or Other');
+
+    // Date of birth
+    if (val('dob')) {
+        const dobDate = new Date(val('dob'));
+        const age = voAgeFromDob(val('dob'));
+        let reason = '';
+        if (age === null) reason = 'is not a valid date';
+        else if (age < 0) reason = 'is in the future';
+        else if (age < 2) reason = `makes the student only ${age} year(s) old`;
+        else if (age > 25) reason = `makes the student ${age} years old`;
+        else {
+            const adm = val('admissionDate') ? new Date(val('admissionDate')) : null;
+            if (adm && !isNaN(adm.getTime()) && adm < dobDate) {
+                reason = 'is after the admission date';
+            } else {
+                const cls = val('studentClass');
+                const gm = /grade\s*(\d+)/i.exec(cls);
+                const typical = gm ? Number(gm[1]) + 5 : VO_CLASS_TYPICAL_AGE[cls.toLowerCase()];
+                if (typical !== undefined && Math.abs(age - typical) > VO_AGE_TOLERANCE) {
+                    reason = `gives age ${age}, which is unusual for ${cls}`;
+                }
+            }
+        }
+        flag('dob', 'Date of Birth', reason);
+    }
+
+    // B-Form / CNICs: format, fake numbers, and the gender digit (odd = male, even = female)
+    const genderDigitMismatch = (k, expectMale, who) => {
+        const d = digits(k);
+        if (d.length !== 13) return '';
+        const isMale = Number(d[12]) % 2 === 1;
+        return isMale === expectMale ? '' : `last digit says ${isMale ? 'male' : 'female'}, but ${who} is ${expectMale ? 'male' : 'female'}`;
+    };
+    if (val('studentBform')) {
+        let r = voCnicProblem(val('studentBform'));
+        if (!r && val('guardianCnic') && digits('studentBform') === digits('guardianCnic')) r = 'is the same as the Guardian CNIC';
+        if (!r && (val('gender') === 'Male' || val('gender') === 'Female')) {
+            r = genderDigitMismatch('studentBform', val('gender') === 'Male', 'the student');
+        }
+        flag('studentBform', 'B-Form', r);
+    }
+    if (val('guardianCnic')) {
+        let r = voCnicProblem(val('guardianCnic'));
+        if (!r && VO_MALE_RELATIONS.includes(val('guardianRole'))) r = genderDigitMismatch('guardianCnic', true, `the ${val('guardianRole').toLowerCase()}`);
+        if (!r && VO_FEMALE_RELATIONS.includes(val('guardianRole'))) r = genderDigitMismatch('guardianCnic', false, `the ${val('guardianRole').toLowerCase()}`);
+        flag('guardianCnic', 'Guardian CNIC', r);
+    }
+    if (val('fatherCnic')) {
+        flag('fatherCnic', 'Father CNIC', voCnicProblem(val('fatherCnic')) || genderDigitMismatch('fatherCnic', true, 'the father'));
+    }
+
+    // Phones
+    [['phone1', 'Primary Phone'], ['phone2', 'Secondary Phone']].forEach(([k, label]) => {
+        if (val(k)) flag(k, label, voPhoneProblem(val(k)));
+    });
+
+    // Addresses
+    [['permanentAddress', 'Permanent Address'], ['mailingAddress', 'Mailing Address']].forEach(([k, label]) => {
+        if (val(k)) flag(k, label, voAddressProblem(val(k)));
+    });
+
+    // Fees: must be non-negative numbers; discounts can't be bigger than what they discount
+    const amount = k => {
+        const raw = val(k).replace(/,/g, '');
+        return raw === '' ? null : Number(raw);
+    };
+    [['standardFee', 'Tuition Fee'], ['admissionFee', 'Admission Fee'], ['transportFee', 'Transport Fee'],
+     ['tuitionDiscount', 'Tuition Discount'], ['transportDiscount', 'Transport Discount'],
+     ['siblingDiscount', 'Sibling Discount'], ['arrears', 'Arrears']].forEach(([k, label]) => {
+        const n = amount(k);
+        if (n !== null && (isNaN(n) || n < 0)) flag(k, label, 'is not a valid amount');
+    });
+    const tf = amount('standardFee'), td = amount('tuitionDiscount');
+    if (tf !== null && td !== null && !isNaN(tf) && !isNaN(td) && tf > 0 && td > tf) flag('tuitionDiscount', 'Tuition Discount', 'is more than the tuition fee');
+    const trf = amount('transportFee'), trd = amount('transportDiscount');
+    if (trf !== null && trd !== null && !isNaN(trf) && !isNaN(trd) && trd > trf) flag('transportDiscount', 'Transport Discount', 'is more than the transport fee');
+
+    return { missing, missingKeys, incorrect, incorrectDetails };
+}
+
+/** True when the student passes every active Sort By option. */
+function voMatchesSort(s) {
+    const g = voSortState.gender, a = voSortState.age, r = voSortState.record;
+    if (g.size && !g.has(s.gender)) return false;
+    if (a.size) {
+        const age = voAgeFromDob(s.dob);
+        if (age === null) return false;
+        if (![...a].some(key => { const b = VO_AGE_BUCKETS.find(x => x.key === key); return b && age >= b.min && age < b.max; })) return false;
+    }
+    if (r.size) {
+        const issues = voGetRecordIssues(s);
+        const f = voSortState.missingFields;
+        const hasMissing = f.size
+            ? issues.missingKeys.some(k => f.has(k))   // missing at least one of the ticked details
+            : issues.missing.length > 0;               // nothing ticked → missing anything
+        const hasIncorrect = issues.incorrect.length > 0;
+        const ok = (r.has('missing') && hasMissing) || (r.has('incorrect') && hasIncorrect);
+        if (!ok) return false;
+    }
+    return true;
+}
+
+function voSortIsActive() {
+    return voSortState.gender.size + voSortState.age.size + voSortState.record.size > 0;
+}
+
+/** Small "Missing: …" / "Check: …" tags shown under the name while a Record Status option is on. */
+function voIssueTagsHtml(s) {
+    if (!voSortState.record.size) return '';
+    const issues = voGetRecordIssues(s);
+    const esc = v => SSValidate.escapeHtml(v);
+    let out = '';
+    if (voSortState.record.has('missing') && issues.missing.length) {
+        const f = voSortState.missingFields;
+        const labels = f.size ? issues.missing.filter((_, i) => f.has(issues.missingKeys[i])) : issues.missing;
+        if (labels.length) {
+            out += `<br><span class="vo-issue-tag is-missing" title="Missing details"><i class="fas fa-circle-exclamation"></i> Missing: ${esc(labels.join(', '))}</span>`;
+        }
+    }
+    if (voSortState.record.has('incorrect') && issues.incorrectDetails.length) {
+        const text = issues.incorrectDetails.map(d => `${d.label} ${d.reason}`).join(' • ');
+        out += `<br><span class="vo-issue-tag is-incorrect" title="Incorrect details"><i class="fas fa-triangle-exclamation"></i> ${esc(text)}</span>`;
+    }
+    return out;
+}
+
+/** Reset every Sort By option and the button/pop-up UI (used when the modal re-opens or goes back to classes). */
+function voResetSortUI() {
+    voSortState.gender.clear(); voSortState.age.clear(); voSortState.record.clear(); voSortState.missingFields.clear();
+    const subReset = document.getElementById('vo-missing-sub');
+    if (subReset) subReset.hidden = true;
+    document.querySelectorAll('#vo-sort-panel input[type="checkbox"], #vo-sort-panel input[type="radio"]').forEach(cb => { cb.checked = false; });
+    const gsReset = document.getElementById('vo-gender-sub');
+    if (gsReset) gsReset.hidden = true;
+    voRefreshSortButton();
+    const panel = document.getElementById('vo-sort-panel');
+    if (panel) panel.hidden = true;
+    const btn = document.getElementById('vo-sort-btn');
+    if (btn) { btn.classList.remove('vo-sort-open'); btn.setAttribute('aria-expanded', 'false'); }
+}
+
+function voRefreshSortButton() {
+    const btn = document.getElementById('vo-sort-btn');
+    const badge = document.getElementById('vo-sort-count');
+    const n = voSortState.gender.size + voSortState.age.size + voSortState.record.size;
+    if (btn) btn.classList.toggle('active-filter', n > 0);
+    if (badge) { badge.textContent = n; badge.hidden = n === 0; }
+}
+
+window.toggleVoSortPanel = function(ev) {
+    if (ev) ev.stopPropagation();
+    const panel = document.getElementById('vo-sort-panel');
+    const btn = document.getElementById('vo-sort-btn');
+    if (!panel || !btn) return;
+    const open = panel.hidden;               // hidden now → opening
+    panel.hidden = !open;
+    btn.classList.toggle('vo-sort-open', open);
+    btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+};
+
+window.voSortChanged = function() {
+    voSortState.gender.clear(); voSortState.age.clear(); voSortState.record.clear(); voSortState.missingFields.clear();
+    document.querySelectorAll('#vo-sort-panel input[type="checkbox"]:checked, #vo-sort-panel input[type="radio"]:checked').forEach(cb => {
+        const set = voSortState[cb.dataset.group];
+        if (set) set.add(cb.value);
+    });
+    // The Male / Female section only exists while "Sort by gender" is ticked (and holds a single choice).
+    const genderOn = !!(document.getElementById('vo-gender-toggle') || {}).checked;
+    const genderSub = document.getElementById('vo-gender-sub');
+    if (genderSub) genderSub.hidden = !genderOn;
+    if (!genderOn) {
+        voSortState.gender.clear();
+        document.querySelectorAll('#vo-gender-sub input[type="radio"]').forEach(r => { r.checked = false; });
+    }
+    // The "which details" section only exists while "Missing details" is ticked.
+    const sub = document.getElementById('vo-missing-sub');
+    const missingOn = voSortState.record.has('missing');
+    if (sub) sub.hidden = !missingOn;
+    if (!missingOn) {
+        voSortState.missingFields.clear();
+        document.querySelectorAll('#vo-missing-sub input[type="checkbox"]').forEach(cb => { cb.checked = false; });
+    }
+    voRefreshSortButton();
+    renderViewOnlyTable();
+};
+
+window.voClearSort = function() {
+    voSortState.gender.clear(); voSortState.age.clear(); voSortState.record.clear(); voSortState.missingFields.clear();
+    const subClear = document.getElementById('vo-missing-sub');
+    if (subClear) subClear.hidden = true;
+    document.querySelectorAll('#vo-sort-panel input[type="checkbox"], #vo-sort-panel input[type="radio"]').forEach(cb => { cb.checked = false; });
+    const gsClear = document.getElementById('vo-gender-sub');
+    if (gsClear) gsClear.hidden = true;
+    voRefreshSortButton();
+    renderViewOnlyTable();
+};
+
+/* Close the pop-up when clicking outside it or pressing Escape. */
+document.addEventListener('click', function(e) {
+    const panel = document.getElementById('vo-sort-panel');
+    if (!panel || panel.hidden) return;
+    if (e.target.closest && e.target.closest('#vo-sort-wrap')) return;
+    window.toggleVoSortPanel();
+});
+document.addEventListener('keydown', function(e) {
+    if (e.key !== 'Escape') return;
+    const panel = document.getElementById('vo-sort-panel');
+    if (panel && !panel.hidden) { window.toggleVoSortPanel(); e.stopPropagation(); }
+}, true);
+
+/* ══════════════════════════════════════════════════════════════
    IN-APP CONFIRM DIALOG — replaces native window.confirm() with a
    themed dialog that matches the rest of the app. Self-contained:
    injects its own markup + styles on first use, so no HTML edits
@@ -804,6 +1136,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // BASE64 PHOTO/B-FORM FIX — see loadStudentMediaInBackground() below.
     let   studentMediaLoaded    = false;  // true once photo/certData base64 has been pulled for this session
     let   studentMediaLoading   = false;  // true while that background fetch is in flight
+    window.ssStudentMediaReady = function() { return studentMediaLoaded; };  // used by Manage Records "Sort By"
     let   liveSyncFailStreak    = 0;      // backs off polling if server is unreachable
     let   suppressNextLiveToast = false;  // true right after THIS tab made its own save/delete
 
@@ -980,6 +1313,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 voOrphanBtn.setAttribute('aria-pressed', 'false');
                 voOrphanBtn.innerHTML = '<i class="fas fa-child"></i> Show Orphans Only';
             }
+            voResetSortUI();
             voRenderClassCards();
             voShowStage('classes');
         }
@@ -1956,6 +2290,7 @@ if (certUploadInput) {
                 }
             });
             studentMediaLoaded = true;
+            if (voSortState.record.has('missing')) changed = true;   // re-check "missing picture" results now that B-Forms are known
 
             if (changed) {
                 if (ssIsModalShown('view-modal')) withScrollPreserved('student-list-tbody', () => {
@@ -4455,6 +4790,7 @@ if (certUploadInput) {
         voOrphanBtn.setAttribute('aria-pressed', 'false');
         voOrphanBtn.innerHTML = '<i class="fas fa-child"></i> Show Orphans Only';
     }
+    voResetSortUI();
     voRenderClassCards();
     voShowStage('classes');
 };
@@ -4497,6 +4833,7 @@ if (certUploadInput) {
                     <strong>${safeFullName}</strong>
                     ${s.orphanStatus === 'Orphan' ? ' <i class="fas fa-heart" style="color:#ef4444; font-size:10px;" title="Orphan"></i>' : ''}
                     ${siblingTag}
+                    ${voIssueTagsHtml(s)}
                 </td>
                 <td>${safeGuardianName}</td>
                 <td><span class="class-chip">${safeClassSection}</span></td>
@@ -4548,6 +4885,9 @@ if (certUploadInput) {
         if (voOrphanFilterActive) {
             filtered = filtered.filter(s => s.orphanStatus === 'Orphan');
         }
+        if (voSortIsActive()) {
+            filtered = filtered.filter(voMatchesSort);
+        }
         if (qName) {
             filtered = filtered.filter(s => studentMatchesSearch(s, qName));
         }
@@ -4558,9 +4898,12 @@ if (certUploadInput) {
 
         if (filtered.length === 0) {
             _voState = null;
-            const emptyMsg = voOrphanFilterActive
-                ? '<i class="fas fa-child" style="font-size:22px;display:block;margin-bottom:10px;opacity:0.6;"></i>No orphan records found.'
-                : 'No matching records found.';
+            const voMediaPending = voSortState.record.has('missing') && typeof window.ssStudentMediaReady === 'function' && !window.ssStudentMediaReady();
+            const emptyMsg = voSortIsActive()
+                ? '<i class="fas fa-arrow-down-wide-short" style="font-size:22px;display:block;margin-bottom:10px;opacity:0.6;"></i>' + (voMediaPending ? 'Still checking B-Form pictures… this list will update in a moment.' : 'No students match the selected sort options.')
+                : voOrphanFilterActive
+                    ? '<i class="fas fa-child" style="font-size:22px;display:block;margin-bottom:10px;opacity:0.6;"></i>No orphan records found.'
+                    : 'No matching records found.';
             tbody.innerHTML = `<tr><td colspan="${voPromoteMode ? 10 : 8}" style="text-align:center;padding:50px;color:#94a3b8;">${emptyMsg}</td></tr>`;
             return;
         }
@@ -4572,7 +4915,7 @@ if (certUploadInput) {
         if (voClassColHeader) voClassColHeader.textContent = showClassCol ? 'Class' : 'Section';
 
         // Reset the visible window whenever the filter context changes.
-        const filterKey = [voActiveClass, voActiveSection, voOrphanFilterActive, qName, voPromoteMode].join('|');
+        const filterKey = [voActiveClass, voActiveSection, voOrphanFilterActive, qName, voPromoteMode, [...voSortState.gender].join(), [...voSortState.age].join(), [...voSortState.record].join(), [...voSortState.missingFields].join()].join('|');
         if (filterKey !== _voFilterKey) {
             _voFilterKey = filterKey;
             _voVisibleCount = STUDENT_TABLE_PAGE_SIZE;

@@ -6304,3 +6304,202 @@ select option {
 /* Performance fix: disable blur/glow effects for smoother pages */
 * { backdrop-filter: none !important; }
 .glow-spot { display: none !important; }
+
+
+/* ============================================
+   MANAGE RECORDS — "SORT BY" BUTTON + POP-UP
+   ============================================ */
+.vo-sort-wrap {
+    position: relative;
+    display: inline-block;
+}
+.vo-sort-count {
+    min-width: 20px;
+    height: 20px;
+    padding: 0 6px;
+    border-radius: 999px;
+    background: var(--accent-primary);
+    color: #fff;
+    font-size: 0.72rem;
+    font-weight: 700;
+    line-height: 20px;
+    text-align: center;
+}
+.vo-sort-count[hidden] { display: none; }
+.vo-sort-caret {
+    font-size: 0.7rem;
+    transition: transform 0.2s ease;
+}
+.btn-secondary.vo-sort-open .vo-sort-caret { transform: rotate(180deg); }
+.btn-secondary.active-filter .vo-sort-count {
+    background: #fff;
+    color: var(--accent-warning);
+}
+
+.vo-sort-panel {
+    position: absolute;
+    top: calc(100% + 8px);
+    left: 0;
+    z-index: 60;
+    width: 330px;
+    max-width: calc(100vw - 40px);
+    max-height: 70vh;
+    overflow-y: auto;
+    padding: 14px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-hover);
+    border-radius: var(--radius-sm);
+    box-shadow: 0 14px 40px rgba(0, 0, 0, 0.35);
+    animation: voSortPop 0.16s ease-out;
+}
+.vo-sort-panel[hidden] { display: none; }
+@keyframes voSortPop {
+    from { opacity: 0; transform: translateY(-6px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+.vo-sort-group + .vo-sort-group {
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid var(--border-subtle);
+}
+.vo-sort-group-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+}
+.vo-sort-group-title i { color: var(--accent-primary-light); }
+.vo-sort-age-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2px 8px;
+}
+.vo-sort-opt {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 8px;
+    border-radius: 8px;
+    font-size: 0.86rem;
+    color: var(--text-primary);
+    cursor: pointer;
+    user-select: none;
+    transition: background 0.15s ease;
+}
+.vo-sort-opt:hover { background: var(--accent-primary-glow); }
+.vo-sort-opt input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+    margin: 0;
+    padding: 0;
+    accent-color: var(--accent-primary);
+    cursor: pointer;
+    flex: 0 0 auto;
+}
+.vo-sort-opt:has(input:checked) { background: var(--accent-primary-glow); font-weight: 600; }
+.vo-sort-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-top: 12px;
+    padding-top: 10px;
+    border-top: 1px solid var(--border-subtle);
+}
+.vo-sort-hint { font-size: 0.7rem; color: var(--text-muted); }
+.vo-sort-clear {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 10px;
+    border: 1px solid var(--border-hover);
+    border-radius: 8px;
+    background: transparent;
+    color: var(--text-secondary);
+    font: 600 0.76rem 'Inter', sans-serif;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all 0.15s ease;
+}
+.vo-sort-clear:hover { color: var(--accent-danger); border-color: var(--accent-danger); }
+
+/* Small tag under a student's name listing what is missing / incorrect */
+.vo-issue-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    margin-top: 4px;
+    margin-right: 6px;
+    padding: 2px 8px;
+    border-radius: 6px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    line-height: 1.5;
+}
+.vo-issue-tag.is-missing   { background: rgba(245, 158, 11, 0.14); color: var(--accent-warning); }
+.vo-issue-tag.is-incorrect { background: rgba(239, 68, 68, 0.14);  color: var(--accent-danger); }
+
+@media (max-width: 640px) {
+    .vo-sort-wrap { flex: 1 1 100%; }
+    .vo-sort-wrap > .btn-secondary { width: 100%; justify-content: center; }
+    .vo-sort-panel { width: 100%; max-width: 100%; }
+}
+
+/* Nested "which details are missing" section inside the Sort By pop-up */
+.vo-sort-sub {
+    margin: 6px 0 2px 12px;
+    padding: 10px 10px 8px;
+    border-left: 3px solid var(--accent-warning);
+    border-radius: 0 10px 10px 0;
+    background: rgba(245, 158, 11, 0.07);
+    animation: voSortPop 0.16s ease-out;
+}
+.vo-sort-sub[hidden] { display: none; }
+.vo-sort-sub-title {
+    margin-bottom: 6px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: var(--accent-warning);
+}
+.vo-sort-sub-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0 6px;
+}
+.vo-sort-sub .vo-sort-opt { padding: 5px 6px; font-size: 0.78rem; gap: 8px; }
+.vo-sort-sub .vo-sort-opt input[type="checkbox"] { width: 14px; height: 14px; }
+.vo-sort-sub-note { margin-top: 6px; font-size: 0.68rem; color: var(--text-muted); }
+@media (max-width: 640px) {
+    .vo-sort-sub-grid { grid-template-columns: 1fr; }
+}
+
+/* Incorrect-detail tags can carry several reasons — let them wrap instead of overflowing */
+.vo-issue-tag { max-width: 100%; white-space: normal; align-items: flex-start; }
+.vo-issue-tag i { margin-top: 3px; flex: 0 0 auto; }
+
+/* Radio buttons in the Sort By pop-up (gender: choose one) */
+.vo-sort-opt input[type="radio"] {
+    width: 16px;
+    height: 16px;
+    margin: 0;
+    padding: 0;
+    border-radius: 50%;
+    accent-color: var(--accent-primary);
+    cursor: pointer;
+    flex: 0 0 auto;
+}
+.vo-sort-sub .vo-sort-opt input[type="radio"] { width: 14px; height: 14px; }
+.vo-sort-opt:has(input[type="radio"]:checked) { background: var(--accent-primary-glow); font-weight: 600; }
+
+/* Blue variant of the nested section (gender) */
+.vo-sort-sub--blue {
+    border-left-color: var(--accent-primary);
+    background: var(--accent-primary-glow);
+}
+.vo-sort-sub--blue .vo-sort-sub-title { color: var(--accent-primary-light); }
+.vo-sort-sub--blue .vo-sort-opt i { margin-right: 4px; opacity: 0.8; }
