@@ -1259,6 +1259,18 @@
                                 <div id="slc-search-results" class="slc-dropdown"></div>
                             </div>
                         </div>
+                        <div class="slc-control-group cs-group" id="slc-cs-group">
+                            <label class="slc-control-label"><i class="fas fa-layer-group"></i> Class Status</label>
+                            <div class="cs-toggle" role="radiogroup" aria-label="Class status">
+                                <label class="cs-opt"><input type="radio" name="slc-cs-mode" value="passed" onchange="csModeChanged('slc')"><span><i class="fas fa-circle-check"></i> Passed class</span></label>
+                                <label class="cs-opt"><input type="radio" name="slc-cs-mode" value="enrolled" onchange="csModeChanged('slc')"><span><i class="fas fa-user-graduate"></i> Enrolled in</span></label>
+                            </div>
+                            <!-- Appears after one of the two options above is chosen -->
+                            <div class="cs-class-wrap" id="slc-cs-class-wrap">
+                                <span class="cs-class-label" id="slc-cs-class-label">Select class</span>
+                                <select id="slc-cs-class" class="slc-mini-input" onchange="csClassChanged('slc')"></select>
+                            </div>
+                        </div>
                         <div class="slc-control-group slc-tel-group">
                             <label class="slc-control-label"><i class="fas fa-phone"></i> School Contact</label>
                             <div class="slc-search-input" style="display:flex;align-items:center;gap:6px;cursor:default;background:var(--bg-secondary,rgba(120,120,120,0.08));">
@@ -1338,7 +1350,7 @@
                             <div class="slc-l-name" id="slc-name-display">&#x2014;</div>
 
                             <!-- MAIN PARAGRAPH -->
-                            <p class="slc-l-main-para">
+                            <p class="slc-l-main-para" id="slc-main-para">
                                 has successfully completed the recommended course of study at this institution
                                 and has accordingly left the rolls of this school.
                             </p>
@@ -1421,6 +1433,18 @@
                                 <option value="moderate">Moderate</option>
                                 <option value="bad">Bad</option>
                             </select>
+                        </div>
+                        <div class="slc-control-group cs-group" id="char-cs-group">
+                            <label class="slc-control-label"><i class="fas fa-layer-group"></i> Class Status</label>
+                            <div class="cs-toggle" role="radiogroup" aria-label="Class status">
+                                <label class="cs-opt"><input type="radio" name="char-cs-mode" value="passed" onchange="csModeChanged('char')"><span><i class="fas fa-circle-check"></i> Passed class</span></label>
+                                <label class="cs-opt"><input type="radio" name="char-cs-mode" value="enrolled" onchange="csModeChanged('char')"><span><i class="fas fa-user-graduate"></i> Enrolled in</span></label>
+                            </div>
+                            <!-- Appears after one of the two options above is chosen -->
+                            <div class="cs-class-wrap" id="char-cs-class-wrap">
+                                <span class="cs-class-label" id="char-cs-class-label">Select class</span>
+                                <select id="char-cs-class" class="slc-mini-input" onchange="csClassChanged('char')"></select>
+                            </div>
                         </div>
                         <div class="slc-control-group slc-tel-group">
                             <label class="slc-control-label"><i class="fas fa-phone"></i> School Contact</label>

@@ -7672,6 +7672,74 @@ function _showMainSections() {
    ENHANCED SLC — Search, fill, conduct, print
    ============================================================ */
 
+/* ============================================================
+   CLASS STATUS — "Passed class" / "Enrolled in" (Leaving + Character certificates)
+   Pick one of the two options, then pick the class; the certificate wording follows.
+   Until both are chosen the certificates keep their original wording.
+   ============================================================ */
+const SLC_DEFAULT_MAIN_PARA = 'has successfully completed the recommended course of study at this institution and has accordingly left the rolls of this school.';
+
+function csEsc(v) {
+    return (typeof SSValidate !== 'undefined' && SSValidate.escapeHtml) ? SSValidate.escapeHtml(String(v)) : String(v);
+}
+
+/** { mode: 'passed' | 'enrolled' | '', cls: 'Grade 3' | '' } for the "slc" or "char" modal. */
+function csGetStatus(prefix) {
+    const picked = document.querySelector(`input[name="${prefix}-cs-mode"]:checked`);
+    const sel = document.getElementById(`${prefix}-cs-class`);
+    return { mode: picked ? picked.value : '', cls: sel ? String(sel.value || '').trim() : '' };
+}
+
+/** Fill the class <select> from the classes saved in Settings (a student's own class is kept even if it was removed there). */
+function csPopulateClasses(prefix, preferred) {
+    const sel = document.getElementById(`${prefix}-cs-class`);
+    if (!sel) return;
+    const wanted = (preferred && preferred !== '—') ? String(preferred) : sel.value;
+    let names = [];
+    try { names = getClassConfigs().map(c => c && c.name).filter(Boolean); } catch (e) { names = []; }
+    if (wanted && !names.includes(wanted)) names = [wanted, ...names];
+
+    sel.innerHTML = '';
+    const ph = document.createElement('option');
+    ph.value = ''; ph.textContent = 'Select class…';
+    sel.appendChild(ph);
+    names.forEach(n => {
+        const o = document.createElement('option');
+        o.value = n; o.textContent = n;
+        sel.appendChild(o);
+    });
+    sel.value = wanted && names.includes(wanted) ? wanted : '';
+}
+
+function csRefresh(prefix) {
+    if (prefix === 'slc') slcApplyClassStatus();
+    else charRenderParagraph();
+}
+
+/** One of the two options was chosen → show the class picker (pre-selecting the student's own class) and update the certificate. */
+function csModeChanged(prefix) {
+    const { mode } = csGetStatus(prefix);
+    const wrap = document.getElementById(`${prefix}-cs-class-wrap`);
+    const label = document.getElementById(`${prefix}-cs-class-label`);
+    if (wrap) wrap.classList.toggle('is-open', !!mode);
+    if (label) label.textContent = mode === 'passed' ? 'Class passed' : mode === 'enrolled' ? 'Enrolled in class' : 'Select class';
+    const s = prefix === 'slc' ? window.__slcCurrentStudent : window.__charCurrentStudent;
+    const ownClass = s ? (s.class || s.studentClass || '') : '';
+    csPopulateClasses(prefix, ownClass);
+    csRefresh(prefix);
+}
+
+function csClassChanged(prefix) { csRefresh(prefix); }
+
+/** A different student was loaded → if a status is already chosen, default the class to that student's class. */
+function csSyncToStudent(prefix, s) {
+    if (!csGetStatus(prefix).mode) return;
+    csPopulateClasses(prefix, s ? (s.class || s.studentClass || '') : '');
+}
+
+window.csModeChanged = csModeChanged;
+window.csClassChanged = csClassChanged;
+
 /* Search bar for SLC modal */
 function slcSearchStudents() {
     const input    = document.getElementById('slc-search-input');
@@ -7819,21 +7887,61 @@ function slcFillFromStudent(s) {
     setText('slc-school-tel', getSchoolContactPhone() || 'Not set in Settings');
     setText('slc-school-address', getSchoolContactAddress() || 'Not set in Settings');
 
-    // Compose the beautiful bottom paragraph from real student details
+    csSyncToStudent('slc', s);
+    slcApplyClassStatus();
+
+    document.getElementById('slc-empty-state').style.display = 'none';
+    document.getElementById('slc-preview').style.display     = 'block';
+    const printBtn = document.getElementById('slc-print-btn'); if (printBtn) printBtn.style.display = '';
+    const shareBtn = document.getElementById('slc-share-btn'); if (shareBtn) shareBtn.style.display = '';
+}
+
+/* (Re)build the Leaving Certificate wording from the loaded student + the Class Status choice */
+function slcApplyClassStatus() {
+    const s = window.__slcCurrentStudent;
+    if (!s) return;
+    const studentName   = s.name || s.fullName || '—';
+    const regNo         = s.regNo || s.id || '—';
+    const fatherName    = s.fatherName || s.guardianName || '—';
+    const admissionDate = s.admissionDate || s.dateOfAdmission || '—';
+    const dob           = s.dob || s.dateOfBirth || '—';
+    const studentClass  = s.class || s.studentClass || '—';
+
+    const { mode, cls } = csGetStatus('slc');
+    const chosen = !!(mode && cls);
+    const c = csEsc(cls);
+
+    // Main sentence under the name
+    const mainEl = document.getElementById('slc-main-para');
+    if (mainEl) {
+        if (chosen && mode === 'passed') {
+            mainEl.innerHTML = `has successfully completed the recommended course of study at this institution, having <strong>passed ${c}</strong>, and has accordingly left the rolls of this school.`;
+        } else if (chosen && mode === 'enrolled') {
+            mainEl.innerHTML = `has been a student of this institution, <strong>enrolled in ${c}</strong>, and has accordingly left the rolls of this school.`;
+        } else {
+            mainEl.textContent = SLC_DEFAULT_MAIN_PARA;
+        }
+    }
+
+    // Class sentence in the record paragraph
+    let classSentence;
+    if (chosen && mode === 'passed') {
+        classSentence = `The student passed <strong>${c}</strong> before leaving this institution. `;
+    } else if (chosen && mode === 'enrolled') {
+        classSentence = `At the time of leaving, the student was enrolled in <strong>${c}</strong>. `;
+    } else {
+        classSentence = `At the time of leaving, the student was enrolled in <strong>Class ${studentClass}</strong>. `;
+    }
+
     const recordEl = document.getElementById('slc-record-para');
     if (recordEl) {
         recordEl.innerHTML =
             `For official record, <strong>${studentName}</strong> (Student ID <strong>${regNo}</strong>), ` +
             `son/daughter of <strong>${fatherName}</strong>, was born on <strong>${dob}</strong> and ` +
             `was admitted to this institution on <strong>${admissionDate}</strong>. ` +
-            `At the time of leaving, the student was enrolled in <strong>Class ${studentClass}</strong>. ` +
+            classSentence +
             `The school administration wishes him/her continued success in all future academic and personal endeavours.`;
     }
-
-    document.getElementById('slc-empty-state').style.display = 'none';
-    document.getElementById('slc-preview').style.display     = 'block';
-    const printBtn = document.getElementById('slc-print-btn'); if (printBtn) printBtn.style.display = '';
-    const shareBtn = document.getElementById('slc-share-btn'); if (shareBtn) shareBtn.style.display = '';
 }
 
 /* Let the user manually override the "Date of Leaving" shown on the certificate */
@@ -8095,11 +8203,11 @@ function charManualGenerate() {
 }
 
 /* Build the moral-character paragraph based on the conduct level selected */
-function charBuildParagraph(studentName, guardianLabel, fatherName, fromDisplay, toDisplay, pronouns, conduct) {
+function charBuildParagraph(studentName, guardianLabel, fatherName, fromDisplay, toDisplay, pronouns, conduct, classClause) {
     const { sub, poss, obj } = pronouns; // sub: He/She, poss: His/Her, obj: him/her
 
     const opening = `It is to certify that <strong>${studentName}</strong> ${guardianLabel} <strong>${fatherName}</strong> ` +
-        `who has studied in this institution from <strong>${fromDisplay}</strong> to <strong>${toDisplay}</strong>, `;
+        `who has studied in this institution from <strong>${fromDisplay}</strong> to <strong>${toDisplay}</strong>${classClause || ''}, `;
 
     const templates = {
         excellent: opening +
@@ -8173,6 +8281,7 @@ function charFillFromStudent(s) {
     window.__charFromDisplay     = fromDisplay;
     window.__charToDisplay       = toDisplay;
 
+    csSyncToStudent('char', s);
     charRenderParagraph();
 
     document.getElementById('char-empty-state').style.display = 'none';
@@ -8185,6 +8294,20 @@ function charFillFromStudent(s) {
 function charRenderParagraph() {
     if (!window.__charCurrentName) return;
     const conduct = document.getElementById('char-conduct-select')?.value || 'good';
+
+    // Class Status: "has passed <class>" / "is|was enrolled in <class>" (only once both are chosen)
+    const { mode, cls } = csGetStatus('char');
+    let classClause = '';
+    if (mode && cls) {
+        if (mode === 'passed') {
+            classClause = ` and has passed <strong>${csEsc(cls)}</strong>`;
+        } else {
+            const toVal = document.getElementById('char-to-date-input')?.value || '';
+            const stillStudying = !toVal || toVal >= charTodayISO();   // leaving date today/future → "is", past → "was"
+            classClause = ` and ${stillStudying ? 'is' : 'was'} enrolled in <strong>${csEsc(cls)}</strong>`;
+        }
+    }
+
     const para = charBuildParagraph(
         window.__charCurrentName,
         window.__charGuardianLabel,
@@ -8192,7 +8315,8 @@ function charRenderParagraph() {
         window.__charFromDisplay,
         window.__charToDisplay,
         window.__charPronouns,
-        conduct
+        conduct,
+        classClause
     );
     const el = document.getElementById('char-main-para');
     if (el) el.innerHTML = para;
