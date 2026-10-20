@@ -95,6 +95,19 @@
 
   function school() { return request('GET', '/school'); }
 
+  // Use the SoftSchool product mark in the browser tab on every portal page.
+  function ensureSoftwareFavicon() {
+    if (!document.head) return;
+    var icon = document.querySelector('link[rel~="icon"]');
+    if (!icon) {
+      icon = document.createElement('link');
+      icon.rel = 'icon';
+      document.head.appendChild(icon);
+    }
+    icon.type = 'image/png';
+    icon.href = 'logo-icon.png';
+  }
+
   // School logos are uploaded as image data URLs. Only accept image sources
   // that cannot turn this branding field into executable page content.
   function safeLogoSource(value) {
@@ -313,5 +326,6 @@
     fmtDate: fmtDate, fmtTime: fmtTime, blobUrl: blobUrl,
     showError: showError, logout: logout
   };
+  ensureSoftwareFavicon();
   loadSchoolBranding();
 })(window);

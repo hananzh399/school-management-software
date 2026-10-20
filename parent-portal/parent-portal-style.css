@@ -2458,3 +2458,31 @@ body.page-dashboard {
     animation-duration: 0.001ms !important;
   }
 }
+
+/* Clear, consistent school marks in the legacy application page shell. */
+.app-brand .app-brand-logo,
+.mobile-brand .mobile-brand-logo {
+  box-sizing: border-box;
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+  padding: 3px;
+  object-fit: contain;
+  background: #fff;
+  border: 1px solid #dce8e4;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(28, 73, 63, 0.12);
+}
+
+.drawer-brand .drawer-logo {
+  box-sizing: border-box;
+  width: 48px;
+  height: 48px;
+  flex-shrink: 0;
+  padding: 3px;
+  object-fit: contain;
+  background: #fff;
+  border: 1px solid #dce8e4;
+  border-radius: 13px;
+  box-shadow: 0 2px 8px rgba(28, 73, 63, 0.12);
+}
