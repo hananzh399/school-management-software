@@ -128,6 +128,7 @@
     students = arr.map(child);
     try { sessionStorage.setItem(LIST_KEY, JSON.stringify(students)); } catch (e) { /* ignore */ }
     sync();
+    window.dispatchEvent(new CustomEvent('portal-students-updated', { detail: students.slice() }));
   }
 
   // "Class 5 – B" style label for compact places
@@ -153,6 +154,16 @@
     classLabel: classLabel,
     classSectionLabel: classSectionLabel
   };
+
+  // The access guard fetches the authoritative child list asynchronously,
+  // after this script has already read sessionStorage. Replace that stale
+  // startup snapshot as soon as the guard's request finishes.
+  window.addEventListener('parent-portal-children-updated', function (event) {
+    if (event && Array.isArray(event.detail)) setStudents(event.detail);
+  });
+  if (Array.isArray(window.__parentPortalChildren)) {
+    setStudents(window.__parentPortalChildren);
+  }
 
   // Make "studentData" match the selected child before any page script runs
   sync();

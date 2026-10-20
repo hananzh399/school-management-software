@@ -219,6 +219,8 @@
 
   function boot() {
     renderAll();
+    // A fresh child list can arrive after the page's scripts have rendered.
+    window.addEventListener('portal-students-updated', renderStudents);
     // Live: new messages and receipts while the page is open
     if (window.ChatStore && window.ChatStore.subscribe) window.ChatStore.subscribe(renderMessages);
     // Back button can restore a cached copy of this page

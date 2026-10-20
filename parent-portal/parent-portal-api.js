@@ -60,6 +60,11 @@
         sessionStorage.setItem('studentsList', JSON.stringify(list));
         if (selected) sessionStorage.setItem('studentData', JSON.stringify(selected));
       } catch (e) { /* storage may be unavailable; in-memory calls still work */ }
+      if (global.PortalStudents && typeof global.PortalStudents.setStudents === 'function') {
+        global.PortalStudents.setStudents(list);
+      } else {
+        global.__parentPortalChildren = list;
+      }
       return list;
     });
   }

@@ -35,6 +35,10 @@
         return res.json().then(function (kids) {
           if (!Array.isArray(kids) || !kids.length) return deny();
           try { sessionStorage.setItem('studentsList', JSON.stringify(kids)); } catch (e) { /* ignore */ }
+          // parent-portal-students.js is loaded while this request is in flight.
+          // Keep both its startup state and its live view in sync with the server.
+          window.__parentPortalChildren = kids;
+          window.dispatchEvent(new CustomEvent('parent-portal-children-updated', { detail: kids }));
           reveal();
         });
       })
