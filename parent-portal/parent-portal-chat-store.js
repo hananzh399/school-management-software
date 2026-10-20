@@ -143,11 +143,17 @@
   }
   function refresh() {
     if (!api || !currentRegNo) return Promise.resolve();
-    return Promise.all([
-      api.teachers(),
-      api.messages(currentRegNo),
-      api.messageThreads(currentRegNo)
-    ]).then(function (results) {
+    function fetchUpdates() {
+      return Promise.all([
+        api.teachers(),
+        api.messages(currentRegNo),
+        api.messageThreads(currentRegNo)
+      ]);
+    }
+    var updates = global.ParentPortalLoading && typeof global.ParentPortalLoading.quiet === 'function'
+      ? global.ParentPortalLoading.quiet(fetchUpdates)
+      : fetchUpdates();
+    return updates.then(function (results) {
       mergeTeachers(results[0], results[1], results[2]);
       notify([{ type: 'refresh', teacherId: activeChat }]);
       return state;

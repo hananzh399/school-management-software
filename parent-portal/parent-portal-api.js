@@ -15,6 +15,12 @@
   function request(method, path, body) {
     var currentToken = token();
     if (!currentToken) return Promise.reject(new Error('Please log in to the parent portal first.'));
+    var finishLoading = global.ParentPortalLoading
+      ? global.ParentPortalLoading.begin(
+          method === 'GET' ? 'Loading your information' : 'Processing your request',
+          method === 'GET' ? 'Please wait while we prepare this page.' : 'Please wait while we securely complete this action.'
+        )
+      : function () {};
     var opts = { method: method, headers: { Authorization: 'Bearer ' + currentToken, Accept: 'application/json' } };
     if (body instanceof FormData) opts.body = body;
     else if (body !== undefined) { opts.headers['Content-Type'] = 'application/json'; opts.body = JSON.stringify(body); }
@@ -25,7 +31,8 @@
         if (!res.ok) throw new Error((data && data.error) || 'Something went wrong. Please try again.');
         return data;
       });
-    }, function () { throw new Error("Couldn't reach the server. Check your connection."); });
+    }, function () { throw new Error("Couldn't reach the server. Check your connection."); })
+      .finally(finishLoading);
   }
 
   // The child currently selected in the portal (set by parent-portal-students.js / the home page).
@@ -293,10 +300,13 @@
 
   // Fetches a protected file (photo, diary picture) and returns a blob: URL for <img src>.
   function blobUrl(path) {
+    var finishLoading = global.ParentPortalLoading
+      ? global.ParentPortalLoading.begin('Loading your information', 'Please wait while we load this image.')
+      : function () {};
     return fetch(API + path, { headers: { Authorization: 'Bearer ' + token() } }).then(function (res) {
       if (!res.ok) throw new Error('file');
       return res.blob();
-    }).then(function (b) { return URL.createObjectURL(b); });
+    }).then(function (b) { return URL.createObjectURL(b); }).finally(finishLoading);
   }
 
   // Child photos: set on every photo element the pages use.
