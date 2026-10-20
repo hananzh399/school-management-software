@@ -39,6 +39,143 @@
     });
   }
 
+  function createSubjectItem(subject, template) {
+    if (template) {
+      const item = template.cloneNode(true);
+      item.classList.remove('open', 'search-open');
+      item.querySelectorAll('[id]').forEach((node) => node.removeAttribute('id'));
+      item.querySelectorAll('[aria-controls]').forEach((node) => node.removeAttribute('aria-controls'));
+      return item;
+    }
+    const item = document.createElement('section');
+    item.className = 'subject-item';
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'subject-btn';
+    button.setAttribute('aria-expanded', 'false');
+    const name = document.createElement('span');
+    name.className = 'subject-name';
+    const count = document.createElement('span');
+    count.className = 'subject-count';
+    button.append(name, count);
+    const panel = document.createElement('div');
+    panel.className = 'subject-panel';
+    const list = document.createElement('div');
+    list.className = 'diary-entries';
+    const empty = document.createElement('div');
+    empty.className = 'diary-empty';
+    empty.textContent = tr('diaryEmpty', 'No diary entries for this period.');
+    panel.append(list, empty);
+    item.append(button, panel);
+    return item;
+  }
+
+  function createDiaryEntry(row, api) {
+    const entry = document.createElement('article');
+    entry.className = 'diary-entry';
+    entry.dataset.date = row.date || '';
+    entry.dataset.periodHidden = '0';
+
+    const date = document.createElement('time');
+    date.className = 'diary-date';
+    date.textContent = I18n && I18n.formatDate(row.date) ? I18n.formatDate(row.date) : (row.date || '');
+    date.dataset.dateLabel = '';
+    entry.appendChild(date);
+
+    const chip = document.createElement('span');
+    chip.className = 'diary-chip';
+    chip.textContent = row.subject || tr('diary', 'Diary');
+    entry.appendChild(chip);
+
+    const note = document.createElement('p');
+    note.className = 'diary-text';
+    note.textContent = row.note || '';
+    entry.appendChild(note);
+    if (row.teacher) {
+      const teacher = document.createElement('span');
+      teacher.className = 'diary-teacher';
+      teacher.textContent = row.teacher;
+      entry.appendChild(teacher);
+    }
+    (Array.isArray(row.imageUrls) ? row.imageUrls : []).forEach((path, index) => {
+      const image = document.createElement('img');
+      image.className = 'diary-image';
+      image.alt = (row.subject || tr('diary', 'Diary')) + ' ' + (index + 1);
+      image.loading = 'lazy';
+      entry.appendChild(image);
+      api.blobUrl(path).then((url) => {
+        image.src = url;
+      }).catch(() => {
+        image.remove();
+      });
+    });
+    return entry;
+  }
+
+  function renderDiaryData(rows, api) {
+    const accordion = document.getElementById('subjectAccordion');
+    if (!accordion) return;
+    const originals = Array.from(accordion.querySelectorAll('.subject-item'));
+    const subjectTemplate = originals[0] || null;
+    const originalBySubject = new Map();
+    originals.forEach((item) => {
+      const name = item.querySelector('.subject-name');
+      if (name) originalBySubject.set(name.textContent.replace(/[\u2066-\u2069]/g, '').trim().toLowerCase(), item);
+    });
+
+    const groups = new Map();
+    (Array.isArray(rows) ? rows : []).forEach((row) => {
+      const subject = String(row.subject || tr('diary', 'Diary')).trim();
+      if (!groups.has(subject)) groups.set(subject, []);
+      groups.get(subject).push(row);
+    });
+
+    const subjects = groups.size ? Array.from(groups.keys()) : Array.from(originalBySubject.keys()).map((key) => {
+      const item = originalBySubject.get(key);
+      return item && item.querySelector('.subject-name')
+        ? item.querySelector('.subject-name').textContent.replace(/[\u2066-\u2069]/g, '').trim()
+        : key;
+    });
+    const rendered = [];
+    subjects.forEach((subject) => {
+      const rowsForSubject = groups.get(subject) || [];
+      const item = originalBySubject.get(subject.toLowerCase()) || createSubjectItem(subject, subjectTemplate);
+      item.classList.remove('open', 'search-open');
+      const name = item.querySelector('.subject-name');
+      if (name) name.textContent = subject;
+      const button = item.querySelector('.subject-btn');
+      if (button) button.setAttribute('aria-expanded', 'false');
+
+      const existingEntry = item.querySelector('.diary-entry');
+      const host = existingEntry ? existingEntry.parentElement : item.querySelector('.subject-panel');
+      item.querySelectorAll('.diary-entry').forEach((entry) => entry.remove());
+      if (host) rowsForSubject.forEach((row) => host.appendChild(createDiaryEntry(row, api)));
+
+      let empty = item.querySelector('.diary-empty');
+      if (!empty) {
+        empty = document.createElement('div');
+        empty.className = 'diary-empty';
+        empty.textContent = tr('diaryEmpty', 'No diary entries for this period.');
+        (host || item).appendChild(empty);
+      }
+      empty.hidden = rowsForSubject.length > 0;
+      const count = item.querySelector('.subject-count');
+      if (count) count.textContent = String(rowsForSubject.length);
+      rendered.push(item);
+    });
+
+    accordion.replaceChildren.apply(accordion, rendered);
+  }
+
+  function initializePage(err) {
+    localizeEntries();
+    initAccordion();
+    initPeriodFilter();
+    initDrawer();
+    if (err && window.PortalAPI) window.PortalAPI.showError(err);
+    console.log('Daily Diary connected to the parent portal backend.');
+  }
+
   // Chip text used by search: what is shown on screen PLUS the English name,
   // so searching "homework" still works when the page is in Urdu.
   function chipSearchText(entry) {
@@ -483,11 +620,22 @@
   // Boot
   // ===================================================
   function boot() {
-    localizeEntries();
-    initAccordion();
-    initPeriodFilter();
-    initDrawer();
-    console.log('Daily Diary ready.');
+    const api = window.PortalAPI;
+    if (!api) {
+      renderDiaryData([], { blobUrl: function () { return Promise.reject(new Error('API client unavailable')); } });
+      initializePage(new Error('Load parent-portal-api.js before parent-portal-diary.js.'));
+      return;
+    }
+    api.ensureChildren()
+      .then(() => api.diary())
+      .then((rows) => {
+        renderDiaryData(rows, api);
+        initializePage();
+      })
+      .catch((err) => {
+        renderDiaryData([], api);
+        initializePage(err);
+      });
   }
 
   if (document.readyState === 'loading') {

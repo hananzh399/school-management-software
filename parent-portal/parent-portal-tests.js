@@ -48,12 +48,172 @@
     });
   }
 
+  function createTestSubject(subject, template) {
+    if (template) {
+      const item = template.cloneNode(true);
+      item.classList.remove('open', 'search-open');
+      item.querySelectorAll('[id]').forEach((node) => node.removeAttribute('id'));
+      item.querySelectorAll('[aria-controls]').forEach((node) => node.removeAttribute('aria-controls'));
+      return item;
+    }
+    const item = document.createElement('section');
+    item.className = 'tests-subject';
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'tests-subject-btn';
+    button.setAttribute('aria-expanded', 'false');
+    const name = document.createElement('span');
+    name.className = 'tests-subject-name';
+    const count = document.createElement('span');
+    count.className = 'tests-count';
+    button.append(name, count);
+    const panel = document.createElement('div');
+    panel.className = 'tests-subject-panel';
+    const empty = document.createElement('div');
+    empty.className = 'tests-empty';
+    empty.textContent = tr('noTests', 'No tests available.');
+    panel.appendChild(empty);
+    item.append(button, panel);
+    return item;
+  }
+
+  function createTestCard(row) {
+    const card = document.createElement('article');
+    card.className = 'test-card';
+    card.dataset.testType = String(row.kind || 'test').toLowerCase();
+    card.dataset.testDate = row.date || '';
+    card.dataset.testId = row.id == null ? '' : String(row.id);
+
+    const title = document.createElement('strong');
+    title.className = 'test-card-title';
+    title.textContent = row.title || tr('untitledTest', 'Untitled test');
+    const meta = document.createElement('div');
+    meta.className = 'test-card-meta';
+    const subject = document.createElement('span');
+    subject.className = 'test-card-subject';
+    subject.textContent = row.subject || '';
+    const date = document.createElement('time');
+    date.className = 'test-card-date';
+    date.dataset.dateLabel = '';
+    date.textContent = I18n && I18n.formatDate(row.date) ? I18n.formatDate(row.date) : (row.date || '');
+    const kind = document.createElement('span');
+    kind.className = 'test-card-kind';
+    kind.textContent = row.kind === 'quiz' ? tr('quiz', 'Quiz') : tr('test', 'Test');
+    meta.append(subject, date, kind);
+    const result = document.createElement('div');
+    result.className = 'test-card-result';
+    if (row.score === null || row.score === undefined) {
+      result.textContent = tr('resultPending', 'Marks pending');
+    } else {
+      const total = row.totalMarks == null ? '' : ' / ' + row.totalMarks;
+      const percent = row.percentage == null ? '' : ' (' + row.percentage + '%)';
+      result.textContent = tr('scoreLabel', 'Score') + ': ' + row.score + total + percent;
+    }
+    card.append(title, meta, result);
+    return card;
+  }
+
+  function renderTestData(rows) {
+    const accordion = document.getElementById('testsAccordion');
+    if (!accordion) return;
+    const originals = Array.from(accordion.querySelectorAll('.tests-subject'));
+    const subjectTemplate = originals[0] || null;
+    const originalBySubject = new Map();
+    originals.forEach((item) => {
+      const name = item.querySelector('.tests-subject-name');
+      if (name) originalBySubject.set(plain(name.textContent).trim().toLowerCase(), item);
+    });
+
+    const groups = new Map();
+    (Array.isArray(rows) ? rows : []).forEach((row) => {
+      const subject = String(row.subject || tr('otherSubject', 'Other')).trim();
+      if (!groups.has(subject)) groups.set(subject, []);
+      groups.get(subject).push(row);
+    });
+    const subjects = groups.size ? Array.from(groups.keys()) : Array.from(originalBySubject.keys()).map((key) => {
+      const item = originalBySubject.get(key);
+      const name = item && item.querySelector('.tests-subject-name');
+      return name ? plain(name.textContent).trim() : key;
+    });
+
+    const rendered = [];
+    subjects.forEach((subject) => {
+      const group = groups.get(subject) || [];
+      const item = originalBySubject.get(subject.toLowerCase()) || createTestSubject(subject, subjectTemplate);
+      item.classList.remove('open', 'search-open');
+      const name = item.querySelector('.tests-subject-name');
+      if (name) name.textContent = subject;
+      const button = item.querySelector('.tests-subject-btn');
+      if (button) button.setAttribute('aria-expanded', 'false');
+
+      const existingCard = item.querySelector('.test-card');
+      const host = existingCard ? existingCard.parentElement : item.querySelector('.tests-subject-panel');
+      item.querySelectorAll('.test-card').forEach((card) => card.remove());
+      if (host) group.forEach((row) => host.appendChild(createTestCard(row)));
+      let empty = item.querySelector('.tests-empty');
+      if (!empty) {
+        empty = document.createElement('div');
+        empty.className = 'tests-empty';
+        empty.textContent = tr('noTests', 'No tests available.');
+        (host || item).appendChild(empty);
+      }
+      empty.hidden = group.length > 0;
+      const count = item.querySelector('.tests-count');
+      if (count) count.textContent = String(group.length);
+      rendered.push(item);
+    });
+    accordion.replaceChildren.apply(accordion, rendered);
+    let emptyState = document.getElementById('testsDataEmpty');
+    if (!emptyState) {
+      emptyState = document.createElement('p');
+      emptyState.id = 'testsDataEmpty';
+      emptyState.className = 'tests-data-empty';
+      emptyState.setAttribute('role', 'status');
+      accordion.insertAdjacentElement('afterend', emptyState);
+    }
+    populateTestFilters(Array.isArray(rows) ? rows : []);
+  }
+
+  function populateTestFilters(rows) {
+    const typeSelect = document.getElementById('testTypeFilter');
+    const monthSelect = document.getElementById('testMonthSort');
+    const kinds = Array.from(new Set(rows.map((row) => String(row.kind || 'test').toLowerCase())))
+      .filter((kind) => kind === 'quiz' || kind === 'test');
+    const months = Array.from(new Set(rows.map((row) => String(row.date || '').slice(0, 7)).filter((month) => /^\d{4}-\d{2}$/.test(month)))).sort().reverse();
+
+    if (typeSelect) {
+      const options = [new Option(tr('allTests', 'All'), 'all')].concat(kinds.map((kind) =>
+        new Option(kind === 'quiz' ? tr('quiz', 'Quiz') : tr('test', 'Test'), kind)));
+      typeSelect.replaceChildren.apply(typeSelect, options);
+      typeSelect.value = 'all';
+    }
+    if (monthSelect) {
+      const options = [new Option(tr('allMonths', 'All months'), 'all')].concat(months.map((month) => {
+        const [year, number] = month.split('-');
+        const label = I18n && I18n.formatMonth(month) ? I18n.formatMonth(month) : new Date(Number(year), Number(number) - 1, 1).toLocaleDateString('en', { month: 'long', year: 'numeric' });
+        return new Option(label, month);
+      }));
+      monthSelect.replaceChildren.apply(monthSelect, options);
+      monthSelect.value = 'all';
+    }
+  }
+
+  function initializePage(err) {
+    localizePage();
+    initGlobalFilters();
+    initAccordion();
+    initDrawer();
+    applyFilters();
+    if (err && window.PortalAPI) window.PortalAPI.showError(err);
+    console.log('Tests page connected to the parent portal backend.');
+  }
+
   // ===================================================
   // Global filter helpers
   // ===================================================
   function currentType() {
     const el = document.getElementById('testTypeFilter');
-    return el ? el.value : 'daily';
+    return el ? el.value : 'all';
   }
 
   function currentDate() {
@@ -69,7 +229,8 @@
   function updateMonthSortVisibility() {
     const row = document.getElementById('testMonthSortRow');
     if (!row) return;
-    row.hidden = currentType() !== 'monthly';
+    const months = document.getElementById('testMonthSort');
+    row.hidden = !months || months.options.length < 2;
   }
 
   function updateGlobalDateClear() {
@@ -98,6 +259,7 @@
     const type = currentType();
     const globalDate = currentDate();
     const month = currentMonth();
+    let totalVisible = 0;
 
     const subjects = document.querySelectorAll('.tests-subject');
 
@@ -113,9 +275,9 @@
         const cardType = card.dataset.testType || '';
         const cardDate = card.dataset.testDate || '';
 
-        const matchesGlobalType = cardType === type;
+        const matchesGlobalType = type === 'all' || cardType === type;
         const matchesGlobalDate = !globalDate || cardDate === globalDate;
-        const matchesMonth = (type !== 'monthly' || month === 'all' || cardDate.startsWith(month));
+        const matchesMonth = month === 'all' || cardDate.startsWith(month);
         const matchesSubjectDate = !subjectDate || cardDate === subjectDate;
 
         const visible =
@@ -135,6 +297,7 @@
       // Empty state
       const emptyEl = subject.querySelector('.tests-empty');
       if (emptyEl) emptyEl.hidden = visibleCount !== 0;
+      totalVisible += visibleCount;
 
       // Hide subject entirely if no matches
       subject.style.display = visibleCount === 0 ? 'none' : '';
@@ -143,6 +306,14 @@
       updateSubjectSearchStatus(subject, visibleCount);
     });
 
+    const dataEmpty = document.getElementById('testsDataEmpty');
+    if (dataEmpty) {
+      const hasAnyTests = document.querySelectorAll('.test-card').length > 0;
+      dataEmpty.textContent = hasAnyTests
+        ? tr('noTestsMatchFilters', 'No tests match the current filters.')
+        : tr('noTestsPublished', 'No tests have been published for this child.');
+      dataEmpty.hidden = totalVisible > 0;
+    }
     resizeOpenPanels();
   }
 
@@ -415,12 +586,22 @@
   // Boot
   // ===================================================
   function boot() {
-    localizePage();
-    initGlobalFilters();
-    initAccordion();
-    initDrawer();
-    applyFilters(); // initial pass
-    console.log('Tests page ready.');
+    const api = window.PortalAPI;
+    if (!api) {
+      renderTestData([]);
+      initializePage(new Error('Load parent-portal-api.js before parent-portal-tests.js.'));
+      return;
+    }
+    api.ensureChildren()
+      .then(() => api.tests())
+      .then((rows) => {
+        renderTestData(rows);
+        initializePage();
+      })
+      .catch((err) => {
+        renderTestData([]);
+        initializePage(err);
+      });
   }
 
   if (document.readyState === 'loading') {

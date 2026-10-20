@@ -130,8 +130,10 @@
 
   function getTeacherIdFromURL() {
     const params = new URLSearchParams(window.location.search);
-    const id = parseInt(params.get('teacher'), 10);
-    return (id && Store.get(id)) ? id : 1;
+    const requested = params.get('teacher');
+    if (requested && Store.get(requested)) return String(requested);
+    const first = Store.list()[0];
+    return first ? String(first.id) : null;
   }
 
   function lastMsg() {
@@ -167,9 +169,11 @@
       presence.classList.add('is-typing');
       presence.classList.remove('is-online');
     } else {
-      presence.textContent = onScreen(teacher.online ? tr('online', 'Online') : lastSeenText(teacher.lastSeen));
+      presence.textContent = onScreen(teacher.online === true
+        ? tr('online', 'Online')
+        : (teacher.lastSeen ? lastSeenText(teacher.lastSeen) : tr('presenceUnavailable', 'Live status unavailable')));
       presence.classList.remove('is-typing');
-      presence.classList.toggle('is-online', teacher.online);
+      presence.classList.toggle('is-online', teacher.online === true);
     }
   }
 
@@ -329,9 +333,8 @@
     }
   }
 
-  // Parent → teacher. Emits "typing" / "stopped typing" events so the other
-  // side can show the indicator. Replace the body of emitParentTyping with a
-  // real call (WebSocket, API, etc.) when the backend is ready.
+  // The backend has no typing-event endpoint, so typing is kept local and is
+  // not shown as teacher activity.
   function emitParentTyping(isTyping) {
     // e.g. socket.emit('typing', { teacherId: teacherId, typing: isTyping });
   }
@@ -364,7 +367,18 @@
     events.forEach((e) => {
       if (e.teacherId !== teacherId) return;
 
-      if (e.type === 'status') {
+      if (e.type === 'refresh') {
+        teacher = Store.get(teacherId) || teacher;
+        renderTopBar();
+        rerender();
+        renderQuickReplies();
+        if (sheetMsgId) renderSheet(Store.getMessage(teacherId, sheetMsgId));
+      } else if (e.type === 'send-error' || e.type === 'edit-error' || e.type === 'delete-error') {
+        showToast((e.error && e.error.message) || tr('messageActionFailed', 'Message could not be saved.'));
+        teacher = Store.get(teacherId) || teacher;
+        rerender();
+        renderQuickReplies();
+      } else if (e.type === 'status') {
         updateReceipt(e.msgId, e.status);
         if (sheetMsgId === e.msgId) renderSheet(Store.getMessage(teacherId, e.msgId));
         if (e.status === 'read' && editingId === e.msgId) {
@@ -493,14 +507,18 @@
     info.innerHTML = '';
     const at = msg.at || {};
     INFO_ROWS.forEach((row) => {
-      const done = row.key === 'sent' ? msg.status !== 'sending' : !!at[row.key];
+      const done = row.key === 'sent' ? msg.status !== 'sending' :
+        (row.key === 'read' ? msg.status === 'read' : !!at[row.key]);
+      const unavailable = row.key === 'delivered' && msg.backend === true && !at.delivered;
       const line = el('div', 'chat-info-row');
       const icon = el('span', 'chat-info-icon');
       icon.innerHTML = Store.receiptHTML(row.key);
       line.appendChild(icon);
       line.appendChild(el('span', 'chat-info-label', onScreen(tr(INFO_KEYS[row.key], row.label))));
-      line.appendChild(el('span', 'chat-info-value' + (done ? '' : ' is-pending'),
-        onScreen(done ? localStamp(Store.stampLabel(at[row.key] || at.sent)) : tr(PENDING_KEYS[row.key], PENDING_TEXT[row.key]))));
+      const value = done
+        ? (row.key === 'read' && !at.read ? tr('receiptRead', 'Read') : localStamp(Store.stampLabel(at[row.key] || at.sent)))
+        : (unavailable ? tr('deliveryStatusUnavailable', 'Delivery status unavailable') : tr(PENDING_KEYS[row.key], PENDING_TEXT[row.key]));
+      line.appendChild(el('span', 'chat-info-value' + (done || unavailable ? '' : ' is-pending'), onScreen(value)));
       info.appendChild(line);
     });
 
@@ -685,18 +703,13 @@
       item.addEventListener('click', () => {
         setOpen(false);
         if (item.dataset.action === 'mark-unread') {
-          Store.markUnread(teacherId);
-          window.location.href = 'parent-portal-messages.html';
-        } else if (item.dataset.action === 'clear') {
-          if (window.confirm(tr('confirmClear', 'Clear all messages with {name}? This cannot be undone.').replace('{name}', teacher.name))) {
-            cancelEdit();
-            Store.clear(teacherId);
-            firstUnreadId = null;
-            setTeacherTyping(false);
-            $('chatQuick').innerHTML = '';
-            renderMessages();
-            renderQuickReplies();
+          if (Store.markUnread(teacherId)) {
+            window.location.href = 'parent-portal-messages.html';
+          } else {
+            showToast(tr('markUnreadUnavailable', 'The server does not support marking messages unread.'));
           }
+        } else if (item.dataset.action === 'clear') {
+          showToast(tr('clearUnavailable', 'The server does not support clearing a conversation.'));
         }
       });
     });
@@ -707,7 +720,17 @@
   // ===================================================
   function boot() {
     teacherId = getTeacherIdFromURL();
+    if (!teacherId) {
+      if (window.PortalAPI) window.PortalAPI.showError(new Error('No teachers are available for this child.'));
+      window.location.replace('parent-portal-messages.html');
+      return;
+    }
     teacher = Store.get(teacherId);
+    if (!teacher) {
+      if (window.PortalAPI) window.PortalAPI.showError(new Error('This teacher is not available for the selected child.'));
+      window.location.replace('parent-portal-messages.html');
+      return;
+    }
     Store.setActive(teacherId); // replies that arrive here are not "unread"
 
     // Remember where the unread messages start, then mark them read
@@ -739,9 +762,17 @@
     if (window.innerWidth > 600) $('chatInput').focus();
   }
 
+  function start() {
+    const ready = Store.ready || Promise.resolve();
+    ready.then(boot).catch((err) => {
+      if (window.PortalAPI) window.PortalAPI.showError(err);
+      window.location.replace('parent-portal-messages.html');
+    });
+  }
+
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', boot);
+    document.addEventListener('DOMContentLoaded', start);
   } else {
-    boot();
+    start();
   }
 })();

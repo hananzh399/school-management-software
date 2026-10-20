@@ -82,6 +82,29 @@
     return tr(METHOD_KEYS[value], value);
   }
 
+  async function postSubmission(payload, imageData) {
+    const api = window.PortalAPI;
+    if (!api) throw new Error('Parent portal API client is missing. Load parent-portal-api.js before this page script.');
+    await api.ensureChildren();
+    const form = new FormData();
+    Object.keys(payload).forEach((key) => {
+      if (payload[key] !== undefined && payload[key] !== null) form.append(key, String(payload[key]));
+    });
+    const regNo = api.childId();
+    if (payload.kind !== 'feedback' && !regNo) throw new Error('Select a child before submitting this form.');
+    if (regNo) form.append('regNo', regNo);
+    if (imageData) {
+      const blob = await fetch(imageData).then((response) => response.blob());
+      if (blob.size > 3 * 1024 * 1024) throw new Error('Each attached picture must be under 3 MB.');
+      form.append('images', blob, 'parent-portal-attachment.' + ((blob.type.split('/')[1] || 'jpg').replace('jpeg', 'jpg')));
+    }
+    return api.submissions(form);
+  }
+
+  function submissionError(err) {
+    alert((err && err.message) || tr('submissionFailed', 'Could not submit this form. Please try again.'));
+  }
+
   // ===================================================
   // Helpers
   // ===================================================
@@ -152,7 +175,7 @@
       card.addEventListener('click', () => {
         const action = card.dataset.action;
         const label = action.charAt(0).toUpperCase() + action.slice(1);
-        alert(`Opening the ${label} form (demo).`);
+          alert(tr('formNotConnected', 'The {name} form is not connected to the backend yet.').replace('{name}', label));
       });
     });
   }
@@ -283,7 +306,7 @@
       if (!file) return;
 
       if (!file.type.startsWith('image/')) { alert(tr('alertSelectImage', 'Please select an image file.')); return; }
-      if (file.size > 5 * 1024 * 1024) { alert(tr('alertImageTooLarge', 'Image is too large (max 5 MB).')); return; }
+      if (file.size > 3 * 1024 * 1024) { alert(tr('alertImageTooLarge', 'Image is too large (max 3 MB).')); return; }
 
       const reader = new FileReader();
       reader.onload = (e) => {
@@ -394,7 +417,7 @@
     const btn = document.getElementById('leaveSubmitBtn');
     if (!btn) return;
 
-    btn.addEventListener('click', () => {
+    btn.addEventListener('click', async () => {
       const from = document.getElementById('leaveFrom')?.value || '';
       const to = document.getElementById('leaveTo')?.value || '';
       const text = (document.getElementById('leaveText')?.value || '').trim();
@@ -418,11 +441,19 @@
 
       const ok = window.confirm(tr('confirmSubmitApplication', 'Submit this application?') + '\n\n' + summary);
       if (ok) {
-        alert(tr('submittedApplication', 'Application submitted successfully (demo).'));
-        console.log('→ Leave submitted', {
-          type: state.type, from, to,
-          method: state.method, text, hasImage: !!state.imageData
-        });
+        btn.disabled = true;
+        try {
+          const result = await postSubmission({
+            kind: 'leave', category: state.type, content: text,
+            from, to, method: state.method
+          }, state.imageData);
+          alert(tr('submittedApplication', 'Application submitted successfully.') +
+            (result && result.id ? '\n' + tr('submissionReference', 'Reference') + ': ' + result.id : ''));
+        } catch (err) {
+          submissionError(err);
+        } finally {
+          btn.disabled = false;
+        }
       }
     });
   }
@@ -497,7 +528,7 @@
       if (!file) return;
 
       if (!file.type.startsWith('image/')) { alert(tr('alertSelectImage', 'Please select an image file.')); return; }
-      if (file.size > 5 * 1024 * 1024) { alert(tr('alertImageTooLarge', 'Image is too large (max 5 MB).')); return; }
+      if (file.size > 3 * 1024 * 1024) { alert(tr('alertImageTooLarge', 'Image is too large (max 3 MB).')); return; }
 
       const reader = new FileReader();
       reader.onload = (e) => {
@@ -598,7 +629,7 @@
     const btn = document.getElementById('complaintSubmitBtn');
     if (!btn) return;
 
-    btn.addEventListener('click', () => {
+    btn.addEventListener('click', async () => {
       const title = (document.getElementById('complaintTitle')?.value || '').trim();
       const text = (document.getElementById('complaintText')?.value || '').trim();
 
@@ -619,10 +650,18 @@
 
       const ok = window.confirm(tr('confirmSubmitComplaint', 'Submit this complaint?') + '\n\n' + summary);
       if (ok) {
-        alert(tr('submittedComplaint', 'Complaint submitted successfully (demo).'));
-        console.log('→ Complaint submitted', {
-          title, method: state.cMethod, text, hasImage: !!state.cImageData
-        });
+        btn.disabled = true;
+        try {
+          const result = await postSubmission({
+            kind: 'complaint', title, content: text, method: state.cMethod
+          }, state.cImageData);
+          alert(tr('submittedComplaint', 'Complaint submitted successfully.') +
+            (result && result.id ? '\n' + tr('submissionReference', 'Reference') + ': ' + result.id : ''));
+        } catch (err) {
+          submissionError(err);
+        } finally {
+          btn.disabled = false;
+        }
       }
     });
   }
@@ -697,7 +736,7 @@
       if (!file) return;
 
       if (!file.type.startsWith('image/')) { alert(tr('alertSelectImage', 'Please select an image file.')); return; }
-      if (file.size > 5 * 1024 * 1024) { alert(tr('alertImageTooLarge', 'Image is too large (max 5 MB).')); return; }
+      if (file.size > 3 * 1024 * 1024) { alert(tr('alertImageTooLarge', 'Image is too large (max 3 MB).')); return; }
 
       const reader = new FileReader();
       reader.onload = (e) => {
@@ -798,7 +837,7 @@
     const btn = document.getElementById('suggestionSubmitBtn');
     if (!btn) return;
 
-    btn.addEventListener('click', () => {
+    btn.addEventListener('click', async () => {
       const title = (document.getElementById('suggestionTitle')?.value || '').trim();
       const text = (document.getElementById('suggestionText')?.value || '').trim();
 
@@ -820,10 +859,18 @@
 
       const ok = window.confirm(tr('confirmSubmitSuggestion', 'Submit this suggestion?') + '\n\n' + summary);
       if (ok) {
-        alert(tr('submittedSuggestion', 'Suggestion submitted successfully (demo).'));
-        console.log('→ Suggestion submitted', {
-          title, method: state.sMethod, text, hasImage: !!state.sImageData
-        });
+        btn.disabled = true;
+        try {
+          const result = await postSubmission({
+            kind: 'suggestion', title, content: text, method: state.sMethod
+          }, state.sImageData);
+          alert(tr('submittedSuggestion', 'Suggestion submitted successfully.') +
+            (result && result.id ? '\n' + tr('submissionReference', 'Reference') + ': ' + result.id : ''));
+        } catch (err) {
+          submissionError(err);
+        } finally {
+          btn.disabled = false;
+        }
       }
     });
   }

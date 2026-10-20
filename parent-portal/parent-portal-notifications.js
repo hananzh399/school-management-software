@@ -1,10 +1,16 @@
-// Parent Portal – Notifications page script
+// Parent Portal – Notifications page script (connected to the backend)
+//
+// The backend has no separate "notifications" table, so the feed is assembled from
+// what the school already publishes for the selected child (last 3 days only):
+//   announcements -> notice            diary entries  -> homework
+//   marked tests  -> result            attendance     -> attendance
+//   unpaid fees   -> fee (standing reminder, shown as today)
 (function () {
   'use strict';
 
   // ---------- Settings ----------
   const RETENTION_DAYS = 3;                 // today + the 2 days before it
-  const STORAGE_KEY = 'portalNotifications';
+  const CURRENCY = 'Rs.';                   // shown in fee reminders; change or set '' to hide
 
   // ---------- Language ----------
   const I18n = window.PortalI18n;
@@ -20,13 +26,16 @@
     }
   };
 
+  const API = window.PortalAPI;
+
   // ---------- Date helpers ----------
+  const pad = (n) => String(n).padStart(2, '0');
+  const isoOf = (d) => d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
+
   function isoDaysAgo(n) {
     const d = new Date();
     d.setDate(d.getDate() - n);
-    return d.getFullYear() + '-' +
-      String(d.getMonth() + 1).padStart(2, '0') + '-' +
-      String(d.getDate()).padStart(2, '0');
+    return isoOf(d);
   }
 
   function parseDate(iso) {
@@ -49,52 +58,128 @@
   }
 
   function formatTime(hhmm) {
+    if (!hhmm) return '';
     const [h, m] = hhmm.split(':').map(Number);
     const t = new Date();
     t.setHours(h, m, 0, 0);
     return t.toLocaleTimeString(locale, { hour: 'numeric', minute: '2-digit' });
   }
 
-  // ---------- Data ----------
-  // type: fee | attendance | meeting | homework | result (optional, picks the icon)
-  // date: YYYY-MM-DD    time: 24-hour HH:MM
-  // Replace this sample list with data from your server.
-  function sampleData() {
-    return [
-      { date: isoDaysAgo(0), time: '09:15', type: 'fee', title: 'Fee reminder',
-        body: 'The fee for October is due on 25 October. Please clear the dues to avoid a late fee.' },
-      { date: isoDaysAgo(0), time: '08:05', type: 'attendance', title: 'Attendance update',
-        body: 'Aarav was marked present today. Arrival time: 07:52 AM.' },
-      { date: isoDaysAgo(1), time: '14:30', type: 'meeting', title: 'Parent-teacher meeting',
-        body: 'A parent-teacher meeting is scheduled for Saturday at 10:00 AM in the school hall.' },
-      { date: isoDaysAgo(1), time: '11:00', type: 'homework', title: 'New homework posted',
-        body: 'Mathematics: Exercise 4.2, questions 1 to 10. Due tomorrow.' },
-      { date: isoDaysAgo(2), time: '16:45', type: 'result', title: 'Result announced',
-        body: 'The mid-term results are now available. Open the dashboard to view the report card.' },
-      // Older than 3 days: removed automatically the first time the page loads
-      { date: isoDaysAgo(4), time: '10:00', type: 'homework', title: 'Old homework notice',
-        body: 'This one is older than 3 days, so it gets deleted.' }
-    ];
+  // "2026-10-20" -> {date, time:''}   |   ISO instant -> local {date, time:'HH:MM'}
+  function when(value) {
+    if (!value) return null;
+    const s = String(value);
+    if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return { date: s, time: '' };
+    const d = new Date(s);
+    if (isNaN(d)) return null;
+    return { date: isoOf(d), time: pad(d.getHours()) + ':' + pad(d.getMinutes()) };
   }
 
-  function loadAll() {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) return JSON.parse(raw);
-    } catch (e) { /* ignore */ }
-    return sampleData();
+  // "07:52:10" or "2026-10-20T07:52:10" -> "07:52"
+  function clock(value) {
+    const m = /(?:T|^)(\d{1,2}):(\d{2})/.exec(String(value || ''));
+    return m ? pad(+m[1]) + ':' + m[2] : '';
   }
 
-  function saveAll(list) {
-    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(list)); } catch (e) { /* ignore */ }
+  const money = (n) => (CURRENCY ? CURRENCY + ' ' : '') + Number(n || 0).toLocaleString(locale);
+
+  // ---------- Build the feed from the backend ----------
+  function childFirstName() {
+    const c = API && API.child();
+    const name = c && (c.name || c.fullName);
+    return name ? String(name).trim().split(/\s+/)[0] : tr('yourChild', 'Your child');
   }
 
-  // Keeps only the last RETENTION_DAYS calendar days and deletes the rest.
-  function purgeOld(list) {
+  function fromAnnouncements(rows) {
+    return (rows || []).map((a) => {
+      const w = when(a.date);
+      if (!w) return null;
+      return { date: w.date, time: w.time, type: 'default',
+        title: a.title || tr('notifAnnouncement', 'New announcement'), body: a.body || '' };
+    });
+  }
+
+  function fromDiary(rows) {
+    return (rows || []).map((d) => {
+      const w = when(d.createdAt || d.date);
+      if (!w) return null;
+      const subject = d.subject ? ' · ' + d.subject : '';
+      return { date: w.date, time: w.time, type: 'homework',
+        title: tr('notifHomework', 'New homework posted') + subject, body: d.note || '' };
+    });
+  }
+
+  function fromTests(rows) {
+    return (rows || []).map((t) => {
+      if (t.status !== 'marked') return null;
+      const w = when(t.date);
+      if (!w) return null;
+      const of = t.totalMarks ? ' / ' + t.totalMarks : '';
+      const pct = t.percentage != null ? ' (' + t.percentage + '%)' : '';
+      return { date: w.date, time: '', type: 'result',
+        title: tr('notifResult', 'Result announced') + (t.title ? ' · ' + t.title : ''),
+        body: (t.subject ? t.subject + ': ' : '') + childFirstName() + ' scored ' + t.score + of + pct + '.' };
+    });
+  }
+
+  function fromAttendance(data) {
+    const out = [];
+    const days = (data && data.days) || {};
+    const details = (data && data.details) || {};
+    const name = childFirstName();
+    Object.keys(days).forEach((date) => {
+      const status = days[date];
+      const det = details[date] || {};
+      const t = clock(det.checkIn);
+      let body;
+      if (status === 'present') {
+        body = name + ' was marked present.' + (t ? ' Arrival time: ' + formatTime(t) + '.' : '');
+      } else if (status === 'absent') {
+        body = name + ' was marked absent.' + (det.reason ? ' Reason: ' + det.reason : '');
+      } else if (status === 'leave') {
+        body = name + ' is on leave.' + (det.reason ? ' Reason: ' + det.reason : '');
+      } else {
+        return;
+      }
+      out.push({ date, time: t, type: 'attendance',
+        title: tr('notifAttendance', 'Attendance update'), body });
+    });
+    return out;
+  }
+
+  function fromFees(data) {
+    const today = isoDaysAgo(0);
+    return ((data && data.fees) || []).map((f) => {
+      if (f.status !== 'due' && f.status !== 'overdue') return null;
+      const overdue = f.status === 'overdue';
+      return { date: today, time: '', type: 'fee',
+        title: overdue ? tr('notifFeeOverdue', 'Fee overdue') : tr('notifFeeReminder', 'Fee reminder'),
+        body: 'The fee for ' + f.monthLabel + ' (' + money(f.remaining) + ') ' +
+              (overdue ? 'was due on ' : 'is due on ') + formatDate(f.dueDate) + '.' };
+    });
+  }
+
+  // Runs every request; one failing endpoint does not hide the others.
+  async function loadFeed() {
+    const jobs = [
+      ['/announcements', fromAnnouncements],
+      ['/diary', fromDiary],
+      ['/tests', fromTests],
+      ['/attendance', fromAttendance],
+      ['/fees', fromFees]
+    ].map(([path, map]) => API.get(API.forChild(path)).then(map));
+
+    const results = await Promise.allSettled(jobs);
+    const failed = results.filter((r) => r.status === 'rejected');
+    if (failed.length === results.length) throw failed[0].reason;
+
     const oldestKept = isoDaysAgo(RETENTION_DAYS - 1);
-    const kept = list.filter((n) => n && n.date >= oldestKept && n.date <= isoDaysAgo(0));
-    if (kept.length !== list.length) saveAll(kept);
-    return kept;
+    const newest = isoDaysAgo(0);
+    const items = [];
+    results.forEach((r) => {
+      if (r.status === 'fulfilled') items.push(...(r.value || []));
+    });
+    return items.filter((n) => n && n.date >= oldestKept && n.date <= newest);
   }
 
   // ---------- Icons (static markup, no user data) ----------
@@ -116,34 +201,37 @@
     return node;
   }
 
-  function render() {
+  function showMessage(list, strong, hint) {
+    list.textContent = '';
+    const box = el('div', 'notif-empty');
+    const icon = el('span', 'notif-empty-icon');
+    icon.innerHTML = ICONS.default;
+    box.appendChild(icon);
+    box.appendChild(el('strong', '', strong));
+    if (hint) box.appendChild(el('span', '', hint));
+    list.appendChild(box);
+  }
+
+  function render(items) {
     const list = document.getElementById('notifList');
     const summary = document.getElementById('notifSummary');
     if (!list) return;
 
-    const items = purgeOld(loadAll());
-    list.textContent = '';
-
-    if (summary) {
-      summary.textContent = items.length
-        ? items.length + ' · ' + tr('notifKeptNote', 'Showing the last 3 days')
-        : tr('notifKeptNote', 'Showing the last 3 days');
-    }
+    const note = tr('notifKeptNote', 'Showing the last 3 days');
+    if (summary) summary.textContent = items.length ? items.length + ' · ' + note : note;
 
     if (!items.length) {
-      const empty = el('div', 'notif-empty');
-      const icon = el('span', 'notif-empty-icon');
-      icon.innerHTML = ICONS.default;
-      empty.appendChild(icon);
-      empty.appendChild(el('strong', '', tr('noNotifications', 'You\u2019re all caught up')));
-      empty.appendChild(el('span', '', tr('noNotificationsHint', 'New notifications from the school will appear here.')));
-      list.appendChild(empty);
+      showMessage(list,
+        tr('noNotifications', 'You\u2019re all caught up'),
+        tr('noNotificationsHint', 'New notifications from the school will appear here.'));
       return;
     }
 
+    list.textContent = '';
+
     // Newest first, grouped by date
     const sorted = items.slice().sort((a, b) =>
-      (b.date + b.time).localeCompare(a.date + a.time));
+      (b.date + (b.time || '')).localeCompare(a.date + (a.time || '')));
 
     const groups = new Map();
     sorted.forEach((n) => {
@@ -171,9 +259,9 @@
         const main = el('div', 'notif-main');
         const head = el('div', 'notif-card-head');
         head.appendChild(el('h3', 'notif-title', n.title));
-        head.appendChild(el('span', 'notif-time', formatTime(n.time)));
+        if (n.time) head.appendChild(el('span', 'notif-time', formatTime(n.time)));
         main.appendChild(head);
-        main.appendChild(el('p', 'notif-body', n.body));
+        if (n.body) main.appendChild(el('p', 'notif-body', n.body));
 
         li.appendChild(icon);
         li.appendChild(main);
@@ -185,9 +273,28 @@
     });
   }
 
+  async function boot() {
+    const list = document.getElementById('notifList');
+    if (!list) return;
+    try { localStorage.removeItem('portalNotifications'); } catch (e) { /* old sample data */ }
+
+    if (!API || !API.childId()) {
+      showMessage(list, tr('ttNoStudent', 'Please select a student from the home page.'));
+      return;
+    }
+    showMessage(list, tr('loading', 'Loading…'));
+    try {
+      render(await loadFeed());
+    } catch (err) {
+      console.error('Notifications load failed:', err);
+      showMessage(list, tr('notifLoadError', 'Could not load notifications.'),
+        (err && err.message) || '');
+    }
+  }
+
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', render);
+    document.addEventListener('DOMContentLoaded', boot);
   } else {
-    render();
+    boot();
   }
 })();

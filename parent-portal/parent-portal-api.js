@@ -2,7 +2,9 @@
 // Every page talks to the backend only through this file.
 (function (global) {
   'use strict';
-  var API = 'https://167-86-120-247.sslip.io/api/parent';   // same server as the login page
+  // Override this before loading the file when the backend URL changes:
+  // window.PARENT_PORTAL_API_BASE = 'https://your-host/api/parent';
+  var API = (global.PARENT_PORTAL_API_BASE || 'https://167-86-120-247.sslip.io/api/parent').replace(/\/+$/, '');
   var LOGIN = '../index.html';
   var MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
@@ -11,7 +13,9 @@
   function pad(n) { return n < 10 ? '0' + n : '' + n; }
 
   function request(method, path, body) {
-    var opts = { method: method, headers: { Authorization: 'Bearer ' + token() } };
+    var currentToken = token();
+    if (!currentToken) return Promise.reject(new Error('Please log in to the parent portal first.'));
+    var opts = { method: method, headers: { Authorization: 'Bearer ' + currentToken, Accept: 'application/json' } };
     if (body instanceof FormData) opts.body = body;
     else if (body !== undefined) { opts.headers['Content-Type'] = 'application/json'; opts.body = JSON.stringify(body); }
     return fetch(API + path, opts).then(function (res) {
@@ -28,13 +32,44 @@
   function child() {
     try {
       var d = JSON.parse(sessionStorage.getItem('studentData') || 'null');
-      if (d && d.id) return d;
+      if (d && (d.regNo || d.id || d.regNumber)) return d;
       var list = JSON.parse(sessionStorage.getItem('studentsList') || '[]');
       return list[0] || null;
     } catch (e) { return null; }
   }
-  function childId() { var c = child(); return c ? c.id : null; }
-  function forChild(suffix) { return '/children/' + encodeURIComponent(childId()) + suffix; }
+  function childId() {
+    var c = child();
+    return c ? (c.regNo || c.regNumber || c.id || null) : null;
+  }
+  function forChild(suffix) {
+    var id = childId();
+    if (!id) throw new Error('No child is selected in the parent portal.');
+    return '/children/' + encodeURIComponent(id) + suffix;
+  }
+
+  // Refresh and normalize the real children list from the authenticated backend.
+  // Keep the parent's current selection when that child is still linked to the account.
+  function children() {
+    return request('GET', '/children').then(function (list) {
+      if (!Array.isArray(list)) throw new Error('The backend returned an invalid children list.');
+      var previous = childId();
+      var selected = list.find(function (c) {
+        return String(c.regNo || c.regNumber || c.id) === String(previous);
+      }) || list[0] || null;
+      try {
+        sessionStorage.setItem('studentsList', JSON.stringify(list));
+        if (selected) sessionStorage.setItem('studentData', JSON.stringify(selected));
+      } catch (e) { /* storage may be unavailable; in-memory calls still work */ }
+      return list;
+    });
+  }
+
+  function ensureChildren() {
+    return children().then(function (list) {
+      if (!list.length) throw new Error('No children are linked to this parent account.');
+      return list;
+    });
+  }
 
   // Dates: "05 Oct 2026" and "09:15 AM", the formats the pages already display.
   function parts(iso) {
@@ -70,7 +105,7 @@
   function loadPhoto() {
     var c = child();
     if (!c || !c.hasPhoto) return;
-    blobUrl('/children/' + encodeURIComponent(c.id) + '/photo').then(function (url) {
+    blobUrl('/children/' + encodeURIComponent(c.regNo || c.regNumber || c.id) + '/photo').then(function (url) {
       ['dashStudentPhoto', 'profilePhoto'].forEach(function (id) { var el = document.getElementById(id); if (el) el.src = url; });
       document.querySelectorAll('.student-bar-photo').forEach(function (el) { el.src = url; });
     }).catch(function () { /* initials/default picture stays */ });
@@ -82,6 +117,17 @@
     post: function (p, b) { return request('POST', p, b); },
     put: function (p, b) { return request('PUT', p, b); },
     del: function (p) { return request('DELETE', p); },
+    postForm: function (p, form) { return request('POST', p, form); },
+    children: children,
+    ensureChildren: ensureChildren,
+    diary: function () { return request('GET', forChild('/diary')); },
+    tests: function () { return request('GET', forChild('/tests')); },
+    teachers: function () { return request('GET', forChild('/teachers')); },
+    messages: function (regNo) { return request('GET', '/messages?regNo=' + encodeURIComponent(regNo || childId())); },
+    messageThreads: function (regNo) { return request('GET', '/messages/threads?regNo=' + encodeURIComponent(regNo || childId())); },
+    markMessagesRead: function (regNo, thread) { return request('POST', '/messages/read', { regNo: regNo || childId(), thread: thread }); },
+    sendMessage: function (body) { return request('POST', '/messages', body); },
+    submissions: function (form) { return request('POST', '/submissions', form); },
     child: child, childId: childId, forChild: forChild,
     fmtDate: fmtDate, fmtTime: fmtTime, blobUrl: blobUrl,
     showError: showError, logout: logout

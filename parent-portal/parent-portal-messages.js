@@ -78,13 +78,17 @@
     return node;
   }
 
+  function localLastSeen(value) {
+    return value || tr('offline', 'Offline');
+  }
+
   // ---------- Row ----------
   function buildRow(t) {
     const last = Store.lastMessage(t.id);
     const unread = Store.unreadCount(t.id);
 
     const row = el('a', 'msg-row' + (unread ? ' is-unread' : ''));
-    row.href = 'parent-portal-chat.html?teacher=' + t.id;
+    row.href = 'parent-portal-chat.html?teacher=' + encodeURIComponent(t.id);
     row.dataset.teacherId = t.id;
 
     // Avatar + presence
@@ -92,7 +96,8 @@
     const avatar = el('div', 'msg-row-avatar', t.initials);
     avatar.style.background = t.color;
     const presence = el('span', 'msg-row-presence' + (t.online ? ' is-online' : ''));
-    presence.title = t.online ? tr('online', 'Online') : tr('offline', 'Offline');
+    presence.title = t.online === true ? tr('online', 'Online') :
+      (t.lastSeen ? localLastSeen(t.lastSeen) : tr('presenceUnavailable', 'Live status unavailable'));
     avatarWrap.appendChild(avatar);
     avatarWrap.appendChild(presence);
 
@@ -292,9 +297,17 @@
     window.addEventListener('pageshow', (e) => { if (e.persisted) renderList(); });
   }
 
+  function start() {
+    const ready = Store.ready || Promise.resolve();
+    ready.then(boot).catch((err) => {
+      boot();
+      if (window.PortalAPI) window.PortalAPI.showError(err);
+    });
+  }
+
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', boot);
+    document.addEventListener('DOMContentLoaded', start);
   } else {
-    boot();
+    start();
   }
 })();
