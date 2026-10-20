@@ -1033,7 +1033,7 @@ function closeLoginOutside(e) {
 /* ── LOGIN ROLE SWITCHING (admin / teacher / parent) ──
    A persistent tab row stays visible at the top of the login card;
    clicking a tab just swaps which form is shown beneath it. ── */
-const LOGIN_STEP_IDS = ["adminLoginStep", "teacherLoginStep", "parentLoginStep"];
+const LOGIN_STEP_IDS = ["adminLoginStep", "teacherLoginStep", "parentLoginStep", "parentSignupStep"];
 const LOGIN_STEP_BY_ROLE = { admin: "adminLoginStep", teacher: "teacherLoginStep", parent: "parentLoginStep" };
 
 function showLoginStep(stepId) {
@@ -1053,6 +1053,9 @@ function selectLoginRole(role) {
   const stepId = LOGIN_STEP_BY_ROLE[role];
   if (!stepId) return;
   showLoginStep(stepId);
+  // "New here? Sign Up" is for registering a SCHOOL; parents have their own sign-up link inside their form.
+  const schoolRow = document.getElementById("schoolSignupRow");
+  if (schoolRow) schoolRow.style.display = role === "parent" ? "none" : "";
   document.querySelectorAll(".role-tab").forEach((tab) => {
     tab.classList.toggle("active", tab.getAttribute("data-role") === role);
   });
@@ -1130,10 +1133,202 @@ function handleTeacherLoginIndex(e) {
   }, 700);
 }
 
-/* ── PARENT LOGIN (dummy placeholder until the portal ships) ── */
-function handleParentDummy(e) {
+/* ── PARENT LOGIN + SIGN UP ──
+   Parent signs up with: father's CNIC + phone number + student registration number + a 7-digit
+   password. The server checks all three against ONE student record, creates the account and attaches
+   every sibling the school's records link to that student. Afterwards the parent logs in with phone +
+   password. Talks to POST /api/parent/signup and POST /api/parent/login. ── */
+const ParentAuth = (function () {
+  // Same server as SoftSchoolAuth above, under /api/parent instead of /api/school.
+  const API_BASE_URL = "https://167-86-120-247.sslip.io/api/parent";
+
+  async function post(path, body) {
+    let res;
+    try {
+      res = await fetch(API_BASE_URL + path, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+    } catch (err) {
+      return { ok: false, message: "Couldn't reach the server. Check your connection and try again." };
+    }
+    let data = null;
+    try { data = await res.json(); } catch (err) { /* empty body */ }
+    if (!res.ok) {
+      return {
+        ok: false,
+        status: res.status,
+        message: (data && data.error) || "Something went wrong. Please try again.",
+        attemptsLeft: data && data.attemptsLeft,
+      };
+    }
+    return { ok: true, data: data };
+  }
+
+  return {
+    login: (phone, password) => post("/login", { phone: phone, password: password }),
+    signup: (fatherCnic, phone, regNo, password) =>
+      post("/signup", { fatherCnic: fatherCnic, phone: phone, regNo: regNo, password: password }),
+  };
+})();
+
+function digitsOnlyStr(s) {
+  return String(s || "").replace(/\D/g, "");
+}
+
+function toggleParentPw(inputId, iconId) {
+  const pw = document.getElementById(inputId);
+  const icon = document.getElementById(iconId);
+  if (!pw || !icon) return;
+  const show = pw.type === "password";
+  pw.type = show ? "text" : "password";
+  icon.className = show ? "fas fa-eye-slash" : "fas fa-eye";
+}
+
+/* 1234512345671 -> 12345-1234567-1 while typing */
+function formatParentCnic(input) {
+  const d = digitsOnlyStr(input.value).slice(0, 13);
+  let out = d;
+  if (d.length > 12) out = d.slice(0, 5) + "-" + d.slice(5, 12) + "-" + d.slice(12);
+  else if (d.length > 5) out = d.slice(0, 5) + "-" + d.slice(5);
+  input.value = out;
+}
+
+function showParentSignup() {
+  showLoginStep("parentSignupStep");
+}
+
+function showParentLogin() {
+  showLoginStep("parentLoginStep");
+}
+
+function shakeLoginCard() {
+  const card = document.getElementById("loginCard");
+  if (!card) return;
+  card.classList.add("shake");
+  card.addEventListener("animationend", () => card.classList.remove("shake"), { once: true });
+}
+
+function setBtnBusy(btn, busy, busyText) {
+  if (!btn) return;
+  if (busy) {
+    btn.dataset.origHtml = btn.innerHTML;
+    btn.textContent = busyText;
+    btn.disabled = true;
+    btn.style.opacity = "0.8";
+  } else {
+    if (btn.dataset.origHtml) btn.innerHTML = btn.dataset.origHtml;
+    btn.disabled = false;
+    btn.style.opacity = "";
+  }
+}
+
+async function handleParentSignup(e) {
   e.preventDefault();
-  showToast("Parent portal is coming soon — check back later!", "info");
+  const cnicEl = document.getElementById("parentSignupCnic");
+  const phoneEl = document.getElementById("parentSignupPhone");
+  const regEl = document.getElementById("parentSignupReg");
+  const passEl = document.getElementById("parentSignupPass");
+  const btn = document.getElementById("parentSignupBtn");
+  [cnicEl, phoneEl, regEl, passEl].forEach((el) => el.classList.remove("error"));
+
+  const cnic = digitsOnlyStr(cnicEl.value);
+  const phone = phoneEl.value.trim();
+  const regNo = regEl.value.trim();
+  const password = passEl.value;
+
+  if (cnic.length !== 13) {
+    cnicEl.classList.add("error");
+    showToast("Enter the father's 13-digit CNIC.", "error");
+    return;
+  }
+  if (digitsOnlyStr(phone).length < 10) {
+    phoneEl.classList.add("error");
+    showToast("Enter a valid phone number.", "error");
+    return;
+  }
+  if (!regNo) {
+    regEl.classList.add("error");
+    showToast("Enter the student's registration number.", "error");
+    return;
+  }
+  if (!/^\d{7}$/.test(password)) {
+    passEl.classList.add("error");
+    showToast("Password must be exactly 7 digits.", "error");
+    return;
+  }
+
+  setBtnBusy(btn, true, "Creating account…");
+  const result = await ParentAuth.signup(cnic, phone, regNo, password);
+  setBtnBusy(btn, false);
+
+  if (!result.ok) {
+    shakeLoginCard();
+    showToast(result.message, "error");
+    return;
+  }
+
+  const kids = (result.data && result.data.children) || [];
+  const names = kids.map((k) => k.name).filter(Boolean);
+  const msg = names.length > 1
+    ? "Account created. " + names.length + " children added: " + names.join(", ") + "."
+    : "Account created. You can now log in.";
+  showToast(msg, "success");
+
+  // Hand over to the login form with the phone number already filled in.
+  document.getElementById("parentSignupForm").reset();
+  showParentLogin();
+  document.getElementById("parentPhone").value = phone;
+  document.getElementById("parentPass").value = "";
+  setTimeout(() => document.getElementById("parentPass").focus(), 80);
+}
+
+async function handleParentLogin(e) {
+  e.preventDefault();
+  const phoneEl = document.getElementById("parentPhone");
+  const passEl = document.getElementById("parentPass");
+  const btn = document.getElementById("parentLoginBtn");
+  [phoneEl, passEl].forEach((el) => el.classList.remove("error"));
+
+  if (digitsOnlyStr(phoneEl.value).length < 10) {
+    phoneEl.classList.add("error");
+    showToast("Enter the phone number you signed up with.", "error");
+    return;
+  }
+  if (!passEl.value) {
+    passEl.classList.add("error");
+    showToast("Please enter your password.", "error");
+    return;
+  }
+
+  setBtnBusy(btn, true, "Signing in…");
+  const result = await ParentAuth.login(phoneEl.value.trim(), passEl.value);
+  setBtnBusy(btn, false);
+
+  if (!result.ok) {
+    passEl.classList.add("error");
+    shakeLoginCard();
+    showToast(result.message, "error");
+    return;
+  }
+
+  const d = result.data;
+  try {
+    // Cleared by the portal's own logout (sessionStorage.clear()).
+    sessionStorage.removeItem("studentData");
+    sessionStorage.removeItem("selectedStudentId");
+    sessionStorage.setItem("softschool_parent_token", d.token);
+    sessionStorage.setItem("softschool_parent_school", JSON.stringify(d.school || {}));
+    if (d.children && d.children.length) sessionStorage.setItem("studentsList", JSON.stringify(d.children));
+  } catch (err) {
+    showToast("Your browser blocked saving the session. Allow site storage and try again.", "error");
+    return;
+  }
+
+  showToast("Welcome!", "success");
+  const target = d.mustChangePassword ? "parent-portal-change-password.html" : "parent-portal-index.html";
+  setTimeout(() => { window.location.href = target; }, 600);
 }
 
 /* ── GLOBAL ESCAPE KEY ── */

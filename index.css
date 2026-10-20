@@ -2523,3 +2523,13 @@ section[id], div[id] { scroll-margin-top: 96px; }
 /* Performance fix: disable blur/glow effects for smoother pages */
 * { backdrop-filter: none !important; }
 .glow-spot { display: none !important; }
+
+
+/* ── Parent sign-up hint ── */
+.parent-hint {
+  margin: 0.2rem 0 0.9rem;
+  font-size: 0.78rem;
+  line-height: 1.45;
+  color: var(--ink-soft);
+  text-align: center;
+}
