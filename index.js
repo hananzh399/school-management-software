@@ -1327,7 +1327,13 @@ async function handleParentLogin(e) {
   }
 
   showToast("Welcome!", "success");
-  const target = d.mustChangePassword ? "parent-portal-change-password.html" : "parent-portal-index.html";
+  // Parent portal pages live in the "parent-portal" folder next to this index.html.
+  // new URL(...) resolves against the current page, so it builds the full path
+  // (e.g. https://user.github.io/school-management-software/parent-portal/parent-portal-index.html)
+  // and keeps working on GitHub Pages sub-paths, localhost and a custom domain.
+  const PARENT_PORTAL_FOLDER = "parent-portal/";
+  const targetFile = d.mustChangePassword ? "parent-portal-change-password.html" : "parent-portal-index.html";
+  const target = new URL(PARENT_PORTAL_FOLDER + targetFile, window.location.href).href;
   setTimeout(() => { window.location.href = target; }, 600);
 }
 
