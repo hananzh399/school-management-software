@@ -234,6 +234,19 @@ button { font: inherit; color: inherit; }
   background-color: var(--brand-soft);
   border: 3px solid var(--brand-soft);
 }
+.student-photo-fallback {
+  position: absolute;
+  inset: 3px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: linear-gradient(145deg, #E5F5EE, #D0E8DE);
+  color: var(--brand-dark);
+  font-size: 1.1rem;
+  font-weight: 800;
+  border: 3px solid var(--brand-soft);
+}
+.student-photo-fallback[hidden] { display: none; }
 .status-dot {
   position: absolute;
   bottom: 3px;

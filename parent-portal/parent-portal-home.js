@@ -18,6 +18,55 @@
   function onScreen(text) { return I18n && I18n.iso ? I18n.iso(text) : text; }
   function fill(text, n) { return text.replace('{n}', String(n)); }
   function $(id) { return document.getElementById(id); }
+  var cardPhotoUrls = [];
+
+  function initials(name) {
+    var parts = String(name || '').trim().split(/\s+/).filter(Boolean);
+    if (!parts.length) return '?';
+    return (parts[0].charAt(0) + (parts.length > 1 ? parts[parts.length - 1].charAt(0) : '')).toUpperCase();
+  }
+
+  function revokeCardPhotoUrl(url) {
+    var index = cardPhotoUrls.indexOf(url);
+    if (index >= 0) cardPhotoUrls.splice(index, 1);
+    if (window.URL && typeof window.URL.revokeObjectURL === 'function') {
+      window.URL.revokeObjectURL(url);
+    }
+  }
+
+  function loadCardPhoto(student, img, fallback) {
+    function show(url) {
+      img.onload = function () { fallback.hidden = true; };
+      img.onerror = function () {
+        img.hidden = true;
+        fallback.hidden = false;
+        if (url.indexOf('blob:') === 0) revokeCardPhotoUrl(url);
+      };
+      img.src = url;
+      img.hidden = false;
+    }
+
+    if (student.photo) {
+      show(student.photo);
+      return;
+    }
+
+    var regNo = student.regNo || student.regNumber || student.id;
+    var api = window.PortalAPI;
+    if ((!student.hasPhoto && !student.photoUrl) || !regNo || !api || typeof api.blobUrl !== 'function') return;
+
+    api.blobUrl('/children/' + encodeURIComponent(regNo) + '/photo').then(function (url) {
+      if (!img.isConnected) {
+        window.URL.revokeObjectURL(url);
+        return;
+      }
+      cardPhotoUrls.push(url);
+      show(url);
+    }).catch(function () {
+      img.hidden = true;
+      fallback.hidden = false;
+    });
+  }
 
   // ---------- Student cards (one per child) ----------
   var SVG_NS = 'http://www.w3.org/2000/svg';
@@ -63,9 +112,12 @@
     var top = node('div', 'student-card-top');
 
     var photoWrap = node('div', 'student-photo-wrap');
+    var fallback = node('span', 'student-photo-fallback', initials(s.name));
+    fallback.setAttribute('aria-hidden', 'true');
     var img = node('img', 'student-photo-new');
-    img.src = s.photo || '';
-    img.alt = tr('photoAlt', '{name}\u2019s photo').replace('{name}', s.name);
+    img.hidden = true;
+    img.alt = tr('photoAlt', '{name}\u2019s photo').replace('{name}', s.name || '');
+    photoWrap.appendChild(fallback);
     photoWrap.appendChild(img);
     photoWrap.appendChild(node('span', 'status-dot'));
 
@@ -100,6 +152,7 @@
 
     card.appendChild(top);
     card.appendChild(bottom);
+    card._studentPhoto = { img: img, fallback: fallback };
 
     card.addEventListener('click', function () { openStudent(s.id); });
     card.addEventListener('keydown', function (e) {
@@ -116,13 +169,20 @@
     var hint = $('studentsHint');
     var heading = $('studentsHeading');
 
+    var previousPhotoUrls = cardPhotoUrls;
+    cardPhotoUrls = [];
+    previousPhotoUrls.forEach(function (url) {
+      if (window.URL && typeof window.URL.revokeObjectURL === 'function') window.URL.revokeObjectURL(url);
+    });
     grid.textContent = '';
     if (!students.length) return;
 
     var current = PS.current();
     var several = students.length > 1;
     students.forEach(function (s) {
-      grid.appendChild(buildStudentCard(s, several && current && s.id === current.id));
+      var card = buildStudentCard(s, several && current && s.id === current.id);
+      grid.appendChild(card);
+      loadCardPhoto(s, card._studentPhoto.img, card._studentPhoto.fallback);
     });
 
     if (hint) hint.hidden = !several;

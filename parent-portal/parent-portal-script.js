@@ -7,17 +7,22 @@
   if (I18n) I18n.apply();
   const tr = (key, fallback) => (I18n ? I18n.t(key) : fallback);
 
-  // ---------- Time-of-day greeting ----------
+  // ---------- Guardian greeting ----------
   const hiEl = document.getElementById('greetingHi');
-  if (hiEl) {
-    const hour = new Date().getHours();
-    const greeting =
-      hour < 12 ? tr('goodMorning', 'Good morning,')
-      : hour < 17 ? tr('goodAfternoon', 'Good afternoon,')
-      : tr('goodEvening', 'Good evening,');
-    // wrap Urdu so its punctuation sits on the correct side
-    hiEl.textContent = I18n && I18n.iso ? I18n.iso(greeting) : greeting;
+  const guardianNameEl = document.getElementById('guardianGreetingName');
+
+  function renderGuardianGreeting() {
+    if (hiEl) hiEl.textContent = I18n && I18n.iso ? I18n.iso('Welcome,') : 'Welcome,';
+
+    if (!guardianNameEl) return;
+    const students = window.PortalStudents ? window.PortalStudents.list() : [];
+    const guardianName = students
+      .map((student) => student && student.guardianName ? String(student.guardianName).trim() : '')
+      .find(Boolean);
+    guardianNameEl.textContent = guardianName || tr('parent', 'Parent');
   }
+  renderGuardianGreeting();
+  window.addEventListener('portal-students-updated', renderGuardianGreeting);
 
   // ---------- Bell → Notifications page ----------
   const bellBtn = document.getElementById('notificationBtn');
