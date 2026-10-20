@@ -129,23 +129,10 @@
   // goes to the software developers; it is sent as multipart FormData so
   // the pictures are included as files.
   function sendFeedbackRequest(formData) {
-    return new Promise((resolve) => {
-      setTimeout(() => {
-        const summary = {};
-        formData.forEach((v, k) => { summary[k] = v instanceof File ? '[file] ' + v.name : v; });
-        console.log('Feedback payload (demo, not sent):', summary);
-        resolve();
-      }, 900);
-    });
-    /* Example:
-    return fetch('/api/feedback', { method: 'POST', body: formData })
-      .then(async (res) => {
-        if (!res.ok) {
-          const data = await res.json().catch(() => ({}));
-          throw new Error(data.message || 'Could not send feedback.');
-        }
-      });
-    */
+    formData.append('kind', 'feedback');
+    const id = PortalAPI.childId();
+    if (id) formData.append('regNo', id);
+    return PortalAPI.post('/submissions', formData);
   }
 
   // ---------- Submit ----------

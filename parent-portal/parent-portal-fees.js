@@ -24,96 +24,26 @@
   // ===================================================
   // Mock data
   // ===================================================
-  const CURRENT_MONTH_FEE = {
-    challan: 'GRW-2026-0012',
-    monthLabel: 'October 2026',
-    issueDate: '01 Oct 2026',
-    dueDate: '10 Oct 2026',
-    tuition: 8000,
-    totalWithinDue: 8500,
-    totalAfterDue: 8800,
-    status: 'due'
-  };
+  const CURRENT_MONTH_FEE = { challan: '—', monthLabel: '', issueDate: '', dueDate: '', tuition: 0,
+    totalWithinDue: 0, totalAfterDue: 0, paidAmount: 0, status: 'paid', empty: true };
+  const FEE_HISTORY = [];
 
-  const FEE_HISTORY = [
-    {
-      challan: 'GRW-2026-0011',
-      monthLabel: 'September 2026',
-      issueDate: '01 Sep 2026',
-      dueDate: '10 Sep 2026',
-      tuition: 8000,
-      totalWithinDue: 8500,
-      totalAfterDue: 8800,
-      paidAmount: 0,
-      status: 'overdue'
-    },
-    {
-      challan: 'GRW-2026-0010',
-      monthLabel: 'August 2026',
-      issueDate: '01 Aug 2026',
-      dueDate: '10 Aug 2026',
-      tuition: 8000,
-      totalWithinDue: 8500,
-      totalAfterDue: 8800,
-      paidAmount: 8500,
-      status: 'paid'
-    },
-    {
-      challan: 'GRW-2026-0009',
-      monthLabel: 'July 2026',
-      issueDate: '01 Jul 2026',
-      dueDate: '10 Jul 2026',
-      tuition: 8000,
-      totalWithinDue: 8500,
-      totalAfterDue: 8800,
-      paidAmount: 8500,
-      status: 'paid'
-    },
-    {
-      challan: 'GRW-2026-0008',
-      monthLabel: 'June 2026',
-      issueDate: '01 Jun 2026',
-      dueDate: '10 Jun 2026',
-      tuition: 7500,
-      totalWithinDue: 8000,
-      totalAfterDue: 8300,
-      paidAmount: 8000,
-      status: 'paid'
-    },
-    {
-      challan: 'GRW-2026-0007',
-      monthLabel: 'May 2026',
-      issueDate: '01 May 2026',
-      dueDate: '10 May 2026',
-      tuition: 7500,
-      totalWithinDue: 8000,
-      totalAfterDue: 8300,
-      paidAmount: 8000,
-      status: 'paid'
-    },
-    {
-      challan: 'GRW-2026-0006',
-      monthLabel: 'April 2026',
-      issueDate: '01 Apr 2026',
-      dueDate: '10 Apr 2026',
-      tuition: 7500,
-      totalWithinDue: 8000,
-      totalAfterDue: 8300,
-      paidAmount: 8000,
-      status: 'paid'
-    },
-    {
-      challan: 'GRW-2026-0005',
-      monthLabel: 'March 2026',
-      issueDate: '01 Mar 2026',
-      dueDate: '10 Mar 2026',
-      tuition: 7500,
-      totalWithinDue: 8000,
-      totalAfterDue: 8300,
-      paidAmount: 8000,
-      status: 'paid'
+  // Real data from the school: newest billed month first; the rest is the history.
+  async function loadData() {
+    const d = await PortalAPI.get(PortalAPI.forChild('/fees'));
+    const map = (f) => ({
+      challan: f.challan, monthLabel: f.monthLabel,
+      issueDate: PortalAPI.fmtDate(f.issueDate), dueDate: PortalAPI.fmtDate(f.dueDate),
+      tuition: f.tuition, totalWithinDue: f.totalWithinDue, totalAfterDue: f.totalAfterDue,
+      paidAmount: f.paidAmount, status: f.status, empty: false
+    });
+    FEE_HISTORY.length = 0;
+    const list = (d && d.fees) || [];
+    if (list.length) {
+      Object.assign(CURRENT_MONTH_FEE, map(list[0]));
+      list.slice(1).forEach((f) => FEE_HISTORY.push(map(f)));
     }
-  ];
+  }
 
   // ===================================================
   // Helpers
@@ -203,6 +133,15 @@
   // ===================================================
   function renderFee() {
     const fee = CURRENT_MONTH_FEE;
+
+    if (fee.empty) {   // the school has not issued any fee voucher yet
+      setText('feesMonthLabel', onScreen(tr('noFeeYet', 'No fee voucher issued yet')));
+      setText('feeChallan', '—'); setText('feeIssueDate', '—'); setText('feeDueDate', '—');
+      const tb = document.getElementById('feeTableBody'); if (tb) tb.innerHTML = '';
+      const bd = document.getElementById('feesStatusBadge'); if (bd) bd.innerHTML = '';
+      const pb = document.getElementById('feesPayNowBtn'); if (pb) pb.disabled = true;
+      return;
+    }
 
     setText('feesMonthLabel', localMonth(fee.monthLabel));
     setText('feeChallan', fee.challan);
@@ -489,7 +428,8 @@
   // ===================================================
   // Boot
   // ===================================================
-  function boot() {
+  async function boot() {
+    try { await loadData(); } catch (err) { PortalAPI.showError(err); }
     renderOverall();
     renderFee();
     renderHistory();

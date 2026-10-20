@@ -20,12 +20,7 @@
   const tr = (key, fallback) => (I18n ? I18n.t(key) : fallback);
 
   // ---------- Student data ----------
-  const defaults = {
-    name: 'Aarav Sharma',
-    className: '5–B',
-    regNumber: 'GH/2024/056',
-    photo: null
-  };
+  const defaults = { name: '', className: '', regNumber: '', photo: null };
 
   let studentData = defaults;
 

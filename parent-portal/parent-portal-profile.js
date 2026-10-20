@@ -19,20 +19,7 @@
   const onScreen = (text) => (I18n ? I18n.iso(text) : text);
 
   // ---------- Full student data ----------
-  const defaults = {
-    name: 'Aarav Sharma',
-    fullName: 'Aarav Sharma',
-    className: '5',
-    section: 'B',
-    classSection: '5 – B',
-    regNumber: 'GH/2024/056',
-    rollNumber: '12',
-    guardianName: 'Rajesh Sharma',
-    primaryPhone: '+92 300 123 4567',
-    secondaryPhone: '+92 321 987 6543',
-    permanentAddress: 'House 24, Street 7, Block C,\nGulberg Greens, Islamabad,\nPakistan – 44000',
-    photo: null
-  };
+  const defaults = { name: '', fullName: '', className: '', section: '', classSection: '', regNumber: '', rollNumber: '—', guardianName: '—', primaryPhone: '—', secondaryPhone: '—', permanentAddress: '—', photo: null };
 
   let data = defaults;
 

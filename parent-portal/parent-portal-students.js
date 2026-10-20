@@ -88,7 +88,7 @@
         if (Array.isArray(arr) && arr.length) return arr.map(child);
       }
     } catch (e) { /* ignore */ }
-    return DEMO_STUDENTS;
+    return [];                      // real children come from the login (sessionStorage "studentsList")
   }
 
   // ---------- API ----------
@@ -103,11 +103,12 @@
     try { return sessionStorage.getItem(SELECTED_KEY); } catch (e) { return null; }
   }
 
-  function current() { return get(selectedId()) || students[0]; }
+  function current() { return get(selectedId()) || students[0] || null; }
 
   // Keep the key the existing pages read in step with the selected child
   function sync() {
     var s = current();
+    if (!s) return null;
     try {
       sessionStorage.setItem(SELECTED_KEY, s.id);
       sessionStorage.setItem(DATA_KEY, JSON.stringify(s));

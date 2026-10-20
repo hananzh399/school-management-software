@@ -45,60 +45,14 @@
   // ===================================================
   // Result data per session + term
   // ===================================================
-  const RESULT_DATA = {
-    '2025-2026': {
-      'first-term': {
-        subjects: [
-          { name: 'Maths',     total: 100, obtained: 88 },
-          { name: 'English',   total: 100, obtained: 85 },
-          { name: 'Physics',   total: 100, obtained: 82 },
-          { name: 'Chemistry', total: 100, obtained: 79 },
-          { name: 'Biology',   total: 100, obtained: 90 },
-          { name: 'Computer',  total: 100, obtained: 92 },
-          { name: 'Urdu',      total: 100, obtained: 76 },
-          { name: 'Islamiat',  total: 100, obtained: 88 }
-        ]
-      },
-      'second-term': {
-        subjects: [
-          { name: 'Maths',     total: 100, obtained: 91 },
-          { name: 'English',   total: 100, obtained: 88 },
-          { name: 'Physics',   total: 100, obtained: 85 },
-          { name: 'Chemistry', total: 100, obtained: 83 },
-          { name: 'Biology',   total: 100, obtained: 92 },
-          { name: 'Computer',  total: 100, obtained: 94 },
-          { name: 'Urdu',      total: 100, obtained: 80 },
-          { name: 'Islamiat',  total: 100, obtained: 90 }
-        ]
-      }
-    },
-    '2026-2027': {
-      'first-term': {
-        subjects: [
-          { name: 'Maths',     total: 100, obtained: 93 },
-          { name: 'English',   total: 100, obtained: 90 },
-          { name: 'Physics',   total: 100, obtained: 88 },
-          { name: 'Chemistry', total: 100, obtained: 86 },
-          { name: 'Biology',   total: 100, obtained: 94 },
-          { name: 'Computer',  total: 100, obtained: 96 },
-          { name: 'Urdu',      total: 100, obtained: 84 },
-          { name: 'Islamiat',  total: 100, obtained: 92 }
-        ]
-      },
-      'second-term': {
-        subjects: [
-          { name: 'Maths',     total: 100, obtained: 95 },
-          { name: 'English',   total: 100, obtained: 92 },
-          { name: 'Physics',   total: 100, obtained: 90 },
-          { name: 'Chemistry', total: 100, obtained: 89 },
-          { name: 'Biology',   total: 100, obtained: 96 },
-          { name: 'Computer',  total: 100, obtained: 98 },
-          { name: 'Urdu',      total: 100, obtained: 86 },
-          { name: 'Islamiat',  total: 100, obtained: 94 }
-        ]
-      }
-    }
-  };
+  const RESULT_DATA = {};
+
+  // { "2025-2026": { "first-term": { subjects:[{name,total,obtained}] } } } — the school's own marks.
+  async function loadData() {
+    const d = await PortalAPI.get(PortalAPI.forChild('/results'));
+    Object.keys(RESULT_DATA).forEach((k) => delete RESULT_DATA[k]);
+    Object.assign(RESULT_DATA, d || {});
+  }
 
   // ===================================================
   // Human-readable labels
@@ -431,7 +385,8 @@
   // ===================================================
   // Boot
   // ===================================================
-  function boot() {
+  async function boot() {
+    try { await loadData(); } catch (err) { PortalAPI.showError(err); }
     populateStudentHeader();
     initFilters();
     initDrawer();

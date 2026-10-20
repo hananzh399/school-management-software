@@ -133,28 +133,9 @@
   // phone number + old password belong to this parent account, then save
   // the new password. Resolve on success, reject with an Error(message).
   function changePasswordRequest(payload) {
-    return new Promise((resolve) => {
-      setTimeout(() => {
-        console.log('Change password payload (demo, not sent):', {
-          phone: payload.phone,
-          oldPassword: '••••••',
-          newPassword: '••••••'
-        });
-        resolve();
-      }, 900);
+    return PortalAPI.post('/change-password', {
+      phone: payload.phone, oldPassword: payload.oldPassword, newPassword: payload.newPassword
     });
-    /* Example:
-    return fetch('/api/parent/change-password', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    }).then(async (res) => {
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data.message || 'Could not change password.');
-      }
-    });
-    */
   }
 
   // ---------- Submit ----------

@@ -39,89 +39,23 @@
   // (up to ~4 months back) so navigating to previous months shows
   // a realistic historical record.
   // ===================================================
-  const ATTENDANCE = (function buildAttendance() {
-    const data = {};
-    const pad = (n) => String(n).padStart(2, '0');
+  const ATTENDANCE = {};
 
-    // ----- Explicit overrides per month -----
-    // Absent / Leave / Holiday days per month, keyed by 'YYYY-MM'.
-    const OVERRIDES = {
-      // Current month (built relative to actual today)
-      [ `${now.getFullYear()}-${pad(now.getMonth() + 1)}` ]: {
-        absent:  [5, 13, 22],
-        leave:   [9, 20],
-        holiday: [12, 27]
-      }
-    };
-
-    // Walk back 4 months from the current one and add a mix of records.
-    for (let i = 0; i < 4; i++) {
-      const ref = new Date(now.getFullYear(), now.getMonth() - i, 1);
-      const y = ref.getFullYear();
-      const m = ref.getMonth();       // 0-11
-      const key = `${y}-${pad(m + 1)}`;
-
-      // If not already defined, generate random-ish but stable values
-      if (!OVERRIDES[key]) {
-        // Deterministic pseudo-random values per month
-        // (so it looks varied but the same on every load)
-        const seed = (y * 12 + m);
-        const absent = [];
-        const leave  = [];
-        const holiday = [];
-
-        // 2-4 absents
-        const absentCount = 2 + (seed % 3);   // 2..4
-        for (let k = 0; k < absentCount; k++) {
-          absent.push(3 + ((seed * (k + 3)) % 24));
-        }
-
-        // 1-2 leaves
-        const leaveCount = 1 + (seed % 2);    // 1..2
-        for (let k = 0; k < leaveCount; k++) {
-          leave.push(7 + ((seed * (k + 5)) % 20));
-        }
-
-        // 1-2 extra holidays (in addition to Sundays)
-        const holidayCount = 1 + ((seed >> 1) % 2); // 1..2
-        for (let k = 0; k < holidayCount; k++) {
-          holiday.push(10 + ((seed * (k + 7)) % 18));
-        }
-
-        OVERRIDES[key] = { absent, leave, holiday };
-      }
+  // Real marks from the school's attendance sheet. Sundays with no mark are shown as holidays,
+  // exactly as before; any other unmarked day stays "unmarked".
+  async function loadData() {
+    const d = await PortalAPI.get(PortalAPI.forChild('/attendance'));
+    Object.keys(ATTENDANCE).forEach((k) => delete ATTENDANCE[k]);
+    const days = (d && d.days) || {};
+    Object.keys(days).forEach((k) => { ATTENDANCE[k] = days[k]; });
+    const keys = Object.keys(days).sort();
+    const pad2 = (n) => String(n).padStart(2, '0');
+    const from = keys.length ? new Date(keys[0] + 'T00:00:00') : TODAY;
+    for (let dt = new Date(from); dt <= TODAY; dt.setDate(dt.getDate() + 1)) {
+      const k = `${dt.getFullYear()}-${pad2(dt.getMonth() + 1)}-${pad2(dt.getDate())}`;
+      if (dt.getDay() === 0 && !ATTENDANCE[k]) ATTENDANCE[k] = 'holiday';
     }
-
-    // ----- Build the map for each month we care about -----
-    Object.keys(OVERRIDES).forEach((monthKey) => {
-      const [y, m] = monthKey.split('-').map(Number);
-      const refDate = new Date(y, m - 1, 1);
-      const lastDay = new Date(y, m, 0).getDate();
-      const cfg = OVERRIDES[monthKey];
-
-      for (let d = 1; d <= lastDay; d++) {
-        const date = new Date(y, m - 1, d);
-        if (date > TODAY) continue; // no attendance for future dates
-
-        const dow = date.getDay(); // 0 = Sunday
-        const k = `${y}-${pad(m)}-${pad(d)}`;
-
-        if (dow === 0) {
-          data[k] = 'holiday'; // every Sunday → holiday
-        } else if (cfg.holiday.includes(d)) {
-          data[k] = 'holiday';
-        } else if (cfg.absent.includes(d)) {
-          data[k] = 'absent';
-        } else if (cfg.leave.includes(d)) {
-          data[k] = 'leave';
-        } else {
-          data[k] = 'present';
-        }
-      }
-    });
-
-    return data;
-  })();
+  }
 
   // ===================================================
   // Helpers
@@ -429,7 +363,8 @@
   // ===================================================
   // Boot
   // ===================================================
-  function boot() {
+  async function boot() {
+    try { await loadData(); } catch (err) { PortalAPI.showError(err); }
     initNav();
     initDrawer();
     renderAll();

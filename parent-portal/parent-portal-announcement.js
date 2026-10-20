@@ -29,94 +29,21 @@
   //   attachment: { name, size, url }  (optional)
   //   isNew:  true                     (optional)
   // ===================================================
-  const ANNOUNCEMENTS = [
-    {
-      id: 'a1',
-      category: 'event',
-      categoryLabel: 'Event',
-      heading: 'Annual Sports Day 2026',
-      date: '05 Oct 2026',
-      time: '09:15 AM',
-      timestamp: '05 Oct 2026 · 09:15 AM',
-      text: 'Greenwood High is proud to announce the Annual Sports Day 2026, taking place on Saturday, 24 October at the main school ground. All students from Class 1 to Class 10 will participate in track events, relays, and team sports. Parents are cordially invited to attend and cheer for the young athletes. Refreshments will be available on-site.',
-      isNew: true,
-      images: [
-        'data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 400 300%22%3E%3Cdefs%3E%3ClinearGradient id=%22g1%22 x1=%220%22 y1=%220%22 x2=%221%22 y2=%221%22%3E%3Cstop offset=%220%22 stop-color=%22%232E8B7A%22/%3E%3Cstop offset=%221%22 stop-color=%22%234CAF8F%22/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width=%22400%22 height=%22300%22 fill=%22url(%23g1)%22/%3E%3Ctext x=%22200%22 y=%22155%22 font-family=%22Arial%22 font-size=%2240%22 font-weight=%22bold%22 fill=%22white%22 text-anchor=%22middle%22%3ESports Day%3C/text%3E%3C/svg%3E',
-        'data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 400 300%22%3E%3Crect width=%22400%22 height=%22300%22 fill=%22%23E3F2ED%22/%3E%3Ctext x=%22200%22 y=%22155%22 font-family=%22Arial%22 font-size=%2232%22 font-weight=%22bold%22 fill=%22%232E8B7A%22 text-anchor=%22middle%22%3ETrack%3C/text%3E%3C/svg%3E',
-        'data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 400 300%22%3E%3Crect width=%22400%22 height=%22300%22 fill=%22%23FBF4DE%22/%3E%3Ctext x=%22200%22 y=%22155%22 font-family=%22Arial%22 font-size=%2232%22 font-weight=%22bold%22 fill=%22%238A6B1C%22 text-anchor=%22middle%22%3ETrophies%3C/text%3E%3C/svg%3E'
-      ]
-    },
-    {
-      id: 'a2',
-      category: 'notice',
-      categoryLabel: 'Notice',
-      heading: 'Parent-Teacher Meeting — Grade 5',
-      date: '03 Oct 2026',
-      time: '02:00 PM',
-      timestamp: '03 Oct 2026 · 02:00 PM',
-      text: 'A Parent-Teacher Meeting (PTM) has been scheduled for Grade 5 parents on Friday, 10 October 2026 from 2:00 PM to 5:00 PM. Please visit the class teacher to discuss your child\'s progress, and collect the mid-term report. Kindly arrive within your allotted time slot; slots will be shared on the class group.',
-      images: [
-        'data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 400 300%22%3E%3Crect width=%22400%22 height=%22300%22 fill=%22%23E6EFF8%22/%3E%3Ctext x=%22200%22 y=%22155%22 font-family=%22Arial%22 font-size=%2230%22 font-weight=%22bold%22 fill=%22%234682B4%22 text-anchor=%22middle%22%3EPTM Notice%3C/text%3E%3C/svg%3E'
-      ],
-      attachment: {
-        name: 'PTM-Schedule-Grade5.pdf',
-        size: '218 KB',
-        url: '#'
-      }
-    },
-    {
-      id: 'a3',
-      category: 'holiday',
-      categoryLabel: 'Holiday',
-      heading: 'Autumn Break — 20 to 22 October',
-      date: '01 Oct 2026',
-      time: '11:00 AM',
-      timestamp: '01 Oct 2026 · 11:00 AM',
-      text: 'The school will remain closed for the Autumn Break from Monday, 20 October to Wednesday, 22 October 2026. Regular classes will resume on Thursday, 23 October 2026. Parents are advised to ensure that students complete the holiday assignments given by their subject teachers during the break.',
-      images: [
-        'data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 400 300%22%3E%3Crect width=%22400%22 height=%22300%22 fill=%22%23EFF5E2%22/%3E%3Ctext x=%22200%22 y=%22155%22 font-family=%22Arial%22 font-size=%2232%22 font-weight=%22bold%22 fill=%22%237B9E4E%22 text-anchor=%22middle%22%3EAutumn Break%3C/text%3E%3C/svg%3E'
-      ]
-    },
-    {
-      id: 'a4',
-      category: 'result',
-      categoryLabel: 'Result',
-      heading: 'Mid-Term Results Announced',
-      date: '30 Sep 2026',
-      time: '05:30 PM',
-      timestamp: '30 Sep 2026 · 05:30 PM',
-      text: 'Mid-Term examination results for all classes have been released. Parents can view their child\'s detailed marksheet in the Result section of the Parent Portal. For any clarification regarding grading, please contact the respective subject teacher during the next PTM.',
-      video: 'data:video/mp4;base64,AAAAIGZ0eXBpc29tAAACAGlzb21pc28yYXZjMW1wNDEAAAAIZnJlZQAAAQxtZGF0',
-      videoPoster: 'data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 400 225%22%3E%3Cdefs%3E%3ClinearGradient id=%22g2%22 x1=%220%22 y1=%220%22 x2=%221%22 y2=%221%22%3E%3Cstop offset=%220%22 stop-color=%22%23C9A227%22/%3E%3Cstop offset=%221%22 stop-color=%22%23E0B93D%22/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width=%22400%22 height=%22225%22 fill=%22url(%23g2)%22/%3E%3Ctext x=%22200%22 y=%22125%22 font-family=%22Arial%22 font-size=%2234%22 font-weight=%22bold%22 fill=%22white%22 text-anchor=%22middle%22%3EMid-Term Result%3C/text%3E%3C/svg%3E'
-    },
-    {
-      id: 'a5',
-      category: 'event',
-      categoryLabel: 'Event',
-      heading: 'Science Exhibition — Young Innovators',
-      date: '27 Sep 2026',
-      time: '10:00 AM',
-      timestamp: '27 Sep 2026 · 10:00 AM',
-      text: 'The Science Department is organising a Science Exhibition titled "Young Innovators" on 15 November 2026. Students from Grades 4 to 10 are encouraged to submit project ideas to their science teachers by 5 November. Selected projects will be displayed in the school auditorium, and winners will receive certificates and prizes.',
-      images: [
-        'data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 400 300%22%3E%3Crect width=%22400%22 height=%22300%22 fill=%22%23E3F2ED%22/%3E%3Ctext x=%22200%22 y=%22155%22 font-family=%22Arial%22 font-size=%2230%22 font-weight=%22bold%22 fill=%22%232E8B7A%22 text-anchor=%22middle%22%3EScience Fair%3C/text%3E%3C/svg%3E',
-        'data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 400 300%22%3E%3Crect width=%22400%22 height=%22300%22 fill=%22%23F0E9F8%22/%3E%3Ctext x=%22200%22 y=%22155%22 font-family=%22Arial%22 font-size=%2232%22 font-weight=%22bold%22 fill=%22%234B2E6E%22 text-anchor=%22middle%22%3EProjects%3C/text%3E%3C/svg%3E'
-      ]
-    },
-    {
-      id: 'a6',
-      category: 'notice',
-      categoryLabel: 'Notice',
-      heading: 'Fee Submission Reminder',
-      date: '25 Sep 2026',
-      time: '09:00 AM',
-      timestamp: '25 Sep 2026 · 09:00 AM',
-      text: 'Parents are kindly reminded to submit the monthly fee by the 10th of every month to avoid late fee charges. Payments can be made online through the Fee & Bills section of this portal, or at the school accounts office between 8:30 AM and 1:00 PM on working days.',
-      images: [
-        'data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 400 300%22%3E%3Crect width=%22400%22 height=%22300%22 fill=%22%23FBE9E9%22/%3E%3Ctext x=%22200%22 y=%22155%22 font-family=%22Arial%22 font-size=%2230%22 font-weight=%22bold%22 fill=%22%238B2020%22 text-anchor=%22middle%22%3EFee Reminder%3C/text%3E%3C/svg%3E'
-      ]
-    }
-  ];
+  const ANNOUNCEMENTS = [];
+
+  // Notices posted to this child's class. Urgent ones are shown under "Notice" with the new-dot.
+  async function loadData() {
+    const list = await PortalAPI.get(PortalAPI.forChild('/announcements'));
+    ANNOUNCEMENTS.length = 0;
+    (list || []).forEach((a) => {
+      const date = PortalAPI.fmtDate(a.date), time = PortalAPI.fmtTime(a.date);
+      ANNOUNCEMENTS.push({
+        id: 'a' + a.id, category: 'notice', categoryLabel: 'Notice',
+        heading: a.title, text: a.body, date: date, time: time,
+        timestamp: date + ' · ' + time, isNew: !!a.isNew
+      });
+    });
+  }
 
   // ===================================================
   // Helpers
@@ -360,7 +287,8 @@
   // ===================================================
   // Boot
   // ===================================================
-  function boot() {
+  async function boot() {
+    try { await loadData(); } catch (err) { PortalAPI.showError(err); }
     renderFeed('all');
     initFilters();
     initDrawer();
