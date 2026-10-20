@@ -1,0 +1,224 @@
+/* ===================================================== */
+/* Urdu support for pages that use the original portal   */
+/* stylesheets (e.g. the dashboard). Load this file AFTER */
+/* parent-portal-style.css and none-edu.css.             */
+/* The layout stays left-to-right; only the text changes.*/
+/* Change --font-ur to switch the Urdu typeface.         */
+/* ===================================================== */
+
+:root {
+  --font-ur: 'Noto Naskh Arabic', 'Noto Nastaliq Urdu', 'Segoe UI', Tahoma, Arial, sans-serif;
+}
+
+:root[lang="ur"] body {
+  font-family: var(--font-ur);
+  line-height: 1.7;
+}
+
+/* Arabic-script letters must stay joined: no tracking or forced caps */
+:root[lang="ur"] *,
+:root[lang="ur"] *::before,
+:root[lang="ur"] *::after {
+  letter-spacing: 0 !important;
+  text-transform: none !important;
+}
+
+/* Taller line boxes so marks above/below the line are never clipped */
+:root[lang="ur"] .page-title,
+:root[lang="ur"] .feature-title,
+:root[lang="ur"] .dash-student-tag,
+:root[lang="ur"] .tab-item span,
+:root[lang="ur"] .page-subtitle,
+:root[lang="ur"] .drawer-role,
+:root[lang="ur"] .drawer-link-text { line-height: 1.7; }
+
+/* Urdu reads smaller than Latin at the same size, so nudge small text up */
+:root[lang="ur"] .page-title { font-size: clamp(1.5rem, 1.3rem + 0.9vw, 1.8rem); }
+:root[lang="ur"] .page-subtitle { font-size: 0.92rem; }
+:root[lang="ur"] .feature-title { font-size: 1rem; }
+:root[lang="ur"] .feature-card-wide .feature-title { font-size: 1.15rem; }
+:root[lang="ur"] .dash-student-tag { font-size: 0.82rem; }
+:root[lang="ur"] .tab-item { font-size: 0.78rem; }
+:root[lang="ur"] .drawer-section-label { font-size: 0.78rem; }
+:root[lang="ur"] .drawer-link-text { font-size: 1rem; }
+:root[lang="ur"] .drawer-role,
+:root[lang="ur"] .powered-by { font-size: 0.8rem; }
+
+/* ---------- Profile page ---------- */
+:root[lang="ur"] .profile-hero-tag { font-size: 0.92rem; line-height: 1.7; }
+:root[lang="ur"] .profile-hero-chip { font-size: 0.8rem; line-height: 1.6; }
+:root[lang="ur"] .profile-section-title { font-size: 0.9rem; line-height: 1.7; }
+:root[lang="ur"] .profile-info-label { font-size: 0.8rem; line-height: 1.7; }
+:root[lang="ur"] .profile-hero-name,
+:root[lang="ur"] .profile-info-value { line-height: 1.6; }
+
+/* ---------- Daily Diary page ---------- */
+:root[lang="ur"] .diary-filter-label { font-size: 0.82rem; line-height: 1.6; }
+:root[lang="ur"] .diary-filter-select { font-size: 1rem; line-height: 1.6; }
+:root[lang="ur"] .subject-name { font-size: 1.06rem; line-height: 1.7; }
+:root[lang="ur"] .subject-meta { font-size: 0.78rem; line-height: 1.6; }
+:root[lang="ur"] .diary-search-label { font-size: 0.8rem; line-height: 1.6; }
+:root[lang="ur"] .diary-search-status { font-size: 0.82rem; line-height: 1.7; }
+:root[lang="ur"] .diary-date { font-size: 0.82rem; line-height: 1.6; }
+:root[lang="ur"] .diary-chip { font-size: 0.74rem; line-height: 1.6; }
+:root[lang="ur"] .diary-empty { font-size: 0.92rem; line-height: 1.8; }
+
+/* ---------- Tests page ---------- */
+:root[lang="ur"] .tests-filter-label { font-size: 0.8rem; line-height: 1.7; }
+:root[lang="ur"] .tests-filter-select,
+:root[lang="ur"] .tests-date-input { font-size: 1rem; line-height: 1.6; }
+:root[lang="ur"] .tests-subject-name { font-size: 1.06rem; line-height: 1.7; }
+:root[lang="ur"] .tests-subject-count { font-size: 0.8rem; line-height: 1.6; }
+:root[lang="ur"] .test-date { font-size: 0.82rem; line-height: 1.6; }
+:root[lang="ur"] .test-type-chip { font-size: 0.76rem; line-height: 1.6; }
+:root[lang="ur"] .test-marks-label { font-size: 0.78rem; line-height: 1.6; }
+:root[lang="ur"] .test-title { line-height: 1.5; }
+:root[lang="ur"] .page-tests .tests-empty { font-size: 0.92rem; line-height: 1.8; }
+:root[lang="ur"] .subject-search-label,
+:root[lang="ur"] .subject-search-status { font-size: 0.82rem; line-height: 1.7; }
+
+/* ---------- Submit Application page ---------- */
+:root[lang="ur"] .app-option-title { font-size: 1.1rem; line-height: 1.6; }
+:root[lang="ur"] .app-option-sub { font-size: 0.86rem; line-height: 1.7; }
+:root[lang="ur"] .leave-section-title { font-size: 0.9rem; line-height: 1.7; }
+:root[lang="ur"] .leave-dropdown-value,
+:root[lang="ur"] .leave-dropdown-item-text { font-size: 1rem; line-height: 1.7; }
+:root[lang="ur"] .leave-date-label,
+:root[lang="ur"] .leave-field-label,
+:root[lang="ur"] .leave-preview-label { font-size: 0.8rem; line-height: 1.7; }
+:root[lang="ur"] .leave-today-btn { font-size: 0.95rem; line-height: 1.6; }
+:root[lang="ur"] .leave-tab { font-size: 0.8rem; line-height: 1.6; }
+:root[lang="ur"] .leave-textarea,
+:root[lang="ur"] .complaint-title-input { font-size: 1rem; line-height: 1.8; }
+:root[lang="ur"] .leave-upload-title { font-size: 0.98rem; line-height: 1.7; }
+:root[lang="ur"] .leave-upload-sub { font-size: 0.82rem; line-height: 1.7; }
+:root[lang="ur"] .leave-cam-btn { font-size: 0.9rem; line-height: 1.6; }
+:root[lang="ur"] .leave-camera-hint { font-size: 0.82rem; line-height: 1.7; }
+:root[lang="ur"] .leave-submit-btn { font-size: 1.06rem; line-height: 1.6; }
+:root[lang="ur"] .leave-footnote { font-size: 0.84rem; line-height: 1.8; }
+
+/* ---------- Announcement page ---------- */
+:root[lang="ur"] .ann-filter-chip { font-size: 0.86rem; line-height: 1.6; }
+:root[lang="ur"] .ann-cat-badge { font-size: 0.76rem; line-height: 1.6; }
+:root[lang="ur"] .ann-timestamp { font-size: 0.78rem; line-height: 1.6; }
+:root[lang="ur"] .ann-heading { line-height: 1.5; }
+:root[lang="ur"] .ann-attachment-name { line-height: 1.6; }
+:root[lang="ur"] .ann-attachment-meta { font-size: 0.78rem; line-height: 1.6; }
+:root[lang="ur"] .ann-empty { font-size: 0.95rem; line-height: 1.8; }
+
+/* ---------- Result page ---------- */
+:root[lang="ur"] .result-filter-label { font-size: 0.8rem; line-height: 1.7; }
+:root[lang="ur"] .result-filter-select { font-size: 1rem; line-height: 1.6; }
+:root[lang="ur"] .result-prompt-title { font-size: 1.1rem; line-height: 1.6; }
+:root[lang="ur"] .result-prompt-text { font-size: 0.92rem; line-height: 1.9; }
+:root[lang="ur"] .result-student-tag { font-size: 0.74rem; line-height: 1.6; }
+:root[lang="ur"] .result-col { font-size: 0.78rem; line-height: 1.6; }
+:root[lang="ur"] .result-table-total .result-col { font-size: 0.95rem; }
+:root[lang="ur"] .result-subject { font-size: 0.95rem; line-height: 1.7; }
+:root[lang="ur"] .result-summary-label { font-size: 0.78rem; line-height: 1.6; }
+:root[lang="ur"] .result-remarks-title { font-size: 0.9rem; line-height: 1.6; }
+:root[lang="ur"] .result-remarks-badge { font-size: 0.78rem; line-height: 1.6; }
+:root[lang="ur"] .result-remarks-text { font-size: 0.95rem; line-height: 1.9; }
+:root[lang="ur"] .result-criteria-title { font-size: 1.05rem; line-height: 1.6; }
+:root[lang="ur"] .result-criteria-sub { font-size: 0.82rem; line-height: 1.7; }
+:root[lang="ur"] .result-criteria-range { font-size: 0.92rem; line-height: 1.7; }
+
+/* ---------- Attendance page ---------- */
+:root[lang="ur"] .att-today-label { font-size: 0.8rem; line-height: 1.7; }
+:root[lang="ur"] .att-today-date { line-height: 1.6; }
+:root[lang="ur"] .att-status-pill { font-size: 0.9rem; line-height: 1.6; }
+:root[lang="ur"] .att-summary-label { font-size: 0.78rem; line-height: 1.6; }
+:root[lang="ur"] .att-calendar-title { line-height: 1.6; }
+:root[lang="ur"] .att-calendar-subtitle { font-size: 0.82rem; line-height: 1.6; }
+:root[lang="ur"] .att-calendar-weekdays span { font-size: 0.7rem; line-height: 1.6; }
+:root[lang="ur"] .att-day-mark { font-size: 0.7rem; line-height: 1.2; }
+:root[lang="ur"] .att-legend-item { font-size: 0.78rem; line-height: 1.6; }
+
+/* ---------- Fee & Bills page ---------- */
+:root[lang="ur"] .fees-overall-title { font-size: 1.05rem; line-height: 1.6; }
+:root[lang="ur"] .fees-overall-sub { font-size: 0.8rem; line-height: 1.6; }
+:root[lang="ur"] .fees-overall-label { font-size: 0.74rem; line-height: 1.6; }
+:root[lang="ur"] .fees-history-btn-title { font-size: 1rem; line-height: 1.6; }
+:root[lang="ur"] .fees-history-btn-sub { font-size: 0.82rem; line-height: 1.7; }
+:root[lang="ur"] .fees-month-head-title { font-size: 1.05rem; line-height: 1.6; }
+:root[lang="ur"] .fees-month-head-sub { line-height: 1.6; }
+:root[lang="ur"] .fee-status-badge { font-size: 0.8rem; line-height: 1.6; }
+:root[lang="ur"] .fees-challan-label { font-size: 0.78rem; line-height: 1.6; }
+:root[lang="ur"] .fee-cell-label { font-size: 0.95rem; line-height: 1.7; }
+:root[lang="ur"] .fee-dues-block-label { font-size: 0.76rem; line-height: 1.6; }
+:root[lang="ur"] .fees-note { font-size: 0.84rem; line-height: 1.8; }
+:root[lang="ur"] .fees-pay-btn-title { font-size: 1.08rem; line-height: 1.6; }
+:root[lang="ur"] .fees-pay-btn-sub { font-size: 0.84rem; line-height: 1.7; }
+:root[lang="ur"] .fees-back-btn { font-size: 0.95rem; line-height: 1.6; }
+:root[lang="ur"] .fees-history-summary-label { font-size: 0.78rem; line-height: 1.6; }
+:root[lang="ur"] .fees-history-summary-sub { font-size: 0.8rem; line-height: 1.6; }
+:root[lang="ur"] .fee-history-month { font-size: 1rem; line-height: 1.6; }
+:root[lang="ur"] .fee-history-detail-label,
+:root[lang="ur"] .fee-history-amount-label { font-size: 0.74rem; line-height: 1.6; }
+
+/* ---------- Timetable page ---------- */
+:root[lang="ur"] .timetable-info-item { font-size: 0.9rem; line-height: 1.6; }
+:root[lang="ur"] .tt-corner-days,
+:root[lang="ur"] .tt-corner-periods { font-size: 0.74rem; line-height: 1.6; }
+:root[lang="ur"] .tt-day-name { font-size: 0.8rem; line-height: 1.5; }
+:root[lang="ur"] .tt-subject { font-size: 0.8rem; line-height: 1.5; }
+:root[lang="ur"] .tt-teacher { font-size: 0.7rem; line-height: 1.5; }
+:root[lang="ur"] .tt-break-label { font-size: 0.8rem; }
+:root[lang="ur"] .timetable-hint { font-size: 0.82rem; line-height: 1.7; }
+
+/* ---------- Messages page ---------- */
+:root[lang="ur"] .msg-search-input { font-size: 1rem; line-height: 1.6; }
+:root[lang="ur"] .msg-filter { font-size: 0.92rem; line-height: 1.6; }
+:root[lang="ur"] .msg-filter-count { font-size: 0.74rem; }
+:root[lang="ur"] .msg-row-time { font-size: 0.8rem; line-height: 1.5; }
+:root[lang="ur"] .msg-row-subject { font-size: 0.84rem; line-height: 1.6; }
+:root[lang="ur"] .msg-row-typing { font-size: 0.9rem; line-height: 1.6; }
+:root[lang="ur"] .msg-row-badge { font-size: 0.76rem; }
+:root[lang="ur"] .msg-empty-title { font-size: 1.08rem; line-height: 1.7; }
+:root[lang="ur"] .msg-empty-text { font-size: 0.92rem; line-height: 1.8; }
+
+/* ---------- Chat page ---------- */
+:root[lang="ur"] .chat-topbar-name { line-height: 1.5; }
+:root[lang="ur"] .chat-topbar-subject { font-size: 0.8rem; line-height: 1.6; }
+:root[lang="ur"] .chat-topbar-presence { font-size: 0.82rem; line-height: 1.6; }
+:root[lang="ur"] .chat-bubble-time { font-size: 0.74rem; line-height: 1.4; }
+:root[lang="ur"] .chat-bubble-edited { font-size: 0.74rem; line-height: 1.4; }
+:root[lang="ur"] .chat-date-divider span,
+:root[lang="ur"] .chat-unread-divider span { font-size: 0.82rem; line-height: 1.7; }
+:root[lang="ur"] .chat-empty-title { font-size: 1.08rem; line-height: 1.7; }
+:root[lang="ur"] .chat-empty-text { font-size: 0.92rem; line-height: 1.8; }
+:root[lang="ur"] .chat-quick-chip { font-size: 0.9rem; line-height: 1.7; }
+:root[lang="ur"] .chat-edit-title { font-size: 0.84rem; line-height: 1.6; }
+:root[lang="ur"] .chat-edit-text { line-height: 1.6; }
+:root[lang="ur"] .chat-input { font-size: 1.02rem; line-height: 1.7; }
+:root[lang="ur"] .chat-menu-item { font-size: 0.98rem; line-height: 1.7; }
+:root[lang="ur"] .chat-sheet-title { font-size: 1.12rem; line-height: 1.7; }
+:root[lang="ur"] .chat-sheet-preview { line-height: 1.7; }
+:root[lang="ur"] .chat-info-label { font-size: 0.96rem; line-height: 1.7; }
+:root[lang="ur"] .chat-info-value { font-size: 0.9rem; line-height: 1.7; }
+:root[lang="ur"] .chat-sheet-note { font-size: 0.86rem; line-height: 1.8; }
+:root[lang="ur"] .chat-sheet-btn { font-size: 1.04rem; line-height: 1.7; }
+:root[lang="ur"] .chat-toast { font-size: 0.9rem; line-height: 1.7; }
+
+/* ---------- Change Password & Submit Feedback pages ---------- */
+/* These two pages use parent-portal-change-password.css (cp-*) and */
+/* parent-portal-feedback.css (fb-*) instead of the original sheets. */
+:root[lang="ur"] .cp-topbar-title { font-size: 1.15rem; line-height: 1.6; }
+:root[lang="ur"] .cp-hero h1,
+:root[lang="ur"] .cp-hero h2 { font-size: 1.15rem; line-height: 1.6; }
+:root[lang="ur"] .cp-hero p { font-size: 0.9rem; line-height: 1.8; }
+:root[lang="ur"] .cp-label { font-size: 0.96rem; line-height: 1.7; }
+:root[lang="ur"] .cp-input { font-size: 1rem; line-height: 1.6; }
+:root[lang="ur"] .cp-error { font-size: 0.86rem; line-height: 1.7; }
+:root[lang="ur"] .cp-form-error { font-size: 0.9rem; line-height: 1.8; }
+:root[lang="ur"] .cp-rules li { font-size: 0.86rem; line-height: 1.7; }
+:root[lang="ur"] .cp-submit { font-size: 1.06rem; line-height: 1.6; }
+:root[lang="ur"] .cp-success h2 { font-size: 1.35rem; line-height: 1.6; }
+:root[lang="ur"] .cp-success p { font-size: 0.96rem; line-height: 1.9; }
+:root[lang="ur"] .fb-cat-name { font-size: 1rem; line-height: 1.6; }
+:root[lang="ur"] .fb-cat-desc { font-size: 0.8rem; line-height: 1.6; }
+:root[lang="ur"] .fb-textarea { line-height: 1.8; }
+:root[lang="ur"] .fb-counter,
+:root[lang="ur"] .fb-optional { font-size: 0.8rem; line-height: 1.6; }
+:root[lang="ur"] .fb-dropzone { font-size: 0.98rem; line-height: 1.6; }
+:root[lang="ur"] .fb-upload-note { font-size: 0.82rem; line-height: 1.7; }

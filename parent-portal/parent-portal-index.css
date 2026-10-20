@@ -1,0 +1,539 @@
+/* ===================================================== */
+/* ============== PARENT PORTAL · HOME PAGE ============ */
+/* Self-contained: mobile-first, fluid, accessible.      */
+/* Colours live in variables so theming can be added     */
+/* later without touching the layout.                    */
+/* ===================================================== */
+
+:root {
+  --brand: #2E8B7A;
+  --brand-dark: #247262;
+  --brand-soft: #E5F5EE;
+  --bg: #F3F7F5;
+  --surface: #FFFFFF;
+  --text: #1B2A2E;
+  --muted: #64767C;
+  --border: #E0EAE5;
+  --danger: #D14444;
+  --danger-soft: #FDEEEE;
+  --radius: 20px;
+  --shadow-sm: 0 1px 2px rgba(27, 42, 46, 0.06);
+  --shadow-md: 0 10px 30px -14px rgba(27, 42, 46, 0.22);
+  --container: 960px;
+  --gutter: clamp(1rem, 4vw, 2rem);
+}
+
+*,
+*::before,
+*::after {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html { -webkit-text-size-adjust: 100%; }
+
+body.page-index {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+    'Helvetica Neue', Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  color: var(--text);
+  background-color: var(--bg);
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+}
+
+button { font: inherit; color: inherit; }
+
+:focus-visible {
+  outline: 3px solid rgba(70, 130, 180, 0.7);
+  outline-offset: 2px;
+}
+
+.container {
+  width: 100%;
+  max-width: var(--container);
+  margin-inline: auto;
+  padding-inline: var(--gutter);
+}
+
+/* ===================================================== */
+/* Top bar                                               */
+/* ===================================================== */
+.mobile-topbar {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  background-color: var(--brand);
+  color: #FFFFFF;
+  padding-top: env(safe-area-inset-top, 0px);
+}
+
+.topbar-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  height: 64px;
+}
+
+.icon-btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border: none;
+  border-radius: 14px;
+  background-color: rgba(255, 255, 255, 0.14);
+  color: #FFFFFF;
+  cursor: pointer;
+  transition: background-color 0.18s ease, transform 0.12s ease;
+}
+.icon-btn:hover { background-color: rgba(255, 255, 255, 0.24); }
+.icon-btn:active { transform: scale(0.94); }
+.icon-btn svg { width: 22px; height: 22px; }
+
+.notification-dot {
+  position: absolute;
+  top: 10px;
+  inset-inline-end: 11px;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background-color: #FF6B6B;
+  border: 2px solid var(--brand);
+}
+
+.mobile-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  min-width: 0;
+}
+.mobile-brand-logo { width: 34px; height: 34px; flex-shrink: 0; }
+.mobile-brand-name {
+  font-size: 1.02rem;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ===================================================== */
+/* Hero / greeting                                       */
+/* ===================================================== */
+.hero {
+  position: relative;
+  overflow: hidden;
+  color: #FFFFFF;
+  background: linear-gradient(180deg, var(--brand) 0%, var(--brand-dark) 100%);
+  border-radius: 0 0 clamp(24px, 5vw, 40px) clamp(24px, 5vw, 40px);
+  padding-block: clamp(0.75rem, 3vw, 1.75rem) clamp(1.75rem, 6vw, 3rem);
+}
+.hero::before,
+.hero::after {
+  content: '';
+  position: absolute;
+  border-radius: 50%;
+  background-color: rgba(255, 255, 255, 0.07);
+  pointer-events: none;
+}
+.hero::before { width: 200px; height: 200px; top: 16px; inset-inline-end: -80px; }
+.hero::after  { width: 140px; height: 140px; bottom: -70px; inset-inline-start: -50px; }
+
+.greeting-block { position: relative; z-index: 1; }
+
+.greeting-hi {
+  font-size: clamp(0.9rem, 2.4vw, 1.05rem);
+  font-weight: 500;
+  opacity: 0.85;
+}
+.greeting-name {
+  font-size: clamp(1.7rem, 6vw, 2.5rem);
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 1.15;
+  margin-top: 0.15rem;
+}
+.greeting-sub {
+  margin-top: 0.5rem;
+  font-size: clamp(0.8rem, 2.2vw, 0.92rem);
+  opacity: 0.75;
+}
+
+/* ===================================================== */
+/* Main content                                          */
+/* ===================================================== */
+.index-content {
+  flex: 1;
+  padding-block: clamp(1.5rem, 5vw, 2.5rem) 3rem;
+}
+
+.section-title-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 0.9rem;
+}
+.section-title {
+  font-size: clamp(1.05rem, 3vw, 1.25rem);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+/* Cards grid: 1 column on phones, flows to more when there is room */
+.student-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr));
+  gap: 1rem;
+}
+
+/* ---------- Student card ---------- */
+.student-card-new {
+  display: flex;
+  flex-direction: column;
+  background-color: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
+  cursor: pointer;
+  overflow: hidden;
+  transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+}
+.student-card-new:hover {
+  transform: translateY(-2px);
+  border-color: rgba(46, 139, 122, 0.45);
+  box-shadow: var(--shadow-md);
+}
+.student-card-new:active { transform: translateY(0) scale(0.99); }
+
+.student-card-top {
+  display: flex;
+  align-items: center;
+  gap: clamp(0.8rem, 3vw, 1.1rem);
+  padding: clamp(1rem, 3.5vw, 1.35rem);
+}
+
+.student-photo-wrap {
+  position: relative;
+  flex-shrink: 0;
+  width: clamp(60px, 16vw, 76px);
+  height: clamp(60px, 16vw, 76px);
+}
+.student-photo-new {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+  background-color: var(--brand-soft);
+  border: 3px solid var(--brand-soft);
+}
+.status-dot {
+  position: absolute;
+  bottom: 3px;
+  inset-inline-end: 3px;
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  background-color: #34C759;
+  border: 3px solid var(--surface);
+}
+
+.student-card-main { flex: 1; min-width: 0; }
+
+.student-tag {
+  display: inline-block;
+  padding: 0.15rem 0.6rem;
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--brand-dark);
+  background-color: var(--brand-soft);
+  border-radius: 999px;
+}
+
+.student-name-new {
+  margin-top: 0.4rem;
+  font-size: clamp(1.05rem, 3.6vw, 1.25rem);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+
+.student-meta-row { margin-top: 0.45rem; display: flex; flex-wrap: wrap; gap: 0.4rem; }
+.meta-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+.meta-chip svg { width: 15px; height: 15px; color: var(--brand); }
+
+.student-card-arrow {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background-color: var(--brand-soft);
+  color: var(--brand);
+  transition: background-color 0.18s ease, color 0.18s ease, transform 0.18s ease;
+}
+.student-card-arrow svg { width: 18px; height: 18px; }
+.student-card-new:hover .student-card-arrow {
+  background-color: var(--brand);
+  color: #FFFFFF;
+  transform: translateX(2px);
+}
+
+.student-card-bottom {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.85rem clamp(1rem, 3.5vw, 1.35rem);
+  background-color: #F8FBF9;
+  border-top: 1px solid var(--border);
+}
+.student-detail { display: flex; flex-direction: column; gap: 0.1rem; min-width: 0; }
+.detail-label {
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.detail-value {
+  font-size: 0.95rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+.student-card-cta {
+  flex-shrink: 0;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--brand);
+}
+
+/* ===================================================== */
+/* Side drawer                                           */
+/* ===================================================== */
+.drawer-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  background-color: rgba(14, 26, 24, 0.5);
+  -webkit-backdrop-filter: blur(3px);
+  backdrop-filter: blur(3px);
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.28s ease, visibility 0.28s;
+}
+.drawer-overlay.active { opacity: 1; visibility: visible; }
+
+.side-drawer {
+  position: fixed;
+  top: 0;
+  bottom: 0;
+  inset-inline-start: 0;
+  z-index: 100;
+  width: min(86vw, 330px);
+  display: flex;
+  flex-direction: column;
+  background-color: var(--surface);
+  box-shadow: 20px 0 50px -20px rgba(0, 0, 0, 0.35);
+  transform: translateX(-102%);
+  visibility: hidden;
+  transition: transform 0.3s cubic-bezier(0.22, 0.8, 0.3, 1), visibility 0.3s;
+}
+.side-drawer.open { transform: translateX(0); visibility: visible; }
+
+.drawer-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: calc(1.1rem + env(safe-area-inset-top, 0px)) 1.1rem 1.2rem;
+  color: #FFFFFF;
+  background: linear-gradient(160deg, var(--brand) 0%, var(--brand-dark) 100%);
+}
+.drawer-brand { display: flex; align-items: center; gap: 0.75rem; min-width: 0; }
+.drawer-logo { width: 44px; height: 44px; flex-shrink: 0; }
+.drawer-brand-text { display: flex; flex-direction: column; min-width: 0; }
+.drawer-school {
+  font-size: 1rem;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.drawer-role { font-size: 0.78rem; opacity: 0.8; }
+
+.drawer-close {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border: none;
+  border-radius: 12px;
+  background-color: rgba(255, 255, 255, 0.16);
+  color: #FFFFFF;
+  cursor: pointer;
+  transition: background-color 0.18s ease;
+}
+.drawer-close:hover { background-color: rgba(255, 255, 255, 0.28); }
+.drawer-close svg { width: 20px; height: 20px; }
+
+.drawer-nav {
+  flex: 1;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 0.75rem 0.75rem 1rem;
+}
+
+.drawer-section-label {
+  display: block;
+  padding: 0.9rem 0.75rem 0.4rem;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.drawer-link {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  min-height: 52px;
+  padding: 0.5rem 0.75rem;
+  border-radius: 14px;
+  color: var(--text);
+  text-decoration: none;
+  font-size: 0.95rem;
+  font-weight: 600;
+  transition: background-color 0.16s ease;
+}
+.drawer-link:hover { background-color: #F1F7F4; }
+.drawer-link:active { background-color: var(--brand-soft); }
+
+.drawer-link-icon {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
+  background-color: var(--brand-soft);
+  color: var(--brand);
+}
+.drawer-link-icon svg { width: 19px; height: 19px; }
+.drawer-link-text { flex: 1; }
+.drawer-link-arrow { width: 16px; height: 16px; color: #A3B3B0; }
+
+.drawer-footer {
+  padding: 0.75rem 0.75rem calc(0.9rem + env(safe-area-inset-bottom, 0px));
+  border-top: 1px solid var(--border);
+}
+.drawer-link-logout { color: var(--danger); }
+.drawer-link-logout .drawer-link-icon { background-color: var(--danger-soft); color: var(--danger); }
+.drawer-link-logout:hover { background-color: var(--danger-soft); }
+
+.drawer-powered {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+  margin-top: 0.6rem;
+  padding-top: 0.8rem;
+  border-top: 1px dashed var(--border);
+}
+.drawer-powered-logo { width: 28px; height: 28px; object-fit: contain; }
+.drawer-powered-text { display: flex; flex-direction: column; line-height: 1.2; }
+.powered-by { font-size: 0.66rem; color: var(--muted); }
+.brand-name { font-size: 0.85rem; font-weight: 800; color: var(--brand-dark); }
+
+/* ===================================================== */
+/* Larger screens                                        */
+/* ===================================================== */
+@media (min-width: 768px) {
+  .topbar-inner { height: 72px; }
+  .mobile-brand-name { font-size: 1.12rem; }
+}
+
+@media (max-width: 360px) {
+  .student-card-arrow { display: none; }
+  .student-card-cta { display: none; }
+}
+
+@media (max-height: 480px) and (orientation: landscape) {
+  .hero { padding-block: 0.5rem 1.25rem; }
+  .greeting-sub { display: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
+}
+
+/* ===================================================== */
+/* Urdu typography (layout stays left-to-right)          */
+/* Change --font-ur to switch the Urdu typeface.         */
+/* ===================================================== */
+:root {
+  --font-ur: 'Noto Naskh Arabic', 'Noto Nastaliq Urdu', 'Segoe UI', Tahoma, Arial, sans-serif;
+}
+
+:root[lang="ur"] body.page-index {
+  font-family: var(--font-ur);
+  line-height: 1.8;
+}
+
+/* Arabic-script letters must stay joined: no tracking or forced caps */
+:root[lang="ur"] *,
+:root[lang="ur"] *::before,
+:root[lang="ur"] *::after {
+  letter-spacing: 0 !important;
+  text-transform: none !important;
+}
+
+/* Taller line boxes so marks above/below the line are never clipped */
+:root[lang="ur"] .greeting-name,
+:root[lang="ur"] .section-title,
+:root[lang="ur"] .student-name-new { line-height: 1.6; }
+:root[lang="ur"] .greeting-hi,
+:root[lang="ur"] .greeting-sub { line-height: 1.7; }
+
+/* Small caps-style labels read better a touch larger in Urdu */
+:root[lang="ur"] .student-tag { font-size: 0.8rem; padding: 0.1rem 0.7rem; }
+:root[lang="ur"] .detail-label,
+:root[lang="ur"] .drawer-section-label { font-size: 0.8rem; }
+:root[lang="ur"] .drawer-role,
+:root[lang="ur"] .powered-by { font-size: 0.82rem; }
+:root[lang="ur"] .student-card-cta { font-size: 0.9rem; }
+:root[lang="ur"] .drawer-link { font-size: 1rem; }
+:root[lang="ur"] .drawer-school,
+:root[lang="ur"] .mobile-brand-name { line-height: 1.7; }
+
+
+/* Layout stays LTR in both languages. Each translated text run is its own   */
+/* right-to-left island (so Urdu punctuation lands on the correct side) but  */

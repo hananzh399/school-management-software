@@ -1,0 +1,508 @@
+/* ===================================================== */
+/*                PARENT PORTAL · FEE & BILLS            */
+/*                                                       */
+/* Replaces the Fee & Bills sections of none-edu.css     */
+/* (lines 994-1984): the current-month view, the         */
+/* overall summary and the fee history view.             */
+/*                                                       */
+/* Load AFTER parent-portal-core.css and                 */
+/* parent-portal-app.css (it uses their design tokens).  */
+/* ===================================================== */
+
+.page-fees {
+  /* money + status colours, defined once */
+  --fee-paid-bg: #DCF2E3;
+  --fee-paid-ink: #17603A;
+  --fee-paid-strong: #1F7A4A;
+  --fee-due-bg: #FCF1D8;
+  --fee-due-ink: #8A5A10;
+  --fee-due-strong: #B7791F;
+  --fee-over-bg: #FBECEA;
+  --fee-over-ink: #9C2F28;
+  --fee-over-strong: #B3372F;
+}
+
+.page-fees .app-content { padding-top: 1.1rem; }
+
+.fees-view { display: flex; flex-direction: column; gap: 0.9rem; }
+.fees-view[hidden] { display: none !important; }
+.fees-view > .page-title-block { margin-bottom: 0.1rem; }
+
+/* ===================================================== */
+/* OVERALL SUMMARY                                       */
+/* ===================================================== */
+
+.fees-overall {
+  overflow: hidden;
+  background-color: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-1);
+}
+
+.fees-overall-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.2rem 0.75rem;
+  padding: 0.95rem 1rem 0.2rem;
+}
+
+.fees-overall-title { font-size: 1rem; font-weight: 700; letter-spacing: -0.01em; color: var(--ink); }
+.fees-overall-sub { font-size: 0.76rem; color: var(--ink-3); }
+
+.fees-overall-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.5rem;
+  padding: 0.7rem 1rem 1rem;
+}
+
+.fees-overall-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  min-width: 0;
+  padding: 0.65rem 0.7rem;
+  background-color: var(--bg);
+  border-radius: var(--r-sm);
+}
+
+.fees-overall-label { font-size: 0.72rem; font-weight: 500; color: var(--ink-3); }
+
+.fees-overall-value {
+  font-size: 0.98rem;
+  font-weight: 700;
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+
+.fees-overall-paid { background-color: var(--fee-paid-bg); }
+.fees-overall-paid .fees-overall-label { color: var(--fee-paid-ink); }
+.fees-overall-paid .fees-overall-value { color: var(--fee-paid-ink); }
+
+.fees-overall-due { background-color: var(--fee-over-bg); }
+.fees-overall-due .fees-overall-label { color: var(--fee-over-ink); }
+.fees-overall-due .fees-overall-value { color: var(--fee-over-strong); }
+
+/* ---------- "View Fee History" row, inside the summary card ---------- */
+.fees-history-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  width: 100%;
+  min-height: 64px;
+  padding: 0.7rem 1rem;
+  font-family: inherit;
+  color: inherit;
+  text-align: start;
+  background-color: var(--surface);
+  border: none;
+  border-top: 1px solid var(--line);
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.fees-history-btn:active { background-color: var(--bg); }
+.fees-history-btn:focus-visible { outline: 2px solid var(--brand); outline-offset: -3px; }
+
+.fees-history-btn-icon,
+.fees-pay-btn-icon {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+}
+
+.fees-history-btn-icon { color: #1D6FB8; background-color: #E1EEF9; }
+.fees-history-btn-icon svg { width: 20px; height: 20px; }
+
+.fees-history-btn-text,
+.fees-pay-btn-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 0.1rem; }
+
+.fees-history-btn-title { font-size: 0.97rem; font-weight: 600; color: var(--ink); }
+.fees-history-btn-sub { font-size: 0.78rem; color: var(--ink-3); }
+
+.fees-history-btn > svg:last-child,
+.fees-history-btn-arrow { width: 18px; height: 18px; color: var(--ink-3); }
+
+/* ===================================================== */
+/* CURRENT MONTH                                         */
+/* ===================================================== */
+
+.fees-month {
+  overflow: hidden;
+  background-color: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-1);
+}
+
+.fees-month-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.95rem 1rem;
+}
+
+.fees-month-head-left { display: flex; align-items: center; gap: 0.75rem; min-width: 0; }
+
+.fees-month-head-icon {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  height: 42px;
+  color: var(--brand-600);
+  background-color: var(--brand-soft);
+  border-radius: 12px;
+}
+
+.fees-month-head-icon svg { width: 21px; height: 21px; }
+.fees-month-head-text { min-width: 0; }
+.fees-month-head-title { font-size: 1rem; font-weight: 700; letter-spacing: -0.01em; color: var(--ink); }
+.fees-month-head-sub { margin-top: 0.05rem; font-size: 0.82rem; color: var(--ink-3); }
+
+/* ---------- Status badge (paid / due / overdue) ---------- */
+.fee-status-badge {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.28rem 0.7rem;
+  font-size: 0.76rem;
+  font-weight: 700;
+  white-space: nowrap;
+  color: var(--fee-due-ink);
+  background-color: var(--fee-due-bg);
+  border-radius: 999px;
+}
+
+.fee-status-badge::before {
+  content: '';
+  width: 7px;
+  height: 7px;
+  background-color: currentColor;
+  border-radius: 50%;
+}
+
+.fee-status-badge.status-paid    { color: var(--fee-paid-ink); background-color: var(--fee-paid-bg); }
+.fee-status-badge.status-due     { color: var(--fee-due-ink);  background-color: var(--fee-due-bg); }
+.fee-status-badge.status-overdue { color: var(--fee-over-ink); background-color: var(--fee-over-bg); }
+
+/* ---------- Challan / dates strip ---------- */
+.fees-challan-strip {
+  display: flex;
+  align-items: stretch;
+  margin: 0 1rem;
+  padding: 0.7rem 0;
+  background-color: var(--bg);
+  border-radius: var(--r-md);
+}
+
+.fees-challan-item {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.15rem;
+  padding: 0 0.3rem;
+  text-align: center;
+}
+
+.fees-challan-label { font-size: 0.72rem; font-weight: 500; color: var(--ink-3); }
+.fees-challan-item:first-child { flex: 1.4; }
+.fees-challan-value { font-size: 0.86rem; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--ink); white-space: nowrap; }
+.fees-challan-value-due { color: var(--fee-over-strong); }
+.fees-challan-sep { flex-shrink: 0; width: 1px; background-color: var(--line-strong); }
+
+/* ---------- Fee table (rows are built by the script) ---------- */
+.fee-table-wrap { padding: 0.3rem 1rem 0.2rem; }
+
+.fee-table,
+.fee-table tbody { display: block; width: 100%; }
+
+.fee-table tbody tr {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.85rem 0;
+}
+
+.fee-table tbody tr + tr { border-top: 1px solid var(--line); }
+.fee-table td { display: block; }
+
+.fee-cell-label { font-size: 0.92rem; font-weight: 500; color: var(--ink-2); }
+.fee-cell-value { font-size: 1rem; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--ink); text-align: end; }
+
+/* "Payment Total" row: label on top, two amounts side by side */
+.fee-table tbody tr.fee-row-dues { flex-direction: column; align-items: stretch; gap: 0.6rem; }
+.fee-row-dues .fee-cell-label { font-weight: 700; color: var(--ink); }
+.fee-row-dues .fee-cell-value { text-align: start; }
+
+.fee-dues-wrap { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; }
+
+.fee-dues-block {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  min-width: 0;
+  padding: 0.7rem 0.8rem;
+  border-radius: var(--r-md);
+}
+
+.fee-dues-block-label { font-size: 0.74rem; font-weight: 600; }
+.fee-dues-block-value { font-size: 1.1rem; font-weight: 700; line-height: 1.2; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+
+.fee-dues-within { background-color: var(--fee-paid-bg); }
+.fee-dues-within .fee-dues-block-label { color: var(--fee-paid-ink); }
+.fee-dues-within .fee-dues-block-value { color: var(--fee-paid-ink); }
+
+.fee-dues-after { background-color: var(--fee-over-bg); }
+.fee-dues-after .fee-dues-block-label { color: var(--fee-over-ink); }
+.fee-dues-after .fee-dues-block-value { color: var(--fee-over-strong); }
+
+/* ---------- Late-fee note ---------- */
+.fees-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.55rem;
+  margin: 0.3rem 1rem 1rem;
+  padding: 0.7rem 0.8rem;
+  font-size: 0.8rem;
+  line-height: 1.45;
+  color: var(--fee-due-ink);
+  background-color: var(--fee-due-bg);
+  border-radius: var(--r-sm);
+}
+
+.fees-note svg { width: 16px; height: 16px; margin-top: 0.1rem; }
+
+.fees-empty {
+  padding: 2rem 1rem;
+  font-size: 0.9rem;
+  text-align: center;
+  color: var(--ink-3);
+}
+
+/* ---------- Pay Now ---------- */
+.fees-pay-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  width: calc(100% - 2rem);
+  min-height: 68px;
+  margin: 0 1rem 1rem;
+  padding: 0.75rem 1rem;
+  font-family: inherit;
+  color: #FFFFFF;
+  text-align: start;
+  background-color: var(--brand-600);
+  border: none;
+  border-radius: var(--r-md);
+  cursor: pointer;
+  transition: background-color 0.15s ease, transform 0.12s ease;
+}
+
+.fees-pay-btn:active { background-color: var(--brand-700); transform: scale(0.99); }
+.fees-pay-btn:focus-visible { outline: 2px solid var(--brand); outline-offset: 3px; }
+
+.fees-pay-btn-icon { color: #FFFFFF; background-color: rgba(255, 255, 255, 0.16); }
+.fees-pay-btn-icon svg { width: 22px; height: 22px; }
+
+.fees-pay-btn-title { font-size: 1.02rem; font-weight: 700; letter-spacing: -0.01em; color: #FFFFFF; }
+.fees-pay-btn-sub { font-size: 0.8rem; color: rgba(255, 255, 255, 0.88); overflow-wrap: anywhere; }
+
+.fees-pay-btn > svg:last-child,
+.fees-pay-btn-arrow { width: 20px; height: 20px; color: #FFFFFF; }
+
+/* Already paid: the button is disabled and quiet */
+.fees-pay-btn:disabled { color: var(--ink-3); background-color: var(--bg); cursor: not-allowed; transform: none; }
+.fees-pay-btn:disabled .fees-pay-btn-icon { color: var(--ink-3); background-color: var(--line); }
+.fees-pay-btn:disabled .fees-pay-btn-title { color: var(--ink-2); }
+.fees-pay-btn:disabled .fees-pay-btn-sub,
+.fees-pay-btn:disabled > svg:last-child { color: var(--ink-3); }
+
+/* ===================================================== */
+/* FEE HISTORY                                           */
+/* ===================================================== */
+
+.fees-back-btn {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-height: 44px;
+  padding: 0 1rem 0 0.8rem;
+  font-family: inherit;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--ink-2);
+  background-color: var(--surface);
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.fees-back-btn svg { width: 18px; height: 18px; }
+.fees-back-btn:active { background-color: var(--bg); }
+.fees-back-btn:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+
+.fees-history-summary { display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem; }
+
+.fees-history-summary-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  padding: 0.85rem 0.95rem;
+  border-radius: var(--r-md);
+}
+
+.fees-history-summary-paid { background-color: var(--fee-paid-bg); }
+.fees-history-summary-due  { background-color: var(--fee-over-bg); }
+
+.fees-history-summary-label { font-size: 0.74rem; font-weight: 600; }
+.fees-history-summary-value { font-size: 1.3rem; font-weight: 700; line-height: 1.2; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.fees-history-summary-sub { font-size: 0.76rem; }
+
+.fees-history-summary-paid .fees-history-summary-label,
+.fees-history-summary-paid .fees-history-summary-value,
+.fees-history-summary-paid .fees-history-summary-sub { color: var(--fee-paid-ink); }
+
+.fees-history-summary-due .fees-history-summary-label,
+.fees-history-summary-due .fees-history-summary-sub { color: var(--fee-over-ink); }
+.fees-history-summary-due .fees-history-summary-value { color: var(--fee-over-strong); }
+
+.fees-history-list { display: flex; flex-direction: column; gap: 0.7rem; }
+
+.fee-history-card {
+  position: relative;
+  padding: 0.95rem 1rem 1rem 1.15rem;
+  overflow: hidden;
+  background-color: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-1);
+}
+
+/* status stripe */
+.fee-history-card::before {
+  content: '';
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: 0;
+  width: 4px;
+  background-color: var(--fee-paid-strong);
+}
+
+.fee-history-card.status-due::before     { background-color: var(--fee-due-strong); }
+.fee-history-card.status-overdue::before { background-color: var(--fee-over-strong); }
+
+.fee-history-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  margin-bottom: 0.8rem;
+}
+
+.fee-history-head-left { display: flex; flex-direction: column; gap: 0.1rem; min-width: 0; }
+.fee-history-month { font-size: 1rem; font-weight: 700; letter-spacing: -0.01em; color: var(--ink); }
+.fee-history-challan { font-size: 0.78rem; font-variant-numeric: tabular-nums; color: var(--ink-3); overflow-wrap: anywhere; }
+
+.fee-history-detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.7rem 0.8rem; padding-bottom: 0.85rem; margin-bottom: 0.85rem; border-bottom: 1px solid var(--line); }
+.fee-history-detail { display: flex; flex-direction: column; gap: 0.1rem; min-width: 0; }
+.fee-history-detail-label { font-size: 0.72rem; font-weight: 500; color: var(--ink-3); }
+.fee-history-detail-value { font-size: 0.9rem; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--ink); overflow-wrap: anywhere; }
+
+.fee-history-amounts { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; }
+
+.fee-history-amount {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  padding: 0.55rem 0.75rem;
+  border-radius: var(--r-sm);
+}
+
+.fee-history-amount-label { font-size: 0.72rem; font-weight: 600; }
+.fee-history-amount-value { font-size: 1rem; font-weight: 700; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+
+.fee-history-amount-paid { background-color: var(--fee-paid-bg); }
+.fee-history-amount-paid .fee-history-amount-label,
+.fee-history-amount-paid .fee-history-amount-value { color: var(--fee-paid-ink); }
+
+.fee-history-amount-due { background-color: var(--fee-over-bg); }
+.fee-history-amount-due .fee-history-amount-label { color: var(--fee-over-ink); }
+.fee-history-amount-due .fee-history-amount-value { color: var(--fee-over-strong); }
+
+.fee-history-amount-neutral { background-color: var(--bg); }
+.fee-history-amount-neutral .fee-history-amount-label { color: var(--ink-3); }
+.fee-history-amount-neutral .fee-history-amount-value { color: var(--ink-2); }
+
+/* ===================================================== */
+/* RESPONSIVE                                            */
+/* ===================================================== */
+
+/* Tablet / desktop: summary beside the current month; history in two columns */
+@media (min-width: 768px) {
+  .page-fees { --shell-max: 920px; }
+
+  #feesViewCurrent {
+    display: grid;
+    grid-template-columns: minmax(250px, 320px) minmax(0, 1fr);
+    grid-template-rows: auto 1fr;
+    column-gap: 1.1rem;
+    row-gap: 0.9rem;
+    align-items: start;
+  }
+
+  #feesViewCurrent > .page-title-block { grid-column: 1 / -1; }
+  #feesViewCurrent > .fees-overall { grid-column: 1; grid-row: 2; }
+  #feesViewCurrent > .fees-month   { grid-column: 2; grid-row: 2; }
+
+  /* three money tiles stack in the narrower summary column */
+  .fees-overall-grid { grid-template-columns: 1fr; }
+  .fees-overall-item { flex-direction: row; align-items: center; justify-content: space-between; }
+
+  .fees-history-list { display: grid; grid-template-columns: 1fr 1fr; gap: 0.8rem; align-items: start; }
+}
+
+@media (min-width: 1000px) {
+  .fees-month-head, .fees-pay-btn { padding-inline: 1.2rem; }
+}
+
+@media (max-width: 380px) {
+  .fees-overall-grid { grid-template-columns: 1fr 1fr; }
+  .fees-overall-due { grid-column: 1 / -1; }
+}
+
+@media (max-width: 360px) {
+  .fees-overall-head, .fees-month-head { padding-inline: 0.85rem; }
+  .fees-overall-grid { padding-inline: 0.85rem; }
+  .fees-challan-strip { margin-inline: 0.85rem; }
+  .fees-challan-value { font-size: 0.78rem; white-space: normal; overflow-wrap: anywhere; }
+  .fee-table-wrap { padding-inline: 0.85rem; }
+  .fee-dues-block-value { font-size: 1rem; }
+  .fees-note { margin-inline: 0.85rem; }
+  .fees-pay-btn { width: calc(100% - 1.7rem); margin-inline: 0.85rem; gap: 0.65rem; padding-inline: 0.8rem; }
+  .fees-history-summary-value { font-size: 1.15rem; }
+  .fee-history-card { padding: 0.85rem 0.85rem 0.9rem 1rem; }
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .fees-history-btn:hover { background-color: var(--surface-soft); }
+  .fees-pay-btn:not(:disabled):hover { background-color: var(--brand-700); }
+  .fees-back-btn:hover { background-color: var(--bg); }
+}

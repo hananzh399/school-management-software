@@ -1,0 +1,479 @@
+/* ===================================================== */
+/*            PARENT PORTAL · PROFILE + TIMETABLE        */
+/*                                                       */
+/* Replaces lines 1-572 of none-edu.css (the Profile and */
+/* Timetable sections). none-edu.css itself is still     */
+/* needed by Attendance, Fees, Announcements, etc.       */
+/*                                                       */
+/* Load AFTER parent-portal-core.css and                 */
+/* parent-portal-app.css (it uses their design tokens).  */
+/* ===================================================== */
+
+/* ===================================================== */
+/* PROFILE                                               */
+/* ===================================================== */
+
+.page-profile .app-content {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-content: start;
+  align-items: start;
+  gap: 1rem;
+}
+
+/* ---------- Hero (the one solid-brand block on this page) ---------- */
+.profile-hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 1.5rem 1rem 1.3rem;
+  background-color: var(--brand-600);
+  border-radius: var(--r-lg);
+  color: #FFFFFF;
+}
+
+.profile-hero-photo-wrap { position: relative; margin-bottom: 0.85rem; }
+
+.profile-hero-img {
+  display: block;
+  width: 92px;
+  height: 92px;
+  border-radius: 50%;
+  object-fit: cover;
+  background-color: var(--brand-soft);
+  border: 3px solid rgba(255, 255, 255, 0.9);
+}
+
+.profile-status-dot {
+  position: absolute;
+  right: 3px;
+  bottom: 3px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background-color: #4ADE80;
+  border: 3px solid var(--brand-600);
+}
+
+.profile-hero-name {
+  font-size: 1.35rem;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: -0.015em;
+  color: #FFFFFF;
+  overflow-wrap: anywhere;
+}
+
+.profile-hero-tag {
+  margin: 0.2rem 0 0.95rem;
+  font-size: 0.88rem;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.profile-hero-chips { display: flex; flex-wrap: wrap; justify-content: center; gap: 0.45rem; }
+
+.profile-hero-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.35rem 0.8rem;
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.92);
+  background-color: rgba(255, 255, 255, 0.16);
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.profile-hero-chip svg { width: 13px; height: 13px; opacity: 0.9; }
+.profile-hero-chip strong { font-weight: 700; color: #FFFFFF; }
+
+/* ---------- Detail cards ---------- */
+.profile-section-title {
+  margin: 0 0.25rem 0.5rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--ink-3);
+}
+
+.profile-info-card {
+  padding: 0.1rem 1rem;
+  background-color: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-1);
+  overflow: hidden;
+}
+
+.profile-info-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  padding: 0.8rem 0;
+}
+
+.profile-info-row-top { align-items: flex-start; padding: 0.95rem 0; }
+
+/* the divider starts after the icon, not at the card edge */
+.profile-info-divider {
+  height: 1px;
+  margin-inline-start: calc(40px + 0.85rem);
+  background-color: var(--line);
+}
+
+.profile-info-icon {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background-color: var(--brand-soft);
+  color: var(--brand-600);
+}
+
+.profile-info-icon svg { width: 19px; height: 19px; }
+
+.profile-info-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 0.1rem; }
+
+.profile-info-label { font-size: 0.78rem; font-weight: 500; color: var(--ink-3); }
+
+.profile-info-value {
+  font-size: 0.97rem;
+  font-weight: 600;
+  line-height: 1.35;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+
+.profile-info-address { font-weight: 500; line-height: 1.55; }
+
+/* Phone numbers: the whole row is the tap target */
+.profile-info-value.profile-info-link {
+  color: var(--brand-600);
+  text-decoration: none;
+  font-variant-numeric: tabular-nums;
+}
+
+.profile-info-link::after { content: ''; position: absolute; inset: 0; }
+.profile-info-row:has(.profile-info-link):active { background-color: var(--bg); }
+.profile-info-link:focus-visible { outline: none; }
+.profile-info-row:has(.profile-info-link:focus-visible) { outline: 2px solid var(--brand); outline-offset: -2px; }
+
+/* Tablet and up: two columns */
+@media (min-width: 640px) {
+  .page-profile .app-content { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1.1rem; }
+  .profile-hero { grid-column: 1 / -1; padding: 1.7rem 1.25rem 1.5rem; }
+  .profile-hero-img { width: 104px; height: 104px; }
+  .profile-hero-name { font-size: 1.5rem; }
+  .page-profile .profile-section:last-of-type { grid-column: 1 / -1; }
+}
+
+@media (max-width: 360px) {
+  .profile-hero { padding: 1.2rem 0.85rem 1.1rem; }
+  .profile-hero-img { width: 80px; height: 80px; }
+  .profile-hero-name { font-size: 1.2rem; }
+  .profile-info-card { padding-inline: 0.85rem; }
+  .profile-info-value { font-size: 0.92rem; }
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .profile-info-row:has(.profile-info-link):hover { background-color: var(--bg); }
+}
+
+/* ===================================================== */
+/* TIMETABLE                                             */
+/* ===================================================== */
+
+/* ---------- Info chips ---------- */
+.timetable-info {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.9rem;
+}
+
+.timetable-info-dot { display: none; }
+
+.timetable-info-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.38rem 0.8rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--ink-2);
+  background-color: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.timetable-info-item svg { width: 14px; height: 14px; color: var(--brand); }
+
+/* ---------- Scroll card ---------- */
+.timetable-scroll {
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
+  background-color: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-1);
+  scrollbar-width: thin;
+  scrollbar-color: var(--line-strong) transparent;
+}
+
+.timetable-scroll::-webkit-scrollbar { height: 6px; }
+.timetable-scroll::-webkit-scrollbar-thumb { background-color: var(--line-strong); border-radius: 999px; }
+.timetable-scroll:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+
+.timetable-table {
+  width: max-content;
+  min-width: 100%;
+  padding: 2px;
+  border-collapse: separate;
+  border-spacing: 4px;
+}
+
+/* ---------- Header ---------- */
+.timetable-table thead th {
+  padding: 0.5rem 0.4rem;
+  font-family: inherit;
+  text-align: center;
+  vertical-align: middle;
+  border-radius: 10px;
+}
+
+.tt-corner {
+  position: sticky;
+  left: 0;
+  z-index: 4;
+  min-width: 92px;
+  background-color: var(--brand-600);
+  color: #FFFFFF;
+  box-shadow: 6px 0 8px -6px rgba(22, 35, 42, 0.25);
+}
+
+.tt-corner-days,
+.tt-corner-periods {
+  display: block;
+  font-size: 0.72rem;
+  font-weight: 700;
+  line-height: 1.15;
+}
+
+.tt-corner-sep { display: block; font-size: 0.62rem; opacity: 0.7; line-height: 1; margin: 1px 0; }
+
+.tt-period { min-width: 84px; background-color: var(--brand-soft); color: var(--brand-700); }
+
+.tt-period-num { display: block; font-size: 0.82rem; font-weight: 700; line-height: 1.1; }
+
+.tt-period-time {
+  display: block;
+  margin-top: 1px;
+  font-size: 0.68rem;
+  font-weight: 500;
+  line-height: 1.2;
+  color: var(--ink-2);
+  white-space: nowrap;
+}
+
+.tt-break-header {
+  min-width: 56px;
+  max-width: 56px;
+  padding: 0 !important;
+  background-color: #FBF0DC;
+  border-radius: 10px 10px 0 0;
+}
+
+/* ---------- Day column (sticky) ---------- */
+.tt-day {
+  position: sticky;
+  left: 0;
+  z-index: 3;
+  min-width: 92px;
+  padding: 0.55rem !important;
+  text-align: left;
+  vertical-align: middle;
+  border-radius: 10px;
+  box-shadow: 6px 0 8px -6px rgba(22, 35, 42, 0.18);
+}
+
+.tt-day-inner { display: flex; align-items: center; gap: 0.45rem; }
+
+.tt-day-icon {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  background-color: rgba(255, 255, 255, 0.75);
+}
+
+.tt-day-icon svg { width: 15px; height: 15px; }
+
+.tt-day-name { font-size: 0.78rem; font-weight: 700; white-space: nowrap; }
+
+/* One quiet colour per weekday: solid tints, so the sticky column stays opaque */
+.tt-day-blue   { background-color: #DCEBF7; color: #29506E; }
+.tt-day-green  { background-color: #DDF1E5; color: #245C3B; }
+.tt-day-yellow { background-color: #F9F0C8; color: #6B5A18; }
+.tt-day-purple { background-color: #E9DFF5; color: #4B2E6E; }
+.tt-day-pink   { background-color: #F9DCE5; color: #6E2942; }
+.tt-day-coral  { background-color: #FCE0D5; color: #7A3520; }
+.tt-day-blue .tt-day-icon   { color: #29506E; }
+.tt-day-green .tt-day-icon  { color: #245C3B; }
+.tt-day-yellow .tt-day-icon { color: #6B5A18; }
+.tt-day-purple .tt-day-icon { color: #4B2E6E; }
+.tt-day-pink .tt-day-icon   { color: #6E2942; }
+.tt-day-coral .tt-day-icon  { color: #7A3520; }
+
+/* ---------- Period cells ---------- */
+.tt-cell {
+  min-width: 84px;
+  padding: 0.55rem 0.4rem !important;
+  text-align: center;
+  vertical-align: middle;
+  border-radius: 10px;
+}
+
+.tt-subject {
+  display: block;
+  font-size: 0.78rem;
+  font-weight: 700;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.tt-teacher {
+  display: block;
+  margin-top: 0.2rem;
+  font-size: 0.68rem;
+  font-weight: 500;
+  line-height: 1.2;
+  color: var(--ink-3);
+  white-space: nowrap;
+}
+
+.tt-cell-blue   { background-color: #EEF5FA; }
+.tt-cell-green  { background-color: #EFF8F3; }
+.tt-cell-yellow { background-color: #FCF8E4; }
+.tt-cell-purple { background-color: #F5F0FA; }
+.tt-cell-pink   { background-color: #FCEEF2; }
+.tt-cell-coral  { background-color: #FDF0EA; }
+.tt-cell-blue .tt-subject   { color: #29506E; }
+.tt-cell-green .tt-subject  { color: #245C3B; }
+.tt-cell-yellow .tt-subject { color: #6B5A18; }
+.tt-cell-purple .tt-subject { color: #4B2E6E; }
+.tt-cell-pink .tt-subject   { color: #6E2942; }
+.tt-cell-coral .tt-subject  { color: #7A3520; }
+
+/* ---------- Break column ---------- */
+.tt-break-cell {
+  min-width: 56px;
+  max-width: 56px;
+  padding: 0.5rem 0.3rem !important;
+  text-align: center;
+  vertical-align: middle;
+  color: #8B5A2E;
+  background-color: #FBF0DC;
+  border-radius: 0 0 10px 10px;
+}
+
+.tt-break-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.55rem;
+  height: 100%;
+  padding: 0.6rem 0;
+}
+
+.tt-break-label { font-size: 0.68rem; font-weight: 700; line-height: 1; color: #A25A22; }
+
+.tt-break-time {
+  padding: 0.15rem 0.4rem;
+  font-size: 0.62rem;
+  font-weight: 600;
+  white-space: nowrap;
+  color: #8B5A2E;
+  background-color: rgba(255, 255, 255, 0.65);
+  border-radius: 999px;
+}
+
+.tt-break-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background-color: #FFFFFF;
+  color: #A25A22;
+}
+
+.tt-break-icon svg { width: 17px; height: 17px; }
+.tt-break-divider { font-size: 0.7rem; line-height: 1; color: #A25A22; opacity: 0.4; }
+
+/* ---------- Today ---------- */
+.tt-row-today .tt-day {
+  background-color: var(--brand-600);
+  color: #FFFFFF;
+}
+
+.tt-row-today .tt-day .tt-day-icon { background-color: rgba(255, 255, 255, 0.2); color: #FFFFFF; }
+.tt-row-today .tt-cell { box-shadow: inset 0 0 0 2px var(--brand); }
+
+/* ---------- Scroll hint ---------- */
+.timetable-hint {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  margin-top: 0.75rem;
+  font-size: 0.78rem;
+  color: var(--ink-3);
+}
+
+.timetable-hint svg { width: 14px; height: 14px; color: var(--brand); animation: timetableHintSlide 1.6s ease-in-out infinite; }
+
+@keyframes timetableHintSlide {
+  0%, 100% { transform: translateX(0); }
+  50%      { transform: translateX(4px); }
+}
+
+/* Tablet / desktop: give this page a wider column so the whole week fits */
+@media (min-width: 768px) {
+  .page-timetable { --shell-max: 920px; }
+  .tt-cell, .tt-period { min-width: 88px; }
+  .tt-subject { font-size: 0.82rem; }
+  .tt-teacher { font-size: 0.72rem; }
+  .timetable-info-item { font-size: 0.85rem; }
+}
+
+/* No scrolling needed from here up, so no swipe hint */
+@media (min-width: 840px) {
+  .timetable-hint { display: none; }
+}
+
+@media (max-width: 360px) {
+  .tt-corner, .tt-day { min-width: 84px; }
+  .tt-period, .tt-cell { min-width: 76px; padding-inline: 0.3rem !important; }
+  .tt-day-name { font-size: 0.74rem; }
+  .tt-subject { font-size: 0.74rem; }
+  .tt-teacher { font-size: 0.64rem; }
+}
+
+@media (max-height: 480px) and (orientation: landscape) {
+  .timetable-hint { display: none; }
+}

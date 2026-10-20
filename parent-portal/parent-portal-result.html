@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover, interactive-widget=resizes-content">
+  <meta name="color-scheme" content="light">
+  <meta name="theme-color" content="#FFFFFF">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <title data-i18n="docTitleResult">Result · Greenwood High</title>
+  <script src="parent-portal-i18n.js"></script>
+  <link rel="stylesheet" href="parent-portal-core.css">
+  <link rel="stylesheet" href="parent-portal-app.css">
+  <link rel="stylesheet" href="parent-portal-academic.css">
+  <link rel="stylesheet" href="parent-portal-i18n.css">
+</head>
+<body class="page-dashboard page-result">
+  <div class="app-shell">
+
+    <!-- ===== App Top Bar ===== -->
+    <header class="app-topbar">
+      <button class="icon-btn" id="hamburgerBtn" aria-label="Open menu" data-i18n-aria="openMenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="3" y1="6" x2="21" y2="6"/>
+          <line x1="3" y1="12" x2="21" y2="12"/>
+          <line x1="3" y1="18" x2="21" y2="18"/>
+        </svg>
+      </button>
+
+      <div class="app-brand">
+        <a href="parent-portal-index.html" class="app-brand-link">
+          <svg class="app-brand-logo" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="50" cy="50" r="45" fill="#F0F9F4" stroke="#2E8B7A" stroke-width="5"/>
+            <path d="M50 20 L75 40 L75 75 L25 75 L25 40 Z" fill="#2E8B7A" opacity="0.85"/>
+            <circle cx="50" cy="52" r="10" fill="#F0F9F4" stroke="#2E8B7A" stroke-width="3"/>
+            <rect x="42" y="62" width="16" height="12" fill="#F0F9F4" rx="2"/>
+          </svg>
+        </a>
+        <span class="app-brand-name" data-i18n="school">Greenwood High</span>
+      </div>
+
+      <a href="parent-portal-dashboard.html" class="icon-btn" aria-label="Back to dashboard" data-i18n-aria="backDashboard">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="19" y1="12" x2="5" y2="12"/>
+          <polyline points="12 19 5 12 12 5"/>
+        </svg>
+      </a>
+    </header>
+
+    <!-- ===== App Content ===== -->
+    <main class="app-content">
+
+      <section class="page-title-block">
+        <h1 class="page-title" data-i18n="featResult">Result</h1>
+        <p class="page-subtitle" data-i18n="resultSubtitle">Select a session and term to view the report card.</p>
+      </section>
+
+      <!-- ===== Filters ===== -->
+      <div class="result-filters">
+
+        <div class="result-filter-row">
+          <label class="result-filter-label" for="resultSession">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="4" width="18" height="16" rx="2"/>
+              <path d="M8 2v4M16 2v4M3 10h18"/>
+            </svg>
+            <span data-i18n="session">Session</span>
+          </label>
+          <div class="result-filter-select-wrap">
+            <select id="resultSession" class="result-filter-select" aria-label="Filter by session" data-i18n-aria="filterSessionAria">
+              <option value="" selected data-i18n="selectSession">Select session…</option>
+              <option value="2025-2026">2025 – 2026</option>
+              <option value="2026-2027">2026 – 2027</option>
+            </select>
+            <span class="result-filter-caret">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="6 9 12 15 18 9"/>
+              </svg>
+            </span>
+          </div>
+        </div>
+
+        <div class="result-filter-row">
+          <label class="result-filter-label" for="resultTerm">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="3" y1="6" x2="21" y2="6"/>
+              <line x1="6" y1="12" x2="18" y2="12"/>
+              <line x1="9" y1="18" x2="15" y2="18"/>
+            </svg>
+            <span data-i18n="term">Term</span>
+          </label>
+          <div class="result-filter-select-wrap">
+            <select id="resultTerm" class="result-filter-select" aria-label="Filter by term" data-i18n-aria="filterTermAria">
+              <option value="" selected data-i18n="selectTerm">Select term…</option>
+              <option value="first-term" data-i18n="firstTerm">First Term</option>
+              <option value="second-term" data-i18n="secondTerm">Second Term</option>
+            </select>
+            <span class="result-filter-caret">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="6 9 12 15 18 9"/>
+              </svg>
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== Result Slot (prompt OR report card appear here) ===== -->
+      <div class="result-slot" id="resultSlot">
+
+        <!-- Prompt (shown when filters not fully selected) -->
+        <div class="result-prompt" id="resultPrompt">
+          <div class="result-prompt-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+              <polyline points="14 2 14 8 20 8"/>
+              <line x1="9" y1="13" x2="15" y2="13"/>
+              <line x1="9" y1="17" x2="13" y2="17"/>
+            </svg>
+          </div>
+          <h3 class="result-prompt-title" data-i18n="promptTitle">Choose filters to view result</h3>
+          <p class="result-prompt-text" data-i18n-html="promptText"></p>
+        </div>
+
+        <!-- Report Card (shown when both filters are selected) -->
+        <section class="result-card" id="resultCard" aria-label="Report card" data-i18n-aria="reportCardAria" hidden>
+
+          <!-- Student header -->
+          <header class="result-student">
+            <div class="result-student-photo-wrap">
+              <img
+                id="resultPhoto"
+                src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120' viewBox='0 0 120 120'%3E%3Ccircle cx='60' cy='60' r='60' fill='%23E3F2ED'/%3E%3Ccircle cx='60' cy='48' r='22' fill='%234A7A8C'/%3E%3Cpath d='M28 98 Q60 120 92 98 Q88 80 60 80 Q32 80 28 98Z' fill='%234A7A8C'/%3E%3C/svg%3E"
+                alt="Student photo"
+                class="result-student-photo"
+              >
+              <span class="result-student-dot"></span>
+            </div>
+            <div class="result-student-info">
+              <span class="result-student-tag" data-i18n="reportCard">Report Card</span>
+              <h2 class="result-student-name" id="resultName">Aarav Sharma</h2>
+              <div class="result-student-meta">
+                <span class="result-meta-item">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="3" y="4" width="18" height="16" rx="2"/>
+                    <path d="M8 2v4M16 2v4M3 10h18"/>
+                  </svg>
+                  <span id="resultReg">GH/2024/056</span>
+                </span>
+                <span class="result-meta-divider"></span>
+                <span class="result-meta-item">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M22 10v6M2 10l10-5 10 5-10 5z"/>
+                    <path d="M6 12v5c3 3 9 3 12 0v-5"/>
+                  </svg>
+                  <span id="resultClassSection">5 – B</span>
+                </span>
+              </div>
+            </div>
+          </header>
+
+          <!-- Applied filters banner -->
+          <div class="result-applied">
+            <span class="result-applied-item">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="3" y="4" width="18" height="16" rx="2"/>
+                <path d="M8 2v4M16 2v4M3 10h18"/>
+              </svg>
+              <span id="resultAppliedSession">—</span>
+            </span>
+            <span class="result-applied-dot"></span>
+            <span class="result-applied-item">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="3" y1="6" x2="21" y2="6"/>
+                <line x1="6" y1="12" x2="18" y2="12"/>
+                <line x1="9" y1="18" x2="15" y2="18"/>
+              </svg>
+              <span id="resultAppliedTerm">—</span>
+            </span>
+          </div>
+
+          <!-- Subject marks table -->
+          <div class="result-table-wrap">
+            <div class="result-table-head">
+              <span class="result-col result-col-subject" data-i18n="colSubject">Subject</span>
+              <span class="result-col result-col-total" data-i18n="marksTotal">Total</span>
+              <span class="result-col result-col-obtained" data-i18n="marksObtained">Obtained</span>
+              <span class="result-col result-col-percent">%</span>
+            </div>
+
+            <div class="result-table-body" id="resultTableBody">
+              <!-- Subject rows injected by JS -->
+            </div>
+
+            <div class="result-table-total" id="resultTableTotal">
+              <span class="result-col result-col-subject result-total-label" data-i18n="marksTotal">Total</span>
+              <span class="result-col result-col-total" id="resultTotalMarks">—</span>
+              <span class="result-col result-col-obtained" id="resultTotalObtained">—</span>
+              <span class="result-col result-col-percent" id="resultTotalPercent">—</span>
+            </div>
+          </div>
+
+          <!-- Overall summary -->
+           <footer class="result-summary">
+            <div class="result-summary-item">
+              <span class="result-summary-label" data-i18n="overallPercentage">Overall Percentage</span>
+              <span class="result-summary-value" id="resultOverallPercent">—</span>
+            </div>
+            <div class="result-summary-item result-summary-grade">
+              <span class="result-summary-label" data-i18n="grade">Grade</span>
+              <span class="result-summary-value result-summary-grade-value" id="resultOverallGrade">—</span>
+            </div>
+          </footer>
+
+          <!-- Remarks -->
+          <div class="result-remarks" id="resultRemarks">
+            <div class="result-remarks-head">
+              <span class="result-remarks-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                </svg>
+              </span>
+              <span class="result-remarks-title" data-i18n="remarks">Remarks</span>
+              <span class="result-remarks-badge" id="resultRemarksBadge">—</span>
+            </div>
+            <p class="result-remarks-text" id="resultRemarksText">—</p>
+          </div>
+        </section>
+
+      </div>
+
+      <!-- ===== Grading criteria (always visible) ===== -->
+      <section class="result-criteria" aria-label="Grading criteria" data-i18n-aria="criteriaAria">
+        <header class="result-criteria-head">
+          <span class="result-criteria-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 2l3.09 6.26L22 9.27l-5 4.87L18.18 21 12 17.77 5.82 21 7 14.14l-5-4.87 6.91-1.01L12 2z"/>
+            </svg>
+          </span>
+          <div class="result-criteria-title-block">
+            <h3 class="result-criteria-title" data-i18n="criteriaTitle">Grading Criteria</h3>
+            <p class="result-criteria-sub" data-i18n="criteriaSub">Based on overall percentage</p>
+          </div>
+        </header>
+
+        <ul class="result-criteria-list">
+          <li class="result-criteria-item">
+            <span class="result-criteria-grade grade-a-plus">A+</span>
+            <span class="result-criteria-range" data-i18n="critAbove90">90% and above</span>
+          </li>
+          <li class="result-criteria-item">
+            <span class="result-criteria-grade grade-a">A</span>
+            <span class="result-criteria-range">80% – 89%</span>
+          </li>
+          <li class="result-criteria-item">
+            <span class="result-criteria-grade grade-b">B</span>
+            <span class="result-criteria-range">70% – 79%</span>
+          </li>
+          <li class="result-criteria-item">
+            <span class="result-criteria-grade grade-c">C</span>
+            <span class="result-criteria-range">60% – 69%</span>
+          </li>
+          <li class="result-criteria-item">
+            <span class="result-criteria-grade grade-d">D</span>
+            <span class="result-criteria-range">50% – 59%</span>
+          </li>
+          <li class="result-criteria-item">
+            <span class="result-criteria-grade grade-e">E</span>
+            <span class="result-criteria-range">40% – 49%</span>
+          </li>
+          <li class="result-criteria-item">
+            <span class="result-criteria-grade grade-f">F</span>
+            <span class="result-criteria-range" data-i18n="critBelow40">Below 40%</span>
+          </li>
+        </ul>
+      </section>
+
+
+    </main>
+
+    <!-- ===== Bottom Tab Bar ===== -->
+    <nav class="bottom-tabs" aria-label="Primary" data-i18n-aria="navPrimary">
+      <a href="parent-portal-index.html" class="tab-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 10l9-7 9 7v10a2 2 0 0 1-2 2h-4v-7h-6v7H5a2 2 0 0 1-2-2z"/>
+        </svg>
+        <span data-i18n="home">Home</span>
+      </a>
+      <a href="parent-portal-dashboard.html" class="tab-item active">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="3" width="7" height="7" rx="1.5"/>
+          <rect x="14" y="3" width="7" height="7" rx="1.5"/>
+          <rect x="3" y="14" width="7" height="7" rx="1.5"/>
+          <rect x="14" y="14" width="7" height="7" rx="1.5"/>
+        </svg>
+        <span data-i18n="dashboard">Dashboard</span>
+      </a>
+      <a href="parent-portal-messages.html" class="tab-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+        </svg>
+        <span data-i18n="messages">Messages</span>
+      </a>
+      <a href="parent-portal-profile.html" class="tab-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="8" r="4"/>
+          <path d="M4 21a8 8 0 0 1 16 0"/>
+        </svg>
+        <span data-i18n="profile">Profile</span>
+      </a>
+    </nav>
+
+  </div>
+
+  <!-- ===== Side Drawer ===== -->
+  <div class="drawer-overlay" id="sidePanelOverlay"></div>
+  <aside class="side-drawer" id="sidePanel" aria-hidden="true">
+    <div class="drawer-header">
+      <div class="drawer-brand">
+        <svg class="drawer-logo" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+          <circle cx="50" cy="50" r="45" fill="#F0F9F4" stroke="#2E8B7A" stroke-width="5"/>
+          <path d="M50 20 L75 40 L75 75 L25 75 L25 40 Z" fill="#2E8B7A" opacity="0.85"/>
+          <circle cx="50" cy="52" r="10" fill="#F0F9F4" stroke="#2E8B7A" stroke-width="3"/>
+          <rect x="42" y="62" width="16" height="12" fill="#F0F9F4" rx="2"/>
+        </svg>
+        <div class="drawer-brand-text">
+          <span class="drawer-school" data-i18n="school">Greenwood High</span>
+          <span class="drawer-role" data-i18n="parentAccount">Parent Account</span>
+        </div>
+      </div>
+      <button class="drawer-close" id="sidePanelClose" aria-label="Close menu" data-i18n-aria="closeMenu">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="18" y1="6" x2="6" y2="18"/>
+          <line x1="6" y1="6" x2="18" y2="18"/>
+        </svg>
+      </button>
+    </div>
+
+    <nav class="drawer-nav">
+      <span class="drawer-section-label" data-i18n="account">Account</span>
+
+      <a href="#" class="drawer-link" data-action="change-password">
+        <span class="drawer-link-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+        </span>
+        <span class="drawer-link-text" data-i18n="changePassword">Change Password</span>
+        <svg class="drawer-link-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+      </a>
+
+      <a href="#" class="drawer-link" data-action="info">
+        <span class="drawer-link-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+        </span>
+        <span class="drawer-link-text" data-i18n="info">Info</span>
+        <svg class="drawer-link-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+      </a>
+
+      <a href="#" class="drawer-link" data-action="settings">
+        <span class="drawer-link-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        </span>
+        <span class="drawer-link-text" data-i18n="settings">Settings</span>
+        <svg class="drawer-link-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+      </a>
+
+      <span class="drawer-section-label" data-i18n="support">Support</span>
+
+      <a href="#" class="drawer-link" data-action="demo-videos">
+        <span class="drawer-link-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>
+        </span>
+        <span class="drawer-link-text" data-i18n="demoVideos">Demo Videos</span>
+        <svg class="drawer-link-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+      </a>
+
+      <a href="#" class="drawer-link" data-action="submit-feedback">
+        <span class="drawer-link-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+        </span>
+        <span class="drawer-link-text" data-i18n="submitFeedback">Submit Feedback</span>
+        <svg class="drawer-link-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+      </a>
+    </nav>
+
+    <div class="drawer-footer">
+      <a href="#" class="drawer-link drawer-link-logout" data-action="logout">
+        <span class="drawer-link-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+        </span>
+        <span class="drawer-link-text" data-i18n="logout">Logout</span>
+      </a>
+
+      <div class="drawer-powered">
+        <img src="logo-icon.png" alt="SoftSchool logo" class="drawer-powered-logo" onerror="this.style.display='none'">
+        <div class="drawer-powered-text">
+          <span class="powered-by" data-i18n="poweredBy">Powered by</span>
+          <span class="brand-name">SoftSchool</span>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <script src="parent-portal-result.js"></script>
+</body>
+</html>

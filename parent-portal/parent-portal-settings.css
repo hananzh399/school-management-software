@@ -1,0 +1,281 @@
+/* ===================================================== */
+/* ============ PARENT PORTAL · SETTINGS PAGE ========== */
+/* Self-contained, mobile-first, RTL-aware.              */
+/* ===================================================== */
+
+:root {
+  --bg: #F3F7F5;
+  --surface: #FFFFFF;
+  --surface-soft: #F6FAF8;
+  --text: #1B2A2E;
+  --muted: #64767C;
+  --primary: #2E8B7A;
+  --primary-soft: #E5F5EE;
+  --on-primary: #FFFFFF;
+  --border: #E0EAE5;
+  --shadow: rgba(27, 42, 46, 0.2);
+  --ring: rgba(46, 139, 122, 0.18);
+  --gutter: clamp(1rem, 4vw, 2rem);
+  --font-ur: 'Noto Naskh Arabic', 'Noto Nastaliq Urdu', 'Segoe UI', Tahoma, Arial, sans-serif;
+}
+
+*,
+*::before,
+*::after {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html { -webkit-text-size-adjust: 100%; }
+
+body.page-settings {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+    'Helvetica Neue', Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  color: var(--text);
+  background-color: var(--bg);
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+
+:focus-visible {
+  outline: 3px solid rgba(70, 130, 180, 0.8);
+  outline-offset: 2px;
+}
+
+/* ---------- Urdu ---------- */
+:root[lang="ur"] body.page-settings {
+  font-family: var(--font-ur);
+  line-height: 1.8;
+}
+:root[lang="ur"] *,
+:root[lang="ur"] *::before,
+:root[lang="ur"] *::after {
+  letter-spacing: 0 !important;
+  text-transform: none !important;
+}
+
+.st-container {
+  width: 100%;
+  max-width: 720px;
+  margin-inline: auto;
+  padding-inline: var(--gutter);
+}
+
+/* ---------- Top bar ---------- */
+.st-topbar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  background-color: var(--surface);
+  border-bottom: 1px solid var(--border);
+  padding-top: env(safe-area-inset-top, 0px);
+}
+
+.st-topbar-inner {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  height: 64px;
+}
+
+.st-back {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
+  border-radius: 14px;
+  background-color: var(--primary-soft);
+  color: var(--primary);
+  text-decoration: none;
+  transition: transform 0.12s ease, background-color 0.18s ease;
+}
+.st-back:hover { background-color: var(--ring); }
+.st-back:active { transform: scale(0.94); }
+.st-back svg { width: 20px; height: 20px; }
+
+.st-topbar-title {
+  font-size: 1.1rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+/* ---------- Main ---------- */
+.st-main { padding-block: clamp(1.25rem, 4vw, 2.25rem) 4rem; }
+
+.st-intro {
+  margin-bottom: clamp(1.1rem, 3vw, 1.5rem);
+  font-size: clamp(0.9rem, 2.4vw, 1rem);
+  color: var(--muted);
+}
+
+/* ---------- Card ---------- */
+.st-card {
+  background-color: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 22px;
+  padding: clamp(1rem, 3.2vw, 1.5rem);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+.st-card-head {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  margin-bottom: 1.1rem;
+}
+
+.st-card-icon {
+  flex-shrink: 0;
+  width: 42px;
+  height: 42px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 13px;
+  background-color: var(--primary-soft);
+  color: var(--primary);
+}
+.st-card-icon svg { width: 21px; height: 21px; }
+
+.st-card-title {
+  font-size: 1.02rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+:root[lang="ur"] .st-card-title { line-height: 1.6; }
+
+.st-card-sub {
+  margin-top: 0.1rem;
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
+/* ---------- Language rows ---------- */
+.lang-list { display: flex; flex-direction: column; gap: 0.7rem; }
+
+.st-option { position: relative; display: block; }
+
+.st-option input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+  z-index: 2;
+}
+
+.st-surface {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  min-height: 72px;
+  padding: 0.75rem 1rem;
+  background-color: var(--surface-soft);
+  border: 1.5px solid var(--border);
+  border-radius: 16px;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease, background-color 0.18s ease;
+}
+.st-option:hover .st-surface { border-color: var(--primary); }
+.st-option input:checked + .st-surface {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 4px var(--ring);
+  background-color: var(--primary-soft);
+}
+.st-option input:focus-visible + .st-surface {
+  outline: 3px solid rgba(70, 130, 180, 0.8);
+  outline-offset: 2px;
+}
+
+.lang-badge {
+  flex-shrink: 0;
+  width: 46px;
+  height: 46px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.92rem;
+  font-weight: 800;
+  color: var(--primary);
+  background-color: var(--surface);
+  border: 1.5px solid var(--border);
+  border-radius: 14px;
+}
+.lang-badge[lang="ur"] { font-family: var(--font-ur); font-size: 1rem; }
+
+.lang-text { flex: 1; min-width: 0; }
+.lang-name { display: block; font-size: 1.02rem; font-weight: 800; text-align: start; }
+.lang-name[lang="ur"] { font-family: var(--font-ur); font-size: 1.1rem; line-height: 1.6; }
+.lang-sub { display: block; margin-top: 0.1rem; font-size: 0.8rem; color: var(--muted); }
+
+.st-radio {
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid var(--border);
+  border-radius: 50%;
+  color: transparent;
+  transition: all 0.18s ease;
+}
+.st-radio svg { width: 13px; height: 13px; }
+.st-option input:checked + .st-surface .st-radio {
+  background-color: var(--primary);
+  border-color: var(--primary);
+  color: var(--on-primary);
+}
+
+/* ---------- Footer note ---------- */
+.st-note {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  margin-top: 1.5rem;
+  font-size: 0.82rem;
+  color: var(--muted);
+  text-align: center;
+}
+.st-note svg { width: 16px; height: 16px; color: var(--primary); flex-shrink: 0; }
+
+/* ---------- Toast ---------- */
+.st-toast {
+  position: fixed;
+  left: 50%;
+  bottom: calc(1.5rem + env(safe-area-inset-bottom, 0px));
+  transform: translate(-50%, 20px);
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.7rem 1.2rem;
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: var(--on-primary);
+  background-color: var(--primary);
+  border-radius: 999px;
+  box-shadow: 0 14px 28px -14px var(--shadow);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+  z-index: 50;
+}
+.st-toast.show { opacity: 1; transform: translate(-50%, 0); }
+.st-toast svg { width: 16px; height: 16px; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
+}
+
+/* Layout stays LTR in both languages. Each translated text run is its own   */
+/* right-to-left island (so Urdu punctuation lands on the correct side) but  */

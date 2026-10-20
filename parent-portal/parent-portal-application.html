@@ -1,0 +1,749 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#2E8B7A">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <title data-i18n="docTitleApplication">Submit Application · Greenwood High</title>
+  <script src="parent-portal-i18n.js"></script>
+  <link rel="stylesheet" href="parent-portal-style.css">
+  <link rel="stylesheet" href="none-edu.css">
+  <link rel="stylesheet" href="parent-portal-i18n.css">
+</head>
+<body class="page-dashboard page-application">
+  <div class="app-shell">
+
+    <!-- ===== App Top Bar ===== -->
+    <header class="app-topbar">
+      <button class="icon-btn" id="hamburgerBtn" aria-label="Open menu" data-i18n-aria="openMenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="3" y1="6" x2="21" y2="6"/>
+          <line x1="3" y1="12" x2="21" y2="12"/>
+          <line x1="3" y1="18" x2="21" y2="18"/>
+        </svg>
+      </button>
+
+      <div class="app-brand">
+        <a href="parent-portal-index.html" class="app-brand-link">
+          <svg class="app-brand-logo" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="50" cy="50" r="45" fill="#F0F9F4" stroke="#2E8B7A" stroke-width="5"/>
+            <path d="M50 20 L75 40 L75 75 L25 75 L25 40 Z" fill="#2E8B7A" opacity="0.85"/>
+            <circle cx="50" cy="52" r="10" fill="#F0F9F4" stroke="#2E8B7A" stroke-width="3"/>
+            <rect x="42" y="62" width="16" height="12" fill="#F0F9F4" rx="2"/>
+          </svg>
+        </a>
+        <span class="app-brand-name" data-i18n="school">Greenwood High</span>
+      </div>
+
+      <!-- Back button behaves differently depending on the current view -->
+      <button class="icon-btn" id="appBackBtn" aria-label="Back" data-i18n-aria="backAria">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="19" y1="12" x2="5" y2="12"/>
+          <polyline points="12 19 5 12 12 5"/>
+        </svg>
+      </button>
+    </header>
+
+    <!-- ===== App Content ===== -->
+    <main class="app-content">
+
+      <!-- ============ VIEW: CHOOSER (default) ============ -->
+      <div id="appViewChooser" class="fees-view">
+
+        <section class="page-title-block">
+          <h1 class="page-title" data-i18n="featApplication">Submit Application</h1>
+          <p class="page-subtitle" data-i18n="appChooserSub">Choose what you would like to submit to the school.</p>
+        </section>
+
+        <!-- Option cards -->
+        <section class="app-options" aria-label="Submission options" data-i18n-aria="optionsAria">
+
+          <!-- Application → opens embedded leave-application form -->
+          <button type="button" class="app-option-card app-option-application" id="appOptionApplication">
+            <span class="app-option-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                <polyline points="14 2 14 8 20 8"/>
+                <line x1="8" y1="13" x2="16" y2="13"/>
+                <line x1="8" y1="17" x2="13" y2="17"/>
+              </svg>
+            </span>
+            <span class="app-option-body">
+              <span class="app-option-title" data-i18n="optApplication">Application</span>
+              <span class="app-option-sub" data-i18n="optApplicationSub">Leave, sick leave, urgent work and more</span>
+            </span>
+            <svg class="app-option-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="9 18 15 12 9 6"/>
+            </svg>
+          </button>
+
+          <!-- Complaint → opens embedded complaint form -->
+          <button type="button" class="app-option-card app-option-complaint" id="appOptionComplaint">
+            <span class="app-option-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+                <line x1="12" y1="9" x2="12" y2="13"/>
+                <line x1="12" y1="17" x2="12.01" y2="17"/>
+              </svg>
+            </span>
+            <span class="app-option-body">
+              <span class="app-option-title" data-i18n="optComplaint">Complaint</span>
+              <span class="app-option-sub" data-i18n="optComplaintSub">Report an issue to the administration</span>
+            </span>
+            <svg class="app-option-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="9 18 15 12 9 6"/>
+            </svg>
+          </button>
+
+          <!-- Suggestion → opens embedded suggestion form -->
+          <button type="button" class="app-option-card app-option-suggestion" id="appOptionSuggestion">
+            <span class="app-option-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M9 18h6"/>
+                <path d="M10 22h4"/>
+                <path d="M12 2a7 7 0 0 0-4 12.7c.6.5 1 1.3 1 2.1V18h6v-1.2c0-.8.4-1.6 1-2.1A7 7 0 0 0 12 2z"/>
+              </svg>
+            </span>
+            <span class="app-option-body">
+              <span class="app-option-title" data-i18n="optSuggestion">Suggestion</span>
+              <span class="app-option-sub" data-i18n="optSuggestionSub">Share an idea to help us improve</span>
+            </span>
+            <svg class="app-option-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="9 18 15 12 9 6"/>
+            </svg>
+          </button>
+
+        </section>
+
+        <div style="height: 1.5rem;"></div>
+      </div>
+
+      <!-- ============ VIEW: LEAVE APPLICATION FORM ============ -->
+      <div id="appViewLeave" class="fees-view" hidden>
+
+        <section class="page-title-block">
+          <h1 class="page-title" data-i18n="leaveTitle">Leave Application</h1>
+          <p class="page-subtitle" data-i18n="leaveSub">Select a type, then attach an image or write your application.</p>
+        </section>
+
+        <!-- Leave type — custom dropdown -->
+        <section class="leave-types" aria-label="Type of application" data-i18n-aria="typeOfApplication">
+          <h2 class="leave-section-title" data-i18n="typeOfApplication">Type of Application</h2>
+
+          <div class="leave-dropdown" id="leaveTypeDropdown">
+            <button type="button"
+                    class="leave-dropdown-trigger"
+                    id="leaveTypeTrigger"
+                    aria-haspopup="listbox"
+                    aria-expanded="false">
+              <span class="leave-dropdown-value is-placeholder" id="leaveTypeValue" data-i18n="selectType">Select type of application</span>
+              <span class="leave-dropdown-caret">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="6 9 12 15 18 9"/>
+                </svg>
+              </span>
+            </button>
+
+            <!-- Dropdown menu -->
+            <div class="leave-dropdown-menu" id="leaveTypeMenu" role="listbox" aria-label="Application type" data-i18n-aria="typeOfApplication" hidden>
+              <button type="button" class="leave-dropdown-item" data-value="sick-leave" role="option">
+                <span class="leave-dropdown-item-icon">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M12 2v6"/>
+                    <path d="M5 8h14v6a7 7 0 0 1-7 7h0a7 7 0 0 1-7-7z"/>
+                    <path d="M9 18v3"/>
+                    <path d="M15 18v3"/>
+                  </svg>
+                </span>
+                <span class="leave-dropdown-item-text" data-i18n="typeSick">Sick Leave</span>
+              </button>
+
+              <button type="button" class="leave-dropdown-item" data-value="urgent-work" role="option">
+                <span class="leave-dropdown-item-icon">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="10"/>
+                    <polyline points="12 6 12 12 16 14"/>
+                  </svg>
+                </span>
+                <span class="leave-dropdown-item-text" data-i18n="typeUrgent">Urgent Work</span>
+              </button>
+
+              <button type="button" class="leave-dropdown-item" data-value="family-event" role="option">
+                <span class="leave-dropdown-item-icon">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                    <circle cx="12" cy="7" r="4"/>
+                  </svg>
+                </span>
+                <span class="leave-dropdown-item-text" data-i18n="typeFamily">Family Event</span>
+              </button>
+
+              <button type="button" class="leave-dropdown-item" data-value="medical" role="option">
+                <span class="leave-dropdown-item-icon">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M12 2v20M2 12h20"/>
+                  </svg>
+                </span>
+                <span class="leave-dropdown-item-text" data-i18n="typeMedical">Medical</span>
+              </button>
+
+              <button type="button" class="leave-dropdown-item" data-value="travel" role="option">
+                <span class="leave-dropdown-item-icon">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M17.8 19.2 16 11l3.5-3.5C21 6 21.5 4 21 3c-1-.5-3 0-4.5 1.5L13 8 4.8 6.2c-.5-.1-.9.1-1.1.5l-.3.5c-.2.5-.1 1 .3 1.3L9 12l-2 3H4l-1 1 3 2 2 3 1-1v-3l3-2 3.5 5.3c.3.4.8.5 1.3.3l.5-.2c.4-.3.6-.7.5-1.2z"/>
+                  </svg>
+                </span>
+                <span class="leave-dropdown-item-text" data-i18n="typeTravel">Travel</span>
+              </button>
+
+              <button type="button" class="leave-dropdown-item" data-value="other" role="option">
+                <span class="leave-dropdown-item-icon">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="1"/>
+                    <circle cx="19" cy="12" r="1"/>
+                    <circle cx="5" cy="12" r="1"/>
+                  </svg>
+                </span>
+                <span class="leave-dropdown-item-text" data-i18n="typeOther">Other</span>
+              </button>
+            </div>
+          </div>
+        </section>
+
+        <!-- Date range -->
+        <section class="leave-dates" aria-label="Leave dates" data-i18n-aria="leaveDatesAria">
+          <h2 class="leave-section-title" data-i18n="leaveDuration">Leave Duration</h2>
+          <div class="leave-dates-grid">
+            <label class="leave-date-field">
+              <span class="leave-date-label" data-i18n="from">From</span>
+              <input type="date" class="leave-date-input" id="leaveFrom" aria-label="Leave from date" data-i18n-aria="leaveFromAria">
+            </label>
+            <label class="leave-date-field">
+              <span class="leave-date-label" data-i18n="to">To</span>
+              <input type="date" class="leave-date-input" id="leaveTo" aria-label="Leave to date" data-i18n-aria="leaveToAria">
+            </label>
+          </div>
+
+          <!-- Today quick-fill button -->
+          <button type="button" class="leave-today-btn" id="leaveTodayBtn">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="4" width="18" height="16" rx="2"/>
+              <path d="M8 2v4M16 2v4M3 10h18"/>
+              <circle cx="12" cy="15" r="1.6"/>
+            </svg>
+            <span data-i18n="todaySingle">Today (single day)</span>
+          </button>
+        </section>
+
+        <!-- Way to submit -->
+        <section class="leave-submit" aria-label="How to submit" data-i18n-aria="howToSubmitAria">
+          <h2 class="leave-section-title" data-i18n="submitYourApplication">Submit Your Application</h2>
+
+          <!-- Method tabs -->
+          <div class="leave-tabs" role="tablist" aria-label="Submission method" data-i18n-aria="submissionMethodAria">
+            <button type="button" class="leave-tab active" data-method="write" role="tab" aria-selected="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 20h9"/>
+                <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/>
+              </svg>
+              <span data-i18n="tabWrite">Write Here</span>
+            </button>
+
+            <button type="button" class="leave-tab" data-method="image" role="tab" aria-selected="false">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="3" y="3" width="18" height="18" rx="2"/>
+                <circle cx="8.5" cy="8.5" r="1.5"/>
+                <polyline points="21 15 16 10 5 21"/>
+              </svg>
+              <span data-i18n="tabImage">Send Picture</span>
+            </button>
+
+            <button type="button" class="leave-tab" data-method="camera" role="tab" aria-selected="false">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+                <circle cx="12" cy="13" r="4"/>
+              </svg>
+              <span data-i18n="tabCamera">Capture Now</span>
+            </button>
+          </div>
+
+          <!-- Panel: Write -->
+          <div class="leave-panel" id="leavePanelWrite" role="tabpanel">
+            <label class="leave-textarea-wrap">
+              <span class="leave-field-label" data-i18n="yourApplication">Your Application</span>
+              <textarea class="leave-textarea" id="leaveText" rows="7" placeholder="Write your application here — e.g. Dear Principal, my son/daughter Aarav (Class 5–B) will be unable to attend school from … to … due to … Kindly grant leave. Thank you." data-i18n-placeholder="leavePlaceholder"></textarea>
+              <span class="leave-textarea-meta"><span id="leaveTextCount">0</span> / 1000</span>
+            </label>
+          </div>
+
+          <!-- Panel: Send Picture -->
+          <div class="leave-panel" id="leavePanelImage" role="tabpanel" hidden>
+            <label class="leave-upload" for="leaveImageInput">
+              <input type="file" id="leaveImageInput" accept="image/*" hidden>
+              <span class="leave-upload-inner">
+                <span class="leave-upload-icon">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                    <polyline points="17 8 12 3 7 8"/>
+                    <line x1="12" y1="3" x2="12" y2="15"/>
+                  </svg>
+                </span>
+                <span class="leave-upload-title" data-i18n="uploadLeaveImage">Upload leave application image</span>
+                <span class="leave-upload-sub" data-i18n="uploadFormat">PNG, JPG — up to 5 MB</span>
+              </span>
+            </label>
+          </div>
+
+          <!-- Panel: Camera -->
+          <div class="leave-panel" id="leavePanelCamera" role="tabpanel" hidden>
+            <div class="leave-camera">
+              <video id="leaveCameraVideo" class="leave-camera-video" autoplay playsinline muted></video>
+              <canvas id="leaveCameraCanvas" hidden></canvas>
+              <div class="leave-camera-actions">
+                <button type="button" class="leave-cam-btn leave-cam-start" id="leaveCamStart">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+                    <circle cx="12" cy="13" r="4"/>
+                  </svg>
+                  <span data-i18n="startCamera">Start Camera</span>
+                </button>
+                <button type="button" class="leave-cam-btn leave-cam-capture" id="leaveCamCapture" disabled>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="4"/>
+                  </svg>
+                  <span data-i18n="capture">Capture</span>
+                </button>
+              </div>
+              <p class="leave-camera-hint" data-i18n="cameraHint">Camera works only on HTTPS or localhost.</p>
+            </div>
+          </div>
+
+          <!-- Attachment preview -->
+          <div class="leave-preview" id="leavePreview" hidden>
+            <span class="leave-preview-label" data-i18n="attachedImage">Attached Image</span>
+            <div class="leave-preview-inner">
+              <img id="leavePreviewImg" alt="Attachment preview">
+              <button type="button" class="leave-preview-remove" id="leavePreviewRemove" aria-label="Remove image" data-i18n-aria="removeImage">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                  <line x1="18" y1="6" x2="6" y2="18"/>
+                  <line x1="6" y1="6" x2="18" y2="18"/>
+                </svg>
+              </button>
+            </div>
+          </div>
+
+        </section>
+
+        <!-- Submit button -->
+        <button type="button" class="leave-submit-btn" id="leaveSubmitBtn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="22" y1="2" x2="11" y2="13"/>
+            <polygon points="22 2 15 22 11 13 2 9 22 2"/>
+          </svg>
+          <span data-i18n="featApplication">Submit Application</span>
+        </button>
+
+        <p class="leave-footnote" data-i18n="leaveFootnote">
+          
+        </p>
+
+        <div style="height: 1.5rem;"></div>
+      </div>
+
+      <!-- ============ VIEW: COMPLAINT FORM ============ -->
+      <div id="appViewComplaint" class="fees-view" hidden>
+
+        <section class="page-title-block">
+          <h1 class="page-title" data-i18n="submitComplaint">Submit Complaint</h1>
+          <p class="page-subtitle" data-i18n="complaintSub">Enter a title, then write the complaint or attach a picture.</p>
+        </section>
+
+        <!-- Title (required) -->
+        <section class="complaint-section" aria-label="Complaint title" data-i18n-aria="complaintTitleLabel">
+          <h2 class="leave-section-title" data-i18n="complaintTitleLabel">Complaint Title</h2>
+          <label class="complaint-field-wrap">
+            <input
+              type="text"
+              class="complaint-title-input"
+              id="complaintTitle"
+              placeholder="e.g. Broken classroom fan" data-i18n-placeholder="complaintTitlePlaceholder"
+              maxlength="120"
+              aria-label="Complaint title" data-i18n-aria="complaintTitleLabel"
+            >
+            <span class="complaint-title-meta"><span id="complaintTitleCount">0</span> / 120</span>
+          </label>
+        </section>
+
+        <!-- Body: write OR image OR camera -->
+        <section class="complaint-section" aria-label="Complaint details" data-i18n-aria="complaintDetails">
+          <h2 class="leave-section-title" data-i18n="complaintDetails">Complaint Details</h2>
+
+          <div class="leave-tabs" role="tablist" aria-label="Complaint method" data-i18n-aria="complaintMethodAria">
+            <button type="button" class="leave-tab active" data-cmethod="write" role="tab" aria-selected="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 20h9"/>
+                <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/>
+              </svg>
+              <span data-i18n="tabWrite">Write Here</span>
+            </button>
+
+            <button type="button" class="leave-tab" data-cmethod="image" role="tab" aria-selected="false">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="3" y="3" width="18" height="18" rx="2"/>
+                <circle cx="8.5" cy="8.5" r="1.5"/>
+                <polyline points="21 15 16 10 5 21"/>
+              </svg>
+              <span data-i18n="tabImage">Send Picture</span>
+            </button>
+
+            <button type="button" class="leave-tab" data-cmethod="camera" role="tab" aria-selected="false">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+                <circle cx="12" cy="13" r="4"/>
+              </svg>
+              <span data-i18n="tabCamera">Capture Now</span>
+            </button>
+          </div>
+
+          <!-- Panel: Write -->
+          <div class="leave-panel" id="complaintPanelWrite" role="tabpanel">
+            <label class="leave-textarea-wrap">
+              <span class="leave-field-label" data-i18n="yourComplaint">Your Complaint</span>
+              <textarea class="leave-textarea" id="complaintText" rows="7" placeholder="Describe the issue in detail — e.g. The ceiling fan in Class 5-B has stopped working since Monday and students are uncomfortable." data-i18n-placeholder="complaintPlaceholder"></textarea>
+              <span class="leave-textarea-meta"><span id="complaintTextCount">0</span> / 1000</span>
+            </label>
+          </div>
+
+          <!-- Panel: Send Picture -->
+          <div class="leave-panel" id="complaintPanelImage" role="tabpanel" hidden>
+            <label class="leave-upload" for="complaintImageInput">
+              <input type="file" id="complaintImageInput" accept="image/*" hidden>
+              <span class="leave-upload-inner">
+                <span class="leave-upload-icon">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                    <polyline points="17 8 12 3 7 8"/>
+                    <line x1="12" y1="3" x2="12" y2="15"/>
+                  </svg>
+                </span>
+                <span class="leave-upload-title" data-i18n="uploadComplaintImage">Upload complaint image</span>
+                <span class="leave-upload-sub" data-i18n="uploadFormat">PNG, JPG — up to 5 MB</span>
+              </span>
+            </label>
+          </div>
+
+          <!-- Panel: Camera -->
+          <div class="leave-panel" id="complaintPanelCamera" role="tabpanel" hidden>
+            <div class="leave-camera">
+              <video id="complaintCameraVideo" class="leave-camera-video" autoplay playsinline muted></video>
+              <canvas id="complaintCameraCanvas" hidden></canvas>
+              <div class="leave-camera-actions">
+                <button type="button" class="leave-cam-btn leave-cam-start" id="complaintCamStart">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+                    <circle cx="12" cy="13" r="4"/>
+                  </svg>
+                  <span data-i18n="startCamera">Start Camera</span>
+                </button>
+                <button type="button" class="leave-cam-btn leave-cam-capture" id="complaintCamCapture" disabled>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="4"/>
+                  </svg>
+                  <span data-i18n="capture">Capture</span>
+                </button>
+              </div>
+              <p class="leave-camera-hint" data-i18n="cameraHint">Camera works only on HTTPS or localhost.</p>
+            </div>
+          </div>
+
+          <!-- Preview -->
+          <div class="leave-preview" id="complaintPreview" hidden>
+            <span class="leave-preview-label" data-i18n="attachedImage">Attached Image</span>
+            <div class="leave-preview-inner">
+              <img id="complaintPreviewImg" alt="Complaint image preview">
+              <button type="button" class="leave-preview-remove" id="complaintPreviewRemove" aria-label="Remove image" data-i18n-aria="removeImage">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                  <line x1="18" y1="6" x2="6" y2="18"/>
+                  <line x1="6" y1="6" x2="18" y2="18"/>
+                </svg>
+              </button>
+            </div>
+          </div>
+
+        </section>
+
+        <!-- Submit button -->
+        <button type="button" class="leave-submit-btn" id="complaintSubmitBtn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="22" y1="2" x2="11" y2="13"/>
+            <polygon points="22 2 15 22 11 13 2 9 22 2"/>
+          </svg>
+          <span data-i18n="submitComplaint">Submit Complaint</span>
+        </button>
+
+        <p class="leave-footnote" data-i18n="complaintFootnote">
+          
+        </p>
+
+        <div style="height: 1.5rem;"></div>
+      </div>
+
+      <!-- ============ VIEW: SUGGESTION FORM ============ -->
+      <div id="appViewSuggestion" class="fees-view" hidden>
+
+        <section class="page-title-block">
+          <h1 class="page-title" data-i18n="submitSuggestion">Submit Suggestion</h1>
+          <p class="page-subtitle" data-i18n="suggestionSub">Enter a title, then write your suggestion or attach a picture.</p>
+        </section>
+
+        <!-- Title (required) -->
+        <section class="complaint-section" aria-label="Suggestion title" data-i18n-aria="suggestionTitleLabel">
+          <h2 class="leave-section-title" data-i18n="suggestionTitleLabel">Suggestion Title</h2>
+          <label class="complaint-field-wrap">
+            <input
+              type="text"
+              class="complaint-title-input"
+              id="suggestionTitle"
+              placeholder="e.g. Add more books to the library" data-i18n-placeholder="suggestionTitlePlaceholder"
+              maxlength="120"
+              aria-label="Suggestion title" data-i18n-aria="suggestionTitleLabel"
+            >
+            <span class="complaint-title-meta"><span id="suggestionTitleCount">0</span> / 120</span>
+          </label>
+        </section>
+
+        <!-- Body: write OR image OR camera -->
+        <section class="complaint-section" aria-label="Suggestion details" data-i18n-aria="suggestionDetails">
+          <h2 class="leave-section-title" data-i18n="suggestionDetails">Suggestion Details</h2>
+
+          <div class="leave-tabs" role="tablist" aria-label="Suggestion method" data-i18n-aria="suggestionMethodAria">
+            <button type="button" class="leave-tab active" data-smethod="write" role="tab" aria-selected="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 20h9"/>
+                <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/>
+              </svg>
+              <span data-i18n="tabWrite">Write Here</span>
+            </button>
+
+            <button type="button" class="leave-tab" data-smethod="image" role="tab" aria-selected="false">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="3" y="3" width="18" height="18" rx="2"/>
+                <circle cx="8.5" cy="8.5" r="1.5"/>
+                <polyline points="21 15 16 10 5 21"/>
+              </svg>
+              <span data-i18n="tabImage">Send Picture</span>
+            </button>
+
+            <button type="button" class="leave-tab" data-smethod="camera" role="tab" aria-selected="false">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+                <circle cx="12" cy="13" r="4"/>
+              </svg>
+              <span data-i18n="tabCamera">Capture Now</span>
+            </button>
+          </div>
+
+          <!-- Panel: Write -->
+          <div class="leave-panel" id="suggestionPanelWrite" role="tabpanel">
+            <label class="leave-textarea-wrap">
+              <span class="leave-field-label" data-i18n="yourSuggestion">Your Suggestion</span>
+              <textarea class="leave-textarea" id="suggestionText" rows="7" placeholder="Describe your idea — e.g. It would be helpful if the school library stayed open for one extra hour on weekdays so students can study in a quiet space." data-i18n-placeholder="suggestionPlaceholder"></textarea>
+              <span class="leave-textarea-meta"><span id="suggestionTextCount">0</span> / 1000</span>
+            </label>
+          </div>
+
+          <!-- Panel: Send Picture -->
+          <div class="leave-panel" id="suggestionPanelImage" role="tabpanel" hidden>
+            <label class="leave-upload" for="suggestionImageInput">
+              <input type="file" id="suggestionImageInput" accept="image/*" hidden>
+              <span class="leave-upload-inner">
+                <span class="leave-upload-icon">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                    <polyline points="17 8 12 3 7 8"/>
+                    <line x1="12" y1="3" x2="12" y2="15"/>
+                  </svg>
+                </span>
+                <span class="leave-upload-title" data-i18n="uploadSuggestionImage">Upload suggestion image</span>
+                <span class="leave-upload-sub" data-i18n="uploadFormat">PNG, JPG — up to 5 MB</span>
+              </span>
+            </label>
+          </div>
+
+          <!-- Panel: Camera -->
+          <div class="leave-panel" id="suggestionPanelCamera" role="tabpanel" hidden>
+            <div class="leave-camera">
+              <video id="suggestionCameraVideo" class="leave-camera-video" autoplay playsinline muted></video>
+              <canvas id="suggestionCameraCanvas" hidden></canvas>
+              <div class="leave-camera-actions">
+                <button type="button" class="leave-cam-btn leave-cam-start" id="suggestionCamStart">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+                    <circle cx="12" cy="13" r="4"/>
+                  </svg>
+                  <span data-i18n="startCamera">Start Camera</span>
+                </button>
+                <button type="button" class="leave-cam-btn leave-cam-capture" id="suggestionCamCapture" disabled>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="4"/>
+                  </svg>
+                  <span data-i18n="capture">Capture</span>
+                </button>
+              </div>
+              <p class="leave-camera-hint" data-i18n="cameraHint">Camera works only on HTTPS or localhost.</p>
+            </div>
+          </div>
+
+          <!-- Preview -->
+          <div class="leave-preview" id="suggestionPreview" hidden>
+            <span class="leave-preview-label" data-i18n="attachedImage">Attached Image</span>
+            <div class="leave-preview-inner">
+              <img id="suggestionPreviewImg" alt="Suggestion image preview">
+              <button type="button" class="leave-preview-remove" id="suggestionPreviewRemove" aria-label="Remove image" data-i18n-aria="removeImage">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                  <line x1="18" y1="6" x2="6" y2="18"/>
+                  <line x1="6" y1="6" x2="18" y2="18"/>
+                </svg>
+              </button>
+            </div>
+          </div>
+
+        </section>
+
+        <!-- Submit button -->
+        <button type="button" class="leave-submit-btn" id="suggestionSubmitBtn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="22" y1="2" x2="11" y2="13"/>
+            <polygon points="22 2 15 22 11 13 2 9 22 2"/>
+          </svg>
+          <span data-i18n="submitSuggestion">Submit Suggestion</span>
+        </button>
+
+        <p class="leave-footnote" data-i18n="suggestionFootnote">
+          
+        </p>
+
+        <div style="height: 1.5rem;"></div>
+      </div>
+
+    </main>
+
+    <!-- ===== Bottom Tab Bar ===== -->
+    <nav class="bottom-tabs" aria-label="Primary" data-i18n-aria="navPrimary">
+      <a href="parent-portal-index.html" class="tab-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 10l9-7 9 7v10a2 2 0 0 1-2 2h-4v-7h-6v7H5a2 2 0 0 1-2-2z"/>
+        </svg>
+        <span data-i18n="home">Home</span>
+      </a>
+      <a href="parent-portal-dashboard.html" class="tab-item active">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="3" width="7" height="7" rx="1.5"/>
+          <rect x="14" y="3" width="7" height="7" rx="1.5"/>
+          <rect x="3" y="14" width="7" height="7" rx="1.5"/>
+          <rect x="14" y="14" width="7" height="7" rx="1.5"/>
+        </svg>
+        <span data-i18n="dashboard">Dashboard</span>
+      </a>
+      <a href="#" class="tab-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+        </svg>
+        <span data-i18n="messages">Messages</span>
+      </a>
+      <a href="parent-portal-profile.html" class="tab-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="8" r="4"/>
+          <path d="M4 21a8 8 0 0 1 16 0"/>
+        </svg>
+        <span data-i18n="profile">Profile</span>
+      </a>
+    </nav>
+
+  </div>
+
+  <!-- ===== Side Drawer ===== -->
+  <div class="drawer-overlay" id="sidePanelOverlay"></div>
+  <aside class="side-drawer" id="sidePanel" aria-hidden="true">
+    <div class="drawer-header">
+      <div class="drawer-brand">
+        <svg class="drawer-logo" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+          <circle cx="50" cy="50" r="45" fill="#F0F9F4" stroke="#2E8B7A" stroke-width="5"/>
+          <path d="M50 20 L75 40 L75 75 L25 75 L25 40 Z" fill="#2E8B7A" opacity="0.85"/>
+          <circle cx="50" cy="52" r="10" fill="#F0F9F4" stroke="#2E8B7A" stroke-width="3"/>
+          <rect x="42" y="62" width="16" height="12" fill="#F0F9F4" rx="2"/>
+        </svg>
+        <div class="drawer-brand-text">
+          <span class="drawer-school" data-i18n="school">Greenwood High</span>
+          <span class="drawer-role" data-i18n="parentAccount">Parent Account</span>
+        </div>
+      </div>
+      <button class="drawer-close" id="sidePanelClose" aria-label="Close menu" data-i18n-aria="closeMenu">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="18" y1="6" x2="6" y2="18"/>
+          <line x1="6" y1="6" x2="18" y2="18"/>
+        </svg>
+      </button>
+    </div>
+
+    <nav class="drawer-nav">
+      <span class="drawer-section-label" data-i18n="account">Account</span>
+
+      <a href="#" class="drawer-link" data-action="change-password">
+        <span class="drawer-link-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+        </span>
+        <span class="drawer-link-text" data-i18n="changePassword">Change Password</span>
+        <svg class="drawer-link-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+      </a>
+
+      <a href="#" class="drawer-link" data-action="info">
+        <span class="drawer-link-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+        </span>
+        <span class="drawer-link-text" data-i18n="info">Info</span>
+        <svg class="drawer-link-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+      </a>
+
+      <span class="drawer-section-label" data-i18n="support">Support</span>
+
+      <a href="#" class="drawer-link" data-action="demo-videos">
+        <span class="drawer-link-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>
+        </span>
+        <span class="drawer-link-text" data-i18n="demoVideos">Demo Videos</span>
+        <svg class="drawer-link-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+      </a>
+
+      <a href="#" class="drawer-link" data-action="submit-feedback">
+        <span class="drawer-link-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+        </span>
+        <span class="drawer-link-text" data-i18n="submitFeedback">Submit Feedback</span>
+        <svg class="drawer-link-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+      </a>
+    </nav>
+
+    <div class="drawer-footer">
+      <a href="#" class="drawer-link drawer-link-logout" data-action="logout">
+        <span class="drawer-link-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+        </span>
+        <span class="drawer-link-text" data-i18n="logout">Logout</span>
+      </a>
+
+      <div class="drawer-powered">
+        <img src="logo-icon.png" alt="SoftSchool logo" class="drawer-powered-logo">
+        <div class="drawer-powered-text">
+          <span class="powered-by" data-i18n="poweredBy">Powered by</span>
+          <span class="brand-name">SoftSchool</span>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <script src="parent-portal-application.js"></script>
+</body>
+</html>

@@ -1,0 +1,184 @@
+/* ===================================================== */
+/* ============ PARENT PORTAL · FEEDBACK PAGE ========== */
+/* Loads AFTER parent-portal-change-password.css (shares */
+/* the base layout, top bar, inputs and button styles).  */
+/* ===================================================== */
+
+/* ---------- Hero heading (h2 on this page) ---------- */
+.cp-hero h2 {
+  font-size: 1.05rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  margin-bottom: 0.15rem;
+}
+
+/* ---------- Category cards ---------- */
+.fb-categories {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.7rem;
+}
+
+.fb-cat { position: relative; }
+
+.fb-cat input {
+  position: absolute;
+  opacity: 0;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  cursor: pointer;
+  margin: 0;
+}
+
+.fb-cat-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.95rem 0.5rem;
+  text-align: center;
+  background-color: #F7FAF8;
+  border: 1.5px solid #DCE7E2;
+  border-radius: 18px;
+  transition: all 0.18s ease;
+}
+
+.fb-cat-icon {
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  background-color: #FFFFFF;
+  color: #8AA39B;
+  transition: all 0.18s ease;
+}
+.fb-cat-icon svg { width: 20px; height: 20px; }
+
+.fb-cat-name {
+  font-size: 0.9rem;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: #1F2A2E;
+}
+.fb-cat-desc {
+  font-size: 0.7rem;
+  color: #7A8B90;
+  line-height: 1.3;
+}
+
+.fb-cat input:checked + .fb-cat-card {
+  background: linear-gradient(150deg, #E5F5EE 0%, #D6EFE4 100%);
+  border-color: #2E8B7A;
+  box-shadow: 0 0 0 4px rgba(46, 139, 122, 0.12);
+}
+.fb-cat input:checked + .fb-cat-card .fb-cat-icon {
+  background-color: #2E8B7A;
+  color: #FFFFFF;
+}
+.fb-cat input:focus-visible + .fb-cat-card {
+  outline: 3px solid rgba(70, 130, 180, 0.5);
+  outline-offset: 2px;
+}
+
+/* ---------- Text inputs ---------- */
+.fb-input { padding: 0 1rem; }
+
+.fb-textarea {
+  height: auto;
+  min-height: 150px;
+  padding: 0.85rem 1rem;
+  resize: vertical;
+  line-height: 1.5;
+  font-family: inherit;
+}
+
+.fb-counter {
+  margin-top: 0.3rem;
+  text-align: right;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: #98A8AD;
+}
+
+.fb-optional {
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+  color: #98A8AD;
+}
+
+/* ---------- Upload ---------- */
+.fb-dropzone {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+  width: 100%;
+  padding: 1rem;
+  font: inherit;
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: #2E8B7A;
+  background-color: #F7FAF8;
+  border: 1.5px dashed rgba(46, 139, 122, 0.5);
+  border-radius: 16px;
+  cursor: pointer;
+  transition: background-color 0.18s ease;
+}
+.fb-dropzone:hover,
+.fb-dropzone.dragover { background-color: #E5F5EE; }
+.fb-dropzone svg { width: 20px; height: 20px; }
+.fb-dropzone:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.fb-upload-note {
+  margin-top: 0.35rem;
+  font-size: 0.72rem;
+  color: #98A8AD;
+  padding-left: 0.2rem;
+}
+
+.fb-previews {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.6rem;
+  margin-top: 0.75rem;
+}
+.fb-previews:empty { display: none; }
+
+.fb-thumb {
+  position: relative;
+  aspect-ratio: 1;
+  border-radius: 14px;
+  overflow: hidden;
+  background-color: #EEF5F1;
+  border: 1.5px solid #DCE7E2;
+}
+.fb-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.fb-thumb-remove {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 50%;
+  background-color: rgba(31, 42, 46, 0.75);
+  color: #FFFFFF;
+  cursor: pointer;
+}
+.fb-thumb-remove svg { width: 13px; height: 13px; }
+
+/* ---------- Send button icon ---------- */
+.cp-submit .fb-send-icon { width: 18px; height: 18px; }
+.cp-submit.loading .fb-send-icon { display: none; }

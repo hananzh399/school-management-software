@@ -1,0 +1,527 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover, interactive-widget=resizes-content">
+  <meta name="color-scheme" content="light">
+  <meta name="theme-color" content="#FFFFFF">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <title data-i18n="docTitleTimetable">Timetable · Greenwood High</title>
+  <script src="parent-portal-i18n.js"></script>
+  <link rel="stylesheet" href="parent-portal-core.css">
+  <link rel="stylesheet" href="parent-portal-app.css">
+  <link rel="stylesheet" href="parent-portal-profile-timetable.css">
+  <link rel="stylesheet" href="parent-portal-i18n.css">
+</head>
+<body class="page-dashboard page-timetable">
+  <div class="app-shell">
+
+    <!-- ===== App Top Bar ===== -->
+    <header class="app-topbar">
+      <button class="icon-btn" id="hamburgerBtn" aria-label="Open menu" data-i18n-aria="openMenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="3" y1="6" x2="21" y2="6"/>
+          <line x1="3" y1="12" x2="21" y2="12"/>
+          <line x1="3" y1="18" x2="21" y2="18"/>
+        </svg>
+      </button>
+
+      <div class="app-brand">
+        <a href="parent-portal-index.html" class="app-brand-link">
+          <svg class="app-brand-logo" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="50" cy="50" r="45" fill="#F0F9F4" stroke="#2E8B7A" stroke-width="5"/>
+            <path d="M50 20 L75 40 L75 75 L25 75 L25 40 Z" fill="#2E8B7A" opacity="0.85"/>
+            <circle cx="50" cy="52" r="10" fill="#F0F9F4" stroke="#2E8B7A" stroke-width="3"/>
+            <rect x="42" y="62" width="16" height="12" fill="#F0F9F4" rx="2"/>
+          </svg>
+        </a>
+        <span class="app-brand-name" data-i18n="school">Greenwood High</span>
+      </div>
+
+      <a href="parent-portal-dashboard.html" class="icon-btn" aria-label="Back to dashboard" data-i18n-aria="backDashboard">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="19" y1="12" x2="5" y2="12"/>
+          <polyline points="12 19 5 12 12 5"/>
+        </svg>
+      </a>
+    </header>
+
+    <!-- ===== App Content ===== -->
+    <main class="app-content">
+
+      <section class="page-title-block">
+        <h1 class="page-title" data-i18n="featTimetable">Timetable</h1>
+        <p class="page-subtitle" data-i18n="ttSubtitle">Weekly class schedule with teacher and room details.</p>
+      </section>
+
+      <!-- Info strip -->
+      <div class="timetable-info">
+        <span class="timetable-info-item">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M22 10v6M2 10l10-5 10 5-10 5z"/>
+            <path d="M6 12v5c3 3 9 3 12 0v-5"/>
+          </svg>
+          <span>Class 5 – B</span>
+        </span>
+        <span class="timetable-info-dot"></span>
+        <span class="timetable-info-item">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="4" width="18" height="16" rx="2"/>
+            <path d="M8 2v4M16 2v4M3 10h18"/>
+          </svg>
+          <span data-i18n="sessionRangeText">Session 2026 – 2027</span>
+        </span>
+      </div>
+
+      <!-- ===== Timetable scroll wrapper ===== -->
+      <div class="timetable-scroll" role="region" aria-label="Weekly timetable" data-i18n-aria="weeklyTimetableAria" tabindex="0">
+        <table class="timetable-table">
+          <thead>
+            <tr>
+              <th class="tt-corner" rowspan="2">
+                <span class="tt-corner-days" data-i18n="ttDays">Days</span>
+                <span class="tt-corner-sep">/</span>
+                <span class="tt-corner-periods" data-i18n="ttPeriods">Periods</span>
+              </th>
+
+              <!-- Period headers -->
+              <th class="tt-period">
+                <span class="tt-period-num">1</span>
+                <span class="tt-period-time">8:30 – 9:15</span>
+              </th>
+              <th class="tt-period">
+                <span class="tt-period-num">2</span>
+                <span class="tt-period-time">9:15 – 10:00</span>
+              </th>
+              <th class="tt-period">
+                <span class="tt-period-num">3</span>
+                <span class="tt-period-time">10:00 – 10:45</span>
+              </th>
+
+              <!-- Break column header: NOT actually a column here — it's a
+                   vertical cell inside tbody. We only put a placeholder to
+                   keep the col count consistent for the browser. -->
+              <th class="tt-break-header" aria-hidden="true"></th>
+
+              <th class="tt-period">
+                <span class="tt-period-num">4</span>
+                <span class="tt-period-time">11:15 – 12:00</span>
+              </th>
+              <th class="tt-period">
+                <span class="tt-period-num">5</span>
+                <span class="tt-period-time">12:00 – 12:45</span>
+              </th>
+              <th class="tt-period">
+                <span class="tt-period-num">6</span>
+                <span class="tt-period-time">12:45 – 1:30</span>
+              </th>
+            </tr>
+          </thead>
+
+          <tbody>
+            <!-- ============ MONDAY ============ -->
+            <tr class="tt-row">
+              <th class="tt-day tt-day-blue">
+                <span class="tt-day-inner">
+                  <span class="tt-day-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/>
+                      <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>
+                    </svg>
+                  </span>
+                  <span class="tt-day-name" data-day="Monday" data-i18n="dayMonday">Monday</span>
+                </span>
+              </th>
+              <td class="tt-cell tt-cell-blue">
+                <span class="tt-subject" data-i18n="subEnglish">English</span>
+                <span class="tt-teacher">Mrs. Smith</span>
+              </td>
+              <td class="tt-cell tt-cell-blue">
+                <span class="tt-subject" data-i18n="subMaths">Maths</span>
+                <span class="tt-teacher">Mrs. Smith</span>
+              </td>
+              <td class="tt-cell tt-cell-blue">
+                <span class="tt-subject" data-i18n="ttScience">Science</span>
+                <span class="tt-teacher"><span data-i18n="roomShort">Rm</span> 101</span>
+              </td>
+
+              <!-- Break cell: first data row spans all 6 body rows -->
+              <td class="tt-break-cell" rowspan="6">
+                <div class="tt-break-inner">
+                  <span class="tt-break-label" data-i18n="ttBreak">BREAK</span>
+                  <span class="tt-break-time">10:45 – 11:15</span>
+                  <span class="tt-break-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M18 8h1a3 3 0 0 1 0 6h-1"/>
+                      <path d="M2 8h16v6a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4z"/>
+                      <line x1="6" y1="2" x2="6" y2="5"/>
+                      <line x1="10" y1="2" x2="10" y2="5"/>
+                      <line x1="14" y1="2" x2="14" y2="5"/>
+                    </svg>
+                  </span>
+                  <span class="tt-break-divider">—</span>
+                  <span class="tt-break-label" data-i18n="ttBreak">BREAK</span>
+                </div>
+              </td>
+
+              <td class="tt-cell tt-cell-blue">
+                <span class="tt-subject" data-i18n="ttSocial">Social Studies</span>
+                <span class="tt-teacher"><span data-i18n="roomShort">Rm</span> 101</span>
+              </td>
+              <td class="tt-cell tt-cell-blue">
+                <span class="tt-subject" data-i18n="ttArt">Art</span>
+                <span class="tt-teacher"><span data-i18n="roomShort">Rm</span> 101</span>
+              </td>
+              <td class="tt-cell tt-cell-blue">
+                <span class="tt-subject" data-i18n="ttPE">P.E.</span>
+                <span class="tt-teacher"><span data-i18n="roomShort">Rm</span> 101</span>
+              </td>
+            </tr>
+
+            <!-- ============ TUESDAY ============ -->
+            <tr class="tt-row">
+              <th class="tt-day tt-day-green">
+                <span class="tt-day-inner">
+                  <span class="tt-day-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <circle cx="12" cy="12" r="10"/>
+                      <line x1="2" y1="12" x2="22" y2="12"/>
+                      <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+                    </svg>
+                  </span>
+                  <span class="tt-day-name" data-day="Tuesday" data-i18n="dayTuesday">Tuesday</span>
+                </span>
+              </th>
+              <td class="tt-cell tt-cell-green">
+                <span class="tt-subject" data-i18n="subMaths">Maths</span>
+                <span class="tt-teacher"><span data-i18n="roomShort">Rm</span> 101</span>
+              </td>
+              <td class="tt-cell tt-cell-green">
+                <span class="tt-subject" data-i18n="subEnglish">English</span>
+                <span class="tt-teacher">Mrs. Smith</span>
+              </td>
+              <td class="tt-cell tt-cell-green">
+                <span class="tt-subject" data-i18n="ttComputers">Computers</span>
+                <span class="tt-teacher"><span data-i18n="roomShort">Rm</span> 101</span>
+              </td>
+              <!-- break cell already spanned from Monday row -->
+              <td class="tt-cell tt-cell-green">
+                <span class="tt-subject" data-i18n="ttGeography">Geography</span>
+                <span class="tt-teacher"><span data-i18n="roomShort">Rm</span> 101</span>
+              </td>
+              <td class="tt-cell tt-cell-green">
+                <span class="tt-subject" data-i18n="ttHindi">Hindi</span>
+                <span class="tt-teacher"><span data-i18n="roomShort">Rm</span> 101</span>
+              </td>
+              <td class="tt-cell tt-cell-green">
+                <span class="tt-subject" data-i18n="ttMusic">Music</span>
+                <span class="tt-teacher"><span data-i18n="roomShort">Rm</span> 101</span>
+              </td>
+            </tr>
+
+            <!-- ============ WEDNESDAY ============ -->
+            <tr class="tt-row">
+              <th class="tt-day tt-day-yellow">
+                <span class="tt-day-inner">
+                  <span class="tt-day-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M3 21h18"/>
+                      <path d="M5 21V7l8-4v18"/>
+                      <path d="M19 21V11l-6-4"/>
+                    </svg>
+                  </span>
+                  <span class="tt-day-name" data-day="Wednesday" data-i18n="dayWednesday">Wednesday</span>
+                </span>
+              </th>
+              <td class="tt-cell tt-cell-yellow">
+                <span class="tt-subject" data-i18n="ttScience">Science</span>
+                <span class="tt-teacher"><span data-i18n="roomShort">Rm</span> 101</span>
+              </td>
+              <td class="tt-cell tt-cell-yellow">
+                <span class="tt-subject" data-i18n="ttHistory">History</span>
+                <span class="tt-teacher">Mrs. Smith</span>
+              </td>
+              <td class="tt-cell tt-cell-yellow">
+                <span class="tt-subject" data-i18n="subEnglish">English</span>
+                <span class="tt-teacher"><span data-i18n="roomShort">Rm</span> 101</span>
+              </td>
+              <!-- break cell already spanned -->
+              <td class="tt-cell tt-cell-yellow">
+                <span class="tt-subject" data-i18n="subMaths">Maths</span>
+                <span class="tt-teacher"><span data-i18n="roomShort">Rm</span> 101</span>
+              </td>
+              <td class="tt-cell tt-cell-yellow">
+                <span class="tt-subject" data-i18n="ttLibrary">Library</span>
+                <span class="tt-teacher"><span data-i18n="roomShort">Rm</span> 101</span>
+              </td>
+              <td class="tt-cell tt-cell-yellow">
+                <span class="tt-subject" data-i18n="ttCraft">Craft</span>
+                <span class="tt-teacher"><span data-i18n="roomShort">Rm</span> 101</span>
+              </td>
+            </tr>
+
+            <!-- ============ THURSDAY ============ -->
+            <tr class="tt-row">
+              <th class="tt-day tt-day-purple">
+                <span class="tt-day-inner">
+                  <span class="tt-day-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                      <polyline points="14 2 14 8 20 8"/>
+                      <line x1="8" y1="13" x2="16" y2="13"/>
+                      <line x1="8" y1="17" x2="16" y2="17"/>
+                    </svg>
+                  </span>
+                  <span class="tt-day-name" data-day="Thursday" data-i18n="dayThursday">Thursday</span>
+                </span>
+              </th>
+              <td class="tt-cell tt-cell-purple">
+                <span class="tt-subject" data-i18n="subMaths">Maths</span>
+                <span class="tt-teacher"><span data-i18n="roomShort">Rm</span> 101</span>
+              </td>
+              <td class="tt-cell tt-cell-purple">
+                <span class="tt-subject" data-i18n="ttScience">Science</span>
+                <span class="tt-teacher"><span data-i18n="roomShort">Rm</span> 101</span>
+              </td>
+              <td class="tt-cell tt-cell-purple">
+                <span class="tt-subject" data-i18n="ttHindi">Hindi</span>
+                <span class="tt-teacher"><span data-i18n="roomShort">Rm</span> 101</span>
+              </td>
+              <!-- break cell already spanned -->
+              <td class="tt-cell tt-cell-purple">
+                <span class="tt-subject" data-i18n="subEnglish">English</span>
+                <span class="tt-teacher"><span data-i18n="roomShort">Rm</span> 101</span>
+              </td>
+              <td class="tt-cell tt-cell-purple">
+                <span class="tt-subject" data-i18n="ttComputers">Computers</span>
+                <span class="tt-teacher"><span data-i18n="roomShort">Rm</span> 101</span>
+              </td>
+              <td class="tt-cell tt-cell-purple">
+                <span class="tt-subject" data-i18n="ttSanskrit">Sanskrit</span>
+                <span class="tt-teacher"><span data-i18n="roomShort">Rm</span> 101</span>
+              </td>
+            </tr>
+
+            <!-- ============ FRIDAY ============ -->
+            <tr class="tt-row">
+              <th class="tt-day tt-day-pink">
+                <span class="tt-day-inner">
+                  <span class="tt-day-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <rect x="3" y="4" width="18" height="18" rx="2"/>
+                      <line x1="16" y1="2" x2="16" y2="6"/>
+                      <line x1="8" y1="2" x2="8" y2="6"/>
+                      <line x1="3" y1="10" x2="21" y2="10"/>
+                    </svg>
+                  </span>
+                  <span class="tt-day-name" data-day="Friday" data-i18n="dayFriday">Friday</span>
+                </span>
+              </th>
+              <td class="tt-cell tt-cell-pink">
+                <span class="tt-subject" data-i18n="ttSocial">Social Studies</span>
+                <span class="tt-teacher"><span data-i18n="roomShort">Rm</span> 101</span>
+              </td>
+              <td class="tt-cell tt-cell-pink">
+                <span class="tt-subject" data-i18n="subEnglish">English</span>
+                <span class="tt-teacher"><span data-i18n="roomShort">Rm</span> 101</span>
+              </td>
+              <td class="tt-cell tt-cell-pink">
+                <span class="tt-subject" data-i18n="ttScience">Science</span>
+                <span class="tt-teacher"><span data-i18n="roomShort">Rm</span> 101</span>
+              </td>
+              <!-- break cell already spanned -->
+              <td class="tt-cell tt-cell-pink">
+                <span class="tt-subject" data-i18n="subMaths">Maths</span>
+                <span class="tt-teacher"><span data-i18n="roomShort">Rm</span> 101</span>
+              </td>
+              <td class="tt-cell tt-cell-pink">
+                <span class="tt-subject" data-i18n="ttDance">Dance</span>
+                <span class="tt-teacher"><span data-i18n="roomShort">Rm</span> 101</span>
+              </td>
+              <td class="tt-cell tt-cell-pink">
+                <span class="tt-subject" data-i18n="ttGK">GK</span>
+                <span class="tt-teacher"><span data-i18n="roomShort">Rm</span> 101</span>
+              </td>
+            </tr>
+
+            <!-- ============ SATURDAY ============ -->
+            <tr class="tt-row">
+              <th class="tt-day tt-day-coral">
+                <span class="tt-day-inner">
+                  <span class="tt-day-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M9 18h6"/>
+                      <path d="M10 22h4"/>
+                      <path d="M12 2a7 7 0 0 0-4 12.7c.6.5 1 1.3 1 2.1V18h6v-1.2c0-.8.4-1.6 1-2.1A7 7 0 0 0 12 2z"/>
+                    </svg>
+                  </span>
+                  <span class="tt-day-name" data-day="Saturday" data-i18n="daySaturday">Saturday</span>
+                </span>
+              </th>
+              <td class="tt-cell tt-cell-coral">
+                <span class="tt-subject" data-i18n="ttArt">Art</span>
+                <span class="tt-teacher"><span data-i18n="roomShort">Rm</span> 101</span>
+              </td>
+              <td class="tt-cell tt-cell-coral">
+                <span class="tt-subject" data-i18n="ttHindi">Hindi</span>
+                <span class="tt-teacher"><span data-i18n="roomShort">Rm</span> 101</span>
+              </td>
+              <td class="tt-cell tt-cell-coral">
+                <span class="tt-subject" data-i18n="subEnglish">English</span>
+                <span class="tt-teacher"><span data-i18n="roomShort">Rm</span> 101</span>
+              </td>
+              <!-- break cell already spanned -->
+              <td class="tt-cell tt-cell-coral">
+                <span class="tt-subject" data-i18n="subMaths">Maths</span>
+                <span class="tt-teacher">Mrs. Smith</span>
+              </td>
+              <td class="tt-cell tt-cell-coral">
+                <span class="tt-subject" data-i18n="ttClassTest">Class Test</span>
+                <span class="tt-teacher"><span data-i18n="roomShort">Rm</span> 101</span>
+              </td>
+              <td class="tt-cell tt-cell-coral">
+                <span class="tt-subject" data-i18n="ttAssembly">Assembly</span>
+                <span class="tt-teacher"><span data-i18n="roomShort">Rm</span> 101</span>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Scroll hint -->
+      <p class="timetable-hint">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="9 18 15 12 9 6"/>
+        </svg>
+        <span data-i18n="ttHint">Swipe left / right to see more periods</span>
+      </p>
+
+
+    </main>
+
+    <!-- ===== Bottom Tab Bar ===== -->
+    <nav class="bottom-tabs" aria-label="Primary" data-i18n-aria="navPrimary">
+      <a href="parent-portal-index.html" class="tab-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 10l9-7 9 7v10a2 2 0 0 1-2 2h-4v-7h-6v7H5a2 2 0 0 1-2-2z"/>
+        </svg>
+        <span data-i18n="home">Home</span>
+      </a>
+      <a href="parent-portal-dashboard.html" class="tab-item active">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="3" width="7" height="7" rx="1.5"/>
+          <rect x="14" y="3" width="7" height="7" rx="1.5"/>
+          <rect x="3" y="14" width="7" height="7" rx="1.5"/>
+          <rect x="14" y="14" width="7" height="7" rx="1.5"/>
+        </svg>
+        <span data-i18n="dashboard">Dashboard</span>
+      </a>
+      <a href="parent-portal-messages.html" class="tab-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+        </svg>
+        <span data-i18n="messages">Messages</span>
+      </a>
+      <a href="parent-portal-profile.html" class="tab-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="8" r="4"/>
+          <path d="M4 21a8 8 0 0 1 16 0"/>
+        </svg>
+        <span data-i18n="profile">Profile</span>
+      </a>
+    </nav>
+
+  </div>
+
+  <!-- ===== Side Drawer ===== -->
+  <div class="drawer-overlay" id="sidePanelOverlay"></div>
+  <aside class="side-drawer" id="sidePanel" aria-hidden="true">
+    <div class="drawer-header">
+      <div class="drawer-brand">
+        <svg class="drawer-logo" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+          <circle cx="50" cy="50" r="45" fill="#F0F9F4" stroke="#2E8B7A" stroke-width="5"/>
+          <path d="M50 20 L75 40 L75 75 L25 75 L25 40 Z" fill="#2E8B7A" opacity="0.85"/>
+          <circle cx="50" cy="52" r="10" fill="#F0F9F4" stroke="#2E8B7A" stroke-width="3"/>
+          <rect x="42" y="62" width="16" height="12" fill="#F0F9F4" rx="2"/>
+        </svg>
+        <div class="drawer-brand-text">
+          <span class="drawer-school" data-i18n="school">Greenwood High</span>
+          <span class="drawer-role" data-i18n="parentAccount">Parent Account</span>
+        </div>
+      </div>
+      <button class="drawer-close" id="sidePanelClose" aria-label="Close menu" data-i18n-aria="closeMenu">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="18" y1="6" x2="6" y2="18"/>
+          <line x1="6" y1="6" x2="18" y2="18"/>
+        </svg>
+      </button>
+    </div>
+
+    <nav class="drawer-nav">
+      <span class="drawer-section-label" data-i18n="account">Account</span>
+
+      <a href="#" class="drawer-link" data-action="change-password">
+        <span class="drawer-link-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+        </span>
+        <span class="drawer-link-text" data-i18n="changePassword">Change Password</span>
+        <svg class="drawer-link-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+      </a>
+
+      <a href="#" class="drawer-link" data-action="info">
+        <span class="drawer-link-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+        </span>
+        <span class="drawer-link-text" data-i18n="info">Info</span>
+        <svg class="drawer-link-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+      </a>
+
+      <a href="#" class="drawer-link" data-action="settings">
+        <span class="drawer-link-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        </span>
+        <span class="drawer-link-text" data-i18n="settings">Settings</span>
+        <svg class="drawer-link-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+      </a>
+
+      <span class="drawer-section-label" data-i18n="support">Support</span>
+
+      <a href="#" class="drawer-link" data-action="demo-videos">
+        <span class="drawer-link-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>
+        </span>
+        <span class="drawer-link-text" data-i18n="demoVideos">Demo Videos</span>
+        <svg class="drawer-link-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+      </a>
+
+      <a href="#" class="drawer-link" data-action="submit-feedback">
+        <span class="drawer-link-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+        </span>
+        <span class="drawer-link-text" data-i18n="submitFeedback">Submit Feedback</span>
+        <svg class="drawer-link-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+      </a>
+    </nav>
+
+    <div class="drawer-footer">
+      <a href="#" class="drawer-link drawer-link-logout" data-action="logout">
+        <span class="drawer-link-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+        </span>
+        <span class="drawer-link-text" data-i18n="logout">Logout</span>
+      </a>
+
+      <div class="drawer-powered">
+        <img src="logo-icon.png" alt="SoftSchool logo" class="drawer-powered-logo">
+        <div class="drawer-powered-text">
+          <span class="powered-by" data-i18n="poweredBy">Powered by</span>
+          <span class="brand-name">SoftSchool</span>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <script src="parent-portal-timetable.js"></script>
+</body>
+</html>

@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content">
+  <meta name="color-scheme" content="light">
+  <meta name="theme-color" content="#FFFFFF">
+  <title data-i18n="docTitleFeedback">Submit Feedback · Greenwood High</title>
+  <script src="parent-portal-i18n.js"></script>
+  <link rel="stylesheet" href="parent-portal-core.css">
+  <link rel="stylesheet" href="parent-portal-i18n.css">
+</head>
+<body class="page-changepw page-feedback">
+
+  <header class="cp-topbar">
+    <a href="parent-portal-index.html" class="cp-back" aria-label="Back to home" data-i18n-aria="back">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+    </a>
+    <h1 class="cp-topbar-title" data-i18n="submitFeedback">Submit Feedback</h1>
+  </header>
+
+  <main class="cp-content">
+
+    <section class="cp-hero">
+      <div class="cp-hero-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+      </div>
+      <div>
+        <h2 data-i18n="fbHeroTitle">Help us improve</h2>
+        <p data-i18n="fbHeroText">Report a bug or share a suggestion. It goes straight to the software developers.</p>
+      </div>
+    </section>
+
+    <form id="feedbackForm" novalidate>
+      <div class="cp-form-error" id="formError" role="alert"></div>
+
+      <!-- 1. Category -->
+      <div class="cp-field" id="field-category">
+        <span class="cp-label" id="categoryLabel" data-i18n="fbCategory">Category</span>
+        <div class="fb-categories" role="radiogroup" aria-labelledby="categoryLabel">
+          <label class="fb-cat">
+            <input type="radio" name="category" value="bug">
+            <span class="fb-cat-card">
+              <span class="fb-cat-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="6" width="8" height="14" rx="4"/><path d="M19 7l-3 2M5 7l3 2M19 19l-3-2M5 19l3-2M20 13h-4M4 13h4M10 4l1 2M14 4l-1 2"/></svg>
+              </span>
+              <span class="fb-cat-name" data-i18n="fbBug">Bug</span>
+              <span class="fb-cat-desc" data-i18n="fbBugDesc">Something isn't working</span>
+            </span>
+          </label>
+          <label class="fb-cat">
+            <input type="radio" name="category" value="suggestion">
+            <span class="fb-cat-card">
+              <span class="fb-cat-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7c.6.5 1 1.2 1 2V17h6v-.3c0-.8.4-1.5 1-2A7 7 0 0 0 12 2z"/></svg>
+              </span>
+              <span class="fb-cat-name" data-i18n="fbSuggestion">Suggestion</span>
+              <span class="fb-cat-desc" data-i18n="fbSuggestionDesc">An idea to improve</span>
+            </span>
+          </label>
+        </div>
+        <p class="cp-error" id="error-category" role="alert"></p>
+      </div>
+
+      <!-- 2. Title -->
+      <div class="cp-field" id="field-title">
+        <label class="cp-label" for="title" id="titleLabel" data-i18n="fbTitle">Title</label>
+        <input class="cp-input fb-input" type="text" id="title" name="title" maxlength="80" placeholder="Short summary" data-i18n-placeholder="fbTitlePh" autocomplete="off">
+        <p class="cp-error" id="error-title" role="alert"></p>
+      </div>
+
+      <!-- 3. Content -->
+      <div class="cp-field" id="field-content">
+        <label class="cp-label" for="content" data-i18n="fbDetails">Details</label>
+        <textarea class="cp-input fb-input fb-textarea" id="content" name="content" maxlength="1000" placeholder="Describe it in detail. For a bug, tell us what you did and what happened." data-i18n-placeholder="fbDetailsPh"></textarea>
+        <div class="fb-counter"><span id="contentCount">0</span>/1000</div>
+        <p class="cp-error" id="error-content" role="alert"></p>
+      </div>
+
+      <!-- 4. Pictures -->
+      <div class="cp-field" id="field-images">
+        <span class="cp-label"><span data-i18n="fbPictures">Pictures</span> <span class="fb-optional" data-i18n="fbOptional">(optional)</span></span>
+        <button type="button" class="fb-dropzone" id="dropzone">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+          <span id="dropzoneText" data-i18n="fbAddPictures">Add pictures</span>
+        </button>
+        <input type="file" id="imageInput" accept="image/*" multiple hidden>
+        <p class="fb-upload-note" data-i18n="fbUploadNote">Up to 3 images, 5 MB each.</p>
+        <div class="fb-previews" id="previews"></div>
+        <p class="cp-error" id="error-images" role="alert"></p>
+      </div>
+
+      <button type="submit" class="cp-submit" id="submitBtn">
+        <span class="cp-spinner" aria-hidden="true"></span>
+        <svg class="fb-send-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+        <span id="submitText" data-i18n="fbSend">Send</span>
+      </button>
+    </form>
+
+    <!-- Success -->
+    <section class="cp-success" id="successBox" aria-live="polite">
+      <div class="cp-success-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+      </div>
+      <h2 data-i18n="fbThanks">Thank you!</h2>
+      <p data-i18n="fbThanksText">Your feedback was sent to the software developers.</p>
+      <a href="parent-portal-index.html" class="cp-submit" data-i18n="backHomeBtn">Back to Home</a>
+    </section>
+
+  </main>
+
+  <script src="parent-portal-feedback.js"></script>
+</body>
+</html>

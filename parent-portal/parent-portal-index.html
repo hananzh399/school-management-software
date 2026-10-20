@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content">
+  <meta name="color-scheme" content="light">
+  <meta name="theme-color" content="#FFFFFF">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <title data-i18n="docTitleIndex">Parent Portal · Greenwood High</title>
+  <script src="parent-portal-i18n.js"></script>
+  <script src="parent-portal-students.js"></script>
+  <link rel="stylesheet" href="parent-portal-core.css">
+</head>
+<body class="page-index">
+
+  <!-- ===== Top Bar ===== -->
+  <header class="mobile-topbar">
+    <div class="container topbar-inner">
+    <button class="icon-btn" id="hamburgerBtn" aria-label="Open menu" data-i18n-aria="openMenu" aria-expanded="false">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="3" y1="6" x2="21" y2="6"/>
+            <line x1="3" y1="12" x2="21" y2="12"/>
+            <line x1="3" y1="18" x2="21" y2="18"/>
+          </svg>
+        </button>
+
+        <div class="mobile-brand">
+          <svg class="mobile-brand-logo" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="50" cy="50" r="45" fill="#F0F9F4" stroke="#2E8B7A" stroke-width="5"/>
+            <path d="M50 20 L75 40 L75 75 L25 75 L25 40 Z" fill="#2E8B7A" opacity="0.85"/>
+            <circle cx="50" cy="52" r="10" fill="#F0F9F4" stroke="#2E8B7A" stroke-width="3"/>
+            <rect x="42" y="62" width="16" height="12" fill="#F0F9F4" rx="2"/>
+          </svg>
+          <span class="mobile-brand-name" data-i18n="school">Greenwood High</span>
+        </div>
+
+        <button class="icon-btn" id="notificationBtn" aria-label="Notifications" data-i18n-aria="notifications">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
+            <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+          </svg>
+          <span class="notification-dot"></span>
+        </button>
+    </div>
+  </header>
+
+  <!-- ===== Hero / Greeting ===== -->
+  <section class="hero hero-brand">
+    <div class="container greeting-block">
+      <p class="greeting-hi" id="greetingHi">Welcome back,</p>
+      <h1 class="greeting-name" data-i18n="parent">Parent</h1>
+      <p class="greeting-sub" data-i18n="portalTag">Greenwood High · Parent Portal</p>
+      <p class="hero-date" id="heroDate" hidden>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+        <span id="heroDateText"></span>
+      </p>
+    </div>
+  </section>
+
+  <!-- ===== Content ===== -->
+  <main class="container index-content">
+
+    <h2 class="sr-only" id="studentsHeading" data-i18n="myChild">My Child</h2>
+
+    <div class="student-grid" id="studentGrid"><!-- cards are drawn by parent-portal-home.js --></div>
+    <p class="students-hint" id="studentsHint" data-i18n="studentsHint" hidden>Tap a student to open their dashboard.</p>
+
+    <!-- ===== Quick access (filled live by parent-portal-home.js) ===== -->
+    <section class="home-section" aria-labelledby="quickTitle">
+      <div class="section-title-row">
+        <h2 class="section-title" id="quickTitle" data-i18n="quickAccess">Quick access</h2>
+      </div>
+
+      <div class="home-tiles">
+        <a class="home-tile" href="parent-portal-messages.html" id="tileMessages">
+          <span class="home-tile-top">
+            <span class="home-tile-icon is-messages">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+            </span>
+            <span class="home-tile-badge" id="tileMessagesBadge" hidden>0</span>
+          </span>
+          <span class="home-tile-title" data-i18n="messages">Messages</span>
+          <span class="home-tile-sub" id="tileMessagesSub"></span>
+        </a>
+
+        <a class="home-tile" href="parent-portal-notifications.html" id="tileNotifications">
+          <span class="home-tile-top">
+            <span class="home-tile-icon is-notifs">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+            </span>
+            <span class="home-tile-badge" id="tileNotifBadge" hidden>0</span>
+          </span>
+          <span class="home-tile-title" data-i18n="notifications">Notifications</span>
+          <span class="home-tile-sub" id="tileNotifSub"></span>
+        </a>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ===== Bottom Tab Bar (same as the other pages) ===== -->
+  <nav class="bottom-tabs" aria-label="Primary" data-i18n-aria="navPrimary">
+    <a href="parent-portal-index.html" class="tab-item active" aria-current="page">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10l9-7 9 7v10a2 2 0 0 1-2 2h-4v-7h-6v7H5a2 2 0 0 1-2-2z"/></svg>
+      <span data-i18n="home">Home</span>
+    </a>
+    <a href="parent-portal-dashboard.html" class="tab-item">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
+      <span data-i18n="dashboard">Dashboard</span>
+    </a>
+    <a href="parent-portal-messages.html" class="tab-item">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+      <span data-i18n="messages">Messages</span>
+    </a>
+    <a href="parent-portal-profile.html" class="tab-item">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>
+      <span data-i18n="profile">Profile</span>
+    </a>
+  </nav>
+
+  <!-- ===== Side Drawer ===== -->
+  <div class="drawer-overlay" id="sidePanelOverlay"></div>
+  <aside class="side-drawer" id="sidePanel" aria-hidden="true">
+    <div class="drawer-header">
+      <div class="drawer-brand">
+        <svg class="drawer-logo" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+          <circle cx="50" cy="50" r="45" fill="#F0F9F4" stroke="#2E8B7A" stroke-width="5"/>
+          <path d="M50 20 L75 40 L75 75 L25 75 L25 40 Z" fill="#2E8B7A" opacity="0.85"/>
+          <circle cx="50" cy="52" r="10" fill="#F0F9F4" stroke="#2E8B7A" stroke-width="3"/>
+          <rect x="42" y="62" width="16" height="12" fill="#F0F9F4" rx="2"/>
+        </svg>
+        <div class="drawer-brand-text">
+          <span class="drawer-school" data-i18n="school">Greenwood High</span>
+          <span class="drawer-role" data-i18n="parentAccount">Parent Account</span>
+        </div>
+      </div>
+      <button class="drawer-close" id="sidePanelClose" aria-label="Close menu" data-i18n-aria="closeMenu">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="18" y1="6" x2="6" y2="18"/>
+          <line x1="6" y1="6" x2="18" y2="18"/>
+        </svg>
+      </button>
+    </div>
+
+    <nav class="drawer-nav">
+      <span class="drawer-section-label" data-i18n="account">Account</span>
+
+      <a href="#" class="drawer-link" data-action="change-password">
+        <span class="drawer-link-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+        </span>
+        <span class="drawer-link-text" data-i18n="changePassword">Change Password</span>
+        <svg class="drawer-link-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+      </a>
+
+      <a href="#" class="drawer-link" data-action="info">
+        <span class="drawer-link-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+        </span>
+        <span class="drawer-link-text" data-i18n="info">Info</span>
+        <svg class="drawer-link-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+      </a>
+
+      <a href="#" class="drawer-link" data-action="settings">
+        <span class="drawer-link-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        </span>
+        <span class="drawer-link-text" data-i18n="settings">Settings</span>
+        <svg class="drawer-link-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+      </a>
+
+      <span class="drawer-section-label" data-i18n="support">Support</span>
+
+      <a href="#" class="drawer-link" data-action="demo-videos">
+        <span class="drawer-link-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>
+        </span>
+        <span class="drawer-link-text" data-i18n="demoVideos">Demo Videos</span>
+        <svg class="drawer-link-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+      </a>
+
+      <a href="#" class="drawer-link" data-action="submit-feedback">
+        <span class="drawer-link-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+        </span>
+        <span class="drawer-link-text" data-i18n="submitFeedback">Submit Feedback</span>
+        <svg class="drawer-link-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+      </a>
+    </nav>
+
+    <div class="drawer-footer">
+      <a href="#" class="drawer-link drawer-link-logout" data-action="logout">
+        <span class="drawer-link-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+        </span>
+        <span class="drawer-link-text" data-i18n="logout">Logout</span>
+      </a>
+
+      <div class="drawer-powered">
+        <img src="logo-icon.png" alt="SoftSchool logo" class="drawer-powered-logo" onerror="this.style.display='none'">
+        <div class="drawer-powered-text">
+          <span class="powered-by" data-i18n="poweredBy">Powered by</span>
+          <bdi class="brand-name" dir="ltr">SoftSchool</bdi>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <script src="parent-portal-script.js"></script>
+  <script src="parent-portal-chat-store.js"></script>
+  <script src="parent-portal-home.js"></script>
+</body>
+</html>

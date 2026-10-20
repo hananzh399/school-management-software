@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover, interactive-widget=resizes-content">
+  <meta name="color-scheme" content="light">
+  <meta name="theme-color" content="#2E8B7A">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <title data-i18n="docTitleDashboard">Dashboard · Greenwood High</title>
+  <script src="parent-portal-i18n.js"></script>
+  <link rel="stylesheet" href="parent-portal-core.css">
+  <link rel="stylesheet" href="parent-portal-app.css">
+  <link rel="stylesheet" href="parent-portal-i18n.css">
+</head>
+<body class="page-dashboard">
+  <div class="app-shell">
+
+    <!-- ===== App Top Bar ===== -->
+    <header class="app-topbar">
+      <button class="icon-btn" id="hamburgerBtn" aria-label="Open menu" data-i18n-aria="openMenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="3" y1="6" x2="21" y2="6"/>
+          <line x1="3" y1="12" x2="21" y2="12"/>
+          <line x1="3" y1="18" x2="21" y2="18"/>
+        </svg>
+      </button>
+
+      <div class="app-brand">
+        <a href="parent-portal-index.html" class="app-brand-link">
+          <svg class="app-brand-logo" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="50" cy="50" r="45" fill="#F0F9F4" stroke="#2E8B7A" stroke-width="5"/>
+            <path d="M50 20 L75 40 L75 75 L25 75 L25 40 Z" fill="#2E8B7A" opacity="0.85"/>
+            <circle cx="50" cy="52" r="10" fill="#F0F9F4" stroke="#2E8B7A" stroke-width="3"/>
+            <rect x="42" y="62" width="16" height="12" fill="#F0F9F4" rx="2"/>
+          </svg>
+        </a>
+        <span class="app-brand-name" data-i18n="school">Greenwood High</span>
+      </div>
+
+      <a href="parent-portal-index.html" class="icon-btn" aria-label="Back home" data-i18n-aria="back">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="19" y1="12" x2="5" y2="12"/>
+          <polyline points="12 19 5 12 12 5"/>
+        </svg>
+      </a>
+    </header>
+
+    <!-- ===== App Content ===== -->
+    <main class="app-content">
+
+      <!-- ===== Student Info Card (which student is open) ===== -->
+      <section class="dash-student-card" aria-label="Current student" data-i18n-aria="currentStudentAria">
+        <div class="dash-student-photo-wrap">
+          <img
+            id="dashStudentPhoto"
+            src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120' viewBox='0 0 120 120'%3E%3Ccircle cx='60' cy='60' r='60' fill='%23E3F2ED'/%3E%3Ccircle cx='60' cy='48' r='22' fill='%234A7A8C'/%3E%3Cpath d='M28 98 Q60 120 92 98 Q88 80 60 80 Q32 80 28 98Z' fill='%234A7A8C'/%3E%3C/svg%3E"
+            alt="Student photo"
+            class="dash-student-photo"
+          >
+          <span class="dash-status-dot"></span>
+        </div>
+
+        <div class="dash-student-info">
+          <span class="dash-student-tag" data-i18n="currentlyViewing">Currently Viewing</span>
+          <h2 class="dash-student-name" id="dashStudentName">Aarav Sharma</h2>
+
+          <div class="dash-student-meta">
+            <span class="dash-meta-item">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M22 10v6M2 10l10-5 10 5-10 5z"/>
+                <path d="M6 12v5c3 3 9 3 12 0v-5"/>
+              </svg>
+              <span id="dashStudentClass">5–B</span>
+            </span>
+            <span class="dash-meta-divider"></span>
+            <span class="dash-meta-item">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="3" y="4" width="18" height="16" rx="2"/>
+                <path d="M8 2v4M16 2v4M3 10h18"/>
+              </svg>
+              <span id="dashStudentReg">GH/2024/056</span>
+            </span>
+          </div>
+        </div>
+      </section>
+
+      <section class="page-title-block">
+        <h1 class="page-title" data-i18n="dashboard">Dashboard</h1>
+        <p class="page-subtitle" data-i18n="dashSubtitle">Everything about your child, in one place.</p>
+      </section>
+
+      <section class="features-grid" aria-label="Dashboard features" data-i18n-aria="featuresAria">
+
+        <!-- Profile (full-width hero) -->
+<a href="parent-portal-profile.html" class="feature-card feature-card-wide" data-feature="profile">
+          <div class="feature-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+              <circle cx="12" cy="7" r="4"/>
+            </svg>
+          </div>
+          <span class="feature-title" data-i18n="profile">Profile</span>
+          <svg class="feature-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="9 18 15 12 9 6"/>
+          </svg>
+        </a>
+
+        <!-- Daily Diary -->
+<a href="parent-portal-diary.html" class="feature-card" data-feature="diary">
+          <div class="feature-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>
+              <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
+              <line x1="9" y1="7" x2="16" y2="7"/>
+              <line x1="9" y1="11" x2="16" y2="11"/>
+            </svg>
+          </div>
+          <span class="feature-title" data-i18n="featDiary">Daily Diary</span>
+        </a>
+
+        <!-- Announcement -->
+        <a href="parent-portal-announcement.html" class="feature-card" data-feature="announcement">
+          <div class="feature-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M3 11l18-5v12L3 14v-3z"/>
+              <path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"/>
+            </svg>
+          </div>
+          <span class="feature-title" data-i18n="featAnnouncement">Announcement</span>
+        </a>
+
+        <!-- Tests -->
+        <a href="parent-portal-tests.html" class="feature-card" data-feature="tests">
+          <div class="feature-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/>
+              <rect x="8" y="2" width="8" height="4" rx="1"/>
+              <path d="M9 14l2 2 4-4"/>
+            </svg>
+          </div>
+          <span class="feature-title" data-i18n="featTests">Tests</span>
+        </a>
+
+        <!-- Result -->
+        <a href="parent-portal-result.html" class="feature-card" data-feature="result">
+          <div class="feature-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="3" y1="21" x2="21" y2="21"/>
+              <rect x="5" y="12" width="3" height="7" rx="1"/>
+              <rect x="10.5" y="6" width="3" height="13" rx="1"/>
+              <rect x="16" y="9" width="3" height="10" rx="1"/>
+            </svg>
+          </div>
+          <span class="feature-title" data-i18n="featResult">Result</span>
+        </a>
+
+        <!-- Attendance -->
+        <a href="parent-portal-attendance.html" class="feature-card" data-feature="attendance">
+          <div class="feature-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
+              <line x1="16" y1="2" x2="16" y2="6"/>
+              <line x1="8" y1="2" x2="8" y2="6"/>
+              <line x1="3" y1="10" x2="21" y2="10"/>
+              <path d="M9 15l2 2 4-4"/>
+            </svg>
+          </div>
+          <span class="feature-title" data-i18n="featAttendance">Attendance</span>
+        </a>
+
+        <!-- Submit Application -->
+<a href="parent-portal-application.html" class="feature-card" data-feature="application">
+  <div class="feature-icon">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+      <polyline points="14 2 14 8 20 8"/>
+      <line x1="12" y1="18" x2="12" y2="12"/>
+      <line x1="9" y1="15" x2="15" y2="15"/>
+    </svg>
+  </div>
+  <span class="feature-title" data-i18n="featApplication">Submit Application</span>
+</a>
+
+        <!-- Timetable -->
+        <a href="parent-portal-timetable.html" class="feature-card" data-feature="timetable">
+          <div class="feature-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="4" width="18" height="18" rx="2"/>
+              <line x1="16" y1="2" x2="16" y2="6"/>
+              <line x1="8" y1="2" x2="8" y2="6"/>
+              <line x1="3" y1="10" x2="21" y2="10"/>
+              <circle cx="12" cy="15" r="1.5"/>
+            </svg>
+          </div>
+          <span class="feature-title" data-i18n="featTimetable">Timetable</span>
+        </a>
+
+        <!-- Fee & Bills -->
+          <a href="parent-portal-fees.html" class="feature-card" data-feature="fee-bills">
+          <div class="feature-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M5 2h14a1 1 0 0 1 1 1v18l-3-2-3 2-3-2-3 2-3-2V3a1 1 0 0 1 1-1z"/>
+              <line x1="8" y1="8" x2="16" y2="8"/>
+              <line x1="8" y1="12" x2="16" y2="12"/>
+              <line x1="8" y1="16" x2="12" y2="16"/>
+            </svg>
+          </div>
+          <span class="feature-title" data-i18n="featFees">Fee &amp; Bills</span>
+        </a>
+
+      </section>
+
+    </main>
+
+    <!-- ===== Bottom Tab Bar ===== -->
+    <nav class="bottom-tabs" aria-label="Primary" data-i18n-aria="navPrimary">
+      <a href="parent-portal-index.html" class="tab-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 10l9-7 9 7v10a2 2 0 0 1-2 2h-4v-7h-6v7H5a2 2 0 0 1-2-2z"/>
+        </svg>
+        <span data-i18n="home">Home</span>
+      </a>
+      <a href="parent-portal-dashboard.html" class="tab-item active">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="3" width="7" height="7" rx="1.5"/>
+          <rect x="14" y="3" width="7" height="7" rx="1.5"/>
+          <rect x="3" y="14" width="7" height="7" rx="1.5"/>
+          <rect x="14" y="14" width="7" height="7" rx="1.5"/>
+        </svg>
+        <span data-i18n="dashboard">Dashboard</span>
+      </a>
+      <a href="parent-portal-messages.html" class="tab-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+        </svg>
+        <span data-i18n="messages">Messages</span>
+      </a>
+      <a href="parent-portal-profile.html" class="tab-item">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="12" cy="8" r="4"/>
+    <path d="M4 21a8 8 0 0 1 16 0"/>
+  </svg>
+  <span data-i18n="profile">Profile</span>
+</a>
+    </nav>
+
+  </div>
+
+  <!-- ===== Side Drawer ===== -->
+  <div class="drawer-overlay" id="sidePanelOverlay"></div>
+  <aside class="side-drawer" id="sidePanel" aria-hidden="true">
+    <div class="drawer-header">
+      <div class="drawer-brand">
+        <svg class="drawer-logo" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+          <circle cx="50" cy="50" r="45" fill="#F0F9F4" stroke="#2E8B7A" stroke-width="5"/>
+          <path d="M50 20 L75 40 L75 75 L25 75 L25 40 Z" fill="#2E8B7A" opacity="0.85"/>
+          <circle cx="50" cy="52" r="10" fill="#F0F9F4" stroke="#2E8B7A" stroke-width="3"/>
+          <rect x="42" y="62" width="16" height="12" fill="#F0F9F4" rx="2"/>
+        </svg>
+        <div class="drawer-brand-text">
+          <span class="drawer-school" data-i18n="school">Greenwood High</span>
+          <span class="drawer-role" data-i18n="parentAccount">Parent Account</span>
+        </div>
+      </div>
+      <button class="drawer-close" id="sidePanelClose" aria-label="Close menu" data-i18n-aria="closeMenu">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="18" y1="6" x2="6" y2="18"/>
+          <line x1="6" y1="6" x2="18" y2="18"/>
+        </svg>
+      </button>
+    </div>
+
+    <nav class="drawer-nav">
+      <span class="drawer-section-label" data-i18n="account">Account</span>
+
+      <a href="#" class="drawer-link" data-action="change-password">
+        <span class="drawer-link-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+        </span>
+        <span class="drawer-link-text" data-i18n="changePassword">Change Password</span>
+        <svg class="drawer-link-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+      </a>
+
+      <a href="#" class="drawer-link" data-action="info">
+        <span class="drawer-link-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+        </span>
+        <span class="drawer-link-text" data-i18n="info">Info</span>
+        <svg class="drawer-link-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+      </a>
+
+      <a href="#" class="drawer-link" data-action="settings">
+        <span class="drawer-link-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        </span>
+        <span class="drawer-link-text" data-i18n="settings">Settings</span>
+        <svg class="drawer-link-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+      </a>
+
+      <span class="drawer-section-label" data-i18n="support">Support</span>
+
+      <a href="#" class="drawer-link" data-action="demo-videos">
+        <span class="drawer-link-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>
+        </span>
+        <span class="drawer-link-text" data-i18n="demoVideos">Demo Videos</span>
+        <svg class="drawer-link-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+      </a>
+
+      <a href="#" class="drawer-link" data-action="submit-feedback">
+        <span class="drawer-link-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+        </span>
+        <span class="drawer-link-text" data-i18n="submitFeedback">Submit Feedback</span>
+        <svg class="drawer-link-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+      </a>
+    </nav>
+
+    <div class="drawer-footer">
+      <a href="#" class="drawer-link drawer-link-logout" data-action="logout">
+        <span class="drawer-link-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+        </span>
+        <span class="drawer-link-text" data-i18n="logout">Logout</span>
+      </a>
+
+      <div class="drawer-powered">
+        <img src="logo-icon.png" alt="SoftSchool logo" class="drawer-powered-logo" onerror="this.style.display='none'">
+        <div class="drawer-powered-text">
+          <span class="powered-by" data-i18n="poweredBy">Powered by</span>
+          <bdi class="brand-name" dir="ltr">SoftSchool</bdi>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <script src="parent-portal-dashboard.js"></script>
+</body>
+</html>

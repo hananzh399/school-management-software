@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content">
+  <meta name="color-scheme" content="light">
+  <meta name="theme-color" content="#FFFFFF">
+  <title data-i18n="docTitleNotifications">Notifications · Greenwood High</title>
+  <script src="parent-portal-i18n.js"></script>
+  <link rel="stylesheet" href="parent-portal-core.css">
+</head>
+<body class="page-index">
+
+  <!-- ===== Top Bar ===== -->
+  <header class="mobile-topbar">
+    <div class="container topbar-inner">
+      <a class="icon-btn" href="parent-portal-index.html" aria-label="Back to home" data-i18n-aria="backHome">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="15 18 9 12 15 6"/>
+        </svg>
+      </a>
+
+      <div class="mobile-brand">
+        <svg class="mobile-brand-logo" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+          <circle cx="50" cy="50" r="45" fill="#F0F9F4" stroke="#2E8B7A" stroke-width="5"/>
+          <path d="M50 20 L75 40 L75 75 L25 75 L25 40 Z" fill="#2E8B7A" opacity="0.85"/>
+          <circle cx="50" cy="52" r="10" fill="#F0F9F4" stroke="#2E8B7A" stroke-width="3"/>
+          <rect x="42" y="62" width="16" height="12" fill="#F0F9F4" rx="2"/>
+        </svg>
+        <span class="mobile-brand-name" data-i18n="school">Greenwood High</span>
+      </div>
+
+      <span class="topbar-spacer" aria-hidden="true"></span>
+    </div>
+  </header>
+
+  <!-- ===== Page header ===== -->
+  <section class="hero notif-hero">
+    <div class="container greeting-block">
+      <h1 class="greeting-name" data-i18n="notifications">Notifications</h1>
+      <p class="greeting-sub" id="notifSummary" data-i18n="notifKeptNote">Showing the last 3 days</p>
+    </div>
+  </section>
+
+  <!-- ===== Content ===== -->
+  <main class="container index-content notif-content">
+    <!-- Filled by parent-portal-notifications.js -->
+    <div id="notifList" aria-live="polite"></div>
+  </main>
+
+  <script src="parent-portal-notifications.js"></script>
+</body>
+</html>
