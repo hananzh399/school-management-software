@@ -405,9 +405,33 @@
     if (/\/parent-portal-profile\.html$/i.test(destination.pathname)) {
       var kids = childrenList();
       if (kids.length > 1) {
-        event.preventDefault();
-        openStudentPicker(kids, destination.href);
-        return;
+        // If a child is already open (e.g. we are inside that child's dashboard),
+        // go straight to that child's profile instead of asking again.
+        // The picker is only for the home/index page or when nothing valid is selected.
+        var onIndexPage = !!(document.body && document.body.classList.contains('page-index'));
+        var openId = destination.searchParams.get('student');
+        if (!openId) {
+          try { openId = sessionStorage.getItem('selectedStudentId'); } catch (e) { openId = null; }
+        }
+        var openStudent = null;
+        for (var k = 0; k < kids.length; k++) {
+          if (openId && studentId(kids[k]) === String(openId)) { openStudent = kids[k]; break; }
+        }
+
+        if (!onIndexPage && openStudent) {
+          try {
+            sessionStorage.setItem('selectedStudentId', studentId(openStudent));
+            sessionStorage.setItem('studentData', JSON.stringify(openStudent));
+          } catch (e) { /* ignore */ }
+          if (window.PortalStudents && typeof window.PortalStudents.select === 'function') {
+            window.PortalStudents.select(studentId(openStudent));
+          }
+          // fall through: let the link navigate normally (no picker)
+        } else {
+          event.preventDefault();
+          openStudentPicker(kids, destination.href);
+          return;
+        }
       }
     }
 
