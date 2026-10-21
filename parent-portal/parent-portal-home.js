@@ -36,7 +36,28 @@
   // ---------- Full-screen photo viewer ----------
   var lightbox = null, lightboxImg = null, lightboxCap = null, lightboxClose = null, lightboxReturnFocus = null;
 
+  function injectLightboxStyles() {
+    if (document.getElementById('photoLightboxStyles')) return;
+    var css = [
+      '.student-photo-wrap.has-photo{cursor:zoom-in}',
+      '.photo-lightbox{position:fixed;top:0;right:0;bottom:0;left:0;z-index:2147483000;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:.9rem;box-sizing:border-box;padding:calc(1rem + env(safe-area-inset-top,0px)) 1rem calc(1rem + env(safe-area-inset-bottom,0px));background:rgba(8,16,14,.92);-webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px);opacity:0;transition:opacity .22s ease;cursor:zoom-out}',
+      '.photo-lightbox[hidden]{display:none}',
+      '.photo-lightbox.is-open{opacity:1}',
+      '.photo-lightbox .photo-lightbox-img{display:block;position:static;width:auto;height:auto;max-width:100%;max-height:calc(100vh - 8rem);max-height:calc(100dvh - 8rem);object-fit:contain;border-radius:16px;border:0;box-shadow:0 20px 60px -10px rgba(0,0,0,.6);transform:scale(.94);transition:transform .25s cubic-bezier(.22,.8,.3,1)}',
+      '.photo-lightbox.is-open .photo-lightbox-img{transform:scale(1)}',
+      '.photo-lightbox .photo-lightbox-caption{margin:0;color:#fff;font-size:1rem;font-weight:700;text-align:center;overflow-wrap:anywhere}',
+      '.photo-lightbox .photo-lightbox-close{position:absolute;top:calc(.75rem + env(safe-area-inset-top,0px));right:.75rem;display:flex;align-items:center;justify-content:center;width:44px;height:44px;padding:0;border:0;border-radius:50%;background:rgba(255,255,255,.16);color:#fff;cursor:pointer}',
+      '.photo-lightbox .photo-lightbox-close:hover{background:rgba(255,255,255,.3)}',
+      '.photo-lightbox .photo-lightbox-close svg{width:22px;height:22px}'
+    ].join('\n');
+    var style = document.createElement('style');
+    style.id = 'photoLightboxStyles';
+    style.textContent = css;
+    document.head.appendChild(style);
+  }
+
   function buildLightbox() {
+    injectLightboxStyles();
     lightbox = node('div', 'photo-lightbox');
     lightbox.hidden = true;
     lightbox.setAttribute('role', 'dialog');
