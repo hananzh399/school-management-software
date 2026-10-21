@@ -108,9 +108,20 @@
     if (lastFocus && lastFocus.focus) lastFocus.focus();
   }
 
+  function loadFromApi(img, student) {
+    const api = window.PortalAPI;
+    if (!student || !api || typeof api.blobUrl !== 'function') return;
+    const regNo = student.regNo || student.regNumber || student.id;
+    if ((!student.hasPhoto && !student.photoUrl && !student.photo) || !regNo) return;
+    if (student.photo) { img.src = student.photo; return; }
+    api.blobUrl('/children/' + encodeURIComponent(regNo) + '/photo')
+      .then((url) => { if (img.isConnected) img.src = url; })
+      .catch(() => { /* keep the placeholder */ });
+  }
+
   // Make the photo wrapper tappable. The zoom is active only while the <img>
   // shows a real photo (it may arrive later, e.g. loaded from the API).
-  function attach(wrap, img, getName) {
+  function attach(wrap, img, getName, getStudent) {
     if (!wrap || !img || wrap.dataset.photoViewer) return;
     wrap.dataset.photoViewer = '1';
 
@@ -129,6 +140,10 @@
     };
     refresh();
     img.addEventListener('load', refresh);
+    // No real photo on screen yet? Load it from the API, like the Home page does.
+    if (!isRealPhoto(img.currentSrc || img.getAttribute('src'))) {
+      loadFromApi(img, typeof getStudent === 'function' ? getStudent() : null);
+    }
     if (window.MutationObserver) {
       new MutationObserver(refresh).observe(img, { attributes: true, attributeFilter: ['src'] });
     }

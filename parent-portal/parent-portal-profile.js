@@ -95,7 +95,9 @@
     const PV = window.PortalPhotoViewer;
     const wrap = photoEl && photoEl.closest('.profile-hero-photo-wrap');
     if (PV && wrap) {
-      PV.attach(wrap, photoEl, () => data.fullName);
+      const PS = window.PortalStudents;
+      const cur = (PS && PS.current && PS.current()) || {};
+      PV.attach(wrap, photoEl, () => data.fullName, () => Object.assign({}, cur, data, { photo: data.photo || cur.photo || null }));
     }
   }
 

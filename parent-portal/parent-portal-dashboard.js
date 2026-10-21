@@ -52,7 +52,9 @@
     const PV = window.PortalPhotoViewer;
     const wrap = photoEl && photoEl.closest('.dash-student-photo-wrap');
     if (PV && wrap) {
-      PV.attach(wrap, photoEl, () => studentData.name);
+      const PS = window.PortalStudents;
+      const cur = (PS && PS.current && PS.current()) || {};
+      PV.attach(wrap, photoEl, () => studentData.name, () => Object.assign({}, cur, studentData, { photo: studentData.photo || cur.photo || null }));
     }
   }
 
