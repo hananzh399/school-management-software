@@ -141,11 +141,39 @@
     });
   }
 
+  // ---------- Profile links: open THIS student's profile directly ----------
+  // When a sibling is already open in the dashboard, the profile page must not
+  // ask "which child?" again. We mark the student as the active one and pass
+  // the registration number along so the profile page can skip its picker.
+  function markActiveStudent() {
+    try {
+      sessionStorage.setItem('activeStudentReg', studentData.regNumber || '');
+      sessionStorage.setItem('skipStudentPicker', '1');
+      sessionStorage.setItem('studentData', JSON.stringify(studentData));
+    } catch (e) { /* ignore */ }
+  }
+
+  function initProfileLinks() {
+    const links = document.querySelectorAll(
+      '.feature-card[data-feature="profile"], .bottom-tabs a[href="parent-portal-profile.html"]'
+    );
+    links.forEach((link) => {
+      // Put the student in the URL too (works even if storage is cleared)
+      if (studentData.regNumber) {
+        const url = new URL(link.getAttribute('href'), window.location.href);
+        url.searchParams.set('reg', studentData.regNumber);
+        link.setAttribute('href', url.pathname.split('/').pop() + url.search);
+      }
+      link.addEventListener('click', markActiveStudent);
+    });
+  }
+
   // ---------- Boot ----------
   function boot() {
     populateStudentCard();
     initDrawer();
     initFeatureCards();
+    initProfileLinks();
     console.log('Dashboard ready for:', studentData.name);
   }
 
