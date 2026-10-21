@@ -3,8 +3,11 @@
    - Classes, sections and students are LIVE data: GET /api/settings/{schoolId}
      and GET /api/students/list?schoolId=… (same sources Student Management uses).
    - Subject suggestions come from the Teaching staff (GET /api/staff).
-   - Papers, marks and the date sheet are stored in localStorage ("ex_data_v2")
-     until an /api/exams backend exists (see BACKEND HOOKS at the bottom).
+   - Papers, marks, the date sheet and the grading scheme are stored on the server
+     (/api/exams, see ExamController). localStorage ("ex_data_v2") is only a cache:
+     every change is queued ("ex_pending_v1") and re-sent until the server accepts it,
+     so nothing is lost if the connection drops. Data an older version kept only in
+     this browser is uploaded once automatically.
    - Every printout (paper, date sheet, marks sheet, report cards) is built as a
      standalone A4 document and printed through a hidden iframe, so the page
      chrome (sidebar, buttons) can never leak into a print.
@@ -135,6 +138,71 @@
     applyGrading();
     function save() { try { localStorage.setItem(KEY, JSON.stringify(db)); } catch (e) { /* ignore */ } }
     let saveT; const saveSoon = () => { clearTimeout(saveT); saveT = setTimeout(save, 400); };
+
+    /* ───────── server sync (/api/exams) ───────── */
+    const QKEY = "ex_pending_v1";
+    const SYNC = { queue: [], busy: false, warned: false };
+    try { const q = JSON.parse(localStorage.getItem(QKEY) || "[]"); if (Array.isArray(q)) SYNC.queue = q.filter(o => o && o.sid === school.schoolId && o.method && o.path); } catch (e) { /* ignore */ }
+    const saveQ = () => { try { localStorage.setItem(QKEY, JSON.stringify(SYNC.queue)); } catch (e) { /* ignore */ } };
+    const warnOnce = msg => { if (!SYNC.warned) { SYNC.warned = true; toast(msg, true); } };
+    async function rawCall(method, path, body, ms) {
+        const ctl = new AbortController(), t = setTimeout(() => ctl.abort(), ms || 15000);
+        try {
+            return await fetch(API_ORIGIN + "/api/exams" + path + "?schoolId=" + encodeURIComponent(school.schoolId), {
+                method, signal: ctl.signal,
+                headers: Object.assign({ Accept: "application/json" }, body !== undefined ? { "Content-Type": "application/json" } : {}),
+                body: body !== undefined ? JSON.stringify(body) : undefined
+            });
+        } finally { clearTimeout(t); }
+    }
+    /* Queue a change (the newest write to a resource replaces an older queued one) and try to send it now. */
+    function pend(method, path, body) {
+        if (!school.schoolId) return;
+        SYNC.queue = SYNC.queue.filter(o => o.path !== path);
+        SYNC.queue.push({ sid: school.schoolId, method, path, body });
+        saveQ(); flush();
+    }
+    function dropQ(path) { SYNC.queue = SYNC.queue.filter(o => o.path !== path); saveQ(); }
+    async function flush() {
+        if (SYNC.busy) return;
+        SYNC.busy = true;
+        try {
+            while (SYNC.queue.length) {
+                const op = SYNC.queue[0];
+                let r;
+                try { r = await rawCall(op.method, op.path, op.body); }
+                catch (e) { warnOnce("Offline - your changes are kept on this device and will sync automatically."); break; }
+                if (r.ok || (r.status === 404 && op.method === "DELETE")) { SYNC.queue = SYNC.queue.filter(o => o !== op); saveQ(); continue; }
+                if (r.status === 401 || r.status === 429 || r.status >= 500) { warnOnce(r.status === 401 ? "Your session expired - log in again to sync your changes." : "The server is busy - will retry shortly."); break; }
+                let m = "The server rejected a change (HTTP " + r.status + ").";
+                try { const j = await r.json(); m = j.message || j.error || m; } catch (e) { /* keep default */ }
+                SYNC.queue = SYNC.queue.filter(o => o !== op); saveQ();
+                toast(m, true);
+            }
+        } finally { SYNC.busy = false; }
+    }
+    const blankDb = () => ({ papers: [], results: {}, datesheet: [], draft: null, prefs: { term: "Mid Term", cls: "" } });
+    /* Replace the local copy with the server's, after uploading anything still waiting to be sent. */
+    async function loadServer() {
+        const sid = school.schoolId;
+        if (!sid) return;
+        await flush();
+        if (SYNC.queue.length) return;                       // unsent edits on this device win until they upload
+        const get = async path => { const r = await rawCall("GET", path, undefined, 20000); if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); };
+        if (db.srvSchool && db.srvSchool !== sid) db = blankDb();   // cache belongs to another school
+        let boot = await get("/bootstrap");
+        const hasLocal = db.papers.length || db.datesheet.length || Object.keys(db.results).length || db.grading;
+        if (!db.srvSchool && hasLocal) {                      // one-time move of data an older version kept only in this browser
+            const r = await rawCall("POST", "/import", { papers: db.papers, results: db.results, datesheet: db.datesheet, grading: db.grading }, 30000);
+            if (r.ok) boot = await get("/bootstrap");
+        }
+        db.papers = boot.papers || []; db.results = boot.results || {}; db.datesheet = boot.datesheet || [];
+        if (boot.grading && Array.isArray(boot.grading.scale)) db.grading = { scale: boot.grading.scale }; else delete db.grading;
+        db.srvSchool = sid;
+        applyGrading(); save();
+    }
+    window.addEventListener("online", flush);
+    setInterval(flush, 30000);
 
     /* ───────── UI plumbing ───────── */
     function toast(msg, err) {
@@ -406,7 +474,7 @@
             const rec = { id: P.id || uid(), title, term: P.term, cls: P.cls, section: P.section || "", subj: P.subj.trim(), date: P.date, total: paperTotal(P), at: Date.now(), sections: data.sections, mins: P.mins, instr: P.instr };
             const i = db.papers.findIndex(x => x.id === rec.id);
             if (i >= 0) db.papers[i] = rec; else db.papers.unshift(rec);
-            P.id = rec.id; db.draft = JSON.parse(JSON.stringify(P)); save(); savedList(); toast("Paper saved — it is now available in Result Upload.");
+            P.id = rec.id; db.draft = JSON.parse(JSON.stringify(P)); save(); pend("PUT", "/papers/" + rec.id, rec); savedList(); toast("Paper saved — it is now available in Result Upload.");
         });
     }
     function keep() { db.draft = JSON.parse(JSON.stringify(P)); saveSoon(); }
@@ -457,7 +525,7 @@
         $$("[data-del]", b).forEach(x => x.addEventListener("click", () => {
             const p = get(x.dataset.del); if (!p) return;
             confirmBox("Delete this paper?", "<b>" + esc(p.title) + "</b>" + (db.results[p.id] ? " and the marks uploaded for it" : "") + " will be removed permanently.", "Delete", () => {
-                db.papers = db.papers.filter(q => q.id !== p.id); delete db.results[p.id]; if (P && P.id === p.id) { P.id = null; keep(); } save(); savedList();
+                db.papers = db.papers.filter(q => q.id !== p.id); delete db.results[p.id]; if (P && P.id === p.id) { P.id = null; keep(); } save(); dropQ("/results/" + p.id); pend("DELETE", "/papers/" + p.id); savedList();
             });
         }));
     }
@@ -601,6 +669,7 @@
     function persist(status, ro, quiet) {
         const marks = {}; ro.forEach(s => { const v = RS.marks[s.reg]; if (v != null && String(v).trim() !== "") marks[s.reg] = String(v).trim(); });
         db.results[RS.paper.id] = { total: RS.total, marks, status, at: Date.now() }; RS.status = status; save();
+        pend("PUT", "/results/" + RS.paper.id, { total: RS.total, marks, status });
         if (!quiet) { toast("Draft saved."); vSheet(RS.paper.id); }
     }
     function publish(ro) {
@@ -637,7 +706,7 @@
                     '</td><td class="ex-rowact"><button class="ex-icon-btn" data-e="' + d.id + '" title="Edit"><i class="fas fa-pen"></i></button><button class="ex-icon-btn del" data-d="' + d.id + '" title="Delete"><i class="fas fa-trash"></i></button></td></tr>').join("") + "</tbody></table></div>"
                 : empty("calendar-plus", "No papers scheduled", "Press Add Paper to build the date sheet.");
             $$("[data-e]").forEach(b => b.addEventListener("click", () => dsForm(db.datesheet.find(x => x.id === b.dataset.e))));
-            $$("[data-d]").forEach(b => b.addEventListener("click", () => confirmBox("Remove this paper?", "It will be removed from the date sheet.", "Remove", () => { db.datesheet = db.datesheet.filter(x => x.id !== b.dataset.d); save(); vDate(); })));
+            $$("[data-d]").forEach(b => b.addEventListener("click", () => confirmBox("Remove this paper?", "It will be removed from the date sheet.", "Remove", () => { db.datesheet = db.datesheet.filter(x => x.id !== b.dataset.d); save(); pend("DELETE", "/datesheet/" + b.dataset.d); vDate(); })));
         };
         draw();
         $("#ds-f").addEventListener("change", e => { db.prefs.dsf = e.target.value; save(); draw(); });
@@ -666,8 +735,9 @@
                 if (!v.subject) return toast("Enter the subject.", 1);
                 if (!v.date) return toast("Pick a date.", 1);
                 if (!v.start || !v.end || v.end <= v.start) return toast("End time must be after the start time.", 1);
-                if (d.id) Object.assign(d, v); else db.datesheet.push(Object.assign({ id: uid() }, v));
-                save(); closeModal(); vDate(); toast("Date sheet updated.");
+                let entry = d;
+                if (d.id) Object.assign(d, v); else { entry = Object.assign({ id: uid() }, v); db.datesheet.push(entry); }
+                save(); pend("PUT", "/datesheet/" + entry.id, entry); closeModal(); vDate(); toast("Date sheet updated.");
             });
         });
     }
@@ -828,10 +898,10 @@
         $("#gs-save").addEventListener("click", () => {
             const err = gsValidate(); if (err) { toast(err, true); return; }
             db.grading = { scale: GS.scale.map(r => ({ min: +r.min, grade: String(r.grade).trim(), remark: String(r.remark || "").trim(), pass: r.pass !== false })).sort((a, b) => b.min - a.min) };
-            applyGrading(); save(); toast("Grading scheme saved"); vGrading();
+            applyGrading(); save(); pend("PUT", "/grading", db.grading); toast("Grading scheme saved"); vGrading();
         });
         $("#gs-reset").addEventListener("click", () => confirmBox("Reset grading scheme?", "The grade scale goes back to the default (A+ to F, with only F as a Fail). Saved marks are not changed.", "Reset", () => {
-            delete db.grading; applyGrading(); save(); toast("Grading scheme reset to default"); vGrading();
+            delete db.grading; applyGrading(); save(); pend("DELETE", "/grading"); toast("Grading scheme reset to default"); vGrading();
         }));
         gsRefresh();
     }
@@ -863,13 +933,18 @@
     }
     window.addEventListener("beforeunload", save);
     chrome(); window.addEventListener("hashchange", route); route();
-    loadLive().catch(e => { LIVE.loading = false; LIVE.error = "Could not load live data (" + e.message + ")."; }).then(route);
+    Promise.all([
+        loadLive().catch(e => { LIVE.loading = false; LIVE.error = "Could not load live data (" + e.message + ")."; }),
+        loadServer().catch(() => { toast("Could not reach the exam server - showing the copy saved on this device.", true); })
+    ]).then(route);
 
     /* ------------------------------------------------------------
-       BACKEND HOOKS (for later) — suggested REST resources:
-         GET/POST   /api/exams/datesheet            -> db.datesheet
-         GET/POST   /api/exams/papers               -> db.papers
-         GET/PUT    /api/exams/results/{paperId}    -> db.results  (marks keyed by student regNo; status draft|published)
-       Add "/api/exams" to protectedPrefixes in shared-data.js so the school token is attached.
+       BACKEND: ExamController (/api/exams)
+         GET    /bootstrap                      papers + results + date sheet + grading in one call
+         PUT    /papers/{id}   DELETE /papers/{id}
+         PUT    /results/{paperId}              { total, marks:{regNo:mark|"A"}, status:"draft"|"published" }
+         PUT    /datesheet/{id}   DELETE /datesheet/{id}
+         PUT    /grading          DELETE /grading
+         POST   /import                         one-time upload of this browser's older local data
        ------------------------------------------------------------ */
 })();
