@@ -5,7 +5,6 @@
   'use strict';
 
   var I18n = window.PortalI18n;
-  var NOTIF_KEY = 'portalNotifications';   // same key the Notifications page uses
 
   // Translation with an English fallback if a key is missing
   function tr(key, fallback) {
@@ -34,9 +33,68 @@
     }
   }
 
+  // ---------- Full-screen photo viewer ----------
+  var lightbox = null, lightboxImg = null, lightboxCap = null, lightboxClose = null, lightboxReturnFocus = null;
+
+  function buildLightbox() {
+    lightbox = node('div', 'photo-lightbox');
+    lightbox.hidden = true;
+    lightbox.setAttribute('role', 'dialog');
+    lightbox.setAttribute('aria-modal', 'true');
+
+    lightboxClose = node('button', 'photo-lightbox-close');
+    lightboxClose.type = 'button';
+    lightboxClose.setAttribute('aria-label', tr('close', 'Close'));
+    lightboxClose.appendChild(svg(['M18 6L6 18', 'M6 6l12 12'], '2.5'));
+
+    lightboxImg = node('img', 'photo-lightbox-img');
+    lightboxCap = node('p', 'photo-lightbox-caption');
+
+    lightbox.appendChild(lightboxClose);
+    lightbox.appendChild(lightboxImg);
+    lightbox.appendChild(lightboxCap);
+    document.body.appendChild(lightbox);
+
+    lightbox.addEventListener('click', closeLightbox);
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' && lightbox && !lightbox.hidden) closeLightbox();
+    });
+  }
+
+  function openLightbox(src, name) {
+    if (!lightbox) buildLightbox();
+    lightboxReturnFocus = document.activeElement;
+    lightboxImg.src = src;
+    lightboxImg.alt = name || '';
+    lightboxCap.textContent = name || '';
+    lightbox.setAttribute('aria-label', name || '');
+    lightbox.hidden = false;
+    document.body.style.overflow = 'hidden';
+    requestAnimationFrame(function () { lightbox.classList.add('is-open'); });
+    lightboxClose.focus();
+  }
+
+  function closeLightbox() {
+    if (!lightbox || lightbox.hidden) return;
+    lightbox.classList.remove('is-open');
+    lightbox.hidden = true;
+    lightboxImg.removeAttribute('src');
+    document.body.style.overflow = '';
+    if (lightboxReturnFocus && lightboxReturnFocus.focus) lightboxReturnFocus.focus();
+  }
+
   function loadCardPhoto(student, img, fallback) {
     function show(url) {
-      img.onload = function () { fallback.hidden = true; };
+      img.onload = function () {
+        fallback.hidden = true;
+        var wrap = img.parentNode;
+        if (wrap) {
+          wrap.classList.add('has-photo');
+          wrap.setAttribute('role', 'button');
+          wrap.tabIndex = 0;
+          wrap.setAttribute('aria-label', tr('viewPhoto', 'View photo'));
+        }
+      };
       img.onerror = function () {
         img.hidden = true;
         fallback.hidden = false;
@@ -154,6 +212,21 @@
     card.appendChild(bottom);
     card._studentPhoto = { img: img, fallback: fallback };
 
+    // Tap the photo → enlarge it (don't open the dashboard)
+    function zoomPhoto(e) {
+      if (!photoWrap.classList.contains('has-photo') || !img.src) return;
+      e.stopPropagation();
+      openLightbox(img.src, s.name);
+    }
+    photoWrap.addEventListener('click', zoomPhoto);
+    photoWrap.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter' || e.key === ' ') {
+        if (!photoWrap.classList.contains('has-photo')) return;
+        e.preventDefault();
+        zoomPhoto(e);
+      }
+    });
+
     card.addEventListener('click', function () { openStudent(s.id); });
     card.addEventListener('keydown', function (e) {
       if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openStudent(s.id); }
@@ -164,6 +237,7 @@
   function renderStudents() {
     var grid = $('studentGrid');
     if (!grid) return;
+    closeLightbox();
     var PS = window.PortalStudents;
     var students = PS ? PS.list() : [];
     var hint = $('studentsHint');
@@ -206,44 +280,47 @@
     box.hidden = false;
   }
 
-  // ---------- Notifications tile ----------
-  function todayISO() {
-    var d = new Date();
-    return d.getFullYear() + '-' +
-      String(d.getMonth() + 1).padStart(2, '0') + '-' +
-      String(d.getDate()).padStart(2, '0');
-  }
+  // ---------- Notifications: red dot + tile ----------
+  // "New" = a notification the person has not yet seen on the Notifications page.
+  // The page marks everything as seen when it opens (see parent-portal-notif-feed.js).
+  var notifRun = 0;
 
-  // Returns the number of notifications dated today, or null if the
-  // Notifications page has not stored any yet.
-  function notificationsToday() {
-    try {
-      var raw = localStorage.getItem(NOTIF_KEY);
-      if (!raw) return null;
-      var list = JSON.parse(raw);
-      if (!Array.isArray(list)) return null;
-      var today = todayISO();
-      return list.filter(function (n) { return n && n.date === today; }).length;
-    } catch (e) { return null; }
+  function setNotifUI(count) {
+    var sub = $('tileNotifSub');
+    var badge = $('tileNotifBadge');
+    var dot = $('notificationDot');
+    if (dot) dot.hidden = !(count > 0);
+    if (!sub || !badge) return;
+    if (count > 0) {
+      sub.textContent = onScreen(fill(tr('unreadN', '{n} unread'), count));
+      badge.textContent = String(count);
+      badge.hidden = false;
+    } else {
+      sub.textContent = onScreen(tr('homeNotifNone', 'Nothing new today'));
+      badge.hidden = true;
+    }
   }
 
   function renderNotifications() {
     var sub = $('tileNotifSub');
     var badge = $('tileNotifBadge');
-    if (!sub || !badge) return;
-    var n = notificationsToday();
+    var dot = $('notificationDot');
+    var Feed = window.PortalNotifFeed;
+    var api = window.PortalAPI;
 
-    if (n === null) {
-      sub.textContent = onScreen(tr('notifKeptNote', 'Showing the last 3 days'));
-      badge.hidden = true;
-    } else if (n === 0) {
-      sub.textContent = onScreen(tr('homeNotifNone', 'Nothing new today'));
-      badge.hidden = true;
-    } else {
-      sub.textContent = onScreen(fill(tr('homeNotifToday', '{n} new today'), n));
-      badge.textContent = String(n);
-      badge.hidden = false;
-    }
+    // Neutral state until the real answer arrives (no dot guessed in advance)
+    if (sub && !sub.textContent) sub.textContent = onScreen(tr('notifKeptNote', 'Showing the last 3 days'));
+    if (badge) badge.hidden = true;
+    if (dot) dot.hidden = true;
+    if (!Feed || !api || !api.childId()) return;
+
+    var run = ++notifRun;
+    Feed.load().then(function (items) {
+      if (run !== notifRun) return;          // a newer check replaced this one
+      setNotifUI(Feed.unseenCount(items));
+    }).catch(function () {
+      // Offline / server error: leave the dot hidden rather than guess
+    });
   }
 
   // ---------- Messages tile ----------
@@ -280,7 +357,10 @@
   function boot() {
     renderAll();
     // A fresh child list can arrive after the page's scripts have rendered.
-    window.addEventListener('portal-students-updated', renderStudents);
+    window.addEventListener('portal-students-updated', function () {
+      renderStudents();
+      renderNotifications();
+    });
     // Live: new messages and receipts while the page is open
     if (window.ChatStore && window.ChatStore.subscribe) window.ChatStore.subscribe(renderMessages);
     // Back button can restore a cached copy of this page

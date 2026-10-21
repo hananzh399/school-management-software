@@ -1,22 +1,14 @@
 // Parent Portal – Notifications page script (connected to the backend)
 //
-// The backend has no separate "notifications" table, so the feed is assembled from
-// what the school already publishes for the selected child (last 3 days only):
-//   announcements -> notice            diary entries  -> homework
-//   marked tests  -> result            attendance     -> attendance
-//   unpaid fees   -> fee (standing reminder, shown as today)
+// The feed itself (and the "seen" tracking behind the red dot on Home) lives in
+// parent-portal-notif-feed.js. This file only renders it and marks it as seen.
 (function () {
   'use strict';
-
-  // ---------- Settings ----------
-  const RETENTION_DAYS = 3;                 // today + the 2 days before it
-  const CURRENCY = 'Rs.';                   // shown in fee reminders; change or set '' to hide
 
   // ---------- Language ----------
   const I18n = window.PortalI18n;
   if (I18n) I18n.apply();
 
-  // Returns the translation, or the English fallback if the key is missing.
   const tr = (key, fallback) => {
     try {
       const v = I18n ? I18n.t(key) : null;
@@ -27,159 +19,14 @@
   };
 
   const API = window.PortalAPI;
-
-  // ---------- Date helpers ----------
-  const pad = (n) => String(n).padStart(2, '0');
-  const isoOf = (d) => d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
-
-  function isoDaysAgo(n) {
-    const d = new Date();
-    d.setDate(d.getDate() - n);
-    return isoOf(d);
-  }
-
-  function parseDate(iso) {
-    const [y, m, d] = iso.split('-').map(Number);
-    return new Date(y, m - 1, d);
-  }
-
+  const Feed = window.PortalNotifFeed;
+  const { isoDaysAgo, parseDate, formatDate, formatTime } = Feed.util;
   const locale = document.documentElement.lang || undefined;
-
-  function formatDate(iso) {
-    return parseDate(iso).toLocaleDateString(locale, {
-      weekday: 'short', day: 'numeric', month: 'long', year: 'numeric'
-    });
-  }
 
   function dateLabel(iso) {
     if (iso === isoDaysAgo(0)) return tr('today', 'Today');
     if (iso === isoDaysAgo(1)) return tr('yesterday', 'Yesterday');
     return parseDate(iso).toLocaleDateString(locale, { weekday: 'long' });
-  }
-
-  function formatTime(hhmm) {
-    if (!hhmm) return '';
-    const [h, m] = hhmm.split(':').map(Number);
-    const t = new Date();
-    t.setHours(h, m, 0, 0);
-    return t.toLocaleTimeString(locale, { hour: 'numeric', minute: '2-digit' });
-  }
-
-  // "2026-10-20" -> {date, time:''}   |   ISO instant -> local {date, time:'HH:MM'}
-  function when(value) {
-    if (!value) return null;
-    const s = String(value);
-    if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return { date: s, time: '' };
-    const d = new Date(s);
-    if (isNaN(d)) return null;
-    return { date: isoOf(d), time: pad(d.getHours()) + ':' + pad(d.getMinutes()) };
-  }
-
-  // "07:52:10" or "2026-10-20T07:52:10" -> "07:52"
-  function clock(value) {
-    const m = /(?:T|^)(\d{1,2}):(\d{2})/.exec(String(value || ''));
-    return m ? pad(+m[1]) + ':' + m[2] : '';
-  }
-
-  const money = (n) => (CURRENCY ? CURRENCY + ' ' : '') + Number(n || 0).toLocaleString(locale);
-
-  // ---------- Build the feed from the backend ----------
-  function childFirstName() {
-    const c = API && API.child();
-    const name = c && (c.name || c.fullName);
-    return name ? String(name).trim().split(/\s+/)[0] : tr('yourChild', 'Your child');
-  }
-
-  function fromAnnouncements(rows) {
-    return (rows || []).map((a) => {
-      const w = when(a.date);
-      if (!w) return null;
-      return { date: w.date, time: w.time, type: 'default',
-        title: a.title || tr('notifAnnouncement', 'New announcement'), body: a.body || '' };
-    });
-  }
-
-  function fromDiary(rows) {
-    return (rows || []).map((d) => {
-      const w = when(d.createdAt || d.date);
-      if (!w) return null;
-      const subject = d.subject ? ' · ' + d.subject : '';
-      return { date: w.date, time: w.time, type: 'homework',
-        title: tr('notifHomework', 'New homework posted') + subject, body: d.note || '' };
-    });
-  }
-
-  function fromTests(rows) {
-    return (rows || []).map((t) => {
-      if (t.status !== 'marked') return null;
-      const w = when(t.date);
-      if (!w) return null;
-      const of = t.totalMarks ? ' / ' + t.totalMarks : '';
-      const pct = t.percentage != null ? ' (' + t.percentage + '%)' : '';
-      return { date: w.date, time: '', type: 'result',
-        title: tr('notifResult', 'Result announced') + (t.title ? ' · ' + t.title : ''),
-        body: (t.subject ? t.subject + ': ' : '') + childFirstName() + ' scored ' + t.score + of + pct + '.' };
-    });
-  }
-
-  function fromAttendance(data) {
-    const out = [];
-    const days = (data && data.days) || {};
-    const details = (data && data.details) || {};
-    const name = childFirstName();
-    Object.keys(days).forEach((date) => {
-      const status = days[date];
-      const det = details[date] || {};
-      const t = clock(det.checkIn);
-      let body;
-      if (status === 'present') {
-        body = name + ' was marked present.' + (t ? ' Arrival time: ' + formatTime(t) + '.' : '');
-      } else if (status === 'absent') {
-        body = name + ' was marked absent.' + (det.reason ? ' Reason: ' + det.reason : '');
-      } else if (status === 'leave') {
-        body = name + ' is on leave.' + (det.reason ? ' Reason: ' + det.reason : '');
-      } else {
-        return;
-      }
-      out.push({ date, time: t, type: 'attendance',
-        title: tr('notifAttendance', 'Attendance update'), body });
-    });
-    return out;
-  }
-
-  function fromFees(data) {
-    const today = isoDaysAgo(0);
-    return ((data && data.fees) || []).map((f) => {
-      if (f.status !== 'due' && f.status !== 'overdue') return null;
-      const overdue = f.status === 'overdue';
-      return { date: today, time: '', type: 'fee',
-        title: overdue ? tr('notifFeeOverdue', 'Fee overdue') : tr('notifFeeReminder', 'Fee reminder'),
-        body: 'The fee for ' + f.monthLabel + ' (' + money(f.remaining) + ') ' +
-              (overdue ? 'was due on ' : 'is due on ') + formatDate(f.dueDate) + '.' };
-    });
-  }
-
-  // Runs every request; one failing endpoint does not hide the others.
-  async function loadFeed() {
-    const jobs = [
-      ['/announcements', fromAnnouncements],
-      ['/diary', fromDiary],
-      ['/tests', fromTests],
-      ['/attendance', fromAttendance],
-      ['/fees', fromFees]
-    ].map(([path, map]) => API.get(API.forChild(path)).then(map));
-
-    const results = await Promise.allSettled(jobs);
-    const failed = results.filter((r) => r.status === 'rejected');
-    if (failed.length === results.length) throw failed[0].reason;
-
-    const oldestKept = isoDaysAgo(RETENTION_DAYS - 1);
-    const newest = isoDaysAgo(0);
-    const items = [];
-    results.forEach((r) => {
-      if (r.status === 'fulfilled') items.push(...(r.value || []));
-    });
-    return items.filter((n) => n && n.date >= oldestKept && n.date <= newest);
   }
 
   // ---------- Icons (static markup, no user data) ----------
@@ -218,7 +65,7 @@
     if (!list) return;
 
     const note = tr('notifKeptNote', 'Showing the last 3 days');
-    if (summary) summary.textContent = items.length ? items.length + ' · ' + note : note;
+    if (summary) summary.textContent = items.length ? items.length + ' \u00b7 ' + note : note;
 
     if (!items.length) {
       showMessage(list,
@@ -282,9 +129,13 @@
       showMessage(list, tr('ttNoStudent', 'Please select a student from the home page.'));
       return;
     }
-    showMessage(list, tr('loading', 'Loading…'));
+    showMessage(list, tr('loading', 'Loading\u2026'));
     try {
-      render(await loadFeed());
+      const items = await Feed.load();
+      render(items);
+      // The person has now seen everything listed -> the red dot on Home goes away
+      // until a notification with a new id arrives.
+      Feed.markSeen(items);
     } catch (err) {
       console.error('Notifications load failed:', err);
       showMessage(list, tr('notifLoadError', 'Could not load notifications.'),
