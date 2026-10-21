@@ -90,6 +90,13 @@
     if (photoEl) {
       photoEl.alt = tr('photoAlt', "{name}'s photo").replace('{name}', data.fullName);
     }
+
+    // Tap the photo to view it full screen (active once a real photo is showing)
+    const PV = window.PortalPhotoViewer;
+    const wrap = photoEl && photoEl.closest('.profile-hero-photo-wrap');
+    if (PV && wrap) {
+      PV.attach(wrap, photoEl, () => data.fullName);
+    }
   }
 
   // Basic HTML escape for safety when injecting multi-line addresses

@@ -47,6 +47,13 @@
     if (photoEl) {
       photoEl.alt = tr('photoAlt', "{name}'s photo").replace('{name}', studentData.name);
     }
+
+    // Tap the photo to view it full screen (active once a real photo is showing)
+    const PV = window.PortalPhotoViewer;
+    const wrap = photoEl && photoEl.closest('.dash-student-photo-wrap');
+    if (PV && wrap) {
+      PV.attach(wrap, photoEl, () => studentData.name);
+    }
   }
 
   // ---------- Drawer ----------
