@@ -142,29 +142,27 @@
   }
 
   // ---------- Profile links: open THIS student's profile directly ----------
-  // When a sibling is already open in the dashboard, the profile page must not
-  // ask "which child?" again. We mark the student as the active one and pass
-  // the registration number along so the profile page can skip its picker.
-  function markActiveStudent() {
-    try {
-      sessionStorage.setItem('activeStudentReg', studentData.regNumber || '');
-      sessionStorage.setItem('skipStudentPicker', '1');
-      sessionStorage.setItem('studentData', JSON.stringify(studentData));
-    } catch (e) { /* ignore */ }
+  // The student opened from the index page is stored by PortalStudents as
+  // "selectedStudentId". Re-affirm it when going to Profile and pass it in the
+  // URL (?student=<id>) so the profile page never has to ask "which child?".
+  function currentStudentId() {
+    const PS = window.PortalStudents;
+    const cur = PS && PS.current && PS.current();
+    return (cur && cur.id) || studentData.id || null;
   }
 
   function initProfileLinks() {
-    const links = document.querySelectorAll(
-      '.feature-card[data-feature="profile"], .bottom-tabs a[href="parent-portal-profile.html"]'
-    );
-    links.forEach((link) => {
-      // Put the student in the URL too (works even if storage is cleared)
-      if (studentData.regNumber) {
-        const url = new URL(link.getAttribute('href'), window.location.href);
-        url.searchParams.set('reg', studentData.regNumber);
-        link.setAttribute('href', url.pathname.split('/').pop() + url.search);
-      }
-      link.addEventListener('click', markActiveStudent);
+    const id = currentStudentId();
+    if (!id) return;
+
+    document.querySelectorAll(
+      '.feature-card[data-feature="profile"], .bottom-tabs a[href^="parent-portal-profile.html"]'
+    ).forEach((link) => {
+      link.setAttribute('href', 'parent-portal-profile.html?student=' + encodeURIComponent(id));
+      link.addEventListener('click', () => {
+        // select() also re-syncs "studentData" to this child
+        if (window.PortalStudents && window.PortalStudents.select) window.PortalStudents.select(id);
+      });
     });
   }
 
