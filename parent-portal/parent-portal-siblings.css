@@ -1,0 +1,37 @@
+/* Parent Portal – sibling switcher (messages page) and child tag (chat top bar) */
+.sibling-switch { margin: 0 0 14px; }
+.sibling-switch[hidden] { display: none; }
+.sibling-switch-label {
+  margin: 0 0 8px; font-size: 13px; font-weight: 600; color: #5B6F69;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.sibling-chips {
+  display: flex; gap: 8px; overflow-x: auto; padding: 2px 2px 6px;
+  scrollbar-width: none; -webkit-overflow-scrolling: touch;
+}
+.sibling-chips::-webkit-scrollbar { display: none; }
+.sibling-chip {
+  flex: 0 0 auto; display: inline-flex; align-items: center; gap: 8px;
+  padding: 5px 12px 5px 5px; border: 1.5px solid #D5E5E0; border-radius: 999px;
+  background: #fff; color: #26413B; font: inherit; font-size: 14px; font-weight: 600;
+  cursor: pointer; transition: background .15s, border-color .15s, color .15s;
+  -webkit-tap-highlight-color: transparent;
+}
+.sibling-chip.active { background: #2E8B7A; border-color: #2E8B7A; color: #fff; }
+.sibling-chip:disabled { opacity: .6; cursor: progress; }
+.sibling-chip-avatar {
+  width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center;
+  color: #fff; font-size: 11px; font-weight: 700; letter-spacing: .02em;
+}
+.sibling-chip.active .sibling-chip-avatar { box-shadow: 0 0 0 2px rgba(255,255,255,.7); }
+.sibling-chip-badge {
+  min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px;
+  display: grid; place-items: center; background: #E5484D; color: #fff;
+  font-size: 11px; font-weight: 700;
+}
+.sibling-chip.active .sibling-chip-badge { background: #fff; color: #2E8B7A; }
+.chat-topbar-child {
+  display: block; font-size: 11px; font-weight: 600; opacity: .85;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.chat-topbar-child[hidden] { display: none; }

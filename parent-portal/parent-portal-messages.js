@@ -25,6 +25,11 @@
   const tr = (key, fallback) => (I18n ? I18n.t(key) : fallback);
   const onScreen = (text) => (I18n ? I18n.iso(text) : text);
   const isUrdu = () => !!I18n && I18n.getLang() === 'ur';
+  // New strings fall back to English until their keys are added to parent-portal-i18n.js
+  const trf = (key, fallback) => {
+    const v = I18n ? I18n.t(key) : '';
+    return !v || v === key ? fallback : v;
+  };
 
   // Teacher names and message text are real data and are shown as written.
   // The subject, time labels, receipts and status words are translated.
@@ -88,7 +93,8 @@
     const unread = Store.unreadCount(t.id);
 
     const row = el('a', 'msg-row' + (unread ? ' is-unread' : ''));
-    row.href = 'parent-portal-chat.html?teacher=' + encodeURIComponent(t.id);
+    row.href = 'parent-portal-chat.html?teacher=' + encodeURIComponent(t.id) +
+      '&child=' + encodeURIComponent(Store.currentRegNo() || '');
     row.dataset.teacherId = t.id;
 
     // Avatar + presence
@@ -148,6 +154,62 @@
     return row;
   }
 
+  // ---------- Siblings ----------
+  let switching = false;
+
+  function renderSiblings() {
+    const box = $('siblingSwitch');
+    const chips = $('siblingChips');
+    if (!box || !chips) return;
+    const sibs = Store.siblings();
+    if (sibs.length < 2) { box.hidden = true; return; }   // single child: nothing changes
+
+    const current = sibs.find((s) => s.active) || sibs[0];
+    $('siblingLabel').textContent =
+      trf('messagesFor', 'Messages for {name}').replace('{name}', current.name) +
+      (current.className ? ' · ' + current.className : '');
+
+    chips.innerHTML = '';
+    sibs.forEach((s) => {
+      const btn = el('button', 'sibling-chip' + (s.active ? ' active' : ''));
+      btn.type = 'button';
+      btn.setAttribute('role', 'tab');
+      btn.setAttribute('aria-selected', s.active ? 'true' : 'false');
+      btn.dataset.regNo = s.regNo;
+      btn.disabled = switching;
+
+      const avatar = el('span', 'sibling-chip-avatar', s.initials);
+      avatar.style.background = s.color;
+      btn.appendChild(avatar);
+      btn.appendChild(el('span', 'sibling-chip-name', s.firstName));
+      if (s.unread) {
+        const badge = el('span', 'sibling-chip-badge', String(s.unread));
+        badge.setAttribute('aria-label', tr('unreadN', '{n} unread').replace('{n}', String(s.unread)));
+        btn.appendChild(badge);
+      }
+      btn.addEventListener('click', () => switchTo(s.regNo));
+      chips.appendChild(btn);
+    });
+    box.hidden = false;
+  }
+
+  function switchTo(regNo) {
+    if (switching || regNo === Store.currentRegNo()) return;
+    switching = true;
+    renderSiblings();
+    Store.switchChild(regNo).catch((err) => {
+      if (window.PortalAPI) window.PortalAPI.showError(err);
+    }).then(() => {
+      switching = false;
+      renderAll();
+    });
+  }
+
+  function renderAll() {
+    renderSiblings();
+    renderList();
+  }
+
   // ---------- List ----------
   function renderList() {
     const list = $('msgTeacherList');
@@ -175,6 +237,9 @@
       if (q) {
         $('msgEmptyTitle').textContent = onScreen(tr('noTeachers', 'No teachers found'));
         $('msgEmptyText').textContent = onScreen(tr('noTeachersText', 'Try a different name or subject.'));
+      } else if (filter === 'all') {
+        $('msgEmptyTitle').textContent = onScreen(trf('noConversations', 'No conversations yet'));
+        $('msgEmptyText').textContent = onScreen(trf('noConversationsText', 'No teachers are linked to this child yet.'));
       } else {
         $('msgEmptyTitle').textContent = onScreen(tr('caughtUp', 'You\'re all caught up'));
         $('msgEmptyText').textContent = onScreen(tr('noUnread', 'There are no unread messages right now.'));
@@ -287,14 +352,14 @@
   function boot() {
     initDrawer();
     initToolbar();
-    renderList();
+    renderAll();
 
-    // Live updates: typing, receipts and new messages while this page is open
-    Store.subscribe(renderList);
+    // Live updates: typing, receipts, new messages and sibling switches while this page is open
+    Store.subscribe(renderAll);
 
     // Coming back with the browser's Back button can show a cached copy of
     // this page, so re-read the store to pick up new previews and receipts.
-    window.addEventListener('pageshow', (e) => { if (e.persisted) renderList(); });
+    window.addEventListener('pageshow', (e) => { if (e.persisted) renderAll(); });
   }
 
   function start() {

@@ -14,6 +14,7 @@
   <link rel="stylesheet" href="parent-portal-core.css">
   <link rel="stylesheet" href="parent-portal-app.css">
   <link rel="stylesheet" href="parent-portal-i18n.css">
+  <link rel="stylesheet" href="parent-portal-siblings.css">
 </head>
 <body class="page-dashboard page-messages">
   <div class="app-shell">
@@ -54,6 +55,12 @@
       <section class="page-title-block">
         <h1 class="page-title" data-i18n="messages">Messages</h1>
         <p class="page-subtitle" data-i18n="msgSubtitle">Chat with your child's teachers.</p>
+      </section>
+
+      <!-- ===== Sibling switcher (only shown when the parent has 2+ children) ===== -->
+      <section class="sibling-switch" id="siblingSwitch" hidden>
+        <p class="sibling-switch-label" id="siblingLabel"></p>
+        <div class="sibling-chips" id="siblingChips" role="tablist"></div>
       </section>
 
       <!-- ===== Search + filters ===== -->

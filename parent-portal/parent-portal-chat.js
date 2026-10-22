@@ -187,6 +187,18 @@
     $('chatTopDot').classList.toggle('is-online', teacher.online);
     renderPresence();
 
+    // With siblings, always show whose conversation this is
+    const childTag = $('chatTopChild');
+    if (childTag) {
+      const kid = Store.currentChild();
+      const several = Store.siblings().length > 1;
+      const label = I18n ? I18n.t('aboutChild') : '';
+      childTag.textContent = kid && several
+        ? (label && label !== 'aboutChild' ? label : 'About {name}').replace('{name}', kid.name)
+        : '';
+      childTag.hidden = !(kid && several);
+    }
+
     document.title = teacher.name + ' · Greenwood High';
   }
 

@@ -9,6 +9,9 @@
   var activeChat = null;
   var currentRegNo = null;
   var sequence = 0;
+  var kids = [];            // every child linked to this parent account (siblings)
+  var unreadByChild = {};   // regNo -> unread count, from /pulse (used for the sibling chips)
+  var loadSeq = 0;          // bumps on every child switch so late responses are ignored
   var COLORS = [
     'linear-gradient(135deg, #2E8B7A 0%, #4CAF8F 100%)',
     'linear-gradient(135deg, #4267A8 0%, #6794D3 100%)',
@@ -127,38 +130,113 @@
     });
     Object.keys(next).forEach(function (id) { state.teachers[id] = next[id]; });
   }
+  function kidId(k) { return String((k && (k.regNo || k.regNumber || k.id)) || ''); }
+  function kidName(k) { return (k && (k.fullName || k.name || k.studentName)) || kidId(k); }
+  function kidClass(k) { return (k && (k.studentClass || k.className || k.class)) || ''; }
+  function quietly(fn) {
+    var loading = global.ParentPortalLoading;
+    return loading && typeof loading.quiet === 'function' ? loading.quiet(fn) : fn();
+  }
+  // Everything for ONE child, addressed by regNo (never by "whoever is selected right now").
+  function fetchChild(regNo) {
+    return Promise.all([
+      api.get('/children/' + encodeURIComponent(regNo) + '/teachers'),
+      api.messages(regNo),
+      api.messageThreads(regNo)
+    ]);
+  }
+  function fetchPulse() {
+    return quietly(function () { return api.pulse(); }).then(function (o) {
+      unreadByChild = (o && o.byChild) || {};
+    }).catch(function () { /* sibling badges are optional */ });
+  }
+  // A link like parent-portal-chat.html?teacher=7&child=REG123 opens that sibling's chat.
+  function applyChildFromURL() {
+    try {
+      var wanted = new URLSearchParams(global.location.search).get('child');
+      if (wanted && api) api.selectChild(wanted);
+    } catch (e) { /* ignore */ }
+  }
   function loadData() {
     if (!api) return Promise.reject(new Error('Load parent-portal-api.js before parent-portal-chat-store.js.'));
-    return api.ensureChildren().then(function () {
-      currentRegNo = api.childId();
-      return Promise.all([
-        api.teachers(),
-        api.messages(currentRegNo),
-        api.messageThreads(currentRegNo)
-      ]);
+    applyChildFromURL();
+    return api.ensureChildren().then(function (list) {
+      kids = list;
+      currentRegNo = String(api.childId());
+      return Promise.all([fetchChild(currentRegNo), fetchPulse()]);
     }).then(function (results) {
-      mergeTeachers(results[0], results[1], results[2]);
+      mergeTeachers(results[0][0], results[0][1], results[0][2]);
       return state;
     });
   }
   function refresh() {
     if (!api || !currentRegNo) return Promise.resolve();
-    function fetchUpdates() {
-      return Promise.all([
-        api.teachers(),
-        api.messages(currentRegNo),
-        api.messageThreads(currentRegNo)
-      ]);
-    }
-    var updates = global.ParentPortalLoading && typeof global.ParentPortalLoading.quiet === 'function'
-      ? global.ParentPortalLoading.quiet(fetchUpdates)
-      : fetchUpdates();
+    var regNo = currentRegNo;
+    var seq = loadSeq;
+    var updates = quietly(function () {
+      return Promise.all([fetchChild(regNo), api.pulse().catch(function () { return null; })]);
+    });
     return updates.then(function (results) {
-      mergeTeachers(results[0], results[1], results[2]);
+      if (seq !== loadSeq || regNo !== currentRegNo) return state; // the parent switched child meanwhile
+      mergeTeachers(results[0][0], results[0][1], results[0][2]);
+      if (results[1] && results[1].byChild) unreadByChild = results[1].byChild;
       notify([{ type: 'refresh', teacherId: activeChat }]);
       return state;
     }).catch(function (err) {
       console.warn('Could not refresh parent messages:', err && err.message ? err.message : err);
+    });
+  }
+  function siblings() {
+    return kids.map(function (k, index) {
+      var id = kidId(k);
+      var active = id === currentRegNo;
+      var name = String(kidName(k));
+      return {
+        regNo: id,
+        name: name,
+        firstName: name.trim().split(/\s+/)[0] || name,
+        className: kidClass(k),
+        initials: initials(name),
+        color: COLORS[index % COLORS.length],
+        active: active,
+        unread: active ? totalUnread() : (Number(unreadByChild[id]) || 0)
+      };
+    });
+  }
+  function currentChild() {
+    var all = siblings();
+    for (var i = 0; i < all.length; i++) if (all[i].active) return all[i];
+    return null;
+  }
+  // Switch the whole messages area to another sibling: own teachers, own messages, own unread.
+  function switchChild(regNo) {
+    regNo = String(regNo);
+    if (!api) return Promise.reject(new Error('Load parent-portal-api.js before parent-portal-chat-store.js.'));
+    if (regNo === currentRegNo) return Promise.resolve(state);
+    var known = kids.some(function (k) { return kidId(k) === regNo; });
+    if (!known || !api.selectChild(regNo)) {
+      return Promise.reject(new Error('That child is not linked to this parent account.'));
+    }
+    var previousRegNo = currentRegNo;
+    var previousTeachers = state.teachers;
+    var seq = ++loadSeq;
+    currentRegNo = regNo;
+    state.teachers = {};
+    activeChat = null;
+    notify([{ type: 'child-loading', regNo: regNo }]);
+    return Promise.all([fetchChild(regNo), fetchPulse()]).then(function (results) {
+      if (seq !== loadSeq) return state;
+      mergeTeachers(results[0][0], results[0][1], results[0][2]);
+      notify([{ type: 'child', regNo: regNo }]);
+      return state;
+    }).catch(function (err) {
+      if (seq === loadSeq) {            // roll back so the page is not left empty
+        api.selectChild(previousRegNo);
+        currentRegNo = previousRegNo;
+        state.teachers = previousTeachers;
+        notify([{ type: 'child', regNo: previousRegNo }]);
+      }
+      throw err;
     });
   }
   var ready = loadData();
@@ -304,6 +382,10 @@
   global.ChatStore = {
     ready: ready,
     refresh: refresh,
+    siblings: siblings,
+    currentChild: currentChild,
+    currentRegNo: function () { return currentRegNo; },
+    switchChild: switchChild,
     error: null,
     list: list,
     get: get,

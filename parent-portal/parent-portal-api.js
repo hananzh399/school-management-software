@@ -48,6 +48,21 @@
     var c = child();
     return c ? (c.regNo || c.regNumber || c.id || null) : null;
   }
+  function regOf(c) { return c ? String(c.regNo || c.regNumber || c.id || '') : ''; }
+  function childList() {
+    try {
+      var list = JSON.parse(sessionStorage.getItem('studentsList') || '[]');
+      return Array.isArray(list) ? list : [];
+    } catch (e) { return []; }
+  }
+  // Make one of the parent's linked children the selected child (shared by the whole portal).
+  // Returns false when that child is not in the parent's own children list.
+  function selectChild(regNo) {
+    var found = childList().find(function (c) { return regOf(c) === String(regNo); });
+    if (!found) return false;
+    try { sessionStorage.setItem('studentData', JSON.stringify(found)); return true; }
+    catch (e) { return false; }
+  }
   function forChild(suffix) {
     var id = childId();
     if (!id) throw new Error('No child is selected in the parent portal.');
@@ -334,10 +349,12 @@
     teachers: function () { return request('GET', forChild('/teachers')); },
     messages: function (regNo) { return request('GET', '/messages?regNo=' + encodeURIComponent(regNo || childId())); },
     messageThreads: function (regNo) { return request('GET', '/messages/threads?regNo=' + encodeURIComponent(regNo || childId())); },
+    pulse: function () { return request('GET', '/pulse'); },   // { unread, byChild: { regNo: n }, lastId }
     markMessagesRead: function (regNo, thread) { return request('POST', '/messages/read', { regNo: regNo || childId(), thread: thread }); },
     sendMessage: function (body) { return request('POST', '/messages', body); },
     submissions: function (form) { return request('POST', '/submissions', form); },
     child: child, childId: childId, forChild: forChild,
+    childList: childList, selectChild: selectChild,
     fmtDate: fmtDate, fmtTime: fmtTime, blobUrl: blobUrl,
     showError: showError, logout: logout
   };
