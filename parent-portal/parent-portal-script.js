@@ -49,6 +49,19 @@
     document.body.style.overflow = '';
   }
 
+  // ---------- Logout ----------
+  // PortalAPI.logout() (parent-portal-api.js) clears sessionStorage, which holds
+  // the session token, then redirects to the login page. The fallback does the
+  // same in case the API file failed to load.
+  function doLogout() {
+    if (window.PortalAPI && typeof window.PortalAPI.logout === 'function') {
+      window.PortalAPI.logout();
+      return;
+    }
+    try { sessionStorage.clear(); } catch (e) {}
+    window.location.replace('../index.html');
+  }
+
   function handleDrawerAction(action) {
     switch (action) {
       case 'change-password':
@@ -64,8 +77,7 @@
         break;
       case 'logout':
         if (window.confirm(tr('logoutConfirm', 'Are you sure you want to logout?'))) {
-          try { sessionStorage.clear(); } catch (e) {}
-          console.log('→ Logged out');
+          doLogout();
         }
         break;
       default: console.warn('Unknown drawer action:', action);
