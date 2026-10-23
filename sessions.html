@@ -82,8 +82,8 @@
         .sessions-table th.center,.sessions-table td.center{text-align:center}
         .sessions-table tbody tr{transition:background .15s}
         .sessions-table tbody tr:hover{background:var(--ss-soft)}
-        .eye-btn{width:38px;height:38px;border-radius:50%;border:1px solid var(--ss-line);background:transparent;color:inherit;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;font:inherit;transition:background .2s,color .2s,border-color .2s,transform .15s}
-        .eye-btn:hover{background:var(--ss-accent);border-color:var(--ss-accent);color:#fff;transform:translateY(-1px)}
+        .eye-btn,.menu-btn{width:38px;height:38px;border-radius:50%;border:1px solid var(--ss-line);background:transparent;color:inherit;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;font:inherit;transition:background .2s,color .2s,border-color .2s,transform .15s}
+        .eye-btn:hover,.menu-btn:hover,.menu-btn[aria-expanded="true"]{background:var(--ss-accent);border-color:var(--ss-accent);color:#fff;transform:translateY(-1px)}
         .eye-label{display:none}
         .empty-row{text-align:center;color:var(--ss-muted);padding:28px 16px!important}
 
@@ -250,6 +250,29 @@
         }
         .ss-note{margin:0 0 14px;font-size:.88rem;color:var(--ss-muted)}
         .ss-note.err{color:var(--ss-red)}
+
+        /* ================= Session status + row menu ================= */
+        .row-actions{display:inline-flex;align-items:center;gap:8px}
+        .ss-status{display:inline-flex;align-items:center;gap:6px;padding:3px 10px;border-radius:999px;font-size:.76rem;font-weight:700;white-space:nowrap}
+        .ss-status::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor}
+        .ss-status.ss-status-current{background:rgba(34,197,94,.16);color:var(--ss-green)}
+        .ss-status.ss-status-next{background:rgba(59,130,246,.16);color:var(--ss-blue)}
+        .ss-status.ss-status-previous{background:var(--ss-soft-2);color:var(--ss-muted)}
+        .session-menu{position:fixed;z-index:1100;min-width:190px;padding:6px;border-radius:12px;background:var(--ss-panel);color:var(--ss-panel-text);border:1px solid var(--ss-line);box-shadow:0 12px 32px rgba(0,0,0,.28)}
+        .session-menu[hidden]{display:none}
+        .session-menu button{display:flex;align-items:center;gap:10px;width:100%;padding:9px 12px;border:0;border-radius:8px;background:transparent;color:inherit;font:inherit;font-size:.88rem;font-weight:500;text-align:left;cursor:pointer}
+        .session-menu button i{width:16px;text-align:center;opacity:.8}
+        .session-menu button:hover:not(:disabled),.session-menu button:focus-visible{background:var(--ss-soft-2);outline:none}
+        .session-menu button:disabled{opacity:.45;cursor:not-allowed}
+        .session-menu button.danger{color:var(--ss-red)}
+        .session-menu button.danger:hover:not(:disabled),.session-menu button.danger:focus-visible{background:rgba(239,68,68,.14)}
+        .session-delete-btn{background:var(--ss-red);border-color:var(--ss-red)}
+        .session-save-btn:disabled,.session-delete-btn:disabled{opacity:.7;cursor:wait;transform:none}
+        .confirm-panel{height:auto;max-width:440px}
+        .confirm-panel .fs-head h2 i{background:rgba(239,68,68,.14);color:var(--ss-red)}
+        .confirm-panel p{margin:0 0 16px;font-size:.92rem;line-height:1.5}
+        .confirm-actions{display:flex;justify-content:flex-end;flex-wrap:wrap;gap:9px}
+        @media (max-width:820px){.confirm-panel{width:calc(100% - 32px);border-radius:16px;border:1px solid var(--ss-line)}}
     </style>
 </head>
 <body>
@@ -313,7 +336,7 @@
             </div>
             <section class="session-create" id="session-create" hidden aria-labelledby="session-create-title">
                 <h3 id="session-create-title">Create a session</h3>
-                <p>Choose the first and last month of this session.</p>
+                <p id="session-create-help">Choose the first and last month of this session.</p>
                 <div class="session-form-grid">
                     <label for="session-start">From month
                         <input id="session-start" type="month" required>
@@ -339,7 +362,7 @@
                         <tr>
                             <th style="width:90px">#</th>
                             <th>Session Title</th>
-                            <th class="center" style="width:120px">Action</th>
+                            <th class="center" style="width:130px">Action</th>
                         </tr>
                     </thead>
                     <tbody id="sessions-body"></tbody>
@@ -510,6 +533,28 @@
         </div>
     </div>
 
+    <!-- ROW ACTION MENU (positioned by script, so the table's scroll area never clips it) -->
+    <div class="session-menu" id="session-menu" role="menu" aria-label="Session actions" hidden>
+        <button type="button" role="menuitem" data-action="current"><i class="fas fa-circle-check"></i> Make as current</button>
+        <button type="button" role="menuitem" data-action="edit"><i class="fas fa-pen"></i> Edit</button>
+        <button type="button" role="menuitem" class="danger" data-action="delete"><i class="fas fa-trash"></i> Delete</button>
+    </div>
+
+    <!-- DELETE CONFIRMATION -->
+    <div class="fs-overlay" id="confirm-overlay" hidden>
+        <div class="fs-panel confirm-panel" role="alertdialog" aria-modal="true" aria-labelledby="confirm-title" aria-describedby="confirm-text">
+            <div class="fs-head">
+                <h2 id="confirm-title"><i class="fas fa-trash"></i> <span>Delete session?</span></h2>
+            </div>
+            <p id="confirm-text"></p>
+            <p class="ss-note err" id="confirm-error" hidden role="alert"></p>
+            <div class="confirm-actions">
+                <button class="session-cancel-btn" id="confirm-cancel" type="button">Cancel</button>
+                <button class="session-save-btn session-delete-btn" id="confirm-ok" type="button"><i class="fas fa-trash"></i> Delete session</button>
+            </div>
+        </div>
+    </div>
+
     <script>
         // =====================================================================
         // Sessions page - REAL DATA
@@ -518,7 +563,8 @@
         // Dashboard use). Nothing is hard-coded or generated.
         //
         //  Session ranges are explicitly created by the school and persisted
-        //  through GET /api/sessions and POST /api/sessions.
+        //  through GET/POST /api/sessions, PUT/DELETE /api/sessions/{id} and
+        //  PUT /api/sessions/{id}/current (marks the school's current session).
         //
         //  Students : GET /api/students/list            (admissionDate, status,
         //                                               droppedDate, graduatedDate)
@@ -600,15 +646,19 @@
                 throw err;
             });
         }
-        function apiPost(path, payload) {
+        function apiSend(method, path, payload, fallbackMessage) {
             var url = BACKEND + path + '?schoolId=' + encodeURIComponent(schoolId());
-            var headers = { 'Content-Type': 'application/json' };
+            var hasBody = payload !== null && payload !== undefined;
+            var headers = {};
+            if (hasBody) headers['Content-Type'] = 'application/json';
             try { var tok = sessionStorage.getItem('softschool_api_token'); if (tok) headers['Authorization'] = 'Bearer ' + tok; } catch (e) {}
-            return fetch(url, { method: 'POST', headers: headers, body: JSON.stringify(payload) }).then(function (res) {
+            var opts = { method: method, headers: headers };
+            if (hasBody) opts.body = JSON.stringify(payload);
+            return fetch(url, opts).then(function (res) {
                 return res.text().then(function (text) {
                     var data = null;
                     try { data = text ? JSON.parse(text) : null; } catch (e) { data = null; }
-                    if (!res.ok) throw new Error(data && (data.error || data.message) ? (data.error || data.message) : 'Could not save session (HTTP ' + res.status + ').');
+                    if (!res.ok) throw new Error(data && (data.error || data.message) ? (data.error || data.message) : (fallbackMessage || 'Request failed') + ' (HTTP ' + res.status + ').');
                     return data;
                 });
             });
@@ -714,6 +764,7 @@
                     startKey: startKey,
                     endKey: endKey,
                     firstSession: row.firstSession === true || String(row.firstSession).toLowerCase() === 'true',
+                    current: row.currentSession === true || String(row.currentSession).toLowerCase() === 'true',
                     title: sessionTitle(startKey, endKey)
                 };
             }).filter(Boolean).sort(function (a, b) {
@@ -733,15 +784,53 @@
         function warningText() {
             return loadWarnings.length ? 'Some data could not be loaded (' + loadWarnings.join(', ') + '), so the figures below may be incomplete.' : '';
         }
+        var STATUS_LABEL = { current: 'Current', next: 'Next', previous: 'Previous' };
+        function markedCurrent() {
+            for (var i = 0; i < sessions.length; i++) if (sessions[i].current) return sessions[i];
+            return null;
+        }
+        /* Status is relative to the session the school marked as current.
+           If none is marked yet, today's date decides until one is chosen. */
+        function statusOf(s) {
+            var ref = markedCurrent();
+            if (ref) {
+                if (s === ref) return 'current';
+                return ((s.startKey - ref.startKey) || (s.endKey - ref.endKey)) < 0 ? 'previous' : 'next';
+            }
+            if (s.startKey <= DB.nowKey && DB.nowKey <= s.endKey) return 'current';
+            return s.endKey < DB.nowKey ? 'previous' : 'next';
+        }
+        function indexOfId(id) {
+            for (var i = 0; i < sessions.length; i++) if (sessions[i].id === id) return i;
+            return -1;
+        }
+        function refreshSessions() {
+            // Indexes can shift after an add / edit / delete, so per-session caches must not survive.
+            feeData = {}; feePromises = {}; peopleCache = {}; financeCache = {};
+            sessions = buildSessions();
+            render();
+        }
+        var STATUS_STYLE = {
+            current: 'background:rgba(34,197,94,.16);color:var(--ss-green)',
+            next: 'background:rgba(59,130,246,.16);color:var(--ss-blue)',
+            previous: 'background:rgba(128,128,128,.18);color:var(--ss-muted)'
+        };
         function render() {
             if (!sessions.length) {
                 body.innerHTML = '<tr><td colspan="3" class="empty-row">No sessions created yet. Select <strong>Add session</strong> to set the school session dates.</td></tr>';
                 return;
             }
             body.innerHTML = sessions.map(function (s, i) {
-                return '<tr><td>' + (i + 1) + '</td><td>' + esc(s.title) +
+                var st = statusOf(s);
+                var auto = st === 'current' && !s.current;
+                var statusHtml = '<span class="ss-status ss-status-' + st + '" style="display:inline-flex;align-items:center;gap:6px;margin-left:10px;padding:3px 10px;border-radius:999px;font-size:.76rem;font-weight:700;white-space:nowrap;' + STATUS_STYLE[st] + '"' +
+                    (auto ? ' title="Current by today\'s date. Use Make as current to set it."' : '') + '>' + STATUS_LABEL[st] + '</span>';
+                return '<tr><td>' + (i + 1) + '</td><td>' + esc(s.title) + statusHtml +
                     (s.firstSession ? '<span class="first-session-badge"><i class="fas fa-check"></i> First session</span>' : '') + '</td>' +
-                    '<td class="center"><button class="eye-btn" data-i="' + i + '" title="View session" aria-label="View session ' + esc(s.title) + '"><i class="fas fa-eye"></i></button></td></tr>';
+                    '<td class="center"><div class="row-actions">' +
+                    '<button class="eye-btn" data-i="' + i + '" title="View session" aria-label="View session ' + esc(s.title) + '"><i class="fas fa-eye"></i></button>' +
+                    '<button class="menu-btn" type="button" data-menu="' + i + '" aria-haspopup="menu" aria-expanded="false" title="More actions" aria-label="More actions for session ' + esc(s.title) + '"><i class="fas fa-ellipsis-vertical"></i></button>' +
+                    '</div></td></tr>';
             }).join('');
             setNote('list-note', warningText(), true);
         }
@@ -1059,6 +1148,8 @@
 
         body.addEventListener('click', function (e) {
             if (e.target.closest('#retry-btn')) { init(); return; }
+            var mb = e.target.closest('.menu-btn');
+            if (mb) { if (menuBtn === mb) closeMenu(false); else openMenu(mb, +mb.dataset.menu); return; }
             var b = e.target.closest('.eye-btn'); if (!b || b.dataset.i === undefined) return;
             location.hash = 'session-' + b.dataset.i;
         });
@@ -1071,15 +1162,31 @@
             createSessionError.textContent = message || '';
             createSessionError.hidden = !message;
         }
+        var editingId = null;
+        function saveLabel() { return '<i class="fas fa-check"></i> ' + (editingId === null ? 'Save session' : 'Save changes'); }
+        /* Fills the shared form: a session to edit, or null for a blank "create" form. */
+        function setFormMode(session) {
+            editingId = session ? session.id : null;
+            document.getElementById('session-create-title').textContent = session ? 'Edit session' : 'Create a session';
+            document.getElementById('session-create-help').textContent = session ? 'Change the first and last month of this session.' : 'Choose the first and last month of this session.';
+            sessionStartInput.value = session ? session.startMonth : '';
+            sessionEndInput.value = session ? session.endMonth : '';
+            sessionFirstInput.checked = session ? session.firstSession : false;
+            document.getElementById('save-session-btn').innerHTML = saveLabel();
+        }
+        function openSessionForm(session) {
+            setFormMode(session || null);
+            showSessionFormError('');
+            createSessionPanel.hidden = false;
+            createSessionPanel.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+            sessionStartInput.focus();
+        }
         function closeSessionForm() {
             createSessionPanel.hidden = true;
             showSessionFormError('');
+            setFormMode(null);
         }
-        document.getElementById('add-session-btn').addEventListener('click', function () {
-            createSessionPanel.hidden = false;
-            showSessionFormError('');
-            sessionStartInput.focus();
-        });
+        document.getElementById('add-session-btn').addEventListener('click', function () { openSessionForm(null); });
         document.getElementById('cancel-session-btn').addEventListener('click', closeSessionForm);
         document.getElementById('save-session-btn').addEventListener('click', function () {
             var startKey = monthKeyOf(sessionStartInput.value);
@@ -1093,31 +1200,148 @@
                 return;
             }
             var saveBtn = document.getElementById('save-session-btn');
+            var editing = editingId !== null;
             saveBtn.disabled = true;
             saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving…';
             showSessionFormError('');
-            apiPost('/api/sessions', {
+            var payload = {
                 schoolId: schoolId(),
                 startMonth: keyToStr(startKey),
                 endMonth: keyToStr(endKey),
                 firstSession: sessionFirstInput.checked
-            }).then(function (saved) {
-                if (sessionFirstInput.checked) {
-                    DB.sessions.forEach(function (existing) { existing.firstSession = false; });
+            };
+            var request = editing
+                ? apiSend('PUT', '/api/sessions/' + encodeURIComponent(editingId), payload, 'Could not update session')
+                : apiSend('POST', '/api/sessions', payload, 'Could not save session');
+            request.then(function (saved) {
+                if (editing) {
+                    DB.sessions = DB.sessions.map(function (x) { return x.id === saved.id ? saved : x; });
+                } else {
+                    DB.sessions.push(saved);
                 }
-                DB.sessions.push(saved);
-                sessions = buildSessions();
-                render();
+                if (saved.firstSession) {
+                    DB.sessions.forEach(function (x) { if (x.id !== saved.id) x.firstSession = false; });
+                }
+                refreshSessions();
                 closeSessionForm();
-                sessionStartInput.value = '';
-                sessionEndInput.value = '';
-                sessionFirstInput.checked = false;
             }).catch(function (err) {
                 showSessionFormError(err && err.message ? err.message : 'Could not save this session.');
             }).then(function () {
                 saveBtn.disabled = false;
-                saveBtn.innerHTML = '<i class="fas fa-check"></i> Save session';
+                saveBtn.innerHTML = saveLabel();
             });
+        });
+
+        // ------------------------------------------------ row menu: make current / edit / delete
+        var menuEl = document.getElementById('session-menu');
+        var menuBtn = null, menuIndex = null;
+        function closeMenu(restoreFocus) {
+            if (menuEl.hidden) return;
+            menuEl.hidden = true;
+            if (menuBtn) {
+                menuBtn.setAttribute('aria-expanded', 'false');
+                if (restoreFocus) menuBtn.focus();
+            }
+            menuBtn = null; menuIndex = null;
+        }
+        function openMenu(btn, i) {
+            closeMenu(false);
+            menuBtn = btn; menuIndex = i;
+            btn.setAttribute('aria-expanded', 'true');
+            menuEl.querySelector('[data-action="current"]').disabled = !!sessions[i].current;
+            menuEl.hidden = false;
+            var r = btn.getBoundingClientRect(), w = menuEl.offsetWidth, h = menuEl.offsetHeight;
+            var left = Math.max(8, Math.min(r.right - w, window.innerWidth - w - 8));
+            var top = r.bottom + 6;
+            if (top + h > window.innerHeight - 8) top = Math.max(8, r.top - h - 6);
+            menuEl.style.left = left + 'px';
+            menuEl.style.top = top + 'px';
+            var first = menuEl.querySelector('button:not(:disabled)');
+            if (first) first.focus();
+        }
+        menuEl.addEventListener('click', function (e) {
+            var b = e.target.closest('button[data-action]');
+            if (!b || b.disabled) return;
+            var s = sessions[menuIndex], action = b.dataset.action;
+            closeMenu(false);
+            if (!s) return;
+            if (action === 'edit') openSessionForm(s);
+            else if (action === 'current') makeCurrent(s);
+            else if (action === 'delete') askDelete(s);
+        });
+        menuEl.addEventListener('keydown', function (e) {
+            if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
+            e.preventDefault();
+            var items = [].slice.call(menuEl.querySelectorAll('button:not(:disabled)'));
+            if (!items.length) return;
+            var k = items.indexOf(document.activeElement);
+            k = e.key === 'ArrowDown' ? (k + 1) % items.length : (k - 1 + items.length) % items.length;
+            items[k].focus();
+        });
+        document.addEventListener('click', function (e) {
+            if (menuEl.hidden || menuEl.contains(e.target) || e.target.closest('.menu-btn')) return;
+            closeMenu(false);
+        });
+        window.addEventListener('scroll', function () { closeMenu(false); }, true);
+        window.addEventListener('resize', function () { closeMenu(false); });
+
+        /* Make as current: saves it, then opens that session so its students, staff, fees and income / expense show. */
+        function makeCurrent(s) {
+            setNote('list-note', 'Setting the current session\u2026', false);
+            apiSend('PUT', '/api/sessions/' + encodeURIComponent(s.id) + '/current', null, 'Could not set the current session').then(function () {
+                DB.sessions.forEach(function (x) { x.currentSession = (x.id === s.id); });
+                refreshSessions();
+                var idx = indexOfId(s.id);
+                if (idx > -1) location.hash = 'session-' + idx;
+            }).catch(function (err) {
+                setNote('list-note', err && err.message ? err.message : 'Could not set the current session.', true);
+            });
+        }
+
+        var confirmOverlay = document.getElementById('confirm-overlay');
+        var confirmError = document.getElementById('confirm-error');
+        var confirmOk = document.getElementById('confirm-ok');
+        var deleteTarget = null;
+        var DELETE_LABEL = '<i class="fas fa-trash"></i> Delete session';
+        function closeConfirm() {
+            confirmOverlay.hidden = true;
+            deleteTarget = null;
+            confirmError.hidden = true;
+            confirmError.textContent = '';
+        }
+        function askDelete(s) {
+            deleteTarget = s;
+            document.getElementById('confirm-text').textContent = 'Delete ' + s.title + '? Only the session dates are removed. Students, staff and fee records are not deleted. This cannot be undone.' +
+                (s.current ? ' This is the current session, so no session will be marked current afterwards.' : '');
+            confirmError.hidden = true;
+            confirmOverlay.hidden = false;
+            document.getElementById('confirm-cancel').focus();
+        }
+        document.getElementById('confirm-cancel').addEventListener('click', closeConfirm);
+        confirmOverlay.addEventListener('click', function (e) { if (e.target === confirmOverlay) closeConfirm(); });
+        confirmOk.addEventListener('click', function () {
+            var target = deleteTarget;
+            if (!target) return;
+            confirmOk.disabled = true;
+            confirmOk.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Deleting…';
+            confirmError.hidden = true;
+            apiSend('DELETE', '/api/sessions/' + encodeURIComponent(target.id), null, 'Could not delete this session').then(function () {
+                DB.sessions = DB.sessions.filter(function (x) { return x.id !== target.id; });
+                if (editingId === target.id) closeSessionForm();
+                refreshSessions();
+                closeConfirm();
+            }).catch(function (err) {
+                confirmError.textContent = err && err.message ? err.message : 'Could not delete this session.';
+                confirmError.hidden = false;
+            }).then(function () {
+                confirmOk.disabled = false;
+                confirmOk.innerHTML = DELETE_LABEL;
+            });
+        });
+        document.addEventListener('keydown', function (e) {
+            if (e.key !== 'Escape') return;
+            if (!menuEl.hidden) closeMenu(true);
+            else if (!confirmOverlay.hidden) closeConfirm();
         });
         document.getElementById('back-btn').onclick = function () { location.hash = ''; };
         window.addEventListener('hashchange', route);
