@@ -495,7 +495,7 @@
         var MONTHS_FULL = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 
         var sessions = [];                 // built from real data in buildSessions()
-        var DB = { students: [], staff: [], expenses: [], salaries: [], advances: [], customFees: [], removedTotal: 0, nowKey: 0, curFeeKey: 0 };
+        var DB = { students: [], staff: [], expenses: [], salaries: [], advances: [], customFees: [], vouchers: [], removedTotal: 0, nowKey: 0, curFeeKey: 0 };
         var loadWarnings = [];
         var feeData = {};                  // idx -> { months, summary }   (resolved)
         var feePromises = {};              // idx -> Promise
@@ -637,8 +637,9 @@
                 DB.salaries = asArray(r[4]);
                 DB.advances = asArray(r[5]);
                 DB.customFees = asArray(r[6]);
+                DB.vouchers = asArray(r[7], ['items']);
 
-                var marker = asArray(r[7], ['items']).filter(function (v) { return v && v.key === FEE_MONTH_MARKER; })[0];
+                var marker = DB.vouchers.filter(function (v) { return v && v.key === FEE_MONTH_MARKER; })[0];
                 var stored = marker && marker.activeMonthKey ? monthKeyOf(marker.activeMonthKey) : null;
                 DB.curFeeKey = (stored !== null && /^\d{4}-\d{2}$/.test(String(marker.activeMonthKey))) ? stored : DB.nowKey;
             });
@@ -652,7 +653,14 @@
             DB.staff.forEach(function (s) { add(s.joinKey); });
             DB.expenses.forEach(function (e) { add(monthKeyOf(e.monthKey)); });
             DB.salaries.forEach(function (e) { add(monthKeyOf(e.monthKey)); });
+            DB.advances.forEach(function (e) { add(monthKeyOf(e.monthKey)); });
             DB.customFees.forEach(function (e) { add(monthKeyOf(e.monthKey)); });
+            // Voucher generation is a real fee record too. Include its month
+            // so older school years remain visible even when student/staff
+            // admission dates or expense history are missing.
+            DB.vouchers.forEach(function (v) {
+                if (v && v.key !== FEE_MONTH_MARKER) add(monthKeyOf(v.monthKey));
+            });
             var lastStart = sessionStartYearOf(Math.max(DB.nowKey, DB.curFeeKey));
             var firstStart = keys.length ? Math.min(sessionStartYearOf(Math.min.apply(null, keys)), lastStart) : lastStart;
             var list = [];
