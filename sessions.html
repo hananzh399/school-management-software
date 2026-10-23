@@ -31,6 +31,31 @@
         .summary-table td.came{color:#22c55e}
         .summary-table td.went{color:#ef4444}
         .summary-table td.total{color:#3b82f6}
+        /* Full-screen students section */
+        .fs-overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:1000;padding:14px;display:flex}
+        .fs-overlay[hidden]{display:none}
+        .fs-panel{flex:1;display:flex;flex-direction:column;min-width:0;border-radius:16px;padding:20px;background:#fff;color:#0f172a;border:1px solid rgba(128,128,128,.35);box-shadow:0 20px 60px rgba(0,0,0,.4)}
+        html[data-theme="dark"] .fs-panel{background:#111827;color:#e5e7eb}
+        .fs-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px}
+        .fs-head h2{margin:0;font-size:1.2rem;display:flex;align-items:center;gap:10px}
+        .fs-close{width:38px;height:38px;border-radius:50%;border:1px solid rgba(128,128,128,.4);background:transparent;color:inherit;cursor:pointer;font-size:1rem}
+        .fs-close:hover{background:#ef4444;border-color:#ef4444;color:#fff}
+        .fs-tools{display:flex;flex-wrap:wrap;gap:12px;align-items:center;margin-bottom:14px}
+        .fs-tabs{display:flex;flex-wrap:wrap;gap:8px}
+        .fs-tab{padding:9px 14px;border-radius:10px;border:1px solid rgba(128,128,128,.4);background:transparent;color:inherit;cursor:pointer;font:inherit;font-size:.9rem}
+        .fs-tab b{margin-left:6px;opacity:.8}
+        .fs-tab.active{background:#3b82f6;border-color:#3b82f6;color:#fff}
+        .fs-search{flex:1;min-width:200px;max-width:340px;margin-left:auto;display:flex;align-items:center;gap:8px;padding:9px 12px;border-radius:10px;border:1px solid rgba(128,128,128,.4)}
+        .fs-search input{flex:1;border:0;outline:0;background:transparent;color:inherit;font:inherit}
+        .fs-body{flex:1;overflow:auto;border:1px solid rgba(128,128,128,.25);border-radius:12px}
+        .fs-body .sessions-table{min-width:760px}
+        .fs-body thead th{position:sticky;top:0;background:inherit;z-index:1;background:#f1f5f9}
+        html[data-theme="dark"] .fs-body thead th{background:#1f2937}
+        .badge{display:inline-block;padding:3px 10px;border-radius:999px;font-size:.78rem;font-weight:600}
+        .badge.before{background:rgba(59,130,246,.18);color:#3b82f6}
+        .badge.came{background:rgba(34,197,94,.18);color:#16a34a}
+        .badge.went{background:rgba(239,68,68,.18);color:#ef4444}
+        .fs-foot{margin-top:10px;font-size:.85rem;opacity:.7}
         .empty-row{text-align:center;opacity:.6;padding:24px}
     </style>
 </head>
@@ -112,7 +137,7 @@
             <div class="table-wrap">
                 <table class="sessions-table summary-table">
                     <thead>
-                        <tr><th>Before Transfer</th><th>Came</th><th>Went</th><th>At End of Session</th></tr>
+                        <tr><th>Before Transfer</th><th>Came</th><th>Went</th><th>At End of Session</th><th>View</th></tr>
                     </thead>
                     <tbody>
                         <tr>
@@ -120,6 +145,7 @@
                             <td class="came" id="st-came">0</td>
                             <td class="went" id="st-went">0</td>
                             <td class="total" id="st-close">0</td>
+                            <td><button class="eye-btn" id="st-view" title="View all students of this session" aria-label="View students of this session"><i class="fas fa-eye"></i></button></td>
                         </tr>
                     </tbody>
                 </table>
@@ -143,6 +169,34 @@
             </div>
         </section>
     </main>
+
+    <!-- FULL-SCREEN STUDENTS SECTION -->
+    <div class="fs-overlay" id="fs-students" hidden>
+        <div class="fs-panel" role="dialog" aria-modal="true" aria-labelledby="fs-title">
+            <div class="fs-head">
+                <h2 id="fs-title"><i class="fas fa-user-graduate"></i> <span id="fs-title-text">Students</span></h2>
+                <button class="fs-close" id="fs-close" aria-label="Close"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="fs-tools">
+                <div class="fs-tabs" id="fs-tabs">
+                    <button class="fs-tab active" data-tab="all">All Students <b id="tc-all">0</b></button>
+                    <button class="fs-tab" data-tab="before">Before Transfer <b id="tc-before">0</b></button>
+                    <button class="fs-tab" data-tab="came">Came <b id="tc-came">0</b></button>
+                    <button class="fs-tab" data-tab="went">Went <b id="tc-went">0</b></button>
+                </div>
+                <div class="fs-search"><i class="fas fa-search"></i><input type="text" id="fs-search" placeholder="Search by name, ID or guardian…"></div>
+            </div>
+            <div class="fs-body">
+                <table class="sessions-table">
+                    <thead>
+                        <tr><th>#</th><th>Student ID</th><th>Roll No.</th><th>Name</th><th>Guardian / Father</th><th>Class</th><th>Section</th><th>Gender</th><th>Status</th></tr>
+                    </thead>
+                    <tbody id="fs-tbody"></tbody>
+                </table>
+            </div>
+            <div class="fs-foot" id="fs-foot"></div>
+        </div>
+    </div>
 
     <script>
         // ---- Sample data: replace with data from your backend ----
@@ -179,6 +233,8 @@
         function route() {
             var m = /^#session-(\d+)$/.exec(location.hash);
             var s = m && sessions[+m[1]];
+            currentSession = s ? +m[1] : null;
+            if (!s) closeStudents();
             if (s) {
                 document.getElementById('d-title').textContent = s.title;
                 fill('st', s.students);
@@ -198,6 +254,101 @@
         });
         document.getElementById('back-btn').onclick = function () { location.hash = ''; };
         window.addEventListener('hashchange', route);
+
+
+        // ---- Students of a session (sample generator: replace with real student records) ----
+        // Each student: { regNo, rollNo, name, guardian, cls, section, gender, origin: 'before'|'came', left: bool }
+        var FIRST_M = ['Ali','Ahmed','Hamza','Usman','Bilal','Hassan','Zain','Umar','Faizan','Saad','Talha','Daniyal'];
+        var FIRST_F = ['Ayesha','Fatima','Zainab','Maryam','Hira','Sana','Iqra','Noor','Amna','Laiba','Areeba','Khadija'];
+        var LAST = ['Khan','Shah','Abbasi','Awan','Malik','Qureshi','Butt','Raza','Tanoli','Satti','Mughal','Javed'];
+        var FATHER = ['Muhammad','Abdul','Tariq','Nadeem','Imran','Kamran','Naveed','Shafiq','Rashid','Zahid'];
+        var sessionStudentsCache = {};
+
+        function buildSessionStudents(idx) {
+            if (sessionStudentsCache[idx]) return sessionStudentsCache[idx];
+            var d = sessions[idx].students, total = d.open + d.came, list = [], i;
+            var leftSet = {};
+            for (i = 0; i < d.went; i++) leftSet[Math.floor((i + 0.5) * total / d.went)] = true;
+            var rollCounter = {};
+            for (i = 0; i < total; i++) {
+                var female = (i * 7 + idx) % 2 === 1;
+                var first = (female ? FIRST_F : FIRST_M)[(i * 5 + idx * 3) % 12];
+                var last = LAST[(i * 7 + idx) % 12];
+                var cls = 'Class ' + (1 + (i * 3 + idx) % 10);
+                var sec = ['A', 'B', 'C'][(i + idx) % 3];
+                var key = cls + sec;
+                rollCounter[key] = (rollCounter[key] || 0) + 1;
+                list.push({
+                    regNo: 'STD-' + String(i + 1).padStart(4, '0'),
+                    rollNo: rollCounter[key],
+                    name: first + ' ' + last,
+                    guardian: FATHER[(i * 3 + idx) % 10] + ' ' + last,
+                    cls: cls, section: sec,
+                    gender: female ? 'Female' : 'Male',
+                    origin: i < d.open ? 'before' : 'came',
+                    left: !!leftSet[i]
+                });
+            }
+            sessionStudentsCache[idx] = list;
+            return list;
+        }
+
+        // ---- Full-screen students section ----
+        var fs = document.getElementById('fs-students');
+        var fsTbody = document.getElementById('fs-tbody');
+        var fsTab = 'all', fsList = [], currentSession = null;
+
+        function esc(t) { return String(t).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+
+        function fsMatch(st) {
+            if (fsTab === 'before') return st.origin === 'before';
+            if (fsTab === 'came') return st.origin === 'came';
+            if (fsTab === 'went') return st.left;
+            return true;
+        }
+
+        function fsRender() {
+            var q = document.getElementById('fs-search').value.trim().toLowerCase();
+            var rows = fsList.filter(function (st) {
+                return fsMatch(st) && (!q || (st.name + ' ' + st.regNo + ' ' + st.guardian).toLowerCase().indexOf(q) > -1);
+            });
+            fsTbody.innerHTML = rows.length ? rows.map(function (st, i) {
+                var status = st.left ? '<span class="badge went">Went</span>' :
+                    (st.origin === 'came' ? '<span class="badge came">Came</span>' : '<span class="badge before">Before Transfer</span>');
+                if (st.left) status = '<span class="badge went">Went</span> <span class="badge ' + st.origin + '">' + (st.origin === 'came' ? 'Came' : 'Before') + '</span>';
+                return '<tr><td>' + (i + 1) + '</td><td>' + esc(st.regNo) + '</td><td>' + st.rollNo + '</td><td>' + esc(st.name) + '</td><td>' + esc(st.guardian) + '</td><td>' + st.cls + '</td><td>' + st.section + '</td><td>' + st.gender + '</td><td>' + status + '</td></tr>';
+            }).join('') : '<tr><td colspan="9" class="empty-row">No students found.</td></tr>';
+            document.getElementById('fs-foot').textContent = 'Showing ' + rows.length + ' of ' + fsList.length + ' students in this session';
+        }
+
+        function openStudents(idx) {
+            currentSession = idx;
+            fsList = buildSessionStudents(idx);
+            document.getElementById('fs-title-text').textContent = 'Students - Session ' + sessions[idx].title;
+            document.getElementById('tc-all').textContent = fsList.length;
+            document.getElementById('tc-before').textContent = fsList.filter(function (x) { return x.origin === 'before'; }).length;
+            document.getElementById('tc-came').textContent = fsList.filter(function (x) { return x.origin === 'came'; }).length;
+            document.getElementById('tc-went').textContent = fsList.filter(function (x) { return x.left; }).length;
+            fsTab = 'all';
+            document.getElementById('fs-search').value = '';
+            document.querySelectorAll('.fs-tab').forEach(function (b) { b.classList.toggle('active', b.dataset.tab === 'all'); });
+            fsRender();
+            fs.hidden = false;
+            document.body.style.overflow = 'hidden';
+        }
+        function closeStudents() { fs.hidden = true; document.body.style.overflow = ''; }
+
+        document.getElementById('st-view').onclick = function () { if (currentSession !== null) openStudents(currentSession); };
+        document.getElementById('fs-close').onclick = closeStudents;
+        fs.addEventListener('click', function (e) { if (e.target === fs) closeStudents(); });
+        document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !fs.hidden) closeStudents(); });
+        document.getElementById('fs-tabs').addEventListener('click', function (e) {
+            var b = e.target.closest('.fs-tab'); if (!b) return;
+            fsTab = b.dataset.tab;
+            document.querySelectorAll('.fs-tab').forEach(function (x) { x.classList.toggle('active', x === b); });
+            fsRender();
+        });
+        document.getElementById('fs-search').addEventListener('input', fsRender);
 
         render();
         route();
