@@ -48,6 +48,25 @@
         .sessions-card{width:min(1400px,calc(100% - 2*var(--ss-gap)));margin:var(--ss-gap) auto;padding:clamp(16px,3vw,28px);border-radius:18px;background:var(--bg-card,rgba(255,255,255,.04));border:1px solid var(--border-color,var(--ss-line));box-shadow:0 1px 2px rgba(0,0,0,.04),0 10px 30px rgba(0,0,0,.06)}
         .sessions-card[hidden]{display:none}
         .sessions-card h2{margin:0 0 18px;font-size:clamp(1.1rem,2.6vw,1.4rem);font-weight:700;letter-spacing:-.01em;display:flex;align-items:center;flex-wrap:wrap;gap:10px}
+        .sessions-heading{display:flex;align-items:center;justify-content:space-between;gap:14px;margin-bottom:18px}
+        .sessions-heading h2{margin:0}
+        .add-session-btn,.session-save-btn,.session-cancel-btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:42px;padding:9px 15px;border:1px solid var(--ss-line);border-radius:10px;font:inherit;font-weight:700;cursor:pointer;transition:transform .15s,background .15s,border-color .15s}
+        .add-session-btn,.session-save-btn{background:var(--ss-blue);border-color:var(--ss-blue);color:#fff}
+        .add-session-btn:hover,.session-save-btn:hover{transform:translateY(-1px);filter:brightness(1.05)}
+        .session-cancel-btn{background:transparent;color:inherit}
+        .session-cancel-btn:hover{background:var(--ss-soft-2)}
+        .session-create{margin:0 0 18px;padding:16px;border:1px solid var(--ss-line);border-radius:14px;background:var(--ss-soft)}
+        .session-create[hidden]{display:none}
+        .session-create h3{margin:0 0 5px;font-size:1rem}
+        .session-create p{margin:0 0 14px;color:var(--ss-muted);font-size:.86rem}
+        .session-form-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,190px),1fr));gap:14px;align-items:end}
+        .session-form-grid label{display:flex;flex-direction:column;gap:6px;font-size:.82rem;font-weight:700}
+        .session-form-grid input[type="month"]{min-height:42px;padding:8px 10px;border:1px solid var(--ss-line);border-radius:9px;background:var(--ss-panel);color:var(--ss-panel-text);font:inherit}
+        .session-form-grid .session-first{flex-direction:row;align-items:center;gap:9px;min-height:42px}
+        .session-first input{width:18px;height:18px;accent-color:var(--ss-blue)}
+        .session-form-actions{display:flex;flex-wrap:wrap;gap:9px;margin-top:14px}
+        .first-session-badge{display:inline-flex;align-items:center;gap:5px;margin-left:8px;padding:3px 9px;border-radius:999px;background:rgba(34,197,94,.14);color:var(--ss-green);font-size:.72rem;font-weight:700;white-space:nowrap}
+        @media(max-width:520px){.sessions-heading{align-items:flex-start;flex-direction:column}.add-session-btn{width:100%}}
         .sessions-card h2>i{width:38px;height:38px;border-radius:12px;display:inline-flex;align-items:center;justify-content:center;background:rgba(59,130,246,.14);color:var(--ss-blue);font-size:1rem}
         #d-title{padding:2px 14px;border-radius:999px;background:rgba(59,130,246,.14);color:var(--ss-blue);font-size:.85em;font-weight:700}
         .back-btn{display:inline-flex;align-items:center;gap:8px;padding:9px 16px;border-radius:999px;border:1px solid var(--ss-line);background:transparent;color:inherit;cursor:pointer;margin-bottom:18px;font:inherit;font-size:.9rem;font-weight:500;transition:background .2s,transform .2s}
@@ -288,7 +307,31 @@
         </header>
 
         <section class="sessions-card" id="page-list">
-            <h2><i class="fas fa-calendar-alt"></i> Sessions</h2>
+            <div class="sessions-heading">
+                <h2><i class="fas fa-calendar-alt"></i> Sessions</h2>
+                <button class="add-session-btn" id="add-session-btn" type="button"><i class="fas fa-plus"></i> Add session</button>
+            </div>
+            <section class="session-create" id="session-create" hidden aria-labelledby="session-create-title">
+                <h3 id="session-create-title">Create a session</h3>
+                <p>Choose the first and last month of this session.</p>
+                <div class="session-form-grid">
+                    <label for="session-start">From month
+                        <input id="session-start" type="month" required>
+                    </label>
+                    <label for="session-end">Through month
+                        <input id="session-end" type="month" required>
+                    </label>
+                    <label class="session-first" for="session-first">
+                        <input id="session-first" type="checkbox">
+                        <span>This is the first session</span>
+                    </label>
+                </div>
+                <div class="session-form-actions">
+                    <button class="session-save-btn" id="save-session-btn" type="button"><i class="fas fa-check"></i> Save session</button>
+                    <button class="session-cancel-btn" id="cancel-session-btn" type="button">Cancel</button>
+                </div>
+                <p class="ss-note err" id="session-form-error" hidden role="alert"></p>
+            </section>
             <p class="ss-note" id="list-note" hidden></p>
             <div class="table-wrap">
                 <table class="sessions-table">
@@ -474,9 +517,8 @@
         // endpoints Manage Students, Manage Staff, Manage Finance and the
         // Dashboard use). Nothing is hard-coded or generated.
         //
-        //  Sessions run April -> March. The list of sessions is worked out from
-        //  the earliest real record (admission, staff joining, fee, salary or
-        //  expense) up to the current session.
+        //  Session ranges are explicitly created by the school and persisted
+        //  through GET /api/sessions and POST /api/sessions.
         //
         //  Students : GET /api/students/list            (admissionDate, status,
         //                                               droppedDate, graduatedDate)
@@ -493,8 +535,8 @@
         var MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
         var MONTHS_FULL = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 
-        var sessions = [];                 // built from real data in buildSessions()
-        var DB = { students: [], staff: [], expenses: [], salaries: [], advances: [], customFees: [], vouchers: [], removedTotal: 0, nowKey: 0, curFeeKey: 0 };
+        var sessions = [];                 // explicitly created by the school and loaded from the backend
+        var DB = { students: [], staff: [], expenses: [], salaries: [], advances: [], customFees: [], vouchers: [], sessions: [], removedTotal: 0, nowKey: 0, curFeeKey: 0 };
         var loadWarnings = [];
         var feeData = {};                  // idx -> { months, summary }   (resolved)
         var feePromises = {};              // idx -> Promise
@@ -530,9 +572,9 @@
             return d.getFullYear() * 12 + d.getMonth();
         }
         function keyToStr(k) { return Math.floor(k / 12) + '-' + ('0' + ((k % 12) + 1)).slice(-2); }
-        function sessionStartYearOf(k) { return (k % 12) >= 3 ? Math.floor(k / 12) : Math.floor(k / 12) - 1; }
-        function calMonth(sm) { return (3 + sm) % 12; }
-        function sessYear(idx, sm) { return sessions[idx].startYear + ((3 + sm) >= 12 ? 1 : 0); }
+        function monthName(k) { return MONTHS_FULL[k % 12] + ' ' + Math.floor(k / 12); }
+        function sessionTitle(startKey, endKey) { return monthName(startKey) + ' – ' + monthName(endKey); }
+        function isValidSessionKey(k) { return k !== null && isFinite(k) && k >= 1900 * 12 && k <= 9999 * 12 + 11; }
         function isSane(k) { return k !== null && k >= 2000 * 12 && k <= (new Date().getFullYear() + 2) * 12 + 11; }
 
         // ------------------------------------------------------------------- API
@@ -556,6 +598,19 @@
             }).then(function (t) { return t ? JSON.parse(t) : null; }).catch(function (err) {
                 if (tries < 1) return new Promise(function (r) { setTimeout(r, 800); }).then(function () { return apiGet(path, tries + 1); });
                 throw err;
+            });
+        }
+        function apiPost(path, payload) {
+            var url = BACKEND + path + '?schoolId=' + encodeURIComponent(schoolId());
+            var headers = { 'Content-Type': 'application/json' };
+            try { var tok = sessionStorage.getItem('softschool_api_token'); if (tok) headers['Authorization'] = 'Bearer ' + tok; } catch (e) {}
+            return fetch(url, { method: 'POST', headers: headers, body: JSON.stringify(payload) }).then(function (res) {
+                return res.text().then(function (text) {
+                    var data = null;
+                    try { data = text ? JSON.parse(text) : null; } catch (e) { data = null; }
+                    if (!res.ok) throw new Error(data && (data.error || data.message) ? (data.error || data.message) : 'Could not save session (HTTP ' + res.status + ').');
+                    return data;
+                });
             });
         }
         /* For data that is "nice to have": a failure is reported on the page instead of breaking it. */
@@ -590,7 +645,8 @@
                 optionalGet('/api/finance/salary/records', [], 'salary records'),
                 optionalGet('/api/finance/staff-advances', [], 'staff advances'),
                 optionalGet('/api/finance/custom-fees', [], 'custom fees'),
-                optionalGet('/api/finance/vouchers', [], 'fee month')
+                optionalGet('/api/finance/vouchers', [], 'fee month'),
+                apiGet('/api/sessions')
             ]).then(function (r) {
                 var now = new Date();
                 DB.nowKey = now.getFullYear() * 12 + now.getMonth();
@@ -637,6 +693,7 @@
                 DB.advances = asArray(r[5]);
                 DB.customFees = asArray(r[6]);
                 DB.vouchers = asArray(r[7], ['items']);
+                DB.sessions = asArray(r[8], ['sessions', 'items', 'content', 'data']);
 
                 var marker = DB.vouchers.filter(function (v) { return v && v.key === FEE_MONTH_MARKER; })[0];
                 var stored = marker && marker.activeMonthKey ? monthKeyOf(marker.activeMonthKey) : null;
@@ -644,29 +701,25 @@
             });
         }
 
-        /* Sessions = every April-March year from the first real record to the current one. */
+        /* Session ranges are manually defined by the school, not inferred from admission dates. */
         function buildSessions() {
-            var keys = [];
-            function add(k) { if (isSane(k)) keys.push(k); }
-            DB.students.forEach(function (s) { add(s.joinKey); });
-            DB.staff.forEach(function (s) { add(s.joinKey); });
-            DB.expenses.forEach(function (e) { add(monthKeyOf(e.monthKey)); });
-            DB.salaries.forEach(function (e) { add(monthKeyOf(e.monthKey)); });
-            DB.advances.forEach(function (e) { add(monthKeyOf(e.monthKey)); });
-            DB.customFees.forEach(function (e) { add(monthKeyOf(e.monthKey)); });
-            // Voucher generation is a real fee record too. Include its month
-            // so older school years remain visible even when student/staff
-            // admission dates or expense history are missing.
-            DB.vouchers.forEach(function (v) {
-                if (v && v.key !== FEE_MONTH_MARKER) add(monthKeyOf(v.monthKey));
+            return DB.sessions.map(function (row) {
+                var startKey = monthKeyOf(row.startMonth);
+                var endKey = monthKeyOf(row.endMonth);
+                if (!isValidSessionKey(startKey) || !isValidSessionKey(endKey) || endKey < startKey) return null;
+                return {
+                    id: row.id,
+                    startMonth: keyToStr(startKey),
+                    endMonth: keyToStr(endKey),
+                    startKey: startKey,
+                    endKey: endKey,
+                    firstSession: row.firstSession === true || String(row.firstSession).toLowerCase() === 'true',
+                    title: sessionTitle(startKey, endKey)
+                };
+            }).filter(Boolean).sort(function (a, b) {
+                if (a.firstSession !== b.firstSession) return a.firstSession ? -1 : 1;
+                return a.startKey - b.startKey || a.endKey - b.endKey;
             });
-            var lastStart = sessionStartYearOf(Math.max(DB.nowKey, DB.curFeeKey));
-            var firstStart = keys.length ? Math.min(sessionStartYearOf(Math.min.apply(null, keys)), lastStart) : lastStart;
-            var list = [];
-            for (var y = firstStart; y <= lastStart; y++) {
-                list.push({ id: list.length + 1, title: y + '-' + (y + 1), startYear: y, startKey: y * 12 + 3 });
-            }
-            return list;
         }
 
         // ------------------------------------------------------------ sessions list
@@ -682,11 +735,12 @@
         }
         function render() {
             if (!sessions.length) {
-                body.innerHTML = '<tr><td colspan="3" class="empty-row">No sessions found.</td></tr>';
+                body.innerHTML = '<tr><td colspan="3" class="empty-row">No sessions created yet. Select <strong>Add session</strong> to set the school session dates.</td></tr>';
                 return;
             }
             body.innerHTML = sessions.map(function (s, i) {
-                return '<tr><td>' + (i + 1) + '</td><td>' + esc(s.title) + '</td>' +
+                return '<tr><td>' + (i + 1) + '</td><td>' + esc(s.title) +
+                    (s.firstSession ? '<span class="first-session-badge"><i class="fas fa-check"></i> First session</span>' : '') + '</td>' +
                     '<td class="center"><button class="eye-btn" data-i="' + i + '" title="View session" aria-label="View session ' + esc(s.title) + '"><i class="fas fa-eye"></i></button></td></tr>';
             }).join('');
             setNote('list-note', warningText(), true);
@@ -694,11 +748,11 @@
 
         // ------------------------------------------------- students / staff per session
         /* origin: 'before' (already there when the session began) or 'came' (joined during it).
-           left: left (dropped / graduated / removed) during the session. joinM / leftM: session month 0 = April ... 11 = March. */
+           left: left during the selected range. joinM / leftM are offsets from the session's first month. */
         function sessionPeople(kind, idx) {
             var ck = kind + idx;
             if (peopleCache[ck]) return peopleCache[ck];
-            var s = sessions[idx], sk = s.startKey, ek = sk + 11, list = [];
+            var s = sessions[idx], sk = s.startKey, ek = s.endKey, list = [];
             (kind === 'staff' ? DB.staff : DB.students).forEach(function (p) {
                 if (p.joinKey !== null && p.joinKey > ek) return;       // not here yet
                 if (p.leftKey !== null && p.leftKey < sk) return;       // already gone before this session
@@ -730,12 +784,12 @@
             if (feePromises[idx]) return feePromises[idx];
             var s = sessions[idx], maxKey = Math.max(DB.nowKey, DB.curFeeKey) + 1;
             var months = [];
-            for (var m = 0; m < 12; m++) months.push(m);
+            for (var m = 0; m <= s.endKey - s.startKey; m++) months.push(m);
             feePromises[idx] = mapLimit(months, 4, function (m) {
                 var key = s.startKey + m;
                 var rowsP = key > maxKey ? Promise.resolve([]) : apiGet('/api/finance/status-all/' + keyToStr(key)).then(function (d) { return asArray(d); });
                 return rowsP.then(function (rows) {
-                    var v = { no: m + 1, month: calMonth(m), year: sessYear(idx, m), key: key, count: 0, paidCount: 0,
+                    var v = { no: m + 1, month: key % 12, year: Math.floor(key / 12), key: key, count: 0, paidCount: 0,
                               gen: 0, prev: 0, fine: 0, disc: 0, paid: 0, pending: 0, unpaidFine: 0, lastTx: null };
                     rows.forEach(function (r) {
                         v.count++;
@@ -782,10 +836,10 @@
         // -------------------------------------------------------- income / expense
         function buildLedger(idx) {
             if (financeCache[idx]) return financeCache[idx];
-            var sk = sessions[idx].startKey, ek = sk + 11, list = [];
+            var sk = sessions[idx].startKey, ek = sessions[idx].endKey, list = [];
             function inSession(k) { return k !== null && k >= sk && k <= ek; }
             function keyOrCurrent(mk) { var k = monthKeyOf(mk); return k === null ? DB.curFeeKey : k; }   // undated items belong to the current fee month
-            function ent(k, type, category, title, amount) { return { month: k % 12, year: Math.floor(k / 12), type: type, category: category, title: title, amount: amount }; }
+            function ent(k, type, category, title, amount) { return { key: k, month: k % 12, year: Math.floor(k / 12), type: type, category: category, title: title, amount: amount }; }
 
             // 1) Fees received, month by month
             feeData[idx].months.forEach(function (v) {
@@ -871,7 +925,7 @@
             var mv = document.getElementById('lg-month').value, sortV = document.getElementById('lg-sort').value;
             var rows = lgList.filter(function (e) {
                 if (lgTab !== 'all' && e.type !== lgTab) return false;
-                if (mv !== '' && (e.month + 9) % 12 !== +mv) return false;
+                if (mv !== '' && e.key - sessions[lgSession].startKey !== +mv) return false;
                 return !q || (e.title + ' ' + MONTHS_FULL[e.month] + ' ' + e.year + ' ' + e.category).toLowerCase().indexOf(q) > -1;
             });
             rows = rows.map(function (e, i) { return { e: e, i: i }; }).sort(function (a, b) {
@@ -1008,6 +1062,63 @@
             var b = e.target.closest('.eye-btn'); if (!b || b.dataset.i === undefined) return;
             location.hash = 'session-' + b.dataset.i;
         });
+        var createSessionPanel = document.getElementById('session-create');
+        var createSessionError = document.getElementById('session-form-error');
+        var sessionStartInput = document.getElementById('session-start');
+        var sessionEndInput = document.getElementById('session-end');
+        var sessionFirstInput = document.getElementById('session-first');
+        function showSessionFormError(message) {
+            createSessionError.textContent = message || '';
+            createSessionError.hidden = !message;
+        }
+        function closeSessionForm() {
+            createSessionPanel.hidden = true;
+            showSessionFormError('');
+        }
+        document.getElementById('add-session-btn').addEventListener('click', function () {
+            createSessionPanel.hidden = false;
+            showSessionFormError('');
+            sessionStartInput.focus();
+        });
+        document.getElementById('cancel-session-btn').addEventListener('click', closeSessionForm);
+        document.getElementById('save-session-btn').addEventListener('click', function () {
+            var startKey = monthKeyOf(sessionStartInput.value);
+            var endKey = monthKeyOf(sessionEndInput.value);
+            if (!isValidSessionKey(startKey) || !isValidSessionKey(endKey)) {
+                showSessionFormError('Choose a valid start and end month.');
+                return;
+            }
+            if (endKey < startKey) {
+                showSessionFormError('The end month must be the same as or later than the start month.');
+                return;
+            }
+            var saveBtn = document.getElementById('save-session-btn');
+            saveBtn.disabled = true;
+            saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving…';
+            showSessionFormError('');
+            apiPost('/api/sessions', {
+                schoolId: schoolId(),
+                startMonth: keyToStr(startKey),
+                endMonth: keyToStr(endKey),
+                firstSession: sessionFirstInput.checked
+            }).then(function (saved) {
+                if (sessionFirstInput.checked) {
+                    DB.sessions.forEach(function (existing) { existing.firstSession = false; });
+                }
+                DB.sessions.push(saved);
+                sessions = buildSessions();
+                render();
+                closeSessionForm();
+                sessionStartInput.value = '';
+                sessionEndInput.value = '';
+                sessionFirstInput.checked = false;
+            }).catch(function (err) {
+                showSessionFormError(err && err.message ? err.message : 'Could not save this session.');
+            }).then(function () {
+                saveBtn.disabled = false;
+                saveBtn.innerHTML = '<i class="fas fa-check"></i> Save session';
+            });
+        });
         document.getElementById('back-btn').onclick = function () { location.hash = ''; };
         window.addEventListener('hashchange', route);
 
@@ -1044,11 +1155,13 @@
             return x.left ? '<span class="badge went">Went</span> ' + o : o;
         }
         function monthLbl(sm) {
-            return (sm === null || sm === undefined) ? '—' : MONTHS_FULL[calMonth(sm)] + ' ' + sessYear(currentSession, sm);
+            return (sm === null || sm === undefined) ? '—' : monthName(sessions[currentSession].startKey + sm);
         }
         function monthOptions(idx) {
             var h = '<option value="">All months</option>';
-            for (var m = 0; m < 12; m++) h += '<option value="' + m + '">' + MONTHS_FULL[calMonth(m)] + ' ' + sessYear(idx, m) + '</option>';
+            for (var m = 0; m <= sessions[idx].endKey - sessions[idx].startKey; m++) {
+                h += '<option value="' + m + '">' + monthName(sessions[idx].startKey + m) + '</option>';
+            }
             return h;
         }
         // Month used for filtering/sorting: "Went" tab -> month left, otherwise -> month joined (before transfer = start of session)
@@ -1060,7 +1173,7 @@
         }
         function fsFootNote() {
             var idx = currentSession;
-            if (idx === null || DB.nowKey < sessions[idx].startKey || DB.nowKey > sessions[idx].startKey + 11) return '';
+            if (idx === null || DB.nowKey < sessions[idx].startKey || DB.nowKey > sessions[idx].endKey) return '';
             if (fsKind === 'students') {
                 var c = fsList.filter(function (x) { return x.leftApprox; }).length;
                 return c ? ' | ' + c + ' removed student' + (c === 1 ? ' has' : 's have') + ' no removal date on record and ' + (c === 1 ? 'is' : 'are') + ' counted in this session' : '';
