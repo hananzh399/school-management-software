@@ -58,31 +58,35 @@
         .badge.came{background:rgba(34,197,94,.18);color:#16a34a}
         .badge.went{background:rgba(239,68,68,.18);color:#ef4444}
         .fs-foot{margin-top:10px;font-size:.85rem;opacity:.7}
-        /* Fee invoices (monthly sections) */
-        .fee-sections{flex:1;overflow:auto;display:flex;flex-direction:column;gap:18px;padding-right:4px}
-        .month-sec{border:1px solid rgba(128,128,128,.3);border-radius:12px;overflow:hidden;flex-shrink:0}
-        .month-head{display:flex;align-items:center;gap:10px;padding:12px 16px;font-weight:700;background:rgba(59,130,246,.12);border-left:5px solid #3b82f6}
-        .month-head span{margin-left:auto;font-weight:500;font-size:.8rem;opacity:.7}
-        .inv-table{width:100%;border-collapse:collapse;min-width:900px}
-        .inv-table thead th{background:#1e293b;color:#fff;text-transform:uppercase;font-size:.72rem;letter-spacing:.05em;padding:14px 10px;text-align:center}
-        .inv-table td{padding:14px 12px;vertical-align:middle;text-align:center;border-bottom:1px solid rgba(128,128,128,.2)}
-        .inv-table td.left{text-align:left}
-        .inv-table td.idx{opacity:.6;font-weight:700;width:46px}
-        .inv-no{font-weight:700;margin-bottom:8px;display:flex;align-items:center;gap:8px}
-        .inv-ico{display:inline-flex;width:30px;height:30px;border-radius:50%;align-items:center;justify-content:center;background:#fef3c7;border:2px solid #facc15;color:#b45309;font-size:.8rem}
-        .inv-line{display:flex;gap:6px;align-items:center;font-size:.85rem;margin:3px 0}
-        .inv-line i{width:16px;text-align:center}
-        .inv-line span{margin-left:auto;padding-left:14px}
-        .inv-line.overdue,.inv-line.overdue i{color:#ef4444;font-weight:600}
+        /* Fee invoices (monthly sections, stacked vertically) */
+        .fee-sections{flex:1;overflow:auto;display:flex;flex-direction:column;gap:20px;padding:2px 4px 8px 0}
+        .fee-top{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:2px}
+        .fee-top div{padding:10px 14px;border-radius:12px;border:1px solid rgba(128,128,128,.3);background:rgba(128,128,128,.07)}
+        .fee-top small{display:block;font-size:.7rem;text-transform:uppercase;letter-spacing:.05em;opacity:.7}
+        .fee-top b{font-family:'Space Grotesk',sans-serif;font-size:1.05rem}
+        .month-sec{border:1px solid rgba(128,128,128,.3);border-radius:14px;overflow:hidden;flex-shrink:0;background:rgba(128,128,128,.04)}
+        .month-head{display:flex;flex-wrap:wrap;align-items:center;gap:10px;padding:12px 16px;font-weight:700;background:#1e293b;color:#fff}
+        .month-head .mh-no{width:30px;height:30px;border-radius:50%;background:#3b82f6;display:inline-flex;align-items:center;justify-content:center;font-size:.85rem}
+        .month-head .mh-inv{margin-left:auto;font-weight:600;font-size:.85rem;display:flex;align-items:center;gap:8px;background:#fef3c7;color:#92400e;padding:4px 12px;border-radius:999px}
+        .month-body{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:14px;padding:16px}
+        .m-card{border:1px solid rgba(128,128,128,.28);border-radius:12px;padding:14px;display:flex;flex-direction:column;gap:6px;min-width:0}
+        .m-card.wide{grid-column:span 2}
+        @media (max-width:640px){.m-card.wide{grid-column:auto}.month-body{padding:12px}.fs-panel{padding:14px}}
+        .m-title{font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;opacity:.7;display:flex;align-items:center;gap:6px;margin-bottom:2px}
+        .inv-line{display:flex;gap:6px;align-items:center;font-size:.86rem;margin:3px 0;flex-wrap:wrap}
+        .inv-line i{width:16px;text-align:center;opacity:.8}
+        .inv-line span{margin-left:auto}
+        .inv-line.overdue,.inv-line.overdue i{color:#ef4444;font-weight:600;opacity:1}
         .stu-badge{background:#dbeafe;color:#1d4ed8;border:1px solid #93c5fd;border-radius:6px;padding:1px 8px;font-size:.78rem;font-weight:600}
-        .imp{color:#2563eb;font-size:.75rem;font-weight:600;margin-bottom:6px}
-        .pill{display:inline-block;padding:5px 12px;border-radius:8px;font-weight:700;font-size:.9rem;border:1px solid}
+        .pill{display:inline-block;padding:6px 14px;border-radius:8px;font-weight:700;font-size:.95rem;border:1px solid;align-self:flex-start;margin-top:auto}
         .pill.grey{background:#f1f5f9;color:#334155;border-color:#cbd5e1}
         .pill.yellow{background:#fef9c3;color:#854d0e;border-color:#facc15}
         .pill.green{background:#dcfce7;color:#166534;border-color:#86efac}
-        .pill.red{background:#fee2e2;color:#991b1b;border-color:#fca5a5;text-align:left;line-height:1.3}
+        .pill.red{background:#fee2e2;color:#991b1b;border-color:#fca5a5;line-height:1.35;font-size:.95rem;margin-top:4px}
         .pill.red small{font-size:.68rem;font-weight:600;margin-right:6px}
-        .kv{display:flex;justify-content:space-between;gap:14px;font-size:.82rem;margin:3px 0;text-align:left}
+        .imp{color:#2563eb;font-size:.78rem;font-weight:600}
+        html[data-theme="dark"] .imp{color:#60a5fa}
+        .kv{display:flex;justify-content:space-between;gap:14px;font-size:.84rem;margin:2px 0}
         .kv b{font-variant-numeric:tabular-nums}
         .empty-row{text-align:center;opacity:.6;padding:24px}
     </style>
@@ -350,28 +354,38 @@
         function openFees(idx) {
             var inv = buildInvoices(idx), now = new Date();
             document.getElementById('fe-title-text').textContent = 'Fees - Session ' + sessions[idx].title;
-            document.getElementById('fee-sections').innerHTML = inv.map(function (v) {
+            var tot = feeSummary(idx);
+            var top = '<div class="fee-top">' +
+                '<div><small>Total Generated</small><b>' + money(tot.generated) + '</b></div>' +
+                '<div><small>Total Fine</small><b>' + money(tot.fine) + '</b></div>' +
+                '<div><small>Total Paid</small><b>' + money(tot.paid) + '</b></div>' +
+                '<div><small>Total Pending</small><b>' + money(tot.pending) + '</b></div></div>';
+            document.getElementById('fee-sections').innerHTML = top + inv.map(function (v) {
                 var overdue = v.pendNo > 0 && new Date(v.year, v.month, 15) < now;
                 var net = v.recFee + v.waivedFee + v.recFine + v.waivedFine;
-                var label = 'Invoice#' + v.no + '-' + MONTHS[v.month].toUpperCase() + '-' + v.year;
+                var label = 'Invoice#' + v.no + '-' + MONTHS[v.month] + '-' + v.year;
                 return '<section class="month-sec">' +
-                    '<div class="month-head"><i class="fas fa-calendar-alt"></i> ' + MONTHS_FULL[v.month] + ' ' + v.year + '<span>1 invoice</span></div>' +
-                    '<div class="table-wrap"><table class="inv-table"><thead><tr><th>#</th><th>Invoice Detail</th><th>Prev Pending</th><th>Current Fee</th><th>Total Payable</th><th>Received</th><th>Pending</th></tr></thead><tbody><tr>' +
-                    '<td class="idx">' + v.no + '</td>' +
-                    '<td class="left"><div class="inv-no"><span class="inv-ico"><i class="fas fa-file-invoice"></i></span>' + label + '</div>' +
-                        '<div class="inv-line"><i class="fas fa-circle-plus"></i> Created Date : <span>' + dmy(5, v.month, v.year) + '</span></div>' +
-                        '<div class="inv-line' + (overdue ? ' overdue' : '') + '"><i class="fas fa-clock"></i> Due Date: <span>' + dmy(15, v.month, v.year) + '</span></div>' +
-                        '<div class="inv-line"><i class="fas fa-calendar-check"></i> Valid Till: <span>' + dmy(25, v.month, v.year) + '</span></div>' +
-                        '<div class="inv-line"><i class="fas fa-user-graduate"></i> Number of students : <span class="stu-badge">' + v.students + ' Students</span></div></td>' +
-                    '<td><div class="imp"><i class="fas fa-file-import"></i> Import Pending</div><span class="pill grey">' + num(v.prevPending) + '</span></td>' +
-                    '<td><span class="pill grey">' + num(v.fee) + '</span></td>' +
-                    '<td><div class="kv"><span>Total Fee</span><b>' + num(v.fee) + '</b></div><div class="kv"><span>Total Fine</span><b>' + num(v.fine) + '</b></div>' +
-                        '<span class="pill yellow">' + money(v.fee + v.fine) + '</span></td>' +
-                    '<td><div class="kv"><span>Received Fee :</span><b>' + num(v.recFee) + '</b></div><div class="kv"><span>Waived off Fee:</span><b>' + num(v.waivedFee) + '</b></div>' +
-                        '<div class="kv"><span>Received Fine :</span><b>' + num(v.recFine) + '</b></div><div class="kv"><span>Waived Off Fine:</span><b>' + num(v.waivedFine) + '</b></div>' +
-                        '<span class="pill green">' + money(net) + '</span></td>' +
-                    '<td><span class="pill red"><small>without fine</small>' + money(v.pendNo) + '<br><small>with fine</small>' + money(v.pendWith) + '</span></td>' +
-                    '</tr></tbody></table></div></section>';
+                    '<div class="month-head"><span class="mh-no">' + v.no + '</span><i class="fas fa-calendar-alt"></i> ' + MONTHS_FULL[v.month] + ' ' + v.year +
+                        '<span class="mh-inv"><i class="fas fa-file-invoice"></i>' + label + '</span></div>' +
+                    '<div class="month-body">' +
+                        '<div class="m-card wide"><div class="m-title"><i class="fas fa-file-lines"></i> Invoice Detail</div>' +
+                            '<div class="inv-line"><i class="fas fa-circle-plus"></i> Created Date : <span>' + dmy(5, v.month, v.year) + '</span></div>' +
+                            '<div class="inv-line' + (overdue ? ' overdue' : '') + '"><i class="fas fa-clock"></i> Due Date : <span>' + dmy(15, v.month, v.year) + '</span></div>' +
+                            '<div class="inv-line"><i class="fas fa-calendar-check"></i> Valid Till : <span>' + dmy(25, v.month, v.year) + '</span></div>' +
+                            '<div class="inv-line"><i class="fas fa-user-graduate"></i> Number of students : <span class="stu-badge">' + v.students + ' Students</span></div></div>' +
+                        '<div class="m-card"><div class="m-title"><i class="fas fa-rotate-left"></i> Prev Pending</div><div class="imp"><i class="fas fa-file-import"></i> Import Pending</div><span class="pill grey">' + num(v.prevPending) + '</span></div>' +
+                        '<div class="m-card"><div class="m-title"><i class="fas fa-receipt"></i> Current Fee</div><span class="pill grey">' + num(v.fee) + '</span></div>' +
+                        '<div class="m-card"><div class="m-title"><i class="fas fa-wallet"></i> Total Payable</div>' +
+                            '<div class="kv"><span>Total Fee</span><b>' + num(v.fee) + '</b></div><div class="kv"><span>Total Fine</span><b>' + num(v.fine) + '</b></div>' +
+                            '<span class="pill yellow">' + money(v.fee + v.fine) + '</span></div>' +
+                        '<div class="m-card"><div class="m-title"><i class="fas fa-circle-check"></i> Received</div>' +
+                            '<div class="kv"><span>Received Fee :</span><b>' + num(v.recFee) + '</b></div><div class="kv"><span>Waived off Fee :</span><b>' + num(v.waivedFee) + '</b></div>' +
+                            '<div class="kv"><span>Received Fine :</span><b>' + num(v.recFine) + '</b></div><div class="kv"><span>Waived Off Fine :</span><b>' + num(v.waivedFine) + '</b></div>' +
+                            '<span class="pill green">' + money(net) + '</span></div>' +
+                        '<div class="m-card"><div class="m-title"><i class="fas fa-hourglass-half"></i> Pending</div>' +
+                            '<span class="pill red"><small>without fine</small>' + money(v.pendNo) + '</span>' +
+                            '<span class="pill red"><small>with fine</small>' + money(v.pendWith) + '</span></div>' +
+                    '</div></section>';
             }).join('');
             feOverlay.hidden = false;
             document.body.style.overflow = 'hidden';
