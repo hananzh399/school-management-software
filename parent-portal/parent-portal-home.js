@@ -352,7 +352,7 @@
     var Store = window.ChatStore;
 
     if (!Store) {
-      sub.textContent = onScreen(tr('msgSubtitle', 'Chat with your child\u2019s teachers.'));
+      sub.textContent = onScreen(tr('msgSubtitle', 'Chat with your child\u2019s teachers and the school office.'));
       badge.hidden = true;
       return;
     }

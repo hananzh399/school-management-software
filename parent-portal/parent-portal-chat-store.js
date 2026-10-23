@@ -23,6 +23,13 @@
   var DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
   var MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
   var RECEIPT_LABEL = { sending: 'Sending', sent: 'Sent', delivered: 'Delivered', read: 'Read' };
+  // The school office (admin) is shown as one more conversation next to the teachers.
+  // Backend: channel "parent_admin", thread key "admin" (no staffId).
+  var ADMIN_ID = 'admin';
+  var ADMIN_NAME = 'School Office';
+  var ADMIN_SUBJECT = 'School Administration';
+  var ADMIN_COLOR = 'linear-gradient(135deg, #1F4E79 0%, #2E75B6 100%)';
+  var PINNED_RANK = Number.MAX_SAFE_INTEGER;
 
   function pad(n) { return n < 10 ? '0' + n : '' + n; }
   function dateKey(d) { return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); }
@@ -84,7 +91,12 @@
       backend: true
     };
   }
+  function threadKey(id) { return String(id) === ADMIN_ID ? 'admin' : 't:' + id; }
   function unreadForThread(threads, id) {
+    if (String(id) === ADMIN_ID) {
+      var office = threads.find(function (item) { return String(item.thread || '') === 'admin'; });
+      return office ? Number(office.unread) || 0 : 0;
+    }
     var thread = threads.find(function (item) {
       return String(item.thread || '') === 't:' + id ||
         (item.staffId != null && String(item.staffId) === String(id));
@@ -96,6 +108,7 @@
     (Array.isArray(teachers) ? teachers : []).forEach(function (row, index) {
       if (row.staffId == null) return;
       var id = String(row.staffId);
+      if (id === ADMIN_ID) return;   // reserved for the school office conversation
       var threadMessages = messages.filter(function (msg) {
         return String(msg.staffId || '') === id && msg.channel === 'parent_teacher';
       }).map(fromBackend);
@@ -124,6 +137,32 @@
       teacher.unread = unreadForThread(threads, id);
       next[id] = teacher;
     });
+
+    // School office (admin): always available, pinned to the top of the list.
+    var officeMessages = messages.filter(function (msg) {
+      return msg.channel === 'parent_admin';
+    }).map(fromBackend);
+    officeMessages.sort(function (a, b) { return a.ts - b.ts; });
+    var officeUnread = unreadForThread(threads, ADMIN_ID);
+    for (var j = officeMessages.length - 1; j >= 0 && officeUnread > 0; j--) {
+      if (officeMessages[j].from !== 'parent') {
+        officeMessages[j].unread = true;
+        officeUnread--;
+      }
+    }
+    var office = state.teachers[ADMIN_ID] || {};
+    office.id = ADMIN_ID;
+    office.isAdmin = true;
+    office.rank = PINNED_RANK;
+    office.name = ADMIN_NAME;
+    office.subject = ADMIN_SUBJECT;
+    office.initials = 'SO';
+    office.color = ADMIN_COLOR;
+    office.online = null;
+    office.lastSeen = '';
+    office.messages = officeMessages;
+    office.unread = unreadForThread(threads, ADMIN_ID);
+    next[ADMIN_ID] = office;
 
     Object.keys(state.teachers).forEach(function (id) {
       if (!next[id]) delete state.teachers[id];
@@ -301,13 +340,14 @@
     };
     teacher.messages.push(message);
     teacher.rank = now.getTime();
-    api.sendMessage({
-      regNo: currentRegNo,
-      channel: 'parent_teacher',
-      staffId: String(id),
-      body: message.text,
-      clientId: clientId
-    }).then(function () {
+    var payload = { regNo: currentRegNo, body: message.text, clientId: clientId };
+    if (String(id) === ADMIN_ID) {
+      payload.channel = 'parent_admin';          // to the school office; the server sets staffId = ""
+    } else {
+      payload.channel = 'parent_teacher';
+      payload.staffId = String(id);
+    }
+    api.sendMessage(payload).then(function () {
       refresh();
     }).catch(function (err) {
       teacher.messages = teacher.messages.filter(function (item) { return item !== message; });
@@ -352,7 +392,7 @@
     teacher.unread = 0;
     teacher.messages.forEach(function (message) { message.unread = false; });
     if (api && currentRegNo) {
-      api.markMessagesRead(currentRegNo, 't:' + String(id)).then(refresh).catch(function (err) {
+      api.markMessagesRead(currentRegNo, threadKey(id)).then(refresh).catch(function (err) {
         console.warn('Could not mark the parent thread read:', err && err.message ? err.message : err);
       });
     }
