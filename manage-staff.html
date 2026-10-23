@@ -8,7 +8,7 @@
     <meta name="description" content="SoftSchool Staff Management - Manage teaching and non-teaching staff directory.">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="manage-staff.css?v=20261004">
+    <link rel="stylesheet" href="manage-staff.css?v=20261025">
     <script>(function(){const t=localStorage.getItem('eduflow-theme')||'dark';document.documentElement.setAttribute('data-theme',t);})()</script>
     <script src="shared-data.js"></script>
     <script src="input-validation.js"></script>
@@ -194,6 +194,9 @@
                     <button id="add-staff-btn" class="btn btn-primary" onclick="openAddForm()">
                         <i class="fas fa-plus"></i> Add Staff
                     </button>
+                    <button id="archive-center-btn" class="btn btn-archive-center" onclick="openArchiveCenter()" title="View staff who have left the school">
+                        <i class="fas fa-box-archive"></i> Archive Center
+                    </button>
                     <button id="generate-staff-idcards-btn" class="btn btn-primary sidc-generate-btn" onclick="openStaffIdCardGenerator()" title="Generate printable ID cards for every staff member in this list">
                         <i class="fas fa-id-card"></i> Generate ID Cards
                     </button>
@@ -238,6 +241,8 @@
                 <div class="profile-actions">
                     <button class="btn btn-certificate d-none" id="generate-certificate-btn" onclick="openCertificateModal()"><i class="fas fa-certificate"></i> Generate Experience Certificate</button>
                     <button class="btn btn-edit" onclick="openEditForm()"><i class="fas fa-edit"></i> Edit</button>
+                    <button class="btn btn-reactivate d-none" id="reactivate-btn" onclick="openReactivateModal()"><i class="fas fa-rotate-left"></i> Reactivate</button>
+                    <button class="btn btn-archive" onclick="openArchiveModal()"><i class="fas fa-box-archive"></i> Move to Archive</button>
                     <button class="btn btn-remove" onclick="confirmRemove()"><i class="fas fa-trash-alt"></i> Remove</button>
                 </div>
             </div>
@@ -252,6 +257,36 @@
                 <div class="modal-actions">
                     <button class="btn btn-cancel" onclick="closeConfirmModal()">Cancel</button>
                     <button class="btn btn-danger" onclick="executeRemove()">Yes, Remove</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- MOVE TO ARCHIVE MODAL (Hidden by default) -->
+        <div id="archive-modal" class="modal-overlay d-none">
+            <div class="modal-content">
+                <div class="modal-icon warning"><i class="fas fa-box-archive"></i></div>
+                <h3 id="archive-modal-title">Move to Archive</h3>
+                <p><strong id="archive-target-name"></strong> will be moved to the Archive Center as a former staff member. Their record is kept.</p>
+                <div class="form-group archive-date-group">
+                    <label for="archive-leaving-date">Date of Leaving</label>
+                    <input type="date" id="archive-leaving-date" required>
+                </div>
+                <div class="modal-actions">
+                    <button class="btn btn-cancel" onclick="closeArchiveModal()">Cancel</button>
+                    <button class="btn btn-primary" onclick="executeArchive()">Move to Archive</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- REACTIVATE MODAL (Hidden by default) -->
+        <div id="reactivate-modal" class="modal-overlay d-none">
+            <div class="modal-content">
+                <div class="modal-icon warning"><i class="fas fa-rotate-left"></i></div>
+                <h3>Reactivate Staff</h3>
+                <p><strong id="reactivate-target-name"></strong> will be moved out of the Archive Center and back into the active staff directory.</p>
+                <div class="modal-actions">
+                    <button class="btn btn-cancel" onclick="closeReactivateModal()">Cancel</button>
+                    <button class="btn btn-primary" onclick="executeReactivate()">Yes, Reactivate</button>
                 </div>
             </div>
         </div>
@@ -406,13 +441,58 @@
         </div>
     </div>
 
+    <!-- ARCHIVE CENTER — full-screen view covering the whole page (sidebar
+         included). The header is cloned from the main page header each time
+         it opens (see openArchiveCenter() in manage-staff.js) so the school
+         name/logo always match. Lists former staff: ID, subject/job, date of
+         joining, date of leaving and a small photo. -->
+    <section id="archive-center" class="archive-center d-none" role="dialog" aria-modal="true" aria-labelledby="archive-title">
+        <div id="archive-header-slot"></div>
+        <div class="archive-body">
+            <div class="view-header">
+                <button class="back-btn" onclick="closeArchiveCenter()">
+                    <i class="fas fa-arrow-left"></i> Back
+                </button>
+                <h2 id="archive-title" class="view-title">Archive Center</h2>
+            </div>
+
+            <div class="table-controls">
+                <div class="search-box">
+                    <i class="fas fa-search"></i>
+                    <input type="text" id="archive-search" placeholder="Search by name, ID, or subject..." oninput="renderArchiveTable()">
+                </div>
+                <div class="archive-tabs" id="archive-tabs">
+                    <button type="button" class="archive-tab" data-cat="All" onclick="setArchiveFilter('All')">All</button>
+                    <button type="button" class="archive-tab" data-cat="Teaching" onclick="setArchiveFilter('Teaching')">Teaching</button>
+                    <button type="button" class="archive-tab" data-cat="Non-Teaching" onclick="setArchiveFilter('Non-Teaching')">Non-Teaching</button>
+                </div>
+            </div>
+
+            <div class="table-container">
+                <table class="staff-table archive-table">
+                    <thead>
+                        <tr>
+                            <th>Photo</th><th>Staff ID</th><th>Name</th>
+                            <th id="archive-subject-th">Subject / Job Title</th><th>Date of Joining</th><th>Date of Leaving</th>
+                        </tr>
+                    </thead>
+                    <tbody id="archive-tbody"></tbody>
+                </table>
+                <div id="archive-empty" class="archive-empty d-none">
+                    <i class="fas fa-box-archive"></i>
+                    <p id="archive-empty-text">No archived staff yet.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
     <!-- TOAST NOTIFICATIONS — used for the "staff limit reached" alert
          (shown when Add Staff is clicked past the cap) via showToast() in
          manage-staff.js. -->
     <div id="toast-container" class="toast-container"></div>
 
     <script src="id-photo-align.js"></script>
-    <script src="manage-staff.js?v=20261004"></script>
+    <script src="manage-staff.js?v=20261025"></script>
 <script src="announce-badge.js"></script>
 </body>
 </html>

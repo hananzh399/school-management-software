@@ -605,6 +605,9 @@ function showDirectoryView(category) {
 // page load (see DOMContentLoaded below) and kept current by every
 // add/edit/delete after that. Never read from or written to localStorage.
 let staffData = { 'Teaching': [], 'Non-Teaching': [] };
+// Former staff (moved to the Archive Center). Kept out of staffData so they
+// never count toward the staff limit, directory, ID cards, etc.
+let archivedStaff = [];
 
 let currentProfileId = null;
 
@@ -2540,6 +2543,7 @@ function renderFormFields(category) {
         html += createInput('f-job', 'Job Title');
         html += createInput('f-startTime', 'Start Time', 'time');
         html += createInput('f-endTime', 'End Time', 'time');
+        html += createInput('f-joined', 'Date Joined', 'date', false, false);
         html += createInput('f-salary', 'Salary', 'number');
         html += `
             <div class="form-group full-width">
@@ -2610,7 +2614,7 @@ function openEditForm() {
     document.getElementById('form-modal-title').textContent = title;
     renderFormFields(currentCategory);
 
-    const staff = staffData[currentCategory].find(s => s.id === currentProfileId);
+    const staff = _getStaff(currentCategory, currentProfileId);
     if (!staff) return;
 
     // Photo
@@ -2670,6 +2674,7 @@ function openEditForm() {
         document.getElementById('f-job').value = staff.job || '';
         document.getElementById('f-startTime').value = staff.startTime || '';
         document.getElementById('f-endTime').value = staff.endTime || '';
+        const _nj = document.getElementById('f-joined'); if (_nj) _nj.value = staff.joined || '';
     }
 
     if (staff.securityTotal) document.getElementById('f-security-total').value = staff.securityTotal;
@@ -2771,6 +2776,17 @@ function handleFormSubmit(e) {
         newData.job = document.getElementById('f-job').value;
         newData.startTime = document.getElementById('f-startTime').value;
         newData.endTime = document.getElementById('f-endTime').value;
+        newData.joined = (document.getElementById('f-joined') || {}).value || '';
+    }
+
+    // Archived staff: the edit form also carries the Date of Leaving.
+    const _lv = document.getElementById('f-leaving-date');
+    if (_lv) {
+        if (!_lv.value) { showToast('Please choose the date of leaving.', 'error', 'Date required'); return; }
+        if (newData.joined && _lv.value < newData.joined) {
+            showToast('Date of leaving cannot be before the date of joining.', 'error', 'Check the date'); return;
+        }
+        newData.leavingDate = _lv.value;
     }
 
     if (isEditMode) {
@@ -2779,6 +2795,13 @@ function handleFormSubmit(e) {
             const existing = staffData[currentCategory][index];
             newData.securityCollected = existing.securityCollected || 0;
             staffData[currentCategory][index] = { ...existing, ...newData };
+        } else {
+            const ai = archivedStaff.findIndex(s => s.id === currentProfileId);
+            if (ai > -1) {
+                const existing = archivedStaff[ai];
+                newData.securityCollected = existing.securityCollected || 0;
+                archivedStaff[ai] = { ...existing, ...newData };
+            }
         }
         showProfileView(currentProfileId, currentCategory);
     } else {
@@ -2799,7 +2822,7 @@ function handleFormSubmit(e) {
     // in the in-memory `staffData` immediately (below), and persisted here;
     // if this fails, syncStaffWithBackend() will reconcile on next load.
     const savedId = isEditMode ? currentProfileId : newData.id;
-    const finalRecord = staffData[currentCategory].find(s => s.id === savedId);
+    const finalRecord = _getStaff(currentCategory, savedId);
     const portalPw = ((document.getElementById('f-portal-password') || {}).value || '').trim();
     if (finalRecord && getCurrentSchoolId()) {
         apiSaveStaff(finalRecord)
@@ -2817,7 +2840,7 @@ function handleFormSubmit(e) {
 
 /* ---- OVERRIDE: showProfileView (adds guardian, tags, agreement) ---- */
 function showProfileView(staffId, category) {
-    const staff = staffData[category].find(s => s.id === staffId);
+    const staff = _getStaff(category, staffId);
     if (!staff) return;
 
     currentProfileId = staff.id;
@@ -2893,6 +2916,7 @@ function showProfileView(staffId, category) {
         grid.innerHTML += createItem('Salary', formatCurrency(staff.salary));
         grid.innerHTML += createItem('Start Time', staff.startTime);
         grid.innerHTML += createItem('End Time', staff.endTime);
+        grid.innerHTML += createItem('Date Joined', staff.joined);
         grid.innerHTML += createItem('CNIC', staff.cnic);
         grid.innerHTML += createItem('Phone Number', staff.phone);
         grid.innerHTML += createItem('Address', staff.address, true);
@@ -2922,6 +2946,8 @@ function _findStaffById(staffId) {
         const found = list.find(s => s.id === staffId);
         if (found) return { staff: found, category: cat };
     }
+    const arch = (archivedStaff || []).find(s => s.id === staffId);
+    if (arch) return { staff: arch, category: arch.type === 'Non-Teaching' ? 'Non-Teaching' : 'Teaching' };
     return null;
 }
 
@@ -3212,7 +3238,7 @@ function _preloadCertLogo(src) {
  * the first preview using smart defaults pulled from their record.
  */
 function openCertificateModal() {
-    const staff = staffData['Teaching'].find(s => s.id === currentProfileId);
+    const staff = _getStaff('Teaching', currentProfileId);
     if (!staff) return;
     _certStaffId = staff.id;
 
@@ -3231,7 +3257,7 @@ function openCertificateModal() {
         </div>
         <div class="form-group">
             <label for="cert-end">End Date</label>
-            <input type="date" id="cert-end" value="${_esc(new Date().toISOString().slice(0,10))}" oninput="refreshCertificatePreview()">
+            <input type="date" id="cert-end" value="${_esc(staff.leavingDate || new Date().toISOString().slice(0,10))}" oninput="refreshCertificatePreview()">
         </div>
     `;
 
@@ -3247,7 +3273,7 @@ function openCertificateModal() {
  * editable option fields, and persist the school contact details.
  */
 function refreshCertificatePreview() {
-    const staff = staffData['Teaching'].find(s => s.id === _certStaffId);
+    const staff = _getStaff('Teaching', _certStaffId);
     if (!staff) return;
 
     const school = _getSchoolIdentity();
@@ -3602,7 +3628,7 @@ async function _renderCertificateBlob() {
 }
 
 async function downloadCertificateImage() {
-    const staff = staffData['Teaching'].find(s => s.id === _certStaffId);
+    const staff = _getStaff('Teaching', _certStaffId);
     const blob = await _renderCertificateBlob();
     if (!blob) return;
     const url = URL.createObjectURL(blob);
@@ -3616,7 +3642,7 @@ async function downloadCertificateImage() {
 }
 
 async function shareCertificateWhatsApp() {
-    const staff = staffData['Teaching'].find(s => s.id === _certStaffId);
+    const staff = _getStaff('Teaching', _certStaffId);
     const name = (staff && staff.name) || 'Staff';
     const blob = await _renderCertificateBlob();
     if (!blob) return;
@@ -3676,7 +3702,8 @@ showProfileView = function(staffId, category) {
 function generateStaffId(joinedDateStr) {
     const all = []
         .concat(staffData['Teaching'] || [])
-        .concat(staffData['Non-Teaching'] || []);
+        .concat(staffData['Non-Teaching'] || [])
+        .concat(archivedStaff || []);
     const ids = all.map(s => s && s.id).filter(Boolean);
 
     if (window.SoftSchoolAdmin && typeof window.SoftSchoolAdmin.nextStaffId === 'function') {
@@ -3715,7 +3742,7 @@ function resolveFreshStaffId(displayedId, allIds, joinedDateStr) {
     const yearSuffix = String(yearDate.getFullYear()).slice(-2);
     const expectedYearSegment = prefix + '_' + yearSuffix + '_S_';
     const yearMatches = !!displayedId && displayedId.toUpperCase().indexOf(expectedYearSegment) === 0;
-    const taken = !!displayedId && allIds.includes(displayedId);
+    const taken = !!displayedId && (allIds.includes(displayedId) || (archivedStaff || []).some(a => a.id === displayedId));
     return (displayedId && yearMatches && !taken) ? displayedId : generateStaffId(joinedDateStr);
 }
 
@@ -4461,3 +4488,328 @@ ${pagesHtml}
 </html>`);
     printWin.document.close();
 };
+
+
+/* ============================================================
+   ============================================================
+   ARCHIVE CENTER — former staff (teaching + non-teaching)
+   Declared LAST so these definitions win.
+
+   A staff member is "archived" when their record has archived = true
+   and a leavingDate. Persisted through the same /api/staff endpoint
+   (apiSaveStaff), so the backend Staff entity needs two extra fields:
+   `archived` (Boolean) and `leavingDate` (String).
+   ============================================================
+   ============================================================ */
+
+let _archiveFilter = 'All';
+
+function _isArchivedRow(s) {
+    return s && (s.archived === true || s.archived === 'true' || s.archived === 1);
+}
+
+function _arcFmtDate(val) {
+    if (!val) return '—';
+    const d = new Date(val);
+    if (isNaN(d.getTime())) return String(val);
+    return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+}
+
+/* ---- OVERRIDE: syncStaffWithBackend — same as before, but archived
+   rows are split out of the active Teaching / Non-Teaching lists ---- */
+async function syncStaffWithBackend() {
+    try {
+        const schoolId = getCurrentSchoolId();
+        if (!schoolId) {
+            console.warn('syncStaffWithBackend: no logged-in school, staying on in-memory cache.');
+            return;
+        }
+        const serverRows = await staffApiRequest('GET', `${STAFF_API_BASE}?schoolId=${encodeURIComponent(schoolId)}`);
+        if (!Array.isArray(serverRows)) return;
+
+        const localById = new Map(
+            [].concat(staffData['Teaching'] || [], staffData['Non-Teaching'] || [], archivedStaff || [])
+              .map(s => [s.id, s])
+        );
+
+        const merged = serverRows.map(fromApiStaffRecord).map(srv =>
+            Object.assign({}, localById.get(srv.id) || {}, srv)
+        );
+
+        const active = merged.filter(s => !_isArchivedRow(s));
+        archivedStaff = merged.filter(_isArchivedRow);
+
+        staffData['Teaching']     = active.filter(s => s.type !== 'Non-Teaching');
+        staffData['Non-Teaching'] = active.filter(s => s.type === 'Non-Teaching');
+
+        loadStaffCounts(false);
+        if (currentCategory && !document.getElementById('directory-view').classList.contains('d-none')) {
+            populateDirectory(currentCategory);
+        }
+        if (!document.getElementById('archive-center').classList.contains('d-none')) renderArchiveTable();
+    } catch (err) {
+        console.warn('syncStaffWithBackend: could not reach the server, using in-memory cache.', err.message);
+    }
+}
+
+/* ---- Move to Archive (from a staff profile) ---- */
+function openArchiveModal() {
+    const staff = (staffData[currentCategory] || []).find(s => s.id === currentProfileId);
+    if (!staff) return;
+    document.getElementById('archive-modal-title').textContent =
+        currentCategory === 'Teaching' ? 'Archive Teacher' : 'Archive Non-Teaching Staff';
+    document.getElementById('archive-target-name').textContent = staff.name || '';
+
+    const dateEl = document.getElementById('archive-leaving-date');
+    const today = new Date();
+    const iso = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' + String(today.getDate()).padStart(2, '0');
+    dateEl.max = iso;
+    dateEl.min = /^\d{4}-\d{2}-\d{2}$/.test(staff.joined || '') ? staff.joined : '';
+    dateEl.value = iso;
+    document.getElementById('archive-modal').classList.remove('d-none');
+}
+
+function closeArchiveModal() {
+    document.getElementById('archive-modal').classList.add('d-none');
+}
+
+function executeArchive() {
+    const list = staffData[currentCategory] || [];
+    const staff = list.find(s => s.id === currentProfileId);
+    if (!staff) return;
+
+    const dateEl = document.getElementById('archive-leaving-date');
+    const leaving = dateEl.value;
+    if (!leaving) {
+        showToast('Please choose the date of leaving.', 'error', 'Date required');
+        return;
+    }
+    if (staff.joined && /^\d{4}-\d{2}-\d{2}$/.test(staff.joined) && leaving < staff.joined) {
+        showToast('Date of leaving cannot be before the date of joining.', 'error', 'Check the date');
+        return;
+    }
+
+    const record = Object.assign({}, staff, {
+        archived: true,
+        leavingDate: leaving,
+        type: currentCategory
+    });
+
+    staffData[currentCategory] = list.filter(s => s.id !== staff.id);
+    archivedStaff = archivedStaff.filter(s => s.id !== staff.id).concat(record);
+
+    if (getCurrentSchoolId()) {
+        apiSaveStaff(record).catch(err =>
+            console.warn('apiSaveStaff (archive) failed, archive kept in-memory only until next sync:', err.message));
+    }
+
+    loadStaffCounts(false);
+    closeArchiveModal();
+    showDirectoryView(currentCategory);
+    showToast(`${staff.name} was moved to the Archive Center.`, 'success', 'Archived');
+}
+
+/* ---- Archive Center screen ---- */
+function openArchiveCenter(keepFilter) {
+    // Same header as the main page (school name/logo/date), re-cloned on
+    // every open so it always reflects what access-control.js filled in.
+    const src = document.querySelector('.main-header');
+    const slot = document.getElementById('archive-header-slot');
+    if (src && slot) {
+        const clone = src.cloneNode(true);
+        clone.querySelectorAll('[id]').forEach(el => el.removeAttribute('id'));
+        clone.querySelectorAll('.menu-toggle, .theme-toggle').forEach(el => el.remove());
+        clone.classList.add('archive-header');
+        slot.innerHTML = '';
+        slot.appendChild(clone);
+    }
+
+    if (!keepFilter) _archiveFilter = (currentCategory === 'Teaching' || currentCategory === 'Non-Teaching') ? currentCategory : 'All';
+    document.getElementById('archive-search').value = '';
+    renderArchiveTable();
+
+    const view = document.getElementById('archive-center');
+    view.classList.remove('d-none');
+    view.scrollTop = 0;
+    document.body.style.overflow = 'hidden';
+    document.addEventListener('keydown', _archiveEscHandler);
+}
+
+function closeArchiveCenter() {
+    document.getElementById('archive-center').classList.add('d-none');
+    document.body.style.overflow = '';
+    document.removeEventListener('keydown', _archiveEscHandler);
+}
+
+function _archiveEscHandler(e) {
+    if (e.key === 'Escape') closeArchiveCenter();
+}
+
+function setArchiveFilter(cat) {
+    _archiveFilter = cat;
+    renderArchiveTable();
+}
+
+function renderArchiveTable() {
+    const esc = SSValidate.escapeHtml;
+    const tbody = document.getElementById('archive-tbody');
+    const q = (document.getElementById('archive-search').value || '').trim().toLowerCase();
+
+    document.querySelectorAll('#archive-tabs .archive-tab').forEach(btn =>
+        btn.classList.toggle('active', btn.dataset.cat === _archiveFilter));
+
+    const label = _archiveFilter === 'Teaching' ? 'Teaching Staff Archive'
+                : _archiveFilter === 'Non-Teaching' ? 'Non-Teaching Staff Archive'
+                : 'Archive Center';
+    document.getElementById('archive-title').textContent = label;
+    document.getElementById('archive-subject-th').textContent =
+        _archiveFilter === 'Teaching' ? 'Subject' : _archiveFilter === 'Non-Teaching' ? 'Job Title' : 'Subject / Job Title';
+
+    const rows = archivedStaff
+        .filter(s => _archiveFilter === 'All' || (s.type === 'Non-Teaching' ? 'Non-Teaching' : 'Teaching') === _archiveFilter)
+        .filter(s => !q || [s.id, s.name, s.subjects, s.job].join(' ').toLowerCase().includes(q))
+        .sort((a, b) => String(b.leavingDate || '').localeCompare(String(a.leavingDate || '')));
+
+    tbody.innerHTML = '';
+    rows.forEach(s => {
+        const isNT = s.type === 'Non-Teaching';
+        const initials = (s.name || '?').split(' ').map(p => p[0]).slice(0, 2).join('').toUpperCase();
+        const photo = s.photo
+            ? `<img class="row-avatar archive-photo" src="${esc(s.photo)}" alt="">`
+            : `<span class="row-avatar-fallback archive-photo">${esc(initials)}</span>`;
+        const subject = isNT ? (s.job || '') : (s.subjects || '');
+
+        const tr = document.createElement('tr');
+        tr.onclick = () => openArchivedProfile(s.id);
+        tr.innerHTML = `
+            <td data-label="Photo">${photo}</td>
+            <td data-label="Staff ID"><span class="id-badge">${esc(s.id)}</span></td>
+            <td data-label="Name" class="td-bold">${esc(s.name || '')}</td>
+            <td data-label="Subject / Job Title">${esc(subject) || '—'}</td>
+            <td data-label="Date of Joining">${_arcFmtDate(s.joined)}</td>
+            <td data-label="Date of Leaving">${_arcFmtDate(s.leavingDate)}</td>`;
+        tbody.appendChild(tr);
+    });
+
+    const empty = document.getElementById('archive-empty');
+    empty.classList.toggle('d-none', rows.length > 0);
+    document.getElementById('archive-empty-text').textContent =
+        archivedStaff.length === 0 ? 'No archived staff yet.' : 'No archived staff match your search.';
+}
+
+
+/* ============================================================
+   ARCHIVED STAFF PROFILE — same full preview as an active staff
+   member (Edit, Experience Certificate) but with Reactivate in
+   place of Move to Archive / Remove.
+   ============================================================ */
+let _viewingArchived = false;
+
+/** Find a staff record in the active list first, then in the archive. */
+function _getStaff(category, id) {
+    const active = (staffData[category] || []).find(s => s.id === id);
+    if (active) return active;
+    return (archivedStaff || []).find(s => s.id === id &&
+        (category === 'Non-Teaching' ? s.type === 'Non-Teaching' : s.type !== 'Non-Teaching')) || null;
+}
+
+function openArchivedProfile(id) {
+    const s = archivedStaff.find(x => x.id === id);
+    if (!s) return;
+    const cat = s.type === 'Non-Teaching' ? 'Non-Teaching' : 'Teaching';
+    currentCategory = cat;
+    closeArchiveCenter();
+    document.getElementById('directory-view').classList.add('d-none');
+    showProfileView(id, cat);
+    window.scrollTo(0, 0);
+}
+
+function backToArchiveCenter() {
+    showDirectoryView(currentCategory);
+    openArchiveCenter(true);
+}
+
+/* ---- OVERRIDE: showProfileView — archived-aware buttons / details ---- */
+const _showProfileView_beforeArchive = showProfileView;
+showProfileView = function(staffId, category) {
+    _showProfileView_beforeArchive(staffId, category);
+
+    const isActive = (staffData[category] || []).some(s => s.id === staffId);
+    const arch = isActive ? null : (archivedStaff || []).find(s => s.id === staffId);
+    _viewingArchived = !!arch;
+
+    const pv = document.getElementById('profile-view');
+    pv.classList.toggle('is-archived', _viewingArchived);
+    document.getElementById('reactivate-btn').classList.toggle('d-none', !_viewingArchived);
+    document.querySelectorAll('.profile-actions .btn-archive, .profile-actions .btn-remove')
+        .forEach(b => b.classList.toggle('d-none', _viewingArchived));
+
+    if (arch) {
+        document.querySelector('.profile-view .back-btn').setAttribute('onclick', 'backToArchiveCenter()');
+        document.querySelector('.profile-view .back-btn').innerHTML = '<i class="fas fa-arrow-left"></i> Back to Archive Center';
+        document.getElementById('profile-id').textContent = arch.id + ' • Archived';
+        document.getElementById('profile-details-grid').insertAdjacentHTML('afterbegin',
+            `<div class="detail-item"><span class="detail-label">Date of Leaving</span>
+             <span class="detail-value">${_arcFmtDate(arch.leavingDate)}</span></div>`);
+    } else {
+        document.querySelector('.profile-view .back-btn').innerHTML = '<i class="fas fa-arrow-left"></i> Back to Directory';
+    }
+};
+
+/* ---- OVERRIDE: openEditForm — archived staff also get Date of Leaving ---- */
+const _openEditForm_beforeArchive = openEditForm;
+openEditForm = function() {
+    _openEditForm_beforeArchive();
+    if (!_viewingArchived) return;
+    const staff = _getStaff(currentCategory, currentProfileId);
+    const grid = document.getElementById('form-dynamic-fields');
+    if (!staff || !grid || document.getElementById('f-leaving-date')) return;
+    const wrap = document.createElement('div');
+    wrap.className = 'form-group';
+    wrap.innerHTML = `<label for="f-leaving-date">Date of Leaving</label>
+        <input type="date" id="f-leaving-date" name="f-leaving-date" required value="${_esc(staff.leavingDate || '')}">`;
+    grid.appendChild(wrap);
+};
+
+/* ---- Reactivate ---- */
+function openReactivateModal() {
+    const staff = _getStaff(currentCategory, currentProfileId);
+    if (!staff) return;
+    document.getElementById('reactivate-target-name').textContent = staff.name || '';
+    document.getElementById('reactivate-modal').classList.remove('d-none');
+}
+
+function closeReactivateModal() {
+    document.getElementById('reactivate-modal').classList.add('d-none');
+}
+
+function executeReactivate() {
+    const staff = archivedStaff.find(s => s.id === currentProfileId);
+    if (!staff) return;
+
+    const limitInfo = getStaffLimitInfo();
+    if (limitInfo && limitInfo.isFull) {
+        closeReactivateModal();
+        showToast(
+            `This school has reached its staff limit (${limitInfo.used}/${limitInfo.limit}). Ask the Super Admin to raise the plan's staff limit before reactivating.`,
+            'error', 'Staff limit reached');
+        return;
+    }
+
+    const cat = staff.type === 'Non-Teaching' ? 'Non-Teaching' : 'Teaching';
+    const record = Object.assign({}, staff, { archived: false, leavingDate: '', type: cat });
+
+    archivedStaff = archivedStaff.filter(s => s.id !== staff.id);
+    staffData[cat].push(record);
+
+    if (getCurrentSchoolId()) {
+        apiSaveStaff(record).catch(err =>
+            console.warn('apiSaveStaff (reactivate) failed, change kept in-memory only until next sync:', err.message));
+    }
+
+    currentCategory = cat;
+    loadStaffCounts(false);
+    closeReactivateModal();
+    showDirectoryView(cat);
+    showToast(`${staff.name} is active again.`, 'success', 'Reactivated');
+}
