@@ -155,7 +155,7 @@
             <div class="table-wrap">
                 <table class="sessions-table summary-table">
                     <thead>
-                        <tr><th>Before Transfer</th><th>Came</th><th>Went</th><th>At End of Session</th></tr>
+                        <tr><th>Before Transfer</th><th>Came</th><th>Went</th><th>At End of Session</th><th>View</th></tr>
                     </thead>
                     <tbody>
                         <tr>
@@ -163,6 +163,7 @@
                             <td class="came" id="sf-came">0</td>
                             <td class="went" id="sf-went">0</td>
                             <td class="total" id="sf-close">0</td>
+                            <td><button class="eye-btn" id="sf-view" title="View all staff of this session" aria-label="View staff of this session"><i class="fas fa-eye"></i></button></td>
                         </tr>
                     </tbody>
                 </table>
@@ -170,25 +171,25 @@
         </section>
     </main>
 
-    <!-- FULL-SCREEN STUDENTS SECTION -->
+    <!-- FULL-SCREEN LIST (students or staff) -->
     <div class="fs-overlay" id="fs-students" hidden>
         <div class="fs-panel" role="dialog" aria-modal="true" aria-labelledby="fs-title">
             <div class="fs-head">
-                <h2 id="fs-title"><i class="fas fa-user-graduate"></i> <span id="fs-title-text">Students</span></h2>
+                <h2 id="fs-title"><i class="fas fa-user-graduate" id="fs-icon"></i> <span id="fs-title-text">Students</span></h2>
                 <button class="fs-close" id="fs-close" aria-label="Close"><i class="fas fa-times"></i></button>
             </div>
             <div class="fs-tools">
                 <div class="fs-tabs" id="fs-tabs">
-                    <button class="fs-tab active" data-tab="all">All Students <b id="tc-all">0</b></button>
+                    <button class="fs-tab active" data-tab="all"><span id="tl-all">All Students</span> <b id="tc-all">0</b></button>
                     <button class="fs-tab" data-tab="before">Before Transfer <b id="tc-before">0</b></button>
                     <button class="fs-tab" data-tab="came">Came <b id="tc-came">0</b></button>
                     <button class="fs-tab" data-tab="went">Went <b id="tc-went">0</b></button>
                 </div>
-                <div class="fs-search"><i class="fas fa-search"></i><input type="text" id="fs-search" placeholder="Search by name, ID or guardian…"></div>
+                <div class="fs-search"><i class="fas fa-search"></i><input type="text" id="fs-search" placeholder="Search…"></div>
             </div>
             <div class="fs-body">
                 <table class="sessions-table">
-                    <thead>
+                    <thead id="fs-thead">
                         <tr><th>#</th><th>Student ID</th><th>Roll No.</th><th>Name</th><th>Guardian / Father</th><th>Class</th><th>Section</th><th>Gender</th><th>Status</th></tr>
                     </thead>
                     <tbody id="fs-tbody"></tbody>
@@ -293,38 +294,94 @@
             return list;
         }
 
-        // ---- Full-screen students section ----
+        // ---- Staff of a session (sample generator: replace with real staff records) ----
+        // Each member: { staffId, name, category, designation, qualification, gender, origin: 'before'|'came', left: bool }
+        var S_FIRST_M = ['Ahmed','Imran','Kamran','Naveed','Tariq','Rashid','Zahid','Shafiq'];
+        var S_FIRST_F = ['Ayesha','Sadia','Nazia','Farah','Rubina','Shazia','Uzma','Bushra'];
+        var TEACH_DES = ['Subject Teacher','Senior Teacher','Class Incharge','Head of Department'];
+        var NONTEACH_DES = ['Clerk','Accountant','Security Guard','Peon','Librarian','Driver'];
+        var QUALS = ['B.Ed','M.Ed','M.A','M.Sc','B.Sc','BS'];
+        var sessionStaffCache = {};
+
+        function buildSessionStaff(idx) {
+            if (sessionStaffCache[idx]) return sessionStaffCache[idx];
+            var d = sessions[idx].staff, total = d.open + d.came, list = [], i;
+            var leftSet = {};
+            for (i = 0; i < d.went; i++) leftSet[Math.floor((i + 0.5) * total / d.went)] = true;
+            for (i = 0; i < total; i++) {
+                var female = (i * 3 + idx) % 2 === 1;
+                var teaching = i % 4 !== 3;
+                list.push({
+                    staffId: 'STF-' + String(i + 1).padStart(3, '0'),
+                    name: (female ? S_FIRST_F : S_FIRST_M)[(i * 5 + idx) % 8] + ' ' + LAST[(i * 7 + idx * 2) % 12],
+                    category: teaching ? 'Teaching' : 'Non-Teaching',
+                    designation: teaching ? TEACH_DES[i % 4] : NONTEACH_DES[i % 6],
+                    qualification: teaching ? QUALS[i % 6] : '-',
+                    gender: female ? 'Female' : 'Male',
+                    origin: i < d.open ? 'before' : 'came',
+                    left: !!leftSet[i]
+                });
+            }
+            sessionStaffCache[idx] = list;
+            return list;
+        }
+
+        // ---- Full-screen list (shared by Students and Staff) ----
         var fs = document.getElementById('fs-students');
         var fsTbody = document.getElementById('fs-tbody');
-        var fsTab = 'all', fsList = [], currentSession = null;
+        var fsTab = 'all', fsList = [], currentSession = null, fsKind = 'students';
+
+        var FS_CFG = {
+            students: {
+                icon: 'fa-user-graduate', noun: 'Students', allLabel: 'All Students',
+                search: 'Search by name, ID or guardian…',
+                cols: ['#', 'Student ID', 'Roll No.', 'Name', 'Guardian / Father', 'Class', 'Section', 'Gender', 'Status'],
+                text: function (x) { return x.name + ' ' + x.regNo + ' ' + x.guardian; },
+                cells: function (x) { return [x.regNo, x.rollNo, esc(x.name), esc(x.guardian), x.cls, x.section, x.gender]; }
+            },
+            staff: {
+                icon: 'fa-chalkboard-teacher', noun: 'Staff', allLabel: 'All Staff',
+                search: 'Search by name, ID or designation…',
+                cols: ['#', 'Staff ID', 'Name', 'Category', 'Designation', 'Qualification', 'Gender', 'Status'],
+                text: function (x) { return x.name + ' ' + x.staffId + ' ' + x.designation + ' ' + x.category; },
+                cells: function (x) { return [x.staffId, esc(x.name), x.category, esc(x.designation), esc(x.qualification), x.gender]; }
+            }
+        };
 
         function esc(t) { return String(t).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
 
-        function fsMatch(st) {
-            if (fsTab === 'before') return st.origin === 'before';
-            if (fsTab === 'came') return st.origin === 'came';
-            if (fsTab === 'went') return st.left;
+        function fsMatch(x) {
+            if (fsTab === 'before') return x.origin === 'before';
+            if (fsTab === 'came') return x.origin === 'came';
+            if (fsTab === 'went') return x.left;
             return true;
         }
 
-        function fsRender() {
-            var q = document.getElementById('fs-search').value.trim().toLowerCase();
-            var rows = fsList.filter(function (st) {
-                return fsMatch(st) && (!q || (st.name + ' ' + st.regNo + ' ' + st.guardian).toLowerCase().indexOf(q) > -1);
-            });
-            fsTbody.innerHTML = rows.length ? rows.map(function (st, i) {
-                var status = st.left ? '<span class="badge went">Went</span>' :
-                    (st.origin === 'came' ? '<span class="badge came">Came</span>' : '<span class="badge before">Before Transfer</span>');
-                if (st.left) status = '<span class="badge went">Went</span> <span class="badge ' + st.origin + '">' + (st.origin === 'came' ? 'Came' : 'Before') + '</span>';
-                return '<tr><td>' + (i + 1) + '</td><td>' + esc(st.regNo) + '</td><td>' + st.rollNo + '</td><td>' + esc(st.name) + '</td><td>' + esc(st.guardian) + '</td><td>' + st.cls + '</td><td>' + st.section + '</td><td>' + st.gender + '</td><td>' + status + '</td></tr>';
-            }).join('') : '<tr><td colspan="9" class="empty-row">No students found.</td></tr>';
-            document.getElementById('fs-foot').textContent = 'Showing ' + rows.length + ' of ' + fsList.length + ' students in this session';
+        function statusBadge(x) {
+            var o = x.origin === 'came' ? '<span class="badge came">Came</span>' : '<span class="badge before">Before Transfer</span>';
+            return x.left ? '<span class="badge went">Went</span> ' + o : o;
         }
 
-        function openStudents(idx) {
+        function fsRender() {
+            var cfg = FS_CFG[fsKind];
+            var q = document.getElementById('fs-search').value.trim().toLowerCase();
+            var rows = fsList.filter(function (x) { return fsMatch(x) && (!q || cfg.text(x).toLowerCase().indexOf(q) > -1); });
+            fsTbody.innerHTML = rows.length ? rows.map(function (x, i) {
+                return '<tr><td>' + (i + 1) + '</td><td>' + cfg.cells(x).join('</td><td>') + '</td><td>' + statusBadge(x) + '</td></tr>';
+            }).join('') : '<tr><td colspan="' + cfg.cols.length + '" class="empty-row">No ' + cfg.noun.toLowerCase() + ' found.</td></tr>';
+            document.getElementById('fs-foot').textContent = 'Showing ' + rows.length + ' of ' + fsList.length + ' ' + cfg.noun.toLowerCase() + ' in this session';
+        }
+
+        function openList(kind, idx) {
+            var cfg = FS_CFG[kind];
+            fsKind = kind;
             currentSession = idx;
-            fsList = buildSessionStudents(idx);
-            document.getElementById('fs-title-text').textContent = 'Students - Session ' + sessions[idx].title;
+            fsList = kind === 'staff' ? buildSessionStaff(idx) : buildSessionStudents(idx);
+            document.getElementById('fs-title-text').textContent = cfg.noun + ' - Session ' + sessions[idx].title;
+            document.getElementById('fs-icon').className = 'fas ' + cfg.icon;
+            document.getElementById('tl-all').textContent = cfg.allLabel;
+            document.getElementById('fs-search').placeholder = cfg.search;
+            document.getElementById('fs-thead').innerHTML = '<tr><th>' + cfg.cols.join('</th><th>') + '</th></tr>';
             document.getElementById('tc-all').textContent = fsList.length;
             document.getElementById('tc-before').textContent = fsList.filter(function (x) { return x.origin === 'before'; }).length;
             document.getElementById('tc-came').textContent = fsList.filter(function (x) { return x.origin === 'came'; }).length;
@@ -338,7 +395,8 @@
         }
         function closeStudents() { fs.hidden = true; document.body.style.overflow = ''; }
 
-        document.getElementById('st-view').onclick = function () { if (currentSession !== null) openStudents(currentSession); };
+        document.getElementById('st-view').onclick = function () { if (currentSession !== null) openList('students', currentSession); };
+        document.getElementById('sf-view').onclick = function () { if (currentSession !== null) openList('staff', currentSession); };
         document.getElementById('fs-close').onclick = closeStudents;
         fs.addEventListener('click', function (e) { if (e.target === fs) closeStudents(); });
         document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !fs.hidden) closeStudents(); });
