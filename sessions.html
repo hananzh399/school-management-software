@@ -33,6 +33,35 @@
         .summary-table td.total{color:#3b82f6}
         .summary-table td.fine{color:#f59e0b}
         .summary-table td.imported{color:#8b5cf6}
+        .summary-table td.income{color:#22c55e}
+        .summary-table td.expense{color:#ef4444}
+        .summary-table td.profit{color:#22c55e}
+        .summary-table td.loss{color:#ef4444}
+        .summary-table td.profit small,.summary-table td.loss small{display:block;font-family:'Inter',sans-serif;font-size:.7rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;margin-bottom:2px}
+        .pl-table td{font-size:1.15rem}
+        .pl-table td.view-cell{font-size:1rem}
+        /* Income / expense ledger */
+        .ledger-top{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;margin-bottom:14px}
+        .ledger-top div{padding:10px 14px;border-radius:12px;border:1px solid rgba(128,128,128,.3);background:rgba(128,128,128,.07)}
+        .ledger-top small{display:block;font-size:.7rem;text-transform:uppercase;letter-spacing:.05em;opacity:.7}
+        .ledger-top b{font-family:'Space Grotesk',sans-serif;font-size:1.05rem}
+        .ledger-top .g b{color:#16a34a}
+        .ledger-top .r b{color:#dc2626}
+        html[data-theme="dark"] .ledger-top .g b{color:#22c55e}
+        html[data-theme="dark"] .ledger-top .r b{color:#ef4444}
+        .ledger-table td.amt{text-align:right;font-variant-numeric:tabular-nums;font-weight:700;white-space:nowrap}
+        .ledger-table th.amt{text-align:right}
+        .ledger-table tr.row-income td{color:#16a34a}
+        .ledger-table tr.row-expense td{color:#dc2626}
+        html[data-theme="dark"] .ledger-table tr.row-income td{color:#22c55e}
+        html[data-theme="dark"] .ledger-table tr.row-expense td{color:#ef4444}
+        .badge.income{background:rgba(34,197,94,.18);color:#16a34a}
+        .badge.expense{background:rgba(239,68,68,.18);color:#ef4444}
+        .fs-select{padding:9px 12px;border-radius:10px;border:1px solid rgba(128,128,128,.4);background:transparent;color:inherit;font:inherit;font-size:.9rem;cursor:pointer;max-width:100%}
+        .fs-select option{background:#fff;color:#0f172a}
+        html[data-theme="dark"] .fs-select option{background:#1f2937;color:#e5e7eb}
+        .fs-select:focus{outline:2px solid #3b82f6;outline-offset:1px}
+        .ledger-table .sub{display:block;font-size:.75rem;opacity:.75;font-weight:500}
         /* Full-screen students section */
         .fs-overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:1000;padding:14px;display:flex}
         .fs-overlay[hidden]{display:none}
@@ -50,7 +79,7 @@
         .fs-search{flex:1;min-width:200px;max-width:340px;margin-left:auto;display:flex;align-items:center;gap:8px;padding:9px 12px;border-radius:10px;border:1px solid rgba(128,128,128,.4)}
         .fs-search input{flex:1;border:0;outline:0;background:transparent;color:inherit;font:inherit}
         .fs-body{flex:1;overflow:auto;border:1px solid rgba(128,128,128,.25);border-radius:12px}
-        .fs-body .sessions-table{min-width:760px}
+        .fs-body .sessions-table{min-width:900px}
         .fs-body thead th{position:sticky;top:0;background:inherit;z-index:1;background:#f1f5f9}
         html[data-theme="dark"] .fs-body thead th{background:#1f2937}
         .badge{display:inline-block;padding:3px 10px;border-radius:999px;font-size:.78rem;font-weight:600}
@@ -219,6 +248,27 @@
                     </tbody>
                 </table>
             </div>
+
+            <h3 class="table-title"><i class="fas fa-scale-balanced"></i> Income / Expense</h3>
+            <div class="table-wrap">
+                <table class="sessions-table summary-table pl-table">
+                    <thead>
+                        <tr><th>Total Paid Fees</th><th>Extra Income</th><th>Total Income</th><th>Salaries</th><th>Other Expenses</th><th>Total Expense</th><th id="ie-pl-head">Profit / Loss</th><th>View</th></tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td class="income" id="ie-paid">0</td>
+                            <td class="income" id="ie-extra">0</td>
+                            <td class="income" id="ie-income">0</td>
+                            <td class="expense" id="ie-salaries">0</td>
+                            <td class="expense" id="ie-expenses">0</td>
+                            <td class="expense" id="ie-expense">0</td>
+                            <td class="profit" id="ie-pl">0</td>
+                            <td class="view-cell"><button class="eye-btn" id="ie-view" title="View all incomes and expenses of this session" aria-label="View incomes and expenses of this session"><i class="fas fa-eye"></i></button></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
         </section>
     </main>
 
@@ -236,12 +286,18 @@
                     <button class="fs-tab" data-tab="came">Came <b id="tc-came">0</b></button>
                     <button class="fs-tab" data-tab="went">Went <b id="tc-went">0</b></button>
                 </div>
+                <select class="fs-select" id="fs-month" aria-label="Filter by month"><option value="">All months</option></select>
+                <select class="fs-select" id="fs-sort" aria-label="Sort by month">
+                    <option value="default">Sort: Default</option>
+                    <option value="asc">Month: Oldest first</option>
+                    <option value="desc">Month: Newest first</option>
+                </select>
                 <div class="fs-search"><i class="fas fa-search"></i><input type="text" id="fs-search" placeholder="Search…"></div>
             </div>
             <div class="fs-body">
                 <table class="sessions-table">
                     <thead id="fs-thead">
-                        <tr><th>#</th><th>Student ID</th><th>Roll No.</th><th>Name</th><th>Guardian / Father</th><th>Class</th><th>Section</th><th>Gender</th><th>Status</th></tr>
+                        <tr><th>#</th><th>Student ID</th><th>Roll No.</th><th>Name</th><th>Guardian / Father</th><th>Class</th><th>Section</th><th>Gender</th><th>Joined</th><th>Left</th><th>Status</th></tr>
                     </thead>
                     <tbody id="fs-tbody"></tbody>
                 </table>
@@ -261,6 +317,41 @@
         </div>
     </div>
 
+    <!-- FULL-SCREEN INCOME / EXPENSE LEDGER -->
+    <div class="fs-overlay" id="fs-ledger" hidden>
+        <div class="fs-panel" role="dialog" aria-modal="true" aria-labelledby="lg-title">
+            <div class="fs-head">
+                <h2 id="lg-title"><i class="fas fa-scale-balanced"></i> <span id="lg-title-text">Income / Expense</span></h2>
+                <button class="fs-close" id="lg-close" aria-label="Close"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="ledger-top" id="lg-top"></div>
+            <div class="fs-tools">
+                <div class="fs-tabs" id="lg-tabs">
+                    <button class="fs-tab active" data-tab="all">All <b id="lc-all">0</b></button>
+                    <button class="fs-tab" data-tab="income">Income <b id="lc-income">0</b></button>
+                    <button class="fs-tab" data-tab="expense">Expense <b id="lc-expense">0</b></button>
+                </div>
+                <select class="fs-select" id="lg-month" aria-label="Filter by month"><option value="">All months</option></select>
+                <select class="fs-select" id="lg-sort" aria-label="Sort entries">
+                    <option value="asc">Month: Oldest first</option>
+                    <option value="desc">Month: Newest first</option>
+                    <option value="amt-desc">Amount: High to low</option>
+                    <option value="amt-asc">Amount: Low to high</option>
+                </select>
+                <div class="fs-search"><i class="fas fa-search"></i><input type="text" id="lg-search" placeholder="Search by title or month…"></div>
+            </div>
+            <div class="fs-body">
+                <table class="sessions-table ledger-table">
+                    <thead>
+                        <tr><th>#</th><th>Month</th><th>Type</th><th>Title / Description</th><th class="amt">Amount</th></tr>
+                    </thead>
+                    <tbody id="lg-tbody"></tbody>
+                </table>
+            </div>
+            <div class="fs-foot" id="lg-foot"></div>
+        </div>
+    </div>
+
     <script>
         // ---- Sample data: replace with data from your backend ----
         // fees.imported = dues brought in from the previous session. If left out, it is taken
@@ -269,10 +360,16 @@
         // came = joined during session, went = left during session.
         var sessions = [
             { id: 1, title: '2024-2025', students: { open: 420, came: 85, went: 60 }, staff: { open: 32, came: 6, went: 4 },
-              fees: { generated: 4200000, fine: 85000, paid: 3900000, imported: 0 } },
+              fees: { generated: 4200000, fine: 85000, paid: 3900000, imported: 0 },
+              finance: { extraIncome: 350000, salaries: 2640000, expenses: 650000 } },
             { id: 2, title: '2025-2026', students: { open: 445, came: 92, went: 48 }, staff: { open: 34, came: 5, went: 3 },
-              fees: { generated: 4650000, fine: 62000, paid: 4100000 } }
+              fees: { generated: 4650000, fine: 62000, paid: 4100000 },
+              finance: { extraIncome: 280000, salaries: 3200000, expenses: 1350000 } }
         ];
+        // finance.extraIncome = income other than student fees (donations, canteen, rent, etc.)
+        // finance.salaries    = total staff salaries paid in the session
+        // finance.expenses    = all other expenses (utilities, maintenance, supplies, etc.)
+        // Total paid fees is taken automatically from the Fees table above.
 
         var body = document.getElementById('sessions-body');
         var pageList = document.getElementById('page-list');
@@ -348,6 +445,128 @@
                 document.getElementById('fe-' + k).textContent = money(f[k]);
             });
         }
+        // ---- Income / Expense ----
+        // Ledger entries: { month: 0-11 (calendar month), year, type: 'income'|'expense', category, title, amount }
+        // If sessions[i].finance.entries is provided it is used as-is (real records, fees collected are still added
+        // automatically). Otherwise entries are generated from the extraIncome / salaries / expenses totals so that
+        // the ledger always adds up to the summary table.
+        var ledgerCache = {};
+        var EXTRA_TPL = [['Donation received', 1, 3], ['Tuck shop rent', 3, 2], ['Annual function ticket & stall income', 8, 2], ['Admission form & prospectus sales', 0, 1], ['Transport (van) charges', 5, 2]];
+        var EXP_TPL = [['Electricity & utility bills', 2, 3], ['Building repair & maintenance', 4, 3], ['Stationery & office supplies', 0, 2], ['Internet & phone bills', 6, 1], ['Annual day expenses', 8, 3], ['Furniture & equipment purchase', 1, 3], ['Cleaning & sanitation', 5, 1], ['Exam papers printing', 10, 2]];
+        function sessYear(idx, sm) { var start = parseInt(sessions[idx].title, 10) || new Date().getFullYear(); return start + ((3 + sm) >= 12 ? 1 : 0); }
+        function calMonth(sm) { return (3 + sm) % 12; }
+        function tplEntries(idx, tpl, total, type, category) {
+            if (!total) return [];
+            var parts = spread(total, tpl.map(function (t) { return t[2]; }));
+            return tpl.map(function (t, i) {
+                return { month: calMonth(t[1]), year: sessYear(idx, t[1]), type: type, category: category, title: t[0], amount: parts[i] };
+            }).filter(function (e) { return e.amount > 0; });
+        }
+        function buildLedger(idx) {
+            if (ledgerCache[idx]) return ledgerCache[idx];
+            var fin = sessions[idx].finance || {}, list = [];
+            // 1) Fees received, month by month (from the monthly invoices)
+            buildInvoices(idx).forEach(function (v) {
+                var amt = v.recFee + v.recFine;
+                if (amt > 0) list.push({ month: v.month, year: v.year, type: 'income', category: 'Fees', title: 'Student fees received (' + MONTHS[v.month] + '-' + v.year + ' invoice)', amount: amt });
+            });
+            if (Array.isArray(fin.entries)) {
+                list = list.concat(fin.entries);
+            } else {
+                list = list.concat(tplEntries(idx, EXTRA_TPL, fin.extraIncome || 0, 'income', 'Extra Income'));
+                var sal = spread(fin.salaries || 0, [1,1,1,1,1,1,1,1,1,1,1,1].map(function (x, i) { return x + (i % 3) / 40; }));
+                for (var m = 0; m < 12; m++) {
+                    if (sal[m] > 0) list.push({ month: calMonth(m), year: sessYear(idx, m), type: 'expense', category: 'Salary', title: 'Staff salaries - ' + MONTHS_FULL[calMonth(m)] + ' ' + sessYear(idx, m), amount: sal[m] });
+                }
+                list = list.concat(tplEntries(idx, EXP_TPL, fin.expenses || 0, 'expense', 'Expense'));
+            }
+            list.sort(function (a, b) { return (a.year * 12 + a.month) - (b.year * 12 + b.month) || (a.type === b.type ? 0 : a.type === 'income' ? -1 : 1); });
+            ledgerCache[idx] = list;
+            return list;
+        }
+        function financeSummary(idx) {
+            var fin = sessions[idx].finance || {};
+            var paid = feeSummary(idx).paid;
+            var extra = fin.extraIncome || 0, salaries = fin.salaries || 0, other = fin.expenses || 0;
+            if (Array.isArray(fin.entries)) {
+                extra = salaries = other = 0;
+                fin.entries.forEach(function (e) {
+                    if (e.type === 'income') extra += e.amount;
+                    else if (e.category === 'Salary') salaries += e.amount;
+                    else other += e.amount;
+                });
+            }
+            var income = paid + extra, expense = salaries + other;
+            return { paid: paid, extra: extra, income: income, salaries: salaries, expenses: other, expense: expense, net: income - expense };
+        }
+        function fillFinance(idx) {
+            var f = financeSummary(idx);
+            document.getElementById('ie-paid').textContent = money(f.paid);
+            document.getElementById('ie-extra').textContent = money(f.extra);
+            document.getElementById('ie-income').textContent = money(f.income);
+            document.getElementById('ie-salaries').textContent = money(f.salaries);
+            document.getElementById('ie-expenses').textContent = money(f.expenses);
+            document.getElementById('ie-expense').textContent = money(f.expense);
+            var isLoss = f.net < 0;
+            var cell = document.getElementById('ie-pl');
+            cell.className = isLoss ? 'loss' : 'profit';
+            cell.innerHTML = '<small>' + (isLoss ? 'Loss' : 'Profit') + '</small>' + money(Math.abs(f.net));
+            document.getElementById('ie-pl-head').textContent = isLoss ? 'Total Loss' : 'Total Profit';
+        }
+        var lgOverlay = document.getElementById('fs-ledger');
+        var lgTab = 'all', lgList = [], lgSession = null;
+        function lgRender() {
+            var q = document.getElementById('lg-search').value.trim().toLowerCase();
+            var mv = document.getElementById('lg-month').value, sortV = document.getElementById('lg-sort').value;
+            var rows = lgList.filter(function (e) {
+                if (lgTab !== 'all' && e.type !== lgTab) return false;
+                if (mv !== '' && (e.month + 9) % 12 !== +mv) return false;
+                return !q || (e.title + ' ' + MONTHS_FULL[e.month] + ' ' + e.year + ' ' + e.category).toLowerCase().indexOf(q) > -1;
+            });
+            rows = rows.map(function (e, i) { return { e: e, i: i }; }).sort(function (a, b) {
+                var ka = a.e.year * 12 + a.e.month, kb = b.e.year * 12 + b.e.month, r;
+                if (sortV === 'desc') r = kb - ka;
+                else if (sortV === 'amt-desc') r = b.e.amount - a.e.amount;
+                else if (sortV === 'amt-asc') r = a.e.amount - b.e.amount;
+                else r = ka - kb;
+                return r || a.i - b.i;
+            }).map(function (o) { return o.e; });
+            document.getElementById('lg-tbody').innerHTML = rows.length ? rows.map(function (e, i) {
+                var inc = e.type === 'income';
+                return '<tr class="row-' + e.type + '"><td>' + (i + 1) + '</td>' +
+                    '<td>' + MONTHS_FULL[e.month] + ' ' + e.year + '</td>' +
+                    '<td><span class="badge ' + e.type + '">' + (inc ? 'Income' : 'Expense') + '</span></td>' +
+                    '<td>' + esc(e.title) + '<span class="sub">' + esc(e.category) + '</span></td>' +
+                    '<td class="amt">' + (inc ? '+ ' : '- ') + money(e.amount) + '</td></tr>';
+            }).join('') : '<tr><td colspan="5" class="empty-row">No records found.</td></tr>';
+            var ti = 0, te = 0;
+            rows.forEach(function (e) { if (e.type === 'income') ti += e.amount; else te += e.amount; });
+            document.getElementById('lg-foot').textContent = 'Showing ' + rows.length + ' of ' + lgList.length + ' records' +
+                (lgTab === 'all' ? ' | Income ' + money(ti) + ' | Expense ' + money(te) : '');
+        }
+        function openLedger(idx) {
+            lgSession = idx;
+            lgList = buildLedger(idx);
+            var f = financeSummary(idx), isLoss = f.net < 0;
+            document.getElementById('lg-title-text').textContent = 'Income / Expense - Session ' + sessions[idx].title;
+            document.getElementById('lg-top').innerHTML =
+                '<div class="g"><small>Total Income</small><b>' + money(f.income) + '</b></div>' +
+                '<div class="r"><small>Total Expense</small><b>' + money(f.expense) + '</b></div>' +
+                '<div class="' + (isLoss ? 'r' : 'g') + '"><small>' + (isLoss ? 'Total Loss' : 'Total Profit') + '</small><b>' + money(Math.abs(f.net)) + '</b></div>';
+            document.getElementById('lc-all').textContent = lgList.length;
+            document.getElementById('lc-income').textContent = lgList.filter(function (e) { return e.type === 'income'; }).length;
+            document.getElementById('lc-expense').textContent = lgList.filter(function (e) { return e.type === 'expense'; }).length;
+            lgTab = 'all';
+            document.getElementById('lg-search').value = '';
+            document.getElementById('lg-month').innerHTML = monthOptions(idx);
+            document.getElementById('lg-sort').value = 'asc';
+            document.querySelectorAll('#lg-tabs .fs-tab').forEach(function (b) { b.classList.toggle('active', b.dataset.tab === 'all'); });
+            lgRender();
+            lgOverlay.hidden = false;
+            document.body.style.overflow = 'hidden';
+        }
+        function closeLedger() { lgOverlay.hidden = true; document.body.style.overflow = ''; }
+
         function dmy(day, month, year) { return (day < 10 ? '0' : '') + day + '-' + MONTHS[month] + '-' + year; }
 
         var feOverlay = document.getElementById('fs-fees');
@@ -405,12 +624,13 @@
             var m = /^#session-(\d+)$/.exec(location.hash);
             var s = m && sessions[+m[1]];
             currentSession = s ? +m[1] : null;
-            if (!s) { closeStudents(); closeFees(); }
+            if (!s) { closeStudents(); closeFees(); closeLedger(); }
             if (s) {
                 document.getElementById('d-title').textContent = s.title;
                 fill('st', s.students);
                 fill('sf', s.staff);
                 fillFees(+m[1]);
+                fillFinance(+m[1]);
                 pageList.hidden = true;
                 pageDetail.hidden = false;
             } else {
@@ -434,6 +654,16 @@
         var FIRST_F = ['Ayesha','Fatima','Zainab','Maryam','Hira','Sana','Iqra','Noor','Amna','Laiba','Areeba','Khadija'];
         var LAST = ['Khan','Shah','Abbasi','Awan','Malik','Qureshi','Butt','Raza','Tanoli','Satti','Mughal','Javed'];
         var FATHER = ['Muhammad','Abdul','Tariq','Nadeem','Imran','Kamran','Naveed','Shafiq','Rashid','Zahid'];
+        // Month the person joined / left, as a session-month index (0 = April ... 11 = March).
+        // joinM is null for people who were already there before the session; leftM is null if they did not leave.
+        // Replace with the real joining / leaving dates when you connect a backend.
+        function joinMonth(i, d) { return i < d.open ? null : Math.min(11, Math.floor((i - d.open) * 12 / Math.max(d.came, 1))); }
+        function leftMonth(i, d, idx, leftSet) {
+            if (!leftSet[i]) return null;
+            var jm = joinMonth(i, d), lm = (i * 5 + idx * 3) % 12;
+            if (jm !== null && lm < jm) lm = jm + (i % (12 - jm));
+            return lm;
+        }
         var sessionStudentsCache = {};
 
         function buildSessionStudents(idx) {
@@ -458,7 +688,9 @@
                     cls: cls, section: sec,
                     gender: female ? 'Female' : 'Male',
                     origin: i < d.open ? 'before' : 'came',
-                    left: !!leftSet[i]
+                    left: !!leftSet[i],
+                    joinM: joinMonth(i, d),
+                    leftM: leftMonth(i, d, idx, leftSet)
                 });
             }
             sessionStudentsCache[idx] = list;
@@ -490,7 +722,9 @@
                     qualification: teaching ? QUALS[i % 6] : '-',
                     gender: female ? 'Female' : 'Male',
                     origin: i < d.open ? 'before' : 'came',
-                    left: !!leftSet[i]
+                    left: !!leftSet[i],
+                    joinM: joinMonth(i, d),
+                    leftM: leftMonth(i, d, idx, leftSet)
                 });
             }
             sessionStaffCache[idx] = list;
@@ -506,16 +740,16 @@
             students: {
                 icon: 'fa-user-graduate', noun: 'Students', allLabel: 'All Students',
                 search: 'Search by name, ID or guardian…',
-                cols: ['#', 'Student ID', 'Roll No.', 'Name', 'Guardian / Father', 'Class', 'Section', 'Gender', 'Status'],
+                cols: ['#', 'Student ID', 'Roll No.', 'Name', 'Guardian / Father', 'Class', 'Section', 'Gender', 'Joined', 'Left', 'Status'],
                 text: function (x) { return x.name + ' ' + x.regNo + ' ' + x.guardian; },
-                cells: function (x) { return [x.regNo, x.rollNo, esc(x.name), esc(x.guardian), x.cls, x.section, x.gender]; }
+                cells: function (x) { return [x.regNo, x.rollNo, esc(x.name), esc(x.guardian), x.cls, x.section, x.gender, monthLbl(x.joinM), monthLbl(x.leftM)]; }
             },
             staff: {
                 icon: 'fa-chalkboard-teacher', noun: 'Staff', allLabel: 'All Staff',
                 search: 'Search by name, ID or designation…',
-                cols: ['#', 'Staff ID', 'Name', 'Category', 'Designation', 'Qualification', 'Gender', 'Status'],
+                cols: ['#', 'Staff ID', 'Name', 'Category', 'Designation', 'Qualification', 'Gender', 'Joined', 'Left', 'Status'],
                 text: function (x) { return x.name + ' ' + x.staffId + ' ' + x.designation + ' ' + x.category; },
-                cells: function (x) { return [x.staffId, esc(x.name), x.category, esc(x.designation), esc(x.qualification), x.gender]; }
+                cells: function (x) { return [x.staffId, esc(x.name), x.category, esc(x.designation), esc(x.qualification), x.gender, monthLbl(x.joinM), monthLbl(x.leftM)]; }
             }
         };
 
@@ -533,10 +767,34 @@
             return x.left ? '<span class="badge went">Went</span> ' + o : o;
         }
 
+        function monthLbl(sm) {
+            return (sm === null || sm === undefined) ? '—' : MONTHS_FULL[calMonth(sm)] + ' ' + sessYear(currentSession, sm);
+        }
+        function monthOptions(idx) {
+            var h = '<option value="">All months</option>';
+            for (var m = 0; m < 12; m++) h += '<option value="' + m + '">' + MONTHS_FULL[calMonth(m)] + ' ' + sessYear(idx, m) + '</option>';
+            return h;
+        }
+        // Month used for filtering/sorting: "Went" tab -> month left, otherwise -> month joined (before transfer = start of session)
+        function fsKey(x) { return fsTab === 'went' ? (x.leftM === null ? 99 : x.leftM) : (x.joinM === null ? -1 : x.joinM); }
+        function fsMonthMatch(x, m) {
+            if (fsTab === 'went') return x.leftM === m;
+            if (fsTab === 'came') return x.joinM === m;
+            return x.joinM === m || x.leftM === m;
+        }
         function fsRender() {
             var cfg = FS_CFG[fsKind];
             var q = document.getElementById('fs-search').value.trim().toLowerCase();
-            var rows = fsList.filter(function (x) { return fsMatch(x) && (!q || cfg.text(x).toLowerCase().indexOf(q) > -1); });
+            var mv = document.getElementById('fs-month').value, sortV = document.getElementById('fs-sort').value;
+            var rows = fsList.filter(function (x) {
+                return fsMatch(x) && (mv === '' || fsMonthMatch(x, +mv)) && (!q || cfg.text(x).toLowerCase().indexOf(q) > -1);
+            });
+            if (sortV !== 'default') {
+                var dir = sortV === 'desc' ? -1 : 1;
+                rows = rows.map(function (x, i) { return { x: x, i: i }; }).sort(function (a, b) {
+                    return (fsKey(a.x) - fsKey(b.x)) * dir || a.i - b.i;
+                }).map(function (o) { return o.x; });
+            }
             fsTbody.innerHTML = rows.length ? rows.map(function (x, i) {
                 return '<tr><td>' + (i + 1) + '</td><td>' + cfg.cells(x).join('</td><td>') + '</td><td>' + statusBadge(x) + '</td></tr>';
             }).join('') : '<tr><td colspan="' + cfg.cols.length + '" class="empty-row">No ' + cfg.noun.toLowerCase() + ' found.</td></tr>';
@@ -559,7 +817,9 @@
             document.getElementById('tc-went').textContent = fsList.filter(function (x) { return x.left; }).length;
             fsTab = 'all';
             document.getElementById('fs-search').value = '';
-            document.querySelectorAll('.fs-tab').forEach(function (b) { b.classList.toggle('active', b.dataset.tab === 'all'); });
+            document.getElementById('fs-month').innerHTML = monthOptions(idx);
+            document.getElementById('fs-sort').value = 'default';
+            document.querySelectorAll('#fs-tabs .fs-tab').forEach(function (b) { b.classList.toggle('active', b.dataset.tab === 'all'); });
             fsRender();
             fs.hidden = false;
             document.body.style.overflow = 'hidden';
@@ -571,16 +831,30 @@
         document.getElementById('fe-close').onclick = closeFees;
         feOverlay.addEventListener('click', function (e) { if (e.target === feOverlay) closeFees(); });
         document.getElementById('sf-view').onclick = function () { if (currentSession !== null) openList('staff', currentSession); };
+        document.getElementById('ie-view').onclick = function () { if (currentSession !== null) openLedger(currentSession); };
+        document.getElementById('lg-close').onclick = closeLedger;
+        lgOverlay.addEventListener('click', function (e) { if (e.target === lgOverlay) closeLedger(); });
+        document.getElementById('lg-tabs').addEventListener('click', function (e) {
+            var b = e.target.closest('.fs-tab'); if (!b) return;
+            lgTab = b.dataset.tab;
+            document.querySelectorAll('#lg-tabs .fs-tab').forEach(function (x) { x.classList.toggle('active', x === b); });
+            lgRender();
+        });
+        document.getElementById('lg-search').addEventListener('input', lgRender);
+        document.getElementById('lg-month').addEventListener('change', lgRender);
+        document.getElementById('lg-sort').addEventListener('change', lgRender);
         document.getElementById('fs-close').onclick = closeStudents;
         fs.addEventListener('click', function (e) { if (e.target === fs) closeStudents(); });
-        document.addEventListener('keydown', function (e) { if (e.key === 'Escape') { if (!feOverlay.hidden) closeFees(); else if (!fs.hidden) closeStudents(); } });
+        document.addEventListener('keydown', function (e) { if (e.key === 'Escape') { if (!lgOverlay.hidden) closeLedger(); else if (!feOverlay.hidden) closeFees(); else if (!fs.hidden) closeStudents(); } });
         document.getElementById('fs-tabs').addEventListener('click', function (e) {
             var b = e.target.closest('.fs-tab'); if (!b) return;
             fsTab = b.dataset.tab;
-            document.querySelectorAll('.fs-tab').forEach(function (x) { x.classList.toggle('active', x === b); });
+            document.querySelectorAll('#fs-tabs .fs-tab').forEach(function (x) { x.classList.toggle('active', x === b); });
             fsRender();
         });
         document.getElementById('fs-search').addEventListener('input', fsRender);
+        document.getElementById('fs-month').addEventListener('change', fsRender);
+        document.getElementById('fs-sort').addEventListener('change', fsRender);
 
         render();
         route();
