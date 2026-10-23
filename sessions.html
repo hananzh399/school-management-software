@@ -12,100 +12,173 @@
     <script>(function(){const t=localStorage.getItem('eduflow-theme')||'dark';document.documentElement.setAttribute('data-theme',t);})()</script>
     <script src="access-control.js"></script>
     <style>
-        .sessions-card{margin:24px;padding:20px;border-radius:16px;background:var(--bg-card,rgba(255,255,255,.04));border:1px solid var(--border-color,rgba(128,128,128,.25))}
-        .sessions-card h2{margin:0 0 16px;font-size:1.25rem;display:flex;align-items:center;gap:10px}
-        .table-wrap{overflow-x:auto}
-        .sessions-table{width:100%;border-collapse:collapse;min-width:420px}
-        .sessions-table th,.sessions-table td{padding:14px 16px;text-align:left;border-bottom:1px solid var(--border-color,rgba(128,128,128,.25))}
-        .sessions-table th{font-size:.8rem;text-transform:uppercase;letter-spacing:.05em;opacity:.7}
+        /* ================= Design tokens ================= */
+        :root{
+            --ss-line:rgba(128,128,128,.24);
+            --ss-soft:rgba(128,128,128,.07);
+            --ss-soft-2:rgba(128,128,128,.14);
+            --ss-muted:#64748b;
+            --ss-accent:#3b82f6;
+            --ss-blue:#2563eb;
+            --ss-green:#16a34a;
+            --ss-red:#dc2626;
+            --ss-amber:#d97706;
+            --ss-violet:#7c3aed;
+            --ss-panel:#ffffff;
+            --ss-panel-text:#0f172a;
+            --ss-panel-head:#f1f5f9;
+            --ss-gap:clamp(12px,2.5vw,24px);
+        }
+        html[data-theme="dark"]{
+            --ss-muted:#94a3b8;
+            --ss-blue:#60a5fa;
+            --ss-green:#22c55e;
+            --ss-red:#ef4444;
+            --ss-amber:#f59e0b;
+            --ss-violet:#a78bfa;
+            --ss-panel:#111827;
+            --ss-panel-text:#e5e7eb;
+            --ss-panel-head:#1f2937;
+        }
+        @keyframes ssFade{from{opacity:0}to{opacity:1}}
+        @keyframes ssPop{from{opacity:0;transform:translateY(14px) scale(.985)}to{opacity:1;transform:none}}
+        @media (prefers-reduced-motion:reduce){.fs-overlay,.fs-panel{animation:none!important}.eye-btn,.back-btn,.fs-tab{transition:none!important}}
+
+        /* ================= Page cards ================= */
+        .sessions-card{width:min(1400px,calc(100% - 2*var(--ss-gap)));margin:var(--ss-gap) auto;padding:clamp(16px,3vw,28px);border-radius:18px;background:var(--bg-card,rgba(255,255,255,.04));border:1px solid var(--border-color,var(--ss-line));box-shadow:0 1px 2px rgba(0,0,0,.04),0 10px 30px rgba(0,0,0,.06)}
+        .sessions-card[hidden]{display:none}
+        .sessions-card h2{margin:0 0 18px;font-size:clamp(1.1rem,2.6vw,1.4rem);font-weight:700;letter-spacing:-.01em;display:flex;align-items:center;flex-wrap:wrap;gap:10px}
+        .sessions-card h2>i{width:38px;height:38px;border-radius:12px;display:inline-flex;align-items:center;justify-content:center;background:rgba(59,130,246,.14);color:var(--ss-blue);font-size:1rem}
+        #d-title{padding:2px 14px;border-radius:999px;background:rgba(59,130,246,.14);color:var(--ss-blue);font-size:.85em;font-weight:700}
+        .back-btn{display:inline-flex;align-items:center;gap:8px;padding:9px 16px;border-radius:999px;border:1px solid var(--ss-line);background:transparent;color:inherit;cursor:pointer;margin-bottom:18px;font:inherit;font-size:.9rem;font-weight:500;transition:background .2s,transform .2s}
+        .back-btn:hover{background:var(--ss-soft-2);transform:translateX(-2px)}
+        .sessions-card button:focus-visible,.fs-overlay button:focus-visible,.fs-overlay select:focus-visible{outline:2px solid var(--ss-accent);outline-offset:2px}
+
+        /* ================= Tables ================= */
+        .table-wrap{overflow-x:auto;border:1px solid var(--ss-line);border-radius:14px;scrollbar-width:thin}
+        .sessions-table{width:100%;border-collapse:separate;border-spacing:0}
+        .sessions-table th,.sessions-table td{padding:14px 16px;text-align:left;border-bottom:1px solid var(--ss-line)}
+        .sessions-table tbody tr:last-child td{border-bottom:0}
+        .sessions-table th{font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--ss-muted);background:var(--ss-soft);white-space:nowrap}
         .sessions-table th.center,.sessions-table td.center{text-align:center}
-        .sessions-table tbody tr:hover{background:rgba(128,128,128,.08)}
-        .eye-btn{width:36px;height:36px;border-radius:50%;border:1px solid var(--border-color,rgba(128,128,128,.4));background:transparent;color:inherit;cursor:pointer;transition:.2s}
-        .eye-btn:hover{background:#3b82f6;border-color:#3b82f6;color:#fff}
-        .back-btn{display:inline-flex;align-items:center;gap:8px;padding:9px 16px;border-radius:10px;border:1px solid var(--border-color,rgba(128,128,128,.4));background:transparent;color:inherit;cursor:pointer;margin-bottom:16px;font:inherit}
-        .back-btn:hover{background:rgba(128,128,128,.12)}
-        .table-title{margin:22px 0 10px;font-size:1.05rem;display:flex;align-items:center;gap:10px}
-        .summary-table{min-width:380px}
+        .sessions-table tbody tr{transition:background .15s}
+        .sessions-table tbody tr:hover{background:var(--ss-soft)}
+        .eye-btn{width:38px;height:38px;border-radius:50%;border:1px solid var(--ss-line);background:transparent;color:inherit;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;font:inherit;transition:background .2s,color .2s,border-color .2s,transform .15s}
+        .eye-btn:hover{background:var(--ss-accent);border-color:var(--ss-accent);color:#fff;transform:translateY(-1px)}
+        .eye-label{display:none}
+        .empty-row{text-align:center;color:var(--ss-muted);padding:28px 16px!important}
+
+        .table-title{margin:30px 0 12px;font-size:1.05rem;font-weight:700;display:flex;align-items:center;gap:10px}
+        h2+.table-title{margin-top:8px}
+        .table-title i{width:32px;height:32px;border-radius:10px;display:inline-flex;align-items:center;justify-content:center;font-size:.85rem;background:rgba(59,130,246,.14);color:var(--ss-blue)}
+        .table-title.t-staff i{background:rgba(124,58,237,.14);color:var(--ss-violet)}
+        .table-title.t-fees i{background:rgba(245,158,11,.16);color:var(--ss-amber)}
+        .table-title.t-ie i{background:rgba(34,197,94,.16);color:var(--ss-green)}
+
+        /* Summary tables */
         .summary-table th,.summary-table td{text-align:center}
-        .summary-table td{font-family:'Space Grotesk',sans-serif;font-size:1.3rem;font-weight:700}
-        .summary-table td.came{color:#22c55e}
-        .summary-table td.went{color:#ef4444}
-        .summary-table td.total{color:#3b82f6}
-        .summary-table td.fine{color:#f59e0b}
-        .summary-table td.imported{color:#8b5cf6}
-        .summary-table td.income{color:#22c55e}
-        .summary-table td.expense{color:#ef4444}
-        .summary-table td.profit{color:#22c55e}
-        .summary-table td.loss{color:#ef4444}
-        .summary-table td.profit small,.summary-table td.loss small{display:block;font-family:'Inter',sans-serif;font-size:.7rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;margin-bottom:2px}
-        .pl-table td{font-size:1.15rem}
-        .pl-table td.view-cell{font-size:1rem}
-        /* Income / expense ledger */
-        .ledger-top{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;margin-bottom:14px}
-        .ledger-top div{padding:10px 14px;border-radius:12px;border:1px solid rgba(128,128,128,.3);background:rgba(128,128,128,.07)}
-        .ledger-top small{display:block;font-size:.7rem;text-transform:uppercase;letter-spacing:.05em;opacity:.7}
-        .ledger-top b{font-family:'Space Grotesk',sans-serif;font-size:1.05rem}
-        .ledger-top .g b{color:#16a34a}
-        .ledger-top .r b{color:#dc2626}
-        html[data-theme="dark"] .ledger-top .g b{color:#22c55e}
-        html[data-theme="dark"] .ledger-top .r b{color:#ef4444}
-        .ledger-table td.amt{text-align:right;font-variant-numeric:tabular-nums;font-weight:700;white-space:nowrap}
-        .ledger-table th.amt{text-align:right}
-        .ledger-table tr.row-income td{color:#16a34a}
-        .ledger-table tr.row-expense td{color:#dc2626}
-        html[data-theme="dark"] .ledger-table tr.row-income td{color:#22c55e}
-        html[data-theme="dark"] .ledger-table tr.row-expense td{color:#ef4444}
-        .badge.income{background:rgba(34,197,94,.18);color:#16a34a}
-        .badge.expense{background:rgba(239,68,68,.18);color:#ef4444}
-        .fs-select{padding:9px 12px;border-radius:10px;border:1px solid rgba(128,128,128,.4);background:transparent;color:inherit;font:inherit;font-size:.9rem;cursor:pointer;max-width:100%}
+        .summary-table td{font-family:'Space Grotesk',sans-serif;font-size:clamp(1.05rem,1.6vw,1.3rem);font-weight:700;white-space:nowrap}
+        .summary-table td.came,.summary-table td.income{color:var(--ss-green)}
+        .summary-table td.went,.summary-table td.expense{color:var(--ss-red)}
+        .summary-table td.total{color:var(--ss-blue)}
+        .summary-table td.fine{color:var(--ss-amber)}
+        .summary-table td.imported{color:var(--ss-violet)}
+        .summary-table td.profit{color:var(--ss-green);background:rgba(34,197,94,.09)}
+        .summary-table td.loss{color:var(--ss-red);background:rgba(239,68,68,.09)}
+        .pl-table td{font-size:clamp(1rem,1.5vw,1.15rem)}
+        .summary-table td.view-cell{font-size:1rem}
+
+        /* Summary tables become tiles on tablets and phones */
+        @media (max-width:1100px){
+            .summary-table,.summary-table tbody,.summary-table tr{display:block;width:100%}
+            .summary-table thead{display:none}
+            .summary-table tbody tr,.summary-table tbody tr:hover{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;padding:12px;background:transparent}
+            .summary-table td{display:flex;flex-direction:column;align-items:flex-start;gap:4px;padding:12px 14px;text-align:left;border:1px solid var(--ss-line);border-radius:12px;background:var(--ss-soft);white-space:normal;overflow-wrap:anywhere}
+            .summary-table tbody tr:last-child td{border-bottom:1px solid var(--ss-line)}
+            .summary-table td[data-label]::before{content:attr(data-label);font-family:'Inter',sans-serif;font-size:.68rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--ss-muted)}
+            .summary-table td.profit{background:rgba(34,197,94,.09);border-color:rgba(34,197,94,.35)}
+            .summary-table td.loss{background:rgba(239,68,68,.09);border-color:rgba(239,68,68,.35)}
+            .summary-table td.view-cell{grid-column:1/-1;padding:0;border:0;background:transparent;align-items:stretch}
+            .summary-table td.view-cell .eye-btn{width:100%;height:44px;border-radius:12px;gap:8px;font-weight:600;font-size:.92rem}
+            .summary-table td.view-cell .eye-label{display:inline}
+        }
+        @media (max-width:520px){
+            .summary-table tbody tr{grid-template-columns:1fr;gap:8px}
+            .summary-table td:not(.view-cell){flex-direction:row;align-items:center;justify-content:space-between;gap:12px}
+            .summary-table td:not(.view-cell)::before{text-align:left}
+        }
+
+        /* ================= Full-screen panels ================= */
+        .fs-overlay{position:fixed;inset:0;height:100dvh;z-index:1000;display:flex;align-items:center;justify-content:center;padding:clamp(0px,2vw,24px);background:rgba(15,23,42,.6);-webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px)}
+        .fs-overlay[hidden]{display:none}
+        .fs-overlay:not([hidden]){animation:ssFade .18s ease-out}
+        .fs-panel{width:100%;max-width:1400px;height:100%;display:flex;flex-direction:column;min-width:0;border-radius:18px;padding:clamp(14px,2.2vw,24px);background:var(--ss-panel);color:var(--ss-panel-text);border:1px solid var(--ss-line);box-shadow:0 24px 70px rgba(0,0,0,.45);animation:ssPop .22s ease-out}
+        .fs-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding-bottom:14px;margin-bottom:16px;border-bottom:1px solid var(--ss-line)}
+        .fs-head h2{margin:0;font-size:clamp(1rem,2.4vw,1.25rem);font-weight:700;display:flex;align-items:center;gap:10px;min-width:0}
+        .fs-head h2 i{width:36px;height:36px;border-radius:11px;display:inline-flex;align-items:center;justify-content:center;flex:none;background:rgba(59,130,246,.14);color:var(--ss-blue);font-size:.95rem}
+        .fs-close{width:40px;height:40px;flex:none;border-radius:50%;border:1px solid var(--ss-line);background:transparent;color:inherit;cursor:pointer;font-size:1rem;transition:background .2s,color .2s,border-color .2s}
+        .fs-close:hover{background:var(--ss-red);border-color:var(--ss-red);color:#fff}
+
+        /* Toolbar */
+        .fs-tools{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:14px}
+        .fs-tabs{display:flex;gap:4px;padding:4px;border-radius:12px;background:var(--ss-soft-2);max-width:100%}
+        .fs-tab{padding:7px 14px;border-radius:9px;border:0;background:transparent;color:inherit;cursor:pointer;font:inherit;font-size:.88rem;font-weight:500;white-space:nowrap;display:inline-flex;align-items:center;gap:6px;transition:background .15s,color .15s}
+        .fs-tab:hover{background:var(--ss-soft-2)}
+        .fs-tab b{margin-left:0;font-size:.74rem;font-weight:600;padding:1px 8px;border-radius:999px;background:rgba(128,128,128,.22)}
+        .fs-tab.active{background:var(--ss-accent);color:#fff;box-shadow:0 2px 8px rgba(59,130,246,.35)}
+        .fs-tab.active b{background:rgba(255,255,255,.25)}
+        .fs-select{height:40px;padding:0 34px 0 12px;border-radius:10px;border:1px solid var(--ss-line);background-color:var(--ss-soft);background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5l5 5 5-5' fill='none' stroke='%2394a3b8' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center;-webkit-appearance:none;appearance:none;color:inherit;font:inherit;font-size:.88rem;cursor:pointer;max-width:100%}
         .fs-select option{background:#fff;color:#0f172a}
         html[data-theme="dark"] .fs-select option{background:#1f2937;color:#e5e7eb}
-        .fs-select:focus{outline:2px solid #3b82f6;outline-offset:1px}
-        .ledger-table .sub{display:block;font-size:.75rem;opacity:.75;font-weight:500}
-        /* Full-screen students section */
-        .fs-overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:1000;padding:14px;display:flex}
-        .fs-overlay[hidden]{display:none}
-        .fs-panel{flex:1;display:flex;flex-direction:column;min-width:0;border-radius:16px;padding:20px;background:#fff;color:#0f172a;border:1px solid rgba(128,128,128,.35);box-shadow:0 20px 60px rgba(0,0,0,.4)}
-        html[data-theme="dark"] .fs-panel{background:#111827;color:#e5e7eb}
-        .fs-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px}
-        .fs-head h2{margin:0;font-size:1.2rem;display:flex;align-items:center;gap:10px}
-        .fs-close{width:38px;height:38px;border-radius:50%;border:1px solid rgba(128,128,128,.4);background:transparent;color:inherit;cursor:pointer;font-size:1rem}
-        .fs-close:hover{background:#ef4444;border-color:#ef4444;color:#fff}
-        .fs-tools{display:flex;flex-wrap:wrap;gap:12px;align-items:center;margin-bottom:14px}
-        .fs-tabs{display:flex;flex-wrap:wrap;gap:8px}
-        .fs-tab{padding:9px 14px;border-radius:10px;border:1px solid rgba(128,128,128,.4);background:transparent;color:inherit;cursor:pointer;font:inherit;font-size:.9rem}
-        .fs-tab b{margin-left:6px;opacity:.8}
-        .fs-tab.active{background:#3b82f6;border-color:#3b82f6;color:#fff}
-        .fs-search{flex:1;min-width:200px;max-width:340px;margin-left:auto;display:flex;align-items:center;gap:8px;padding:9px 12px;border-radius:10px;border:1px solid rgba(128,128,128,.4)}
-        .fs-search input{flex:1;border:0;outline:0;background:transparent;color:inherit;font:inherit}
-        .fs-body{flex:1;overflow:auto;border:1px solid rgba(128,128,128,.25);border-radius:12px}
+        .fs-search{flex:1 1 220px;max-width:340px;margin-left:auto;height:40px;display:flex;align-items:center;gap:8px;padding:0 12px;border-radius:10px;border:1px solid var(--ss-line);background:var(--ss-soft);transition:border-color .15s,box-shadow .15s}
+        .fs-search:focus-within{border-color:var(--ss-accent);box-shadow:0 0 0 3px rgba(59,130,246,.2)}
+        .fs-search i{opacity:.55}
+        .fs-search input{flex:1;min-width:0;border:0;outline:0;background:transparent;color:inherit;font:inherit;font-size:.9rem}
+
+        /* List area */
+        .fs-body{flex:1;overflow:auto;border:1px solid var(--ss-line);border-radius:14px;scrollbar-width:thin}
         .fs-body .sessions-table{min-width:900px}
-        .fs-body thead th{position:sticky;top:0;background:inherit;z-index:1;background:#f1f5f9}
-        html[data-theme="dark"] .fs-body thead th{background:#1f2937}
-        .badge{display:inline-block;padding:3px 10px;border-radius:999px;font-size:.78rem;font-weight:600}
-        .badge.before{background:rgba(59,130,246,.18);color:#3b82f6}
-        .badge.came{background:rgba(34,197,94,.18);color:#16a34a}
-        .badge.went{background:rgba(239,68,68,.18);color:#ef4444}
-        .fs-foot{margin-top:10px;font-size:.85rem;opacity:.7}
+        .fs-body .ledger-table{min-width:640px}
+        .fs-body thead th{position:sticky;top:0;z-index:1;background:var(--ss-panel-head)}
+        .fs-foot{margin-top:12px;font-size:.82rem;color:var(--ss-muted)}
+        .badge{display:inline-block;padding:3px 10px;border-radius:999px;font-size:.76rem;font-weight:600;white-space:nowrap}
+        .badge.before{background:rgba(59,130,246,.16);color:var(--ss-blue)}
+        .badge.came,.badge.income{background:rgba(34,197,94,.16);color:var(--ss-green)}
+        .badge.went,.badge.expense{background:rgba(239,68,68,.16);color:var(--ss-red)}
+
+        /* Income / expense ledger */
+        .ledger-table tr.row-income td{color:var(--ss-green)}
+        .ledger-table tr.row-expense td{color:var(--ss-red)}
+        .ledger-table td.amt{text-align:right;font-variant-numeric:tabular-nums;font-weight:700;white-space:nowrap}
+        .ledger-table th.amt{text-align:right}
+        .ledger-table .sub{display:block;font-size:.75rem;font-weight:500;opacity:.75}
+
+        /* Stat tiles (fees + ledger summaries) */
+        .fee-top,.ledger-top{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,160px),1fr));gap:10px;margin-bottom:14px}
+        .fee-top div,.ledger-top div{--tile:var(--ss-accent);padding:12px 16px;border-radius:12px;border:1px solid var(--ss-line);border-left:4px solid var(--tile);background:var(--ss-soft);min-width:0}
+        .fee-top .g,.ledger-top .g{--tile:var(--ss-green)}
+        .fee-top .r,.ledger-top .r{--tile:var(--ss-red)}
+        .fee-top .a{--tile:var(--ss-amber)}
+        .fee-top small,.ledger-top small{display:block;font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--ss-muted);margin-bottom:2px}
+        .fee-top b,.ledger-top b{font-family:'Space Grotesk',sans-serif;font-size:1.1rem;overflow-wrap:anywhere}
+        .fee-top .g b,.ledger-top .g b{color:var(--ss-green)}
+        .fee-top .r b,.ledger-top .r b{color:var(--ss-red)}
+
         /* Fee invoices (monthly sections, stacked vertically) */
-        .fee-sections{flex:1;overflow:auto;display:flex;flex-direction:column;gap:20px;padding:2px 4px 8px 0}
-        .fee-top{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:2px}
-        .fee-top div{padding:10px 14px;border-radius:12px;border:1px solid rgba(128,128,128,.3);background:rgba(128,128,128,.07)}
-        .fee-top small{display:block;font-size:.7rem;text-transform:uppercase;letter-spacing:.05em;opacity:.7}
-        .fee-top b{font-family:'Space Grotesk',sans-serif;font-size:1.05rem}
-        .month-sec{border:1px solid rgba(128,128,128,.3);border-radius:14px;overflow:hidden;flex-shrink:0;background:rgba(128,128,128,.04)}
-        .month-head{display:flex;flex-wrap:wrap;align-items:center;gap:10px;padding:12px 16px;font-weight:700;background:#1e293b;color:#fff}
-        .month-head .mh-no{width:30px;height:30px;border-radius:50%;background:#3b82f6;display:inline-flex;align-items:center;justify-content:center;font-size:.85rem}
-        .month-head .mh-inv{margin-left:auto;font-weight:600;font-size:.85rem;display:flex;align-items:center;gap:8px;background:#fef3c7;color:#92400e;padding:4px 12px;border-radius:999px}
-        .month-body{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:14px;padding:16px}
-        .m-card{border:1px solid rgba(128,128,128,.28);border-radius:12px;padding:14px;display:flex;flex-direction:column;gap:6px;min-width:0}
+        .fee-sections{flex:1;overflow:auto;display:flex;flex-direction:column;gap:18px;padding:2px 4px 8px 0;scrollbar-width:thin}
+        .fee-top{margin-bottom:2px}
+        .month-sec{border:1px solid var(--ss-line);border-radius:14px;overflow:hidden;flex-shrink:0;background:var(--ss-soft)}
+        .month-head{display:flex;flex-wrap:wrap;align-items:center;gap:10px;padding:12px 16px;font-weight:700;background:linear-gradient(135deg,#1e293b,#334155);color:#fff}
+        .month-head .mh-no{width:30px;height:30px;border-radius:50%;background:var(--ss-accent);display:inline-flex;align-items:center;justify-content:center;font-size:.85rem}
+        .month-head .mh-inv{margin-left:auto;font-weight:600;font-size:.82rem;display:flex;align-items:center;gap:8px;background:#fef3c7;color:#92400e;padding:4px 12px;border-radius:999px}
+        .month-body{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,230px),1fr));gap:14px;padding:16px}
+        .m-card{border:1px solid var(--ss-line);border-radius:12px;padding:14px;display:flex;flex-direction:column;gap:6px;min-width:0;background:var(--ss-panel)}
         .m-card.wide{grid-column:span 2}
-        @media (max-width:640px){.m-card.wide{grid-column:auto}.month-body{padding:12px}.fs-panel{padding:14px}}
-        .m-title{font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;opacity:.7;display:flex;align-items:center;gap:6px;margin-bottom:2px}
+        .m-title{font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--ss-muted);display:flex;align-items:center;gap:6px;margin-bottom:2px}
         .inv-line{display:flex;gap:6px;align-items:center;font-size:.86rem;margin:3px 0;flex-wrap:wrap}
         .inv-line i{width:16px;text-align:center;opacity:.8}
         .inv-line span{margin-left:auto}
-        .inv-line.overdue,.inv-line.overdue i{color:#ef4444;font-weight:600;opacity:1}
+        .inv-line.overdue,.inv-line.overdue i{color:var(--ss-red);font-weight:600;opacity:1}
         .stu-badge{background:#dbeafe;color:#1d4ed8;border:1px solid #93c5fd;border-radius:6px;padding:1px 8px;font-size:.78rem;font-weight:600}
         .pill{display:inline-block;padding:6px 14px;border-radius:8px;font-weight:700;font-size:.95rem;border:1px solid;align-self:flex-start;margin-top:auto}
         .pill.grey{background:#f1f5f9;color:#334155;border-color:#cbd5e1}
@@ -117,7 +190,45 @@
         html[data-theme="dark"] .imp{color:#60a5fa}
         .kv{display:flex;justify-content:space-between;gap:14px;font-size:.84rem;margin:2px 0}
         .kv b{font-variant-numeric:tabular-nums}
-        .empty-row{text-align:center;opacity:.6;padding:24px}
+
+        /* ================= Responsive ================= */
+        @media (max-width:900px){
+            .m-card.wide{grid-column:1/-1}
+        }
+        @media (max-width:820px){
+            .fs-overlay{padding:0}
+            .fs-panel{border-radius:0;border:0;overflow-y:auto;overflow-x:hidden;padding-bottom:max(14px,env(safe-area-inset-bottom))}
+            .fs-head{position:sticky;top:0;z-index:5;background:var(--ss-panel);margin:-14px -14px 14px;padding:14px}
+            .fs-tools{gap:10px}
+            .fs-tabs{width:100%;overflow-x:auto;scrollbar-width:none}
+            .fs-tabs::-webkit-scrollbar{display:none}
+            .fs-tab{flex:1 0 auto;justify-content:center}
+            .fs-select{flex:1 1 140px;min-width:0}
+            .fs-search{flex:1 1 100%;max-width:none;margin-left:0}
+            .fee-sections{flex:none;overflow:visible;padding:0}
+            /* tables turn into cards */
+            .fs-body{flex:none;overflow:visible;border:0;border-radius:0}
+            .fs-body .sessions-table,.fs-body .ledger-table{min-width:0}
+            .fs-body table,.fs-body tbody,.fs-body tr,.fs-body td{display:block;width:100%}
+            .fs-body thead{display:none}
+            .fs-body tbody{display:grid;gap:10px}
+            .fs-body tbody tr,.fs-body tbody tr:hover{border:1px solid var(--ss-line);border-radius:12px;padding:4px 14px;background:var(--ss-soft)}
+            .fs-body td,.fs-body tbody tr:last-child td{display:flex;justify-content:space-between;align-items:center;gap:16px;padding:9px 0;text-align:right;border-bottom:1px dashed var(--ss-line)}
+            .fs-body td:last-child,.fs-body tbody tr:last-child td:last-child{border-bottom:0}
+            .fs-body td[data-label]::before{content:attr(data-label);flex:none;text-align:left;font-size:.68rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--ss-panel-text);opacity:.6}
+            .fs-body td[data-label="#"]{display:none}
+            .fs-body td.empty-row{display:block!important;text-align:center!important;border-bottom:0!important}
+            .ledger-table tr.row-income{border-left:4px solid var(--ss-green)!important}
+            .ledger-table tr.row-expense{border-left:4px solid var(--ss-red)!important}
+            .ledger-table td.amt{font-size:1.02rem}
+        }
+        @media (max-width:640px){
+            .sessions-card{border-radius:14px}
+            .sessions-table th,.sessions-table td{padding:12px}
+            .month-body{padding:12px;gap:12px}
+            .month-head .mh-inv{margin-left:0;width:100%;justify-content:center}
+            .eye-btn,.fs-close{width:42px;height:42px}
+        }
     </style>
 </head>
 <body>
@@ -194,7 +305,8 @@
         <section class="sessions-card" id="page-detail" hidden>
             <button class="back-btn" id="back-btn"><i class="fas fa-arrow-left"></i> Back to Sessions</button>
             <h2><i class="fas fa-calendar-check"></i> Session <span id="d-title"></span></h2>
-            <h3 class="table-title"><i class="fas fa-user-graduate"></i> Students</h3>
+
+            <h3 class="table-title t-students"><i class="fas fa-user-graduate"></i> Students</h3>
             <div class="table-wrap">
                 <table class="sessions-table summary-table">
                     <thead>
@@ -202,17 +314,17 @@
                     </thead>
                     <tbody>
                         <tr>
-                            <td id="st-open">0</td>
-                            <td class="came" id="st-came">0</td>
-                            <td class="went" id="st-went">0</td>
-                            <td class="total" id="st-close">0</td>
-                            <td><button class="eye-btn" id="st-view" title="View all students of this session" aria-label="View students of this session"><i class="fas fa-eye"></i></button></td>
+                            <td data-label="Before Transfer" id="st-open">0</td>
+                            <td class="came" data-label="Came" id="st-came">0</td>
+                            <td class="went" data-label="Went" id="st-went">0</td>
+                            <td class="total" data-label="At End of Session" id="st-close">0</td>
+                            <td class="view-cell"><button class="eye-btn" id="st-view" title="View all students of this session" aria-label="View students of this session"><i class="fas fa-eye"></i><span class="eye-label">View students</span></button></td>
                         </tr>
                     </tbody>
                 </table>
             </div>
 
-            <h3 class="table-title"><i class="fas fa-chalkboard-teacher"></i> Staff</h3>
+            <h3 class="table-title t-staff"><i class="fas fa-chalkboard-teacher"></i> Staff</h3>
             <div class="table-wrap">
                 <table class="sessions-table summary-table">
                     <thead>
@@ -220,17 +332,17 @@
                     </thead>
                     <tbody>
                         <tr>
-                            <td id="sf-open">0</td>
-                            <td class="came" id="sf-came">0</td>
-                            <td class="went" id="sf-went">0</td>
-                            <td class="total" id="sf-close">0</td>
-                            <td><button class="eye-btn" id="sf-view" title="View all staff of this session" aria-label="View staff of this session"><i class="fas fa-eye"></i></button></td>
+                            <td data-label="Before Transfer" id="sf-open">0</td>
+                            <td class="came" data-label="Came" id="sf-came">0</td>
+                            <td class="went" data-label="Went" id="sf-went">0</td>
+                            <td class="total" data-label="At End of Session" id="sf-close">0</td>
+                            <td class="view-cell"><button class="eye-btn" id="sf-view" title="View all staff of this session" aria-label="View staff of this session"><i class="fas fa-eye"></i><span class="eye-label">View staff</span></button></td>
                         </tr>
                     </tbody>
                 </table>
             </div>
 
-            <h3 class="table-title"><i class="fas fa-money-bill-wave"></i> Fees</h3>
+            <h3 class="table-title t-fees"><i class="fas fa-money-bill-wave"></i> Fees</h3>
             <div class="table-wrap">
                 <table class="sessions-table summary-table">
                     <thead>
@@ -238,18 +350,18 @@
                     </thead>
                     <tbody>
                         <tr>
-                            <td id="fe-generated">0</td>
-                            <td class="fine" id="fe-fine">0</td>
-                            <td class="came" id="fe-paid">0</td>
-                            <td class="went" id="fe-pending">0</td>
-                            <td class="imported" id="fe-imported">0</td>
-                            <td><button class="eye-btn" id="fe-view" title="View monthly fee invoices" aria-label="View fee invoices of this session"><i class="fas fa-eye"></i></button></td>
+                            <td data-label="Total Generated" id="fe-generated">0</td>
+                            <td class="fine" data-label="Total Fine" id="fe-fine">0</td>
+                            <td class="came" data-label="Total Paid" id="fe-paid">0</td>
+                            <td class="went" data-label="Total Pending" id="fe-pending">0</td>
+                            <td class="imported" data-label="Imported from Previous Session" id="fe-imported">0</td>
+                            <td class="view-cell"><button class="eye-btn" id="fe-view" title="View monthly fee invoices" aria-label="View fee invoices of this session"><i class="fas fa-eye"></i><span class="eye-label">View fee invoices</span></button></td>
                         </tr>
                     </tbody>
                 </table>
             </div>
 
-            <h3 class="table-title"><i class="fas fa-scale-balanced"></i> Income / Expense</h3>
+            <h3 class="table-title t-ie"><i class="fas fa-scale-balanced"></i> Income / Expense</h3>
             <div class="table-wrap">
                 <table class="sessions-table summary-table pl-table">
                     <thead>
@@ -257,14 +369,14 @@
                     </thead>
                     <tbody>
                         <tr>
-                            <td class="income" id="ie-paid">0</td>
-                            <td class="income" id="ie-extra">0</td>
-                            <td class="income" id="ie-income">0</td>
-                            <td class="expense" id="ie-salaries">0</td>
-                            <td class="expense" id="ie-expenses">0</td>
-                            <td class="expense" id="ie-expense">0</td>
-                            <td class="profit" id="ie-pl">0</td>
-                            <td class="view-cell"><button class="eye-btn" id="ie-view" title="View all incomes and expenses of this session" aria-label="View incomes and expenses of this session"><i class="fas fa-eye"></i></button></td>
+                            <td class="income" data-label="Total Paid Fees" id="ie-paid">0</td>
+                            <td class="income" data-label="Extra Income" id="ie-extra">0</td>
+                            <td class="income" data-label="Total Income" id="ie-income">0</td>
+                            <td class="expense" data-label="Salaries" id="ie-salaries">0</td>
+                            <td class="expense" data-label="Other Expenses" id="ie-expenses">0</td>
+                            <td class="expense" data-label="Total Expense" id="ie-expense">0</td>
+                            <td class="profit" data-label="Total Profit" id="ie-pl">0</td>
+                            <td class="view-cell"><button class="eye-btn" id="ie-view" title="View all incomes and expenses of this session" aria-label="View incomes and expenses of this session"><i class="fas fa-eye"></i><span class="eye-label">View incomes &amp; expenses</span></button></td>
                         </tr>
                     </tbody>
                 </table>
@@ -510,7 +622,8 @@
             var isLoss = f.net < 0;
             var cell = document.getElementById('ie-pl');
             cell.className = isLoss ? 'loss' : 'profit';
-            cell.innerHTML = '<small>' + (isLoss ? 'Loss' : 'Profit') + '</small>' + money(Math.abs(f.net));
+            cell.setAttribute('data-label', isLoss ? 'Total Loss' : 'Total Profit');
+            cell.textContent = money(Math.abs(f.net));
             document.getElementById('ie-pl-head').textContent = isLoss ? 'Total Loss' : 'Total Profit';
         }
         var lgOverlay = document.getElementById('fs-ledger');
@@ -533,11 +646,11 @@
             }).map(function (o) { return o.e; });
             document.getElementById('lg-tbody').innerHTML = rows.length ? rows.map(function (e, i) {
                 var inc = e.type === 'income';
-                return '<tr class="row-' + e.type + '"><td>' + (i + 1) + '</td>' +
-                    '<td>' + MONTHS_FULL[e.month] + ' ' + e.year + '</td>' +
-                    '<td><span class="badge ' + e.type + '">' + (inc ? 'Income' : 'Expense') + '</span></td>' +
-                    '<td>' + esc(e.title) + '<span class="sub">' + esc(e.category) + '</span></td>' +
-                    '<td class="amt">' + (inc ? '+ ' : '- ') + money(e.amount) + '</td></tr>';
+                return '<tr class="row-' + e.type + '"><td data-label="#">' + (i + 1) + '</td>' +
+                    '<td data-label="Month">' + MONTHS_FULL[e.month] + ' ' + e.year + '</td>' +
+                    '<td data-label="Type"><span class="badge ' + e.type + '">' + (inc ? 'Income' : 'Expense') + '</span></td>' +
+                    '<td data-label="Title"><span>' + esc(e.title) + '<span class="sub">' + esc(e.category) + '</span></span></td>' +
+                    '<td class="amt" data-label="Amount">' + (inc ? '+ ' : '- ') + money(e.amount) + '</td></tr>';
             }).join('') : '<tr><td colspan="5" class="empty-row">No records found.</td></tr>';
             var ti = 0, te = 0;
             rows.forEach(function (e) { if (e.type === 'income') ti += e.amount; else te += e.amount; });
@@ -576,9 +689,9 @@
             var tot = feeSummary(idx);
             var top = '<div class="fee-top">' +
                 '<div><small>Total Generated</small><b>' + money(tot.generated) + '</b></div>' +
-                '<div><small>Total Fine</small><b>' + money(tot.fine) + '</b></div>' +
-                '<div><small>Total Paid</small><b>' + money(tot.paid) + '</b></div>' +
-                '<div><small>Total Pending</small><b>' + money(tot.pending) + '</b></div></div>';
+                '<div class="a"><small>Total Fine</small><b>' + money(tot.fine) + '</b></div>' +
+                '<div class="g"><small>Total Paid</small><b>' + money(tot.paid) + '</b></div>' +
+                '<div class="r"><small>Total Pending</small><b>' + money(tot.pending) + '</b></div></div>';
             document.getElementById('fee-sections').innerHTML = top + inv.map(function (v) {
                 var overdue = v.pendNo > 0 && new Date(v.year, v.month, 15) < now;
                 var net = v.recFee + v.waivedFee + v.recFine + v.waivedFine;
@@ -796,7 +909,8 @@
                 }).map(function (o) { return o.x; });
             }
             fsTbody.innerHTML = rows.length ? rows.map(function (x, i) {
-                return '<tr><td>' + (i + 1) + '</td><td>' + cfg.cells(x).join('</td><td>') + '</td><td>' + statusBadge(x) + '</td></tr>';
+                var cells = [i + 1].concat(cfg.cells(x), [statusBadge(x)]);
+                return '<tr>' + cells.map(function (c, k) { return '<td data-label="' + cfg.cols[k] + '">' + c + '</td>'; }).join('') + '</tr>';
             }).join('') : '<tr><td colspan="' + cfg.cols.length + '" class="empty-row">No ' + cfg.noun.toLowerCase() + ' found.</td></tr>';
             document.getElementById('fs-foot').textContent = 'Showing ' + rows.length + ' of ' + fsList.length + ' ' + cfg.noun.toLowerCase() + ' in this session';
         }
