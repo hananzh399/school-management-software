@@ -229,6 +229,8 @@
             .month-head .mh-inv{margin-left:0;width:100%;justify-content:center}
             .eye-btn,.fs-close{width:42px;height:42px}
         }
+        .ss-note{margin:0 0 14px;font-size:.88rem;color:var(--ss-muted)}
+        .ss-note.err{color:var(--ss-red)}
     </style>
 </head>
 <body>
@@ -288,6 +290,7 @@
 
         <section class="sessions-card" id="page-list">
             <h2><i class="fas fa-calendar-alt"></i> Sessions</h2>
+            <p class="ss-note" id="list-note" hidden></p>
             <div class="table-wrap">
                 <table class="sessions-table">
                     <thead>
@@ -305,6 +308,7 @@
         <section class="sessions-card" id="page-detail" hidden>
             <button class="back-btn" id="back-btn"><i class="fas fa-arrow-left"></i> Back to Sessions</button>
             <h2><i class="fas fa-calendar-check"></i> Session <span id="d-title"></span></h2>
+            <p class="ss-note" id="detail-note" hidden></p>
 
             <h3 class="table-title t-students"><i class="fas fa-user-graduate"></i> Students</h3>
             <div class="table-wrap">
@@ -465,149 +469,375 @@
     </div>
 
     <script>
-        // ---- Sample data: replace with data from your backend ----
-        // fees.imported = dues brought in from the previous session. If left out, it is taken
-        // automatically from the previous session's pending amount (0 for the first session).
-        // students/staff: open = count before transfer into this session,
-        // came = joined during session, went = left during session.
-        var sessions = [
-            { id: 1, title: '2024-2025', students: { open: 420, came: 85, went: 60 }, staff: { open: 32, came: 6, went: 4 },
-              fees: { generated: 4200000, fine: 85000, paid: 3900000, imported: 0 },
-              finance: { extraIncome: 350000, salaries: 2640000, expenses: 650000 } },
-            { id: 2, title: '2025-2026', students: { open: 445, came: 92, went: 48 }, staff: { open: 34, came: 5, went: 3 },
-              fees: { generated: 4650000, fine: 62000, paid: 4100000 },
-              finance: { extraIncome: 280000, salaries: 3200000, expenses: 1350000 } }
-        ];
-        // finance.extraIncome = income other than student fees (donations, canteen, rent, etc.)
-        // finance.salaries    = total staff salaries paid in the session
-        // finance.expenses    = all other expenses (utilities, maintenance, supplies, etc.)
-        // Total paid fees is taken automatically from the Fees table above.
+        // =====================================================================
+        // Sessions page - REAL DATA
+        // Everything on this page is read from the school's backend (the same
+        // endpoints Manage Students, Manage Staff, Manage Finance and the
+        // Dashboard use). Nothing is hard-coded or generated.
+        //
+        //  Sessions run April -> March. The list of sessions is worked out from
+        //  the earliest real record (admission, staff joining, fee, salary or
+        //  expense) up to the current session.
+        //
+        //  Students : GET /api/students/list            (admissionDate, status,
+        //                                               droppedDate, graduatedDate)
+        //  Staff    : GET /api/staff, /api/finance/dropout-staff
+        //  Fees     : GET /api/finance/status-all/{YYYY-MM}   (one call per month)
+        //  Income / : GET /api/finance/expenses, /salary/records, /staff-advances,
+        //  Expense    /custom-fees, /vouchers (current fee month marker)
+        // =====================================================================
+
+        var configuredOrigin = (typeof window.SOFTSCHOOL_API_ORIGIN === 'string') ? window.SOFTSCHOOL_API_ORIGIN.trim().replace(/\/+$/, '') : '';
+        var BACKEND = configuredOrigin || (window.location.port === '8080' ? '' : 'https://167-86-120-247.sslip.io');
+        var FEE_MONTH_MARKER = '__FEE_MONTH_STATE__';
+
+        var MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+        var MONTHS_FULL = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+
+        var sessions = [];                 // built from real data in buildSessions()
+        var DB = { students: [], staff: [], expenses: [], salaries: [], advances: [], customFees: [], removedTotal: 0, nowKey: 0, curFeeKey: 0 };
+        var loadWarnings = [];
+        var feeData = {};                  // idx -> { months, summary }   (resolved)
+        var feePromises = {};              // idx -> Promise
+        var peopleCache = {};
+        var financeCache = {};
 
         var body = document.getElementById('sessions-body');
         var pageList = document.getElementById('page-list');
         var pageDetail = document.getElementById('page-detail');
 
+        // ---------------------------------------------------------------- helpers
+        function esc(t) { return String(t == null ? '' : t).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+        function n(v) { var x = Number(v); return isFinite(x) ? x : 0; }
+        function money(v) { return 'Rs. ' + Math.round(n(v)).toLocaleString('en-US'); }
+        function num(v) { return Math.round(n(v)).toLocaleString('en-US'); }
+        function dmy(day, month, year) { return (day < 10 ? '0' : '') + day + '-' + MONTHS[month] + '-' + year; }
+        function asArray(data, keys) {
+            if (Array.isArray(data)) return data;
+            if (!data || typeof data !== 'object') return [];
+            var out = [];
+            (keys || ['items', 'content', 'data']).forEach(function (k) { if (Array.isArray(data[k])) out = out.concat(data[k]); });
+            return out;
+        }
+        /* Any date / 'YYYY-MM' / 'YYYY-MM-DD' / timestamp  ->  month number (year*12 + month0), or null. */
+        function monthKeyOf(v) {
+            if (v === null || v === undefined || v === '') return null;
+            var s = String(v).trim(), m;
+            if ((m = /^(\d{4})-(\d{2})$/.exec(s)) || (m = /^(\d{4})-(\d{2})-\d{2}$/.exec(s))) {
+                return (+m[1]) * 12 + (+m[2] - 1);
+            }
+            var d = new Date(typeof v === 'number' ? v : s);
+            if (isNaN(d.getTime())) return null;
+            return d.getFullYear() * 12 + d.getMonth();
+        }
+        function keyToStr(k) { return Math.floor(k / 12) + '-' + ('0' + ((k % 12) + 1)).slice(-2); }
+        function sessionStartYearOf(k) { return (k % 12) >= 3 ? Math.floor(k / 12) : Math.floor(k / 12) - 1; }
+        function calMonth(sm) { return (3 + sm) % 12; }
+        function sessYear(idx, sm) { return sessions[idx].startYear + ((3 + sm) >= 12 ? 1 : 0); }
+        function isSane(k) { return k !== null && k >= 2000 * 12 && k <= (new Date().getFullYear() + 2) * 12 + 11; }
+
+        // ------------------------------------------------------------------- API
+        function schoolId() {
+            try {
+                if (window.SoftSchoolAdmin && typeof window.SoftSchoolAdmin.getCurrentSchool === 'function') {
+                    var sc = window.SoftSchoolAdmin.getCurrentSchool();
+                    if (sc && sc.schoolId) return sc.schoolId;
+                }
+            } catch (e) {}
+            return '';
+        }
+        function apiGet(path, tries) {
+            tries = tries || 0;
+            var url = BACKEND + path + (path.indexOf('?') > -1 ? '&' : '?') + 'schoolId=' + encodeURIComponent(schoolId());
+            var headers = {};
+            try { var tok = sessionStorage.getItem('softschool_api_token'); if (tok) headers['Authorization'] = 'Bearer ' + tok; } catch (e) {}
+            return fetch(url, { headers: headers }).then(function (res) {
+                if (!res.ok) throw new Error(path + ' returned HTTP ' + res.status);
+                return res.text();
+            }).then(function (t) { return t ? JSON.parse(t) : null; }).catch(function (err) {
+                if (tries < 1) return new Promise(function (r) { setTimeout(r, 800); }).then(function () { return apiGet(path, tries + 1); });
+                throw err;
+            });
+        }
+        /* For data that is "nice to have": a failure is reported on the page instead of breaking it. */
+        function optionalGet(path, fallback, label) {
+            return apiGet(path).then(function (d) { return d == null ? fallback : d; }).catch(function (err) {
+                console.warn('[Sessions] could not load ' + label, err);
+                loadWarnings.push(label);
+                return fallback;
+            });
+        }
+        function mapLimit(items, limit, fn) {
+            var results = new Array(items.length), next = 0;
+            function worker() {
+                if (next >= items.length) return Promise.resolve();
+                var i = next++;
+                return fn(items[i], i).then(function (r) { results[i] = r; return worker(); });
+            }
+            var workers = [];
+            for (var w = 0; w < Math.min(limit, items.length); w++) workers.push(worker());
+            return Promise.all(workers).then(function () { return results; });
+        }
+
+        // ------------------------------------------------------------ load + shape
+        function loadAll() {
+            if (!schoolId()) return Promise.reject(new Error('No school is signed in. Please log in again.'));
+            loadWarnings = [];
+            return Promise.all([
+                apiGet('/api/students/list'),
+                optionalGet('/api/staff', [], 'staff list'),
+                optionalGet('/api/finance/dropout-staff', { total: 0, records: [] }, 'removed staff'),
+                optionalGet('/api/finance/expenses', [], 'expenses'),
+                optionalGet('/api/finance/salary/records', [], 'salary records'),
+                optionalGet('/api/finance/staff-advances', [], 'staff advances'),
+                optionalGet('/api/finance/custom-fees', [], 'custom fees'),
+                optionalGet('/api/finance/vouchers', [], 'fee month')
+            ]).then(function (r) {
+                var now = new Date();
+                DB.nowKey = now.getFullYear() * 12 + now.getMonth();
+
+                DB.students = asArray(r[0]).map(function (s) {
+                    var status = String(s.status || '').trim().toLowerCase();
+                    var joinKey = monthKeyOf(s.admissionDate); if (!isSane(joinKey)) joinKey = null;
+                    var leftKey = null, leftApprox = false;
+                    if (status === 'dropped' || status === 'graduated') {
+                        leftKey = monthKeyOf(status === 'dropped' ? (s.droppedDate || s.graduatedDate) : (s.graduatedDate || s.droppedDate));
+                        if (!isSane(leftKey)) { leftKey = DB.nowKey; leftApprox = true; }   // removed, but the date was never recorded
+                    }
+                    return {
+                        regNo: s.regNo || '', rollNo: s.rollNo, name: s.fullName || '', guardian: s.guardianName || s.fatherFullName || '',
+                        cls: s.studentClass || '', section: s.section || '', gender: s.gender || '',
+                        admissionFee: n(s.admissionFee), joinKey: joinKey, leftKey: leftKey, leftApprox: leftApprox
+                    };
+                });
+
+                var staffRows = asArray(r[1], ['staff', 'employees', 'members', 'items', 'content', 'data', 'Teaching', 'Non-Teaching', 'teaching', 'nonTeaching']);
+                DB.staff = staffRows.map(function (s) {
+                    var cat = s.type || s.category || '';
+                    var teaching = /teach/i.test(cat) && !/non/i.test(cat);
+                    var joinKey = monthKeyOf(s.joined); if (!isSane(joinKey)) joinKey = null;
+                    return {
+                        staffId: s.staffId || '', name: s.name || '', category: cat || '—',
+                        designation: (teaching ? (s.role || s.subjects) : s.job) || s.role || s.job || '—',
+                        qualification: s.qualification || '—', gender: s.gender || '—',
+                        joinKey: joinKey, leftKey: null, removed: false
+                    };
+                });
+                var rm = r[2] || {};
+                asArray(rm.records, ['records']).forEach(function (d) {
+                    var lk = monthKeyOf(d.deletedAt); if (!isSane(lk)) lk = DB.nowKey;
+                    DB.staff.push({
+                        staffId: d.staffId || '', name: d.staffName || '', category: '—', designation: '—', qualification: '—', gender: '—',
+                        joinKey: null, leftKey: lk, removed: true
+                    });
+                });
+                DB.removedTotal = n(rm.total);
+
+                DB.expenses = asArray(r[3]);
+                DB.salaries = asArray(r[4]);
+                DB.advances = asArray(r[5]);
+                DB.customFees = asArray(r[6]);
+
+                var marker = asArray(r[7], ['items']).filter(function (v) { return v && v.key === FEE_MONTH_MARKER; })[0];
+                var stored = marker && marker.activeMonthKey ? monthKeyOf(marker.activeMonthKey) : null;
+                DB.curFeeKey = (stored !== null && /^\d{4}-\d{2}$/.test(String(marker.activeMonthKey))) ? stored : DB.nowKey;
+            });
+        }
+
+        /* Sessions = every April-March year from the first real record to the current one. */
+        function buildSessions() {
+            var keys = [];
+            function add(k) { if (isSane(k)) keys.push(k); }
+            DB.students.forEach(function (s) { add(s.joinKey); });
+            DB.staff.forEach(function (s) { add(s.joinKey); });
+            DB.expenses.forEach(function (e) { add(monthKeyOf(e.monthKey)); });
+            DB.salaries.forEach(function (e) { add(monthKeyOf(e.monthKey)); });
+            DB.customFees.forEach(function (e) { add(monthKeyOf(e.monthKey)); });
+            var lastStart = sessionStartYearOf(Math.max(DB.nowKey, DB.curFeeKey));
+            var firstStart = keys.length ? Math.min(sessionStartYearOf(Math.min.apply(null, keys)), lastStart) : lastStart;
+            var list = [];
+            for (var y = firstStart; y <= lastStart; y++) {
+                list.push({ id: list.length + 1, title: y + '-' + (y + 1), startYear: y, startKey: y * 12 + 3 });
+            }
+            return list;
+        }
+
+        // ------------------------------------------------------------ sessions list
+        function setNote(id, text, isErr) {
+            var el = document.getElementById(id);
+            if (!el) return;
+            el.textContent = text || '';
+            el.className = 'ss-note' + (isErr ? ' err' : '');
+            el.hidden = !text;
+        }
+        function warningText() {
+            return loadWarnings.length ? 'Some data could not be loaded (' + loadWarnings.join(', ') + '), so the figures below may be incomplete.' : '';
+        }
         function render() {
             if (!sessions.length) {
                 body.innerHTML = '<tr><td colspan="3" class="empty-row">No sessions found.</td></tr>';
                 return;
             }
             body.innerHTML = sessions.map(function (s, i) {
-                return '<tr><td>' + (i + 1) + '</td><td>' + s.title + '</td>' +
-                    '<td class="center"><button class="eye-btn" data-i="' + i + '" title="View session" aria-label="View session ' + s.title + '"><i class="fas fa-eye"></i></button></td></tr>';
+                return '<tr><td>' + (i + 1) + '</td><td>' + esc(s.title) + '</td>' +
+                    '<td class="center"><button class="eye-btn" data-i="' + i + '" title="View session" aria-label="View session ' + esc(s.title) + '"><i class="fas fa-eye"></i></button></td></tr>';
             }).join('');
+            setNote('list-note', warningText(), true);
         }
 
-
-        // ---- Fees ----
-        // Monthly invoices are generated from each session's fees totals so that they add up exactly.
-        // Replace buildInvoices() with your real invoice records (same fields) when you connect a backend.
-        // Session Pending = Generated + Fine + Imported - Paid - Waived off
-        var MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-        var MONTHS_FULL = ['January','February','March','April','May','June','July','August','September','October','November','December'];
-        var invoiceCache = {};
-
-        function spread(total, w) {
-            var sum = w.reduce(function (a, b) { return a + b; }, 0), out = [], used = 0;
-            for (var i = 0; i < w.length - 1; i++) { var v = Math.floor(total * w[i] / sum); out.push(v); used += v; }
-            out.push(total - used);
-            return out;
-        }
-        function importedFor(idx) {
-            var f = sessions[idx].fees || {};
-            if (typeof f.imported === 'number') return f.imported;
-            return idx > 0 ? feeSummary(idx - 1).pending : 0;
-        }
-        function buildInvoices(idx) {
-            if (invoiceCache[idx]) return invoiceCache[idx];
-            var se = sessions[idx], f = se.fees || { generated: 0, fine: 0, paid: 0 }, d = se.students;
-            var start = parseInt(se.title, 10) || new Date().getFullYear();
-            var w = []; for (var m = 0; m < 12; m++) w.push(1 + ((m * 5) % 7) / 20);
-            var fee = spread(f.generated, w), fine = spread(f.fine, w), paid = spread(f.paid, w);
-            var prev = importedFor(idx), list = [];
-            for (m = 0; m < 12; m++) {              // session runs April to March
-                var cal = (3 + m) % 12, year = start + ((3 + m) >= 12 ? 1 : 0);
-                var recFine = Math.floor(fine[m] * 0.4), recFee = paid[m] - recFine;
-                var wFee = Math.floor(fee[m] * 0.004), wFine = Math.floor(fine[m] * 0.05);
-                var v = {
-                    no: m + 1, month: cal, year: year, prevPending: prev,
-                    fee: fee[m], fine: fine[m], recFee: recFee, waivedFee: wFee, recFine: recFine, waivedFine: wFine,
-                    pendNo: fee[m] - recFee - wFee,
-                    pendWith: fee[m] + fine[m] - (recFee + wFee + recFine + wFine),
-                    students: d.open + Math.round(d.came * (m + 1) / 12) - Math.round(d.went * m / 12)
-                };
-                list.push(v);
-                prev = v.pendWith;
-            }
-            invoiceCache[idx] = list;
+        // ------------------------------------------------- students / staff per session
+        /* origin: 'before' (already there when the session began) or 'came' (joined during it).
+           left: left (dropped / graduated / removed) during the session. joinM / leftM: session month 0 = April ... 11 = March. */
+        function sessionPeople(kind, idx) {
+            var ck = kind + idx;
+            if (peopleCache[ck]) return peopleCache[ck];
+            var s = sessions[idx], sk = s.startKey, ek = sk + 11, list = [];
+            (kind === 'staff' ? DB.staff : DB.students).forEach(function (p) {
+                if (p.joinKey !== null && p.joinKey > ek) return;       // not here yet
+                if (p.leftKey !== null && p.leftKey < sk) return;       // already gone before this session
+                var before = p.joinKey === null || p.joinKey < sk;
+                var left = p.leftKey !== null && p.leftKey <= ek;
+                var o = Object.assign({}, p);
+                o.origin = before ? 'before' : 'came';
+                o.left = left;
+                o.joinM = before ? null : p.joinKey - sk;
+                o.leftM = left ? p.leftKey - sk : null;
+                list.push(o);
+            });
+            peopleCache[ck] = list;
             return list;
         }
-        function feeSummary(idx) {
-            var f = sessions[idx].fees || { generated: 0, fine: 0, paid: 0 };
-            var imported = importedFor(idx);
-            var waived = buildInvoices(idx).reduce(function (a, v) { return a + v.waivedFee + v.waivedFine; }, 0);
-            return { generated: f.generated, fine: f.fine, paid: f.paid, imported: imported, waived: waived,
-                     pending: f.generated + f.fine + imported - f.paid - waived };
+        function fill(prefix, list) {
+            var open = list.filter(function (x) { return x.origin === 'before'; }).length;
+            var came = list.filter(function (x) { return x.origin === 'came'; }).length;
+            var went = list.filter(function (x) { return x.left; }).length;
+            document.getElementById(prefix + '-open').textContent = open;
+            document.getElementById(prefix + '-came').textContent = came;
+            document.getElementById(prefix + '-went').textContent = went;
+            document.getElementById(prefix + '-close').textContent = open + came - went;
         }
-        function money(n) { return 'Rs. ' + Number(n).toLocaleString('en-US'); }
-        function num(n) { return Number(n).toLocaleString('en-US'); }
+
+        // ------------------------------------------------------------------- fees
+        /* One /status-all call per month of the session. Each row is one student's fee master for that month. */
+        function loadSessionFees(idx) {
+            if (feePromises[idx]) return feePromises[idx];
+            var s = sessions[idx], maxKey = Math.max(DB.nowKey, DB.curFeeKey) + 1;
+            var months = [];
+            for (var m = 0; m < 12; m++) months.push(m);
+            feePromises[idx] = mapLimit(months, 4, function (m) {
+                var key = s.startKey + m;
+                var rowsP = key > maxKey ? Promise.resolve([]) : apiGet('/api/finance/status-all/' + keyToStr(key)).then(function (d) { return asArray(d); });
+                return rowsP.then(function (rows) {
+                    var v = { no: m + 1, month: calMonth(m), year: sessYear(idx, m), key: key, count: 0, paidCount: 0,
+                              gen: 0, prev: 0, fine: 0, disc: 0, paid: 0, pending: 0, unpaidFine: 0, lastTx: null };
+                    rows.forEach(function (r) {
+                        v.count++;
+                        if (String(r.paymentStatus || '').toLowerCase() === 'paid') v.paidCount++;
+                        v.gen += n(r.baseTuitionFee) + n(r.transportFee);
+                        v.prev += n(r.otherCharges);
+                        v.fine += n(r.totalFineCharged);
+                        v.disc += n(r.totalDiscountApplied);
+                        v.paid += n(r.paidAmount);
+                        v.pending += n(r.remainingBalance);
+                        v.unpaidFine += n(r.fineAmount);
+                        if (n(r.paidAmount) > 0 && r.lastTransactionDate) {
+                            var t = new Date(r.lastTransactionDate).getTime();
+                            if (isFinite(t) && (v.lastTx === null || t > v.lastTx)) v.lastTx = t;
+                        }
+                    });
+                    v.pendNo = Math.max(0, v.pending - v.unpaidFine);
+                    v.pendWith = v.pending;
+                    return v;
+                });
+            }).then(function (list) {
+                var gen = 0, fine = 0, paid = 0, disc = 0, imported = 0, got = false;
+                list.forEach(function (v) {
+                    gen += v.gen; fine += v.fine; paid += v.paid; disc += v.disc;
+                    if (!got && v.count > 0) { imported = v.prev; got = true; }   // arrears carried in from the previous session
+                });
+                // Session Pending = Generated + Fine + Imported - Paid - Waived off / discounts
+                var summary = { generated: gen, fine: fine, paid: paid, imported: imported, waived: disc,
+                                pending: Math.max(0, gen + fine + imported - paid - disc) };
+                feeData[idx] = { months: list, summary: summary };
+                return feeData[idx];
+            });
+            feePromises[idx].catch(function () { delete feePromises[idx]; });   // allow a retry after a failure
+            return feePromises[idx];
+        }
+        function feeSummary(idx) { return feeData[idx].summary; }
         function fillFees(idx) {
             var f = feeSummary(idx);
             ['generated', 'fine', 'paid', 'pending', 'imported'].forEach(function (k) {
                 document.getElementById('fe-' + k).textContent = money(f[k]);
             });
         }
-        // ---- Income / Expense ----
-        // Ledger entries: { month: 0-11 (calendar month), year, type: 'income'|'expense', category, title, amount }
-        // If sessions[i].finance.entries is provided it is used as-is (real records, fees collected are still added
-        // automatically). Otherwise entries are generated from the extraIncome / salaries / expenses totals so that
-        // the ledger always adds up to the summary table.
-        var ledgerCache = {};
-        var EXTRA_TPL = [['Donation received', 1, 3], ['Tuck shop rent', 3, 2], ['Annual function ticket & stall income', 8, 2], ['Admission form & prospectus sales', 0, 1], ['Transport (van) charges', 5, 2]];
-        var EXP_TPL = [['Electricity & utility bills', 2, 3], ['Building repair & maintenance', 4, 3], ['Stationery & office supplies', 0, 2], ['Internet & phone bills', 6, 1], ['Annual day expenses', 8, 3], ['Furniture & equipment purchase', 1, 3], ['Cleaning & sanitation', 5, 1], ['Exam papers printing', 10, 2]];
-        function sessYear(idx, sm) { var start = parseInt(sessions[idx].title, 10) || new Date().getFullYear(); return start + ((3 + sm) >= 12 ? 1 : 0); }
-        function calMonth(sm) { return (3 + sm) % 12; }
-        function tplEntries(idx, tpl, total, type, category) {
-            if (!total) return [];
-            var parts = spread(total, tpl.map(function (t) { return t[2]; }));
-            return tpl.map(function (t, i) {
-                return { month: calMonth(t[1]), year: sessYear(idx, t[1]), type: type, category: category, title: t[0], amount: parts[i] };
-            }).filter(function (e) { return e.amount > 0; });
-        }
+
+        // -------------------------------------------------------- income / expense
         function buildLedger(idx) {
-            if (ledgerCache[idx]) return ledgerCache[idx];
-            var fin = sessions[idx].finance || {}, list = [];
-            // 1) Fees received, month by month (from the monthly invoices)
-            buildInvoices(idx).forEach(function (v) {
-                var amt = v.recFee + v.recFine;
-                if (amt > 0) list.push({ month: v.month, year: v.year, type: 'income', category: 'Fees', title: 'Student fees received (' + MONTHS[v.month] + '-' + v.year + ' invoice)', amount: amt });
+            if (financeCache[idx]) return financeCache[idx];
+            var sk = sessions[idx].startKey, ek = sk + 11, list = [];
+            function inSession(k) { return k !== null && k >= sk && k <= ek; }
+            function keyOrCurrent(mk) { var k = monthKeyOf(mk); return k === null ? DB.curFeeKey : k; }   // undated items belong to the current fee month
+            function ent(k, type, category, title, amount) { return { month: k % 12, year: Math.floor(k / 12), type: type, category: category, title: title, amount: amount }; }
+
+            // 1) Fees received, month by month
+            feeData[idx].months.forEach(function (v) {
+                if (v.paid > 0) list.push(ent(v.key, 'income', 'Fees', 'Student fees received (' + MONTHS[v.month] + '-' + v.year + ' invoice)', v.paid));
             });
-            if (Array.isArray(fin.entries)) {
-                list = list.concat(fin.entries);
-            } else {
-                list = list.concat(tplEntries(idx, EXTRA_TPL, fin.extraIncome || 0, 'income', 'Extra Income'));
-                var sal = spread(fin.salaries || 0, [1,1,1,1,1,1,1,1,1,1,1,1].map(function (x, i) { return x + (i % 3) / 40; }));
-                for (var m = 0; m < 12; m++) {
-                    if (sal[m] > 0) list.push({ month: calMonth(m), year: sessYear(idx, m), type: 'expense', category: 'Salary', title: 'Staff salaries - ' + MONTHS_FULL[calMonth(m)] + ' ' + sessYear(idx, m), amount: sal[m] });
+            // 2) Admission fees, in the month each student was admitted
+            var adm = {};
+            DB.students.forEach(function (st) {
+                if (st.joinKey !== null && inSession(st.joinKey) && st.admissionFee > 0) {
+                    var a = adm[st.joinKey] || (adm[st.joinKey] = { count: 0, sum: 0 });
+                    a.count++; a.sum += st.admissionFee;
                 }
-                list = list.concat(tplEntries(idx, EXP_TPL, fin.expenses || 0, 'expense', 'Expense'));
+            });
+            Object.keys(adm).forEach(function (k) {
+                list.push(ent(+k, 'income', 'Extra Income', 'Admission fees (' + adm[k].count + ' student' + (adm[k].count === 1 ? '' : 's') + ')', adm[k].sum));
+            });
+            // 3) Custom fees that students have paid
+            DB.customFees.forEach(function (f) {
+                var k = keyOrCurrent(f.monthKey); if (!inSession(k)) return;
+                var paidCount = (Array.isArray(f.records) ? f.records : []).filter(function (r) { return r && r.paid; }).length;
+                var amt = paidCount * n(f.amount);
+                if (amt > 0) list.push(ent(k, 'income', 'Extra Income', (f.feeName || f.name || 'Custom fee') + ' (' + paidCount + ' paid)', amt));
+            });
+            // 4) Salaries paid + advances not yet settled
+            var sal = {}, adv = {};
+            DB.salaries.forEach(function (r) {
+                var k = keyOrCurrent(r.monthKey); if (!inSession(k)) return;
+                var amt = r.amountPaid != null ? n(r.amountPaid) : n(r.netPaid) + n(r.advanceDeducted);
+                sal[k] = (sal[k] || 0) + amt;
+            });
+            DB.advances.forEach(function (r) {
+                if (String(r.paymentStatus || '').toLowerCase() === 'settled') return;
+                var k = keyOrCurrent(r.monthKey); if (!inSession(k)) return;
+                adv[k] = (adv[k] || 0) + n(r.amount);
+            });
+            Object.keys(sal).forEach(function (k) { if (sal[k] > 0) list.push(ent(+k, 'expense', 'Salary', 'Staff salaries - ' + MONTHS_FULL[k % 12] + ' ' + Math.floor(k / 12), sal[k])); });
+            Object.keys(adv).forEach(function (k) { if (adv[k] > 0) list.push(ent(+k, 'expense', 'Salary', 'Salary advances (not yet settled) - ' + MONTHS_FULL[k % 12] + ' ' + Math.floor(k / 12), adv[k])); });
+            // Staff who were later removed: the server keeps only a lifetime total, so it is shown in the current fee month (same as the Dashboard).
+            if (DB.removedTotal > 0 && inSession(DB.curFeeKey)) {
+                list.push(ent(DB.curFeeKey, 'expense', 'Salary', 'Pay given to staff who have since left (lifetime total)', DB.removedTotal));
             }
+            // 5) Other expenses logged in Manage Finance
+            DB.expenses.forEach(function (e) {
+                var k = keyOrCurrent(e.monthKey); if (!inSession(k)) return;
+                var amt = n(e.amount || e.netPaid || e.value);
+                if (amt > 0) list.push(ent(k, 'expense', 'Expense', e.description || e.title || 'Expense', amt));
+            });
+
             list.sort(function (a, b) { return (a.year * 12 + a.month) - (b.year * 12 + b.month) || (a.type === b.type ? 0 : a.type === 'income' ? -1 : 1); });
-            ledgerCache[idx] = list;
+            financeCache[idx] = list;
             return list;
         }
         function financeSummary(idx) {
-            var fin = sessions[idx].finance || {};
-            var paid = feeSummary(idx).paid;
-            var extra = fin.extraIncome || 0, salaries = fin.salaries || 0, other = fin.expenses || 0;
-            if (Array.isArray(fin.entries)) {
-                extra = salaries = other = 0;
-                fin.entries.forEach(function (e) {
-                    if (e.type === 'income') extra += e.amount;
-                    else if (e.category === 'Salary') salaries += e.amount;
-                    else other += e.amount;
-                });
-            }
+            var paid = feeSummary(idx).paid, extra = 0, salaries = 0, other = 0;
+            buildLedger(idx).forEach(function (e) {
+                if (e.type === 'income') { if (e.category !== 'Fees') extra += e.amount; }
+                else if (e.category === 'Salary') salaries += e.amount;
+                else other += e.amount;
+            });
             var income = paid + extra, expense = salaries + other;
             return { paid: paid, extra: extra, income: income, salaries: salaries, expenses: other, expense: expense, net: income - expense };
         }
@@ -626,6 +856,7 @@
             cell.textContent = money(Math.abs(f.net));
             document.getElementById('ie-pl-head').textContent = isLoss ? 'Total Loss' : 'Total Profit';
         }
+
         var lgOverlay = document.getElementById('fs-ledger');
         var lgTab = 'all', lgList = [], lgSession = null;
         function lgRender() {
@@ -658,6 +889,7 @@
                 (lgTab === 'all' ? ' | Income ' + money(ti) + ' | Expense ' + money(te) : '');
         }
         function openLedger(idx) {
+            if (!feeData[idx]) { setNote('detail-note', 'Still loading this session\u2019s figures\u2026', false); return; }
             lgSession = idx;
             lgList = buildLedger(idx);
             var f = financeSummary(idx), isLoss = f.net < 0;
@@ -680,58 +912,73 @@
         }
         function closeLedger() { lgOverlay.hidden = true; document.body.style.overflow = ''; }
 
-        function dmy(day, month, year) { return (day < 10 ? '0' : '') + day + '-' + MONTHS[month] + '-' + year; }
-
+        // ------------------------------------------------------- monthly fee invoices
         var feOverlay = document.getElementById('fs-fees');
         function openFees(idx) {
-            var inv = buildInvoices(idx), now = new Date();
+            if (!feeData[idx]) { setNote('detail-note', 'Still loading this session\u2019s figures\u2026', false); return; }
+            var data = feeData[idx];
             document.getElementById('fe-title-text').textContent = 'Fees - Session ' + sessions[idx].title;
-            var tot = feeSummary(idx);
+            var tot = data.summary;
             var top = '<div class="fee-top">' +
                 '<div><small>Total Generated</small><b>' + money(tot.generated) + '</b></div>' +
                 '<div class="a"><small>Total Fine</small><b>' + money(tot.fine) + '</b></div>' +
                 '<div class="g"><small>Total Paid</small><b>' + money(tot.paid) + '</b></div>' +
                 '<div class="r"><small>Total Pending</small><b>' + money(tot.pending) + '</b></div></div>';
-            document.getElementById('fee-sections').innerHTML = top + inv.map(function (v) {
-                var overdue = v.pendNo > 0 && new Date(v.year, v.month, 15) < now;
-                var net = v.recFee + v.waivedFee + v.recFine + v.waivedFine;
+            var shown = data.months.filter(function (v) { return v.count > 0 || v.key <= DB.curFeeKey; });
+            document.getElementById('fee-sections').innerHTML = top + (shown.length ? shown.map(function (v) {
                 var label = 'Invoice#' + v.no + '-' + MONTHS[v.month] + '-' + v.year;
+                var last = v.lastTx ? (function (d) { return dmy(d.getDate(), d.getMonth(), d.getFullYear()); })(new Date(v.lastTx)) : '—';
                 return '<section class="month-sec">' +
                     '<div class="month-head"><span class="mh-no">' + v.no + '</span><i class="fas fa-calendar-alt"></i> ' + MONTHS_FULL[v.month] + ' ' + v.year +
                         '<span class="mh-inv"><i class="fas fa-file-invoice"></i>' + label + '</span></div>' +
                     '<div class="month-body">' +
                         '<div class="m-card wide"><div class="m-title"><i class="fas fa-file-lines"></i> Invoice Detail</div>' +
-                            '<div class="inv-line"><i class="fas fa-circle-plus"></i> Created Date : <span>' + dmy(5, v.month, v.year) + '</span></div>' +
-                            '<div class="inv-line' + (overdue ? ' overdue' : '') + '"><i class="fas fa-clock"></i> Due Date : <span>' + dmy(15, v.month, v.year) + '</span></div>' +
-                            '<div class="inv-line"><i class="fas fa-calendar-check"></i> Valid Till : <span>' + dmy(25, v.month, v.year) + '</span></div>' +
-                            '<div class="inv-line"><i class="fas fa-user-graduate"></i> Number of students : <span class="stu-badge">' + v.students + ' Students</span></div></div>' +
-                        '<div class="m-card"><div class="m-title"><i class="fas fa-rotate-left"></i> Prev Pending</div><div class="imp"><i class="fas fa-file-import"></i> Import Pending</div><span class="pill grey">' + num(v.prevPending) + '</span></div>' +
-                        '<div class="m-card"><div class="m-title"><i class="fas fa-receipt"></i> Current Fee</div><span class="pill grey">' + num(v.fee) + '</span></div>' +
+                            '<div class="inv-line"><i class="fas fa-user-graduate"></i> Students billed : <span class="stu-badge">' + v.count + ' Students</span></div>' +
+                            '<div class="inv-line"><i class="fas fa-circle-check"></i> Fully paid : <span>' + v.paidCount + ' of ' + v.count + '</span></div>' +
+                            '<div class="inv-line"><i class="fas fa-calendar-check"></i> Last payment received : <span>' + last + '</span></div></div>' +
+                        '<div class="m-card"><div class="m-title"><i class="fas fa-rotate-left"></i> Prev Pending</div><div class="imp"><i class="fas fa-file-import"></i> Import Pending</div><span class="pill grey">' + num(v.prev) + '</span></div>' +
+                        '<div class="m-card"><div class="m-title"><i class="fas fa-receipt"></i> Current Fee</div><span class="pill grey">' + num(v.gen) + '</span></div>' +
                         '<div class="m-card"><div class="m-title"><i class="fas fa-wallet"></i> Total Payable</div>' +
-                            '<div class="kv"><span>Total Fee</span><b>' + num(v.fee) + '</b></div><div class="kv"><span>Total Fine</span><b>' + num(v.fine) + '</b></div>' +
-                            '<span class="pill yellow">' + money(v.fee + v.fine) + '</span></div>' +
+                            '<div class="kv"><span>Total Fee</span><b>' + num(v.gen) + '</b></div><div class="kv"><span>Total Fine</span><b>' + num(v.fine) + '</b></div>' +
+                            '<span class="pill yellow">' + money(v.gen + v.fine) + '</span></div>' +
                         '<div class="m-card"><div class="m-title"><i class="fas fa-circle-check"></i> Received</div>' +
-                            '<div class="kv"><span>Received Fee :</span><b>' + num(v.recFee) + '</b></div><div class="kv"><span>Waived off Fee :</span><b>' + num(v.waivedFee) + '</b></div>' +
-                            '<div class="kv"><span>Received Fine :</span><b>' + num(v.recFine) + '</b></div><div class="kv"><span>Waived Off Fine :</span><b>' + num(v.waivedFine) + '</b></div>' +
-                            '<span class="pill green">' + money(net) + '</span></div>' +
+                            '<div class="kv"><span>Received (fee + fine) :</span><b>' + num(v.paid) + '</b></div><div class="kv"><span>Discounts given :</span><b>' + num(v.disc) + '</b></div>' +
+                            '<span class="pill green">' + money(v.paid + v.disc) + '</span></div>' +
                         '<div class="m-card"><div class="m-title"><i class="fas fa-hourglass-half"></i> Pending</div>' +
                             '<span class="pill red"><small>without fine</small>' + money(v.pendNo) + '</span>' +
                             '<span class="pill red"><small>with fine</small>' + money(v.pendWith) + '</span></div>' +
                     '</div></section>';
-            }).join('');
+            }).join('') : '<p class="ss-note" style="padding:16px">No fee records exist for this session yet.</p>');
             feOverlay.hidden = false;
             document.body.style.overflow = 'hidden';
             document.getElementById('fee-sections').scrollTop = 0;
         }
         function closeFees() { feOverlay.hidden = true; if (fs.hidden) document.body.style.overflow = ''; }
 
-        function fill(prefix, d) {
-            document.getElementById(prefix + '-open').textContent = d.open;
-            document.getElementById(prefix + '-came').textContent = d.came;
-            document.getElementById(prefix + '-went').textContent = d.went;
-            document.getElementById(prefix + '-close').textContent = d.open + d.came - d.went;
+        // ------------------------------------------------------------ detail routing
+        var currentSession = null;
+        function showDetail(i) {
+            var s = sessions[i];
+            document.getElementById('d-title').textContent = s.title;
+            fill('st', sessionPeople('students', i));
+            fill('sf', sessionPeople('staff', i));
+            var pending = ['fe-generated', 'fe-fine', 'fe-paid', 'fe-pending', 'fe-imported', 'ie-paid', 'ie-extra', 'ie-income', 'ie-salaries', 'ie-expenses', 'ie-expense', 'ie-pl'];
+            if (feeData[i]) {
+                fillFees(i); fillFinance(i); setNote('detail-note', warningText(), true);
+            } else {
+                pending.forEach(function (id) { document.getElementById(id).textContent = '…'; });
+                setNote('detail-note', 'Loading fee and income / expense figures\u2026', false);
+                loadSessionFees(i).then(function () {
+                    if (currentSession !== i) return;
+                    fillFees(i); fillFinance(i); setNote('detail-note', warningText(), true);
+                }).catch(function (err) {
+                    console.error('[Sessions] fee load failed', err);
+                    if (currentSession !== i) return;
+                    pending.forEach(function (id) { document.getElementById(id).textContent = '—'; });
+                    setNote('detail-note', 'Could not load fee data from the server. Check your connection and reopen this session.', true);
+                });
+            }
         }
-
         // Simple hash router: #session-<index> shows the detail page, anything else shows the list
         function route() {
             var m = /^#session-(\d+)$/.exec(location.hash);
@@ -739,13 +986,9 @@
             currentSession = s ? +m[1] : null;
             if (!s) { closeStudents(); closeFees(); closeLedger(); }
             if (s) {
-                document.getElementById('d-title').textContent = s.title;
-                fill('st', s.students);
-                fill('sf', s.staff);
-                fillFees(+m[1]);
-                fillFinance(+m[1]);
                 pageList.hidden = true;
                 pageDetail.hidden = false;
+                showDetail(+m[1]);
             } else {
                 pageDetail.hidden = true;
                 pageList.hidden = false;
@@ -754,100 +997,17 @@
         }
 
         body.addEventListener('click', function (e) {
-            var b = e.target.closest('.eye-btn'); if (!b) return;
+            if (e.target.closest('#retry-btn')) { init(); return; }
+            var b = e.target.closest('.eye-btn'); if (!b || b.dataset.i === undefined) return;
             location.hash = 'session-' + b.dataset.i;
         });
         document.getElementById('back-btn').onclick = function () { location.hash = ''; };
         window.addEventListener('hashchange', route);
 
-
-        // ---- Students of a session (sample generator: replace with real student records) ----
-        // Each student: { regNo, rollNo, name, guardian, cls, section, gender, origin: 'before'|'came', left: bool }
-        var FIRST_M = ['Ali','Ahmed','Hamza','Usman','Bilal','Hassan','Zain','Umar','Faizan','Saad','Talha','Daniyal'];
-        var FIRST_F = ['Ayesha','Fatima','Zainab','Maryam','Hira','Sana','Iqra','Noor','Amna','Laiba','Areeba','Khadija'];
-        var LAST = ['Khan','Shah','Abbasi','Awan','Malik','Qureshi','Butt','Raza','Tanoli','Satti','Mughal','Javed'];
-        var FATHER = ['Muhammad','Abdul','Tariq','Nadeem','Imran','Kamran','Naveed','Shafiq','Rashid','Zahid'];
-        // Month the person joined / left, as a session-month index (0 = April ... 11 = March).
-        // joinM is null for people who were already there before the session; leftM is null if they did not leave.
-        // Replace with the real joining / leaving dates when you connect a backend.
-        function joinMonth(i, d) { return i < d.open ? null : Math.min(11, Math.floor((i - d.open) * 12 / Math.max(d.came, 1))); }
-        function leftMonth(i, d, idx, leftSet) {
-            if (!leftSet[i]) return null;
-            var jm = joinMonth(i, d), lm = (i * 5 + idx * 3) % 12;
-            if (jm !== null && lm < jm) lm = jm + (i % (12 - jm));
-            return lm;
-        }
-        var sessionStudentsCache = {};
-
-        function buildSessionStudents(idx) {
-            if (sessionStudentsCache[idx]) return sessionStudentsCache[idx];
-            var d = sessions[idx].students, total = d.open + d.came, list = [], i;
-            var leftSet = {};
-            for (i = 0; i < d.went; i++) leftSet[Math.floor((i + 0.5) * total / d.went)] = true;
-            var rollCounter = {};
-            for (i = 0; i < total; i++) {
-                var female = (i * 7 + idx) % 2 === 1;
-                var first = (female ? FIRST_F : FIRST_M)[(i * 5 + idx * 3) % 12];
-                var last = LAST[(i * 7 + idx) % 12];
-                var cls = 'Class ' + (1 + (i * 3 + idx) % 10);
-                var sec = ['A', 'B', 'C'][(i + idx) % 3];
-                var key = cls + sec;
-                rollCounter[key] = (rollCounter[key] || 0) + 1;
-                list.push({
-                    regNo: 'STD-' + String(i + 1).padStart(4, '0'),
-                    rollNo: rollCounter[key],
-                    name: first + ' ' + last,
-                    guardian: FATHER[(i * 3 + idx) % 10] + ' ' + last,
-                    cls: cls, section: sec,
-                    gender: female ? 'Female' : 'Male',
-                    origin: i < d.open ? 'before' : 'came',
-                    left: !!leftSet[i],
-                    joinM: joinMonth(i, d),
-                    leftM: leftMonth(i, d, idx, leftSet)
-                });
-            }
-            sessionStudentsCache[idx] = list;
-            return list;
-        }
-
-        // ---- Staff of a session (sample generator: replace with real staff records) ----
-        // Each member: { staffId, name, category, designation, qualification, gender, origin: 'before'|'came', left: bool }
-        var S_FIRST_M = ['Ahmed','Imran','Kamran','Naveed','Tariq','Rashid','Zahid','Shafiq'];
-        var S_FIRST_F = ['Ayesha','Sadia','Nazia','Farah','Rubina','Shazia','Uzma','Bushra'];
-        var TEACH_DES = ['Subject Teacher','Senior Teacher','Class Incharge','Head of Department'];
-        var NONTEACH_DES = ['Clerk','Accountant','Security Guard','Peon','Librarian','Driver'];
-        var QUALS = ['B.Ed','M.Ed','M.A','M.Sc','B.Sc','BS'];
-        var sessionStaffCache = {};
-
-        function buildSessionStaff(idx) {
-            if (sessionStaffCache[idx]) return sessionStaffCache[idx];
-            var d = sessions[idx].staff, total = d.open + d.came, list = [], i;
-            var leftSet = {};
-            for (i = 0; i < d.went; i++) leftSet[Math.floor((i + 0.5) * total / d.went)] = true;
-            for (i = 0; i < total; i++) {
-                var female = (i * 3 + idx) % 2 === 1;
-                var teaching = i % 4 !== 3;
-                list.push({
-                    staffId: 'STF-' + String(i + 1).padStart(3, '0'),
-                    name: (female ? S_FIRST_F : S_FIRST_M)[(i * 5 + idx) % 8] + ' ' + LAST[(i * 7 + idx * 2) % 12],
-                    category: teaching ? 'Teaching' : 'Non-Teaching',
-                    designation: teaching ? TEACH_DES[i % 4] : NONTEACH_DES[i % 6],
-                    qualification: teaching ? QUALS[i % 6] : '-',
-                    gender: female ? 'Female' : 'Male',
-                    origin: i < d.open ? 'before' : 'came',
-                    left: !!leftSet[i],
-                    joinM: joinMonth(i, d),
-                    leftM: leftMonth(i, d, idx, leftSet)
-                });
-            }
-            sessionStaffCache[idx] = list;
-            return list;
-        }
-
-        // ---- Full-screen list (shared by Students and Staff) ----
+        // --------------------------------------------- full-screen list (students / staff)
         var fs = document.getElementById('fs-students');
         var fsTbody = document.getElementById('fs-tbody');
-        var fsTab = 'all', fsList = [], currentSession = null, fsKind = 'students';
+        var fsTab = 'all', fsList = [], fsKind = 'students';
 
         var FS_CFG = {
             students: {
@@ -855,18 +1015,16 @@
                 search: 'Search by name, ID or guardian…',
                 cols: ['#', 'Student ID', 'Roll No.', 'Name', 'Guardian / Father', 'Class', 'Section', 'Gender', 'Joined', 'Left', 'Status'],
                 text: function (x) { return x.name + ' ' + x.regNo + ' ' + x.guardian; },
-                cells: function (x) { return [x.regNo, x.rollNo, esc(x.name), esc(x.guardian), x.cls, x.section, x.gender, monthLbl(x.joinM), monthLbl(x.leftM)]; }
+                cells: function (x) { return [esc(x.regNo), esc(x.rollNo == null || x.rollNo === '' ? '—' : x.rollNo), esc(x.name), esc(x.guardian || '—'), esc(x.cls || '—'), esc(x.section || '—'), esc(x.gender || '—'), monthLbl(x.joinM), monthLbl(x.leftM)]; }
             },
             staff: {
                 icon: 'fa-chalkboard-teacher', noun: 'Staff', allLabel: 'All Staff',
                 search: 'Search by name, ID or designation…',
                 cols: ['#', 'Staff ID', 'Name', 'Category', 'Designation', 'Qualification', 'Gender', 'Joined', 'Left', 'Status'],
                 text: function (x) { return x.name + ' ' + x.staffId + ' ' + x.designation + ' ' + x.category; },
-                cells: function (x) { return [x.staffId, esc(x.name), x.category, esc(x.designation), esc(x.qualification), x.gender, monthLbl(x.joinM), monthLbl(x.leftM)]; }
+                cells: function (x) { return [esc(x.staffId), esc(x.name), esc(x.category), esc(x.designation), esc(x.qualification), esc(x.gender), monthLbl(x.joinM), monthLbl(x.leftM)]; }
             }
         };
-
-        function esc(t) { return String(t).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
 
         function fsMatch(x) {
             if (fsTab === 'before') return x.origin === 'before';
@@ -874,12 +1032,10 @@
             if (fsTab === 'went') return x.left;
             return true;
         }
-
         function statusBadge(x) {
             var o = x.origin === 'came' ? '<span class="badge came">Came</span>' : '<span class="badge before">Before Transfer</span>';
             return x.left ? '<span class="badge went">Went</span> ' + o : o;
         }
-
         function monthLbl(sm) {
             return (sm === null || sm === undefined) ? '—' : MONTHS_FULL[calMonth(sm)] + ' ' + sessYear(currentSession, sm);
         }
@@ -894,6 +1050,16 @@
             if (fsTab === 'went') return x.leftM === m;
             if (fsTab === 'came') return x.joinM === m;
             return x.joinM === m || x.leftM === m;
+        }
+        function fsFootNote() {
+            var idx = currentSession;
+            if (idx === null || DB.nowKey < sessions[idx].startKey || DB.nowKey > sessions[idx].startKey + 11) return '';
+            if (fsKind === 'students') {
+                var c = fsList.filter(function (x) { return x.leftApprox; }).length;
+                return c ? ' | ' + c + ' removed student' + (c === 1 ? ' has' : 's have') + ' no removal date on record and ' + (c === 1 ? 'is' : 'are') + ' counted in this session' : '';
+            }
+            var r = fsList.filter(function (x) { return x.removed; }).length;
+            return r ? ' | ' + r + ' removed staff have no joining date on record, so they are counted as present from the start' : '';
         }
         function fsRender() {
             var cfg = FS_CFG[fsKind];
@@ -912,14 +1078,13 @@
                 var cells = [i + 1].concat(cfg.cells(x), [statusBadge(x)]);
                 return '<tr>' + cells.map(function (c, k) { return '<td data-label="' + cfg.cols[k] + '">' + c + '</td>'; }).join('') + '</tr>';
             }).join('') : '<tr><td colspan="' + cfg.cols.length + '" class="empty-row">No ' + cfg.noun.toLowerCase() + ' found.</td></tr>';
-            document.getElementById('fs-foot').textContent = 'Showing ' + rows.length + ' of ' + fsList.length + ' ' + cfg.noun.toLowerCase() + ' in this session';
+            document.getElementById('fs-foot').textContent = 'Showing ' + rows.length + ' of ' + fsList.length + ' ' + cfg.noun.toLowerCase() + ' in this session' + fsFootNote();
         }
-
         function openList(kind, idx) {
             var cfg = FS_CFG[kind];
             fsKind = kind;
             currentSession = idx;
-            fsList = kind === 'staff' ? buildSessionStaff(idx) : buildSessionStudents(idx);
+            fsList = sessionPeople(kind, idx);
             document.getElementById('fs-title-text').textContent = cfg.noun + ' - Session ' + sessions[idx].title;
             document.getElementById('fs-icon').className = 'fas ' + cfg.icon;
             document.getElementById('tl-all').textContent = cfg.allLabel;
@@ -970,29 +1135,23 @@
         document.getElementById('fs-month').addEventListener('change', fsRender);
         document.getElementById('fs-sort').addEventListener('change', fsRender);
 
-        render();
-        route();
-
-        // Sidebar open/close
-        var sb = document.getElementById('sidebar');
-        document.getElementById('open-sidebar').onclick = function () { sb.classList.add('open'); document.body.classList.add('sidebar-open'); };
-        document.getElementById('close-sidebar').onclick = function () { sb.classList.remove('open'); document.body.classList.remove('sidebar-open'); };
-
-        // Menu search
-        document.getElementById('nav-search').addEventListener('input', function () {
-            var q = this.value.toLowerCase();
-            document.querySelectorAll('.sidebar-nav .nav-link').forEach(function (a) {
-                a.style.display = a.textContent.toLowerCase().indexOf(q) > -1 ? '' : 'none';
+        // ---------------------------------------------------------------- start up
+        function init() {
+            feeData = {}; feePromises = {}; peopleCache = {}; financeCache = {};
+            setNote('list-note', '', false);
+            body.innerHTML = '<tr><td colspan="3" class="empty-row">Loading sessions…</td></tr>';
+            loadAll().then(function () {
+                sessions = buildSessions();
+                render();
+                route();
+            }).catch(function (err) {
+                console.error('[Sessions] could not load data', err);
+                sessions = [];
+                body.innerHTML = '<tr><td colspan="3" class="empty-row">Could not load data from the server (' + esc(err && err.message ? err.message : err) + '). ' +
+                    '<button class="eye-btn" id="retry-btn" type="button" style="margin-left:8px"><i class="fas fa-rotate"></i><span class="eye-label">Retry</span></button></td></tr>';
             });
-        });
-
-        // Theme toggle + date
-        document.getElementById('theme-toggle').onclick = function () {
-            var t = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
-            document.documentElement.setAttribute('data-theme', t);
-            try { localStorage.setItem('eduflow-theme', t); } catch (e) {}
-        };
-        document.getElementById('header-date').textContent = new Date().toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+        }
+        init();
     </script>
 </body>
 </html>
