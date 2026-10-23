@@ -9,7 +9,7 @@
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <link rel="stylesheet" href="manage-staff.css">
     <link rel="stylesheet" href="main.css">
-    <script>(function(){const t=localStorage.getItem('eduflow-theme')||'dark';document.documentElement.setAttribute('data-theme',t);})()</script>
+    <script>(function(){try{var t=localStorage.getItem('eduflow-theme');document.documentElement.setAttribute('data-theme',t==='light'?'light':'dark');}catch(e){document.documentElement.setAttribute('data-theme','dark');}})()</script>
     <script src="access-control.js"></script>
     <style>
         /* ================= Design tokens ================= */
@@ -279,7 +279,6 @@
                 <div class="school-branding"><h1 class="school-name">ST. LAWRENCE INTERNATIONAL SCHOOL</h1></div>
             </div>
             <div class="header-right">
-                <div class="header-date" id="header-date"></div>
                 <button id="theme-toggle" class="theme-toggle" aria-label="Toggle theme">
                     <i class="fas fa-moon" id="theme-icon-moon"></i>
                     <i class="fas fa-sun" id="theme-icon-sun"></i>
@@ -1159,6 +1158,58 @@
                     '<button class="eye-btn" id="retry-btn" type="button" style="margin-left:8px"><i class="fas fa-rotate"></i><span class="eye-label">Retry</span></button></td></tr>';
             });
         }
+        function initPageControls() {
+            var root = document.documentElement;
+            var themeToggle = document.getElementById('theme-toggle');
+            var savedTheme = 'dark';
+            try {
+                var storedTheme = localStorage.getItem('eduflow-theme');
+                if (storedTheme === 'light' || storedTheme === 'dark') savedTheme = storedTheme;
+            } catch (e) {}
+            root.setAttribute('data-theme', savedTheme);
+
+            if (themeToggle) {
+                themeToggle.setAttribute('aria-pressed', savedTheme === 'light' ? 'true' : 'false');
+                themeToggle.addEventListener('click', function () {
+                    var nextTheme = root.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+                    root.setAttribute('data-theme', nextTheme);
+                    themeToggle.setAttribute('aria-pressed', nextTheme === 'light' ? 'true' : 'false');
+                    try { localStorage.setItem('eduflow-theme', nextTheme); } catch (e) {}
+                });
+            }
+
+            var sidebar = document.getElementById('sidebar');
+            var openBtn = document.getElementById('open-sidebar');
+            var closeBtn = document.getElementById('close-sidebar');
+            if (!sidebar || !openBtn || !closeBtn) return;
+
+            var overlay = document.querySelector('.sidebar-overlay');
+            if (!overlay) {
+                overlay = document.createElement('div');
+                overlay.className = 'sidebar-overlay';
+                document.body.appendChild(overlay);
+            }
+            function closeSidebar() {
+                sidebar.classList.remove('active');
+                overlay.classList.remove('active');
+                openBtn.setAttribute('aria-expanded', 'false');
+            }
+            openBtn.setAttribute('aria-expanded', 'false');
+            openBtn.addEventListener('click', function () {
+                sidebar.classList.add('active');
+                overlay.classList.add('active');
+                openBtn.setAttribute('aria-expanded', 'true');
+            });
+            closeBtn.addEventListener('click', closeSidebar);
+            overlay.addEventListener('click', closeSidebar);
+            sidebar.querySelectorAll('.nav-link').forEach(function (link) {
+                link.addEventListener('click', closeSidebar);
+            });
+            document.addEventListener('keydown', function (event) {
+                if (event.key === 'Escape') closeSidebar();
+            });
+        }
+        initPageControls();
         init();
     </script>
 </body>
