@@ -5744,6 +5744,59 @@ ${pagesHtml}
         return progression[idx + 1];
     }
 
+    // Session status is derived in sessions.html: when a session is marked
+    // current, later date ranges are "Next"; otherwise today's date determines
+    // the current range and the nearest future range is next.
+    async function getNextAcademicSession() {
+        const schoolId = getCurrentSchoolId();
+        if (!schoolId) throw new Error('Sign in to a school before promoting students.');
+
+        const rows = await apiRequest(
+            'GET',
+            `${BACKEND_ORIGIN}/api/sessions?schoolId=${encodeURIComponent(schoolId)}`
+        );
+        if (!Array.isArray(rows)) return null;
+
+        const monthKey = value => {
+            const match = /^(\d{4})-(0[1-9]|1[0-2])$/.exec(String(value || '').trim());
+            return match ? (Number(match[1]) * 12 + Number(match[2]) - 1) : null;
+        };
+        const validSessions = rows.map(session => ({
+            ...session,
+            _startKey: monthKey(session.startMonth),
+            _endKey: monthKey(session.endMonth)
+        })).filter(session =>
+            session._startKey !== null &&
+            session._endKey !== null &&
+            session._endKey >= session._startKey
+        );
+        if (!validSessions.length) return null;
+
+        const compare = (a, b) =>
+            (a._startKey - b._startKey) || (a._endKey - b._endKey);
+        const markedCurrent = validSessions.find(session =>
+            session.currentSession === true ||
+            String(session.currentSession).toLowerCase() === 'true'
+        );
+
+        let nextSessions;
+        if (markedCurrent) {
+            nextSessions = validSessions.filter(session =>
+                session.id !== markedCurrent.id && compare(session, markedCurrent) > 0
+            );
+        } else {
+            const now = new Date();
+            const todayKey = now.getFullYear() * 12 + now.getMonth();
+            nextSessions = validSessions.filter(session =>
+                !(session._startKey <= todayKey && todayKey <= session._endKey) &&
+                session._endKey >= todayKey
+            );
+        }
+
+        nextSessions.sort(compare);
+        return nextSessions[0] || null;
+    }
+
     window.togglePromoteMode = function() {
         const active = document.body.classList.toggle('promote-mode-active');
         const header = document.getElementById('promote-checkbox-header');
@@ -5797,15 +5850,35 @@ ${pagesHtml}
             return;
         }
 
+        let nextSession;
+        try {
+            nextSession = await getNextAcademicSession();
+        } catch (err) {
+            console.error('Could not check the next academic session:', err);
+            showToast(
+                "Session Check Failed",
+                err && err.message ? err.message : "Could not check for a new session. Please try again.",
+                "danger"
+            );
+            return;
+        }
+        if (!nextSession) {
+            showToast(
+                "No New Session Found",
+                "No new session found, please create new session first.",
+                "danger"
+            );
+            return;
+        }
+
         const db = getDatabase();
+        const selectedStudents = db.filter(s => selectedRegNos.includes(s.regNo));
 
         // How many of the selected students are being promoted OUT of the
         // school's last configured class — those are the ones that will land
         // in the Archive Center as "graduated", so they're what counts against
         // the plan's archiveStudentLimit.
-        const willGraduateCount = db.filter(s =>
-            selectedRegNos.includes(s.regNo) && !getNextClass(s.studentClass)
-        ).length;
+        const willGraduateCount = selectedStudents.filter(s => !getNextClass(s.studentClass)).length;
 
         if (willGraduateCount > 0 && !canArchiveMoreStudents(willGraduateCount)) {
             const limit = getArchiveLimit();
@@ -5818,74 +5891,148 @@ ${pagesHtml}
             return;
         }
 
+        const nextSessionLabel = `${nextSession.startMonth} to ${nextSession.endMonth}`;
         const promoteConfirmed = await ssConfirm(
-            `Promote ${selectedRegNos.length} selected student(s) to their next class?`,
+            `Copy ${selectedRegNos.length} selected student(s) into the next session (${nextSessionLabel}) at their next class level?`,
             { title: 'Promote Students', confirmLabel: 'Promote', danger: false }
         );
         if (!promoteConfirmed) return;
 
         const todayISO = new Date().toISOString().slice(0, 10);
         const thisYear = new Date().getFullYear();
+        const nextSessionAdmissionDate = `${nextSession.startMonth}-01`;
         let promotedCount = 0;
         let graduatedCount = 0;
-        const changedStudents = [];
+        let failedCount = 0;
+        const copies = [];
+        const graduates = [];
+        const sessionExitDate = (() => {
+            const parts = /^(\d{4})-(\d{2})$/.exec(nextSession.startMonth || '');
+            if (!parts) return todayISO;
+            return new Date(Date.UTC(Number(parts[1]), Number(parts[2]) - 1, 0))
+                .toISOString().slice(0, 10);
+        })();
 
-        db.forEach(s => {
-            if (selectedRegNos.includes(s.regNo)) {
-                const nextClass = getNextClass(s.studentClass);
-                if (nextClass) {
-                    // Keep the Admission Class fixed; students admitted before this
-                    // feature get it filled in from the class they are leaving.
-                    if (!s.admissionClass) s.admissionClass = s.studentClass;
-                    s.studentClass = nextClass;
-                    s.rollNo = generateClassRollNumber(nextClass);
-                    s.promoted = true;
-                    promotedCount++;
-                } else {
-                    // Being promoted out of the school's LAST configured class
-                    // means this student has completed school — graduate them
-                    // into the Archive Center instead of leaving them stuck.
-                    s.status           = 'graduated';
-                    s.graduatedDate    = todayISO;
-                    s.graduatedYear    = thisYear;
-                    s.graduatedClass   = s.studentClass;
-                    s.graduatedSection = s.section || '';
-                    s.promoted         = true;
-                    graduatedCount++;
+        selectedStudents.forEach(student => {
+            const nextClass = getNextClass(student.studentClass);
+            if (nextClass) {
+                // Each academic year gets its own student row. Keep the source
+                // row unchanged for its original session and start the copied
+                // record on the first day of the next session.
+                const copy = { ...student };
+                copy.admissionClass = copy.admissionClass || student.studentClass;
+                copy.studentClass = nextClass;
+                copy.admissionDate = nextSessionAdmissionDate;
+                copy.status = 'active';
+                copy.droppedDate = null;
+                copy.graduatedDate = null;
+                copy.graduatedYear = null;
+                copy.graduatedClass = null;
+                copy.graduatedSection = null;
+                copy.promoted = false;
+                copy.regNo = generateNextRegistrationNumber(nextSessionAdmissionDate);
+                copy.id = copy.regNo;
+                copy.rollNo = generateClassRollNumber(nextClass);
+
+                // A photo URL is only a display URL, not the file contents or
+                // stored path expected by the student API. Keep real paths and
+                // inline data, but do not store a stale API URL on the copy.
+                if (typeof copy.photo === 'string' && /^https?:/i.test(copy.photo)) {
+                    delete copy.photo;
                 }
-                changedStudents.push(s);
+                const sourceUpdate = {
+                    ...student,
+                    status: 'promoted',
+                    // The source record ends immediately before the next
+                    // session, keeping it in historical reports without
+                    // counting it again alongside its new-session copy.
+                    droppedDate: sessionExitDate
+                };
+                if (typeof sourceUpdate.photo === 'string' && /^https?:/i.test(sourceUpdate.photo)) {
+                    delete sourceUpdate.photo;
+                }
+                const sourceRollback = {
+                    ...student,
+                    status: student.status || 'active',
+                    droppedDate: student.droppedDate || null
+                };
+                if (typeof sourceRollback.photo === 'string' && /^https?:/i.test(sourceRollback.photo)) {
+                    delete sourceRollback.photo;
+                }
+                copies.push({
+                    source: student,
+                    copy,
+                    sourceUpdate,
+                    sourceRollback
+                });
+                // Reserve IDs/roll numbers while preparing the remaining copies.
+                db.push(copy);
+            } else {
+                // The final configured class still graduates instead of being
+                // copied into another class.
+                graduates.push({
+                    source: student,
+                    update: {
+                        ...student,
+                        status: 'graduated',
+                        graduatedDate: todayISO,
+                        graduatedYear: thisYear,
+                        graduatedClass: student.studentClass,
+                        graduatedSection: student.section || ''
+                    }
+                });
             }
         });
 
-        // BUGFIX: this used to only call saveDatabase(db), which updates the
-        // browser's in-memory mirror only. The page also polls the backend
-        // every few seconds (syncWithBackend, see startLiveSync()) and pulls
-        // the server's UNCHANGED row over that local change — so a promotion
-        // or graduation would look like it worked, then quietly revert a few
-        // seconds later (a promoted student's class snapped back, or a
-        // graduated student reappeared on the active roster). Every changed
-        // record now gets pushed to the backend the same way every other
-        // mutation in this file does (delete, reactivate, sibling link, etc.)
-        // so the change actually survives a resync/reload.
-        saveDatabase(db);
-
-        let failedCount = 0;
-        for (const s of changedStudents) {
+        // Mark the source inactive before creating its copy so the server's
+        // student-capacity check counts the promotion as a transfer, not an
+        // extra enrolment. If copy creation fails, restore the source record.
+        for (const item of copies) {
+            let sourceMarked = false;
             try {
-                const saved = await apiSaveStudent(s);
+                await apiSaveStudent(item.sourceUpdate);
+                sourceMarked = true;
+                const saved = await apiSaveStudent(item.copy);
                 if (saved) normalizeSiblingFieldsFromServer(saved);
+                Object.assign(item.source, item.sourceUpdate, { promoted: true });
+                promotedCount++;
             } catch (err) {
                 failedCount++;
-                console.error('Backend sync failed (promotion) for', s.regNo, err);
+                const draftIndex = db.indexOf(item.copy);
+                if (draftIndex !== -1) {
+                    db.splice(draftIndex, 1);
+                }
+                if (sourceMarked) {
+                    try {
+                        await apiSaveStudent(item.sourceRollback);
+                    } catch (rollbackErr) {
+                        console.error('Could not restore source student after failed copy', item.source.regNo, rollbackErr);
+                    }
+                }
+                console.error('Backend sync failed (promotion) for', item.source.regNo, err);
             }
         }
 
+        // Save graduating students in place, matching the existing archive flow.
+        for (const item of graduates) {
+            try {
+                const saved = await apiSaveStudent(item.update);
+                if (saved) normalizeSiblingFieldsFromServer(saved);
+                Object.assign(item.source, item.update, { promoted: true });
+                graduatedCount++;
+            } catch (err) {
+                failedCount++;
+                console.error('Backend sync failed (graduation) for', item.source.regNo, err);
+            }
+        }
+        saveDatabase(db);
+
         const failureNote = failedCount > 0
-            ? ` ${failedCount} record(s) could not be saved to the server — check your connection, they may revert.`
+            ? ` ${failedCount} record(s) could not be saved to the server.`
             : '';
         showToast(
             "Promotion Complete",
-            `${promotedCount} student(s) promoted.` + (graduatedCount ? ` ${graduatedCount} graduated and moved to the Archive Center.` : '') + failureNote,
+            `${promotedCount} student(s) copied into ${nextSessionLabel} and promoted.` + (graduatedCount ? ` ${graduatedCount} graduated and moved to the Archive Center.` : '') + failureNote,
             failedCount > 0 ? "danger" : "success"
         );
 

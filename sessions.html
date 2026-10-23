@@ -705,8 +705,12 @@
                     var status = String(s.status || '').trim().toLowerCase();
                     var joinKey = monthKeyOf(s.admissionDate); if (!isSane(joinKey)) joinKey = null;
                     var leftKey = null, leftApprox = false;
-                    if (status === 'dropped' || status === 'graduated') {
-                        leftKey = monthKeyOf(status === 'dropped' ? (s.droppedDate || s.graduatedDate) : (s.graduatedDate || s.droppedDate));
+                    if (status === 'dropped' || status === 'graduated' || status === 'promoted') {
+                        leftKey = monthKeyOf(
+                            status === 'graduated'
+                                ? (s.graduatedDate || s.droppedDate)
+                                : (s.droppedDate || s.graduatedDate)
+                        );
                         if (!isSane(leftKey)) { leftKey = DB.nowKey; leftApprox = true; }   // removed, but the date was never recorded
                     }
                     return {
