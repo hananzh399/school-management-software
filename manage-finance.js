@@ -6947,6 +6947,22 @@ function computeOutstandingArrears(student) {
     // Only the most recent prior month's snapshot is needed: it already
     // represents the full running balance up to that point.
     const last = priorRecords[priorRecords.length - 1];
+    const promotionCarryAmount = Number(last.snapshot && last.snapshot.promotionCarryAmount);
+    if (last.snapshot && last.snapshot.promotionCarryTracking === true
+            && Number.isFinite(promotionCarryAmount) && promotionCarryAmount >= 0) {
+        const promotionCarryAt = last.snapshot.promotionCarryAt || last.generatedAt;
+        const promotionCarryTimestamp = promotionCarryAt
+            ? new Date(promotionCarryAt).getTime()
+            : 0;
+        const paidSincePromotionCarry = payments
+            .filter(payment => {
+                if (!payment.date) return false;
+                const paidAt = new Date(payment.date).getTime();
+                return !isNaN(paidAt) && paidAt >= promotionCarryTimestamp;
+            })
+            .reduce((sum, payment) => sum + (Number(payment.amount) || 0), 0);
+        return Math.max(0, promotionCarryAmount - paidSincePromotionCarry);
+    }
     const billed = Number(last.snapshot && last.snapshot.voucherTotal) || 0;
 
     // BUGFIX — "arrears logic": payments were only counted against a prior
@@ -7130,6 +7146,12 @@ function recordVoucherGeneration(student, source = 'individual', importPrevious 
     // so arrears / fines / discounts are captured exactly as the rest of the
     // app already computes them.
     const f = computeFeeBreakdown(freshStudent);
+    const tracksPromotionCarry = list.some(record =>
+        String(record.studentId) === String(studentId)
+        && record.snapshot
+        && record.snapshot.promotionCarryTracking === true
+    );
+    const generatedAt = new Date().toISOString();
 
     const record = {
         key,
@@ -7137,7 +7159,7 @@ function recordVoucherGeneration(student, source = 'individual', importPrevious 
         studentName: freshStudent.fullName,
         studentClass: freshStudent.studentClass,
         monthKey,
-        generatedAt: new Date().toISOString(),
+        generatedAt,
         source,
         snapshot: {
             tuitionFee: f.tuitionFee,
@@ -7149,7 +7171,12 @@ function recordVoucherGeneration(student, source = 'individual', importPrevious 
             voucherTotal: f.voucherTotal,
             totalAfterDueDate: f.totalAfterDueDate,
             dueDateStr: f.dueDateStr,
-            expiryDateStr: f.expiryDateStr
+            expiryDateStr: f.expiryDateStr,
+            ...(tracksPromotionCarry ? {
+                promotionCarryTracking: true,
+                promotionCarryAmount: Number(f.voucherTotal) || 0,
+                promotionCarryAt: generatedAt
+            } : {})
         }
     };
 

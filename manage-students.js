@@ -2017,13 +2017,14 @@ if (certUploadInput) {
     // sent to Spring, or Jackson throws a 400 (can't map "4500" (String) -> Double).
     const NUMERIC_FIELDS = [
         'standardFee', 'admissionFee', 'tuitionDiscount',
-        'transportDiscount', 'siblingDiscount', 'transportFee', 'netPayable'
+        'transportDiscount', 'siblingDiscount', 'transportFee', 'netPayable',
+        'arrears', 'voucherBulkDiscount'
     ];
     const INTEGER_FIELDS = ['age', 'graduatedYear'];
     // Sent as "on" by FormData when checked, absent when unchecked — neither
     // is valid JSON for a Java Boolean, so this needs its own coercion pass
     // in toApiPayload() (see below).
-    const BOOLEAN_FIELDS = ['isLifetime'];
+    const BOOLEAN_FIELDS = ['isLifetime', 'voucherCustomFees'];
 
     /*
      * These are the properties represented by StudentController's Student
@@ -2041,6 +2042,7 @@ if (certUploadInput) {
         'permanentAddress', 'mailingAddress', 'standardFee', 'admissionFee',
         'tuitionDiscount', 'transportDiscount', 'siblingDiscount',
         'transportMode', 'transportType', 'transportFee', 'netPayable',
+        'arrears', 'voucherCustomFees', 'voucherCustomFeesMonth', 'voucherBulkDiscount', 'voucherNote',
         'otherFeesData', 'status', 'photo', 'certData',
         // Sibling link fields — now persisted server-side (Student.java).
         // hasSiblings is an array in memory but a JSON LONGTEXT column on the
@@ -5904,6 +5906,7 @@ ${pagesHtml}
         let promotedCount = 0;
         let graduatedCount = 0;
         let failedCount = 0;
+        let financeTransferFailedCount = 0;
         const copies = [];
         const graduates = [];
         const sessionExitDate = (() => {
@@ -5989,20 +5992,63 @@ ${pagesHtml}
         // extra enrolment. If copy creation fails, restore the source record.
         for (const item of copies) {
             let sourceMarked = false;
+            let copySaved = false;
             try {
                 await apiSaveStudent(item.sourceUpdate);
                 sourceMarked = true;
                 const saved = await apiSaveStudent(item.copy);
+                copySaved = true;
                 if (saved) normalizeSiblingFieldsFromServer(saved);
                 Object.assign(item.source, item.sourceUpdate, { promoted: true });
                 promotedCount++;
+
+                // Move the student's fee ledgers, voucher history, unpaid
+                // fines, pending custom fees, and carried balance to the new
+                // registration number after both student records exist.
+                const financeTransferPayload = {
+                    schoolId: getCurrentSchoolId(),
+                    sourceRegNo: item.source.regNo,
+                    targetRegNo: item.copy.regNo,
+                    nextSessionMonth: nextSession.startMonth
+                };
+                let financeTransfer = null;
+                let financeTransferError = null;
+                // The endpoint is idempotent, so retry once for a transient
+                // network failure or a response lost after the server commit.
+                for (let attempt = 0; attempt < 2 && !financeTransfer; attempt++) {
+                    try {
+                        financeTransfer = await apiRequest(
+                            'POST',
+                            `${BACKEND_ORIGIN}/api/finance/promote-student-finances`,
+                            financeTransferPayload
+                        );
+                        if (!financeTransfer || financeTransfer.success !== true) {
+                            throw new Error('The server did not confirm the finance transfer.');
+                        }
+                    } catch (transferErr) {
+                        financeTransferError = transferErr;
+                        financeTransfer = null;
+                    }
+                }
+                if (financeTransfer) {
+                    item.copy.arrears = Number(financeTransfer.carryForwardAmount) || 0;
+                } else {
+                    financeTransferFailedCount++;
+                    console.error(
+                        'Student was promoted, but finance history transfer failed for',
+                        item.source.regNo,
+                        financeTransferError
+                    );
+                }
             } catch (err) {
                 failedCount++;
-                const draftIndex = db.indexOf(item.copy);
-                if (draftIndex !== -1) {
-                    db.splice(draftIndex, 1);
+                if (!copySaved) {
+                    const draftIndex = db.indexOf(item.copy);
+                    if (draftIndex !== -1) {
+                        db.splice(draftIndex, 1);
+                    }
                 }
-                if (sourceMarked) {
+                if (sourceMarked && !copySaved) {
                     try {
                         await apiSaveStudent(item.sourceRollback);
                     } catch (rollbackErr) {
@@ -6030,10 +6076,13 @@ ${pagesHtml}
         const failureNote = failedCount > 0
             ? ` ${failedCount} record(s) could not be saved to the server.`
             : '';
+        const financeFailureNote = financeTransferFailedCount > 0
+            ? ` Finance history and pending balances could not be transferred for ${financeTransferFailedCount} student(s); their new student records were created.`
+            : '';
         showToast(
-            "Promotion Complete",
-            `${promotedCount} student(s) copied into ${nextSessionLabel} and promoted.` + (graduatedCount ? ` ${graduatedCount} graduated and moved to the Archive Center.` : '') + failureNote,
-            failedCount > 0 ? "danger" : "success"
+            failedCount > 0 || financeTransferFailedCount > 0 ? "Promotion Partially Complete" : "Promotion Complete",
+            `${promotedCount} student(s) copied into ${nextSessionLabel} and promoted.` + (graduatedCount ? ` ${graduatedCount} graduated and moved to the Archive Center.` : '') + failureNote + financeFailureNote,
+            failedCount > 0 || financeTransferFailedCount > 0 ? "danger" : "success"
         );
 
         if (isVo) {
