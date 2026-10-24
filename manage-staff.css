@@ -4491,8 +4491,3 @@ body { min-height: 100vh; min-height: 100dvh; }
     color: #ef4444;
 }
 .btn-deactivate:hover { background: rgba(239, 68, 68, 0.2); }
-
-
-/* Archive Center row actions */
-.archive-row-actions { display: flex; gap: 6px; flex-wrap: wrap; }
-.archive-act-btn { padding: 7px 11px; font-size: 12px; white-space: nowrap; }

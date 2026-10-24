@@ -4698,14 +4698,7 @@ function renderArchiveTable() {
             <td data-label="Name" class="td-bold">${esc(s.name || '')}</td>
             <td data-label="Subject / Job Title">${esc(subject) || '—'}</td>
             <td data-label="Date of Joining">${_arcFmtDate(s.joined)}</td>
-            <td data-label="Date of Leaving">${_arcFmtDate(s.leavingDate)}</td>
-            <td data-label="Actions" class="archive-actions-cell">
-                <div class="archive-row-actions">
-                    <button type="button" class="btn btn-reactivate archive-act-btn" title="Reactivate staff" onclick="event.stopPropagation(); archiveRowAction('reactivate','${esc(s.id)}')"><i class="fas fa-rotate-left"></i> Reactivate</button>
-                    <button type="button" class="btn btn-edit archive-act-btn" title="Update record" onclick="event.stopPropagation(); archiveRowAction('edit','${esc(s.id)}')"><i class="fas fa-edit"></i> Update</button>
-                    <button type="button" class="btn btn-certificate archive-act-btn" title="Generate experience certificate" onclick="event.stopPropagation(); archiveRowAction('certificate','${esc(s.id)}')"><i class="fas fa-certificate"></i> Certificate</button>
-                </div>
-            </td>`;
+            <td data-label="Date of Leaving">${_arcFmtDate(s.leavingDate)}</td>`;
         tbody.appendChild(tr);
     });
 
@@ -4746,33 +4739,6 @@ function backToArchiveCenter() {
     showDirectoryView(currentCategory);
     openArchiveCenter(true);
 }
-
-/* ---- Row actions inside the Archive Center ---- */
-let _archiveActionEdit = false;
-
-function archiveRowAction(action, id) {
-    const s = (archivedStaff || []).find(x => x.id === id);
-    if (!s) return;
-    currentCategory = s.type === 'Non-Teaching' ? 'Non-Teaching' : 'Teaching';
-    currentProfileId = s.id;
-    _viewingArchived = true;
-    if (action === 'reactivate') openReactivateModal();
-    else if (action === 'certificate') openCertificateModal();
-    else if (action === 'edit') { _archiveActionEdit = true; openEditForm(); }
-}
-
-/* After saving an edit started from the Archive Center, stay in the Archive Center */
-const _handleFormSubmit_beforeArchiveAct = handleFormSubmit;
-handleFormSubmit = function(e) {
-    _handleFormSubmit_beforeArchiveAct(e);
-    if (!_archiveActionEdit) return;
-    if (document.getElementById('form-modal').classList.contains('d-none')) {
-        _archiveActionEdit = false;
-        document.getElementById('profile-view').classList.add('d-none');
-        document.getElementById('directory-view').classList.remove('d-none');
-        renderArchiveTable();
-    }
-};
 
 /* Label the Archive Center button per category */
 const _showDirectoryView_beforeArchiveLabel = showDirectoryView;
