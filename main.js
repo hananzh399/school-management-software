@@ -832,10 +832,24 @@ async function _dashboardSnapshot(
     // bonus-inclusive server-side — see FinanceController#paySalary) takes
     // over, so the bonus correctly moves from Pending into Paid with the
     // real combined value.
+    //
+    // BUGFIX — "full salary paid in Manage Finance shows Pending on the
+    // Dashboard": payroll (SALARY rows), advances, and salary bonus/fines are
+    // all stamped with the CALENDAR month by manage-finance.js
+    // (getCurrentMonthKey()), but `monthKey`/`currentMonthKey` here are the
+    // stored FEE/billing month, which can differ (e.g. after "Move to Next
+    // Month"). The paid SALARY row then never matched, so Paid fell to 0 and
+    // Pending became the whole salary. Payroll figures are therefore matched
+    // on the calendar month: the current snapshot uses this calendar month,
+    // the previous-month snapshot the calendar month before it.
+    const calCurrentKey = _dashboardMonthKey(new Date());
+    const salaryMonthKey = monthKey === currentMonthKey
+        ? calCurrentKey
+        : _dashboardPreviousMonthKey(calCurrentKey);
     const { payable, paidFromPayroll, totalDue } = _dashboardSalaryAmount(
-        salaryRecords, staff, staffFines, staffBonus, monthKey, currentMonthKey
+        salaryRecords, staff, staffFines, staffBonus, salaryMonthKey, calCurrentKey
     );
-    const advance = _dashboardAdvanceTotal(staffAdvances, monthKey, currentMonthKey, staff);
+    const advance = _dashboardAdvanceTotal(staffAdvances, salaryMonthKey, calCurrentKey, staff);
     const paid = paidFromPayroll + advance;
     const pending = Math.max(0, totalDue - paid);
 
