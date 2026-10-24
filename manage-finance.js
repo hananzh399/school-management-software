@@ -724,8 +724,34 @@ async function refreshStaffCache() {
 
     const staff = extractStaffList(data);
     const grouped = { Teaching: [], 'Non-Teaching': [] };
-    staff.forEach(s => grouped[s.category].push(s));
+    // FEATURE — deactivated (archived) staff disappear from Fees & Finance.
+    // Manage Staff's "Deactivate" sets archived = true on the Staff row and
+    // GET /api/staff still returns those rows (the Archive Center needs
+    // them). Finance must only ever work with the ACTIVE roster, so archived
+    // staff are kept out of _staffCache entirely: they vanish from the
+    // Teaching / Non-Teaching salary pages, salary records, bonus tables and
+    // fine/advance pickers, and — because every payable/pending salary
+    // figure is built from this roster — their pending salary is no longer
+    // counted. Their ids are remembered in _archivedStaffIds so any log
+    // rows (fines/bonuses/advances) that still reference them can be hidden
+    // too. Reactivating the staff member brings everything back, because
+    // nothing is deleted from the backend.
+    _archivedStaffIds = new Set();
+    staff.forEach(s => {
+        if (isStaffArchivedRecord(s)) { _archivedStaffIds.add(String(s.id)); return; }
+        grouped[s.category].push(s);
+    });
     _staffCache = grouped;
+}
+/** Ids of deactivated staff from the last roster fetch (see refreshStaffCache). */
+let _archivedStaffIds = new Set();
+function isStaffArchivedRecord(s) {
+    return !!s && (s.archived === true || s.archived === 'true' || s.archived === 1);
+}
+/** True when a fine/bonus/advance row belongs to a deactivated staff member. */
+function isArchivedStaffLogRow(r) {
+    if (!r || _archivedStaffIds.size === 0) return false;
+    return _archivedStaffIds.has(String(r.staffId ?? r.id ?? ''));
 }
 /** Read staff for a category straight from the in-memory backend mirror. */
 function getStaffCache(category) {
@@ -1888,7 +1914,7 @@ function renderStaffFinesTable() {
     const currentMonthKey = getCurrentMonthKey();
     const q = ((document.getElementById('staff-fines-view-search') || {}).value || '').trim().toLowerCase();
 
-    let fines = allFines.filter(f => !f.monthKey || f.monthKey === currentMonthKey);
+    let fines = allFines.filter(f => (!f.monthKey || f.monthKey === currentMonthKey) && !isArchivedStaffLogRow(f));
     if (staffFinesCategoryFilter && staffFinesCategoryFilter !== 'All') {
         fines = fines.filter(f => getStaffFineCategory(f) === staffFinesCategoryFilter);
     }
