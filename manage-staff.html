@@ -242,8 +242,7 @@
                     <button class="btn btn-certificate d-none" id="generate-certificate-btn" onclick="openCertificateModal()"><i class="fas fa-certificate"></i> Generate Experience Certificate</button>
                     <button class="btn btn-edit" onclick="openEditForm()"><i class="fas fa-edit"></i> Edit</button>
                     <button class="btn btn-reactivate d-none" id="reactivate-btn" onclick="openReactivateModal()"><i class="fas fa-rotate-left"></i> Reactivate</button>
-                    <button class="btn btn-archive" onclick="openArchiveModal()"><i class="fas fa-box-archive"></i> Move to Archive</button>
-                    <button class="btn btn-remove" onclick="confirmRemove()"><i class="fas fa-trash-alt"></i> Remove</button>
+                    <button class="btn btn-deactivate" id="deactivate-btn" onclick="openArchiveModal()"><i class="fas fa-user-slash"></i> Deactivate</button>
                 </div>
             </div>
         </section>
@@ -264,16 +263,16 @@
         <!-- MOVE TO ARCHIVE MODAL (Hidden by default) -->
         <div id="archive-modal" class="modal-overlay d-none">
             <div class="modal-content">
-                <div class="modal-icon warning"><i class="fas fa-box-archive"></i></div>
-                <h3 id="archive-modal-title">Move to Archive</h3>
-                <p><strong id="archive-target-name"></strong> will be moved to the Archive Center as a former staff member. Their record is kept.</p>
+                <div class="modal-icon warning"><i class="fas fa-user-slash"></i></div>
+                <h3 id="archive-modal-title">Deactivate Staff</h3>
+                <p>Are you sure you want to deactivate <strong id="archive-target-name"></strong>? They will be removed from the active staff list and moved to the Archive Center. Their record is kept and they can be reactivated later.</p>
                 <div class="form-group archive-date-group">
                     <label for="archive-leaving-date">Date of Leaving</label>
                     <input type="date" id="archive-leaving-date" required>
                 </div>
                 <div class="modal-actions">
                     <button class="btn btn-cancel" onclick="closeArchiveModal()">Cancel</button>
-                    <button class="btn btn-primary" onclick="executeArchive()">Move to Archive</button>
+                    <button class="btn btn-primary" onclick="executeArchive()">Yes, Deactivate</button>
                 </div>
             </div>
         </div>
@@ -461,11 +460,7 @@
                     <i class="fas fa-search"></i>
                     <input type="text" id="archive-search" placeholder="Search by name, ID, or subject..." oninput="renderArchiveTable()">
                 </div>
-                <div class="archive-tabs" id="archive-tabs">
-                    <button type="button" class="archive-tab" data-cat="All" onclick="setArchiveFilter('All')">All</button>
-                    <button type="button" class="archive-tab" data-cat="Teaching" onclick="setArchiveFilter('Teaching')">Teaching</button>
-                    <button type="button" class="archive-tab" data-cat="Non-Teaching" onclick="setArchiveFilter('Non-Teaching')">Non-Teaching</button>
-                </div>
+                
             </div>
 
             <div class="table-container">
@@ -473,7 +468,7 @@
                     <thead>
                         <tr>
                             <th>Photo</th><th>Staff ID</th><th>Name</th>
-                            <th id="archive-subject-th">Subject / Job Title</th><th>Date of Joining</th><th>Date of Leaving</th>
+                            <th id="archive-subject-th">Subject / Job Title</th><th>Date of Joining</th><th>Date of Leaving</th><th>Actions</th>
                         </tr>
                     </thead>
                     <tbody id="archive-tbody"></tbody>

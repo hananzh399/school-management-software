@@ -4480,3 +4480,19 @@ body { min-height: 100vh; min-height: 100dvh; }
 .btn-reactivate:hover { background: rgba(34, 197, 94, 0.2); }
 /* Security deductions don't apply to staff who have left */
 .profile-view.is-archived .btn-deduct-month { display: none; }
+
+
+/* ============================================================
+   DEACTIVATE BUTTON (staff profile) — replaces Move to Archive / Remove
+   ============================================================ */
+.btn-deactivate {
+    background: rgba(239, 68, 68, 0.1);
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    color: #ef4444;
+}
+.btn-deactivate:hover { background: rgba(239, 68, 68, 0.2); }
+
+
+/* Archive Center row actions */
+.archive-row-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+.archive-act-btn { padding: 7px 11px; font-size: 12px; white-space: nowrap; }

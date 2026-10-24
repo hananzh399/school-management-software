@@ -3238,12 +3238,16 @@ function _preloadCertLogo(src) {
  * the first preview using smart defaults pulled from their record.
  */
 function openCertificateModal() {
-    const staff = _getStaff('Teaching', currentProfileId);
+    const _f = _findStaffById(currentProfileId);
+    const staff = _f && _f.staff;
     if (!staff) return;
     _certStaffId = staff.id;
+    const _isNT = _f.category === 'Non-Teaching';
 
     const school = _getSchoolIdentity();
-    const position = (staff.subjects ? staff.subjects.split(',')[0].trim() + ' Teacher' : 'Teacher');
+    const position = _isNT
+        ? (staff.job || 'Staff Member')
+        : (staff.subjects ? staff.subjects.split(',')[0].trim() + ' Teacher' : 'Teacher');
     _certPosition = position;
 
     document.getElementById('certificate-modal-title').textContent = `Experience Certificate — ${staff.name}`;
@@ -3273,8 +3277,10 @@ function openCertificateModal() {
  * editable option fields, and persist the school contact details.
  */
 function refreshCertificatePreview() {
-    const staff = _getStaff('Teaching', _certStaffId);
+    const _fr = _findStaffById(_certStaffId);
+    const staff = _fr && _fr.staff;
     if (!staff) return;
+    const isNT = _fr.category === 'Non-Teaching';
 
     const school = _getSchoolIdentity();
     const p = _pronouns(staff.gender);
@@ -3326,13 +3332,19 @@ function refreshCertificatePreview() {
                 <p>This is to certify that <strong>${_esc(staff.name)}</strong>, ${guardianLine}has served as
                 an <strong>${_esc(position)}</strong> from <strong>${startDate}</strong> to <strong>${endDate}</strong>.</p>
 
-                <p>During ${p.poss} tenure with us, ${p.subj} taught <strong>${subjectsLine}</strong>
+                ${isNT ? `<p>During ${p.poss} tenure with us, ${p.subj} carried out the duties of
+                <strong>${_esc(position)}</strong> with diligence and responsibility.</p>
+
+                <p>During ${p.poss} employment, we found ${p.obj} to be hardworking, dedicated, punctual, and
+                highly professional. ${p.subj.charAt(0).toUpperCase() + p.subj.slice(1)} maintained good
+                professional relationships with colleagues, students, and parents.</p>`
+                : `<p>During ${p.poss} tenure with us, ${p.subj} taught <strong>${subjectsLine}</strong>
                 to classes <strong>${classesLine}</strong>.</p>
 
                 <p>During ${p.poss} employment, we found ${p.obj} to be hardworking, dedicated, punctual, and
                 highly professional. ${p.subj.charAt(0).toUpperCase() + p.subj.slice(1)} possesses excellent
                 classroom management skills and maintains strong professional relationships with students,
-                colleagues, and parents.</p>
+                colleagues, and parents.</p>`}
 
                 <p>We appreciate ${p.poss} contributions to our institution and wish ${p.obj} all the best
                 and success in future endeavors.</p>
@@ -3628,7 +3640,7 @@ async function _renderCertificateBlob() {
 }
 
 async function downloadCertificateImage() {
-    const staff = _getStaff('Teaching', _certStaffId);
+    const staff = (_findStaffById(_certStaffId) || {}).staff;
     const blob = await _renderCertificateBlob();
     if (!blob) return;
     const url = URL.createObjectURL(blob);
@@ -3642,7 +3654,7 @@ async function downloadCertificateImage() {
 }
 
 async function shareCertificateWhatsApp() {
-    const staff = _getStaff('Teaching', _certStaffId);
+    const staff = (_findStaffById(_certStaffId) || {}).staff;
     const name = (staff && staff.name) || 'Staff';
     const blob = await _renderCertificateBlob();
     if (!blob) return;
@@ -3682,11 +3694,7 @@ showProfileView = function(staffId, category) {
     _showProfileView_beforeCertificate(staffId, category);
     const certBtn = document.getElementById('generate-certificate-btn');
     if (!certBtn) return;
-    if (category === 'Teaching') {
-        certBtn.classList.remove('d-none');
-    } else {
-        certBtn.classList.add('d-none');
-    }
+    certBtn.classList.toggle('d-none', !(category === 'Teaching' || _isArchivedProfile(staffId)));
 }
 
 /* ============================================
@@ -4504,6 +4512,10 @@ ${pagesHtml}
 
 let _archiveFilter = 'All';
 
+function _isArchivedProfile(id) {
+    return (archivedStaff || []).some(s => s.id === id);
+}
+
 function _isArchivedRow(s) {
     return s && (s.archived === true || s.archived === 'true' || s.archived === 1);
 }
@@ -4557,7 +4569,7 @@ function openArchiveModal() {
     const staff = (staffData[currentCategory] || []).find(s => s.id === currentProfileId);
     if (!staff) return;
     document.getElementById('archive-modal-title').textContent =
-        currentCategory === 'Teaching' ? 'Archive Teacher' : 'Archive Non-Teaching Staff';
+        currentCategory === 'Teaching' ? 'Deactivate Teacher' : 'Deactivate Non-Teaching Staff';
     document.getElementById('archive-target-name').textContent = staff.name || '';
 
     const dateEl = document.getElementById('archive-leaving-date');
@@ -4606,7 +4618,7 @@ function executeArchive() {
     loadStaffCounts(false);
     closeArchiveModal();
     showDirectoryView(currentCategory);
-    showToast(`${staff.name} was moved to the Archive Center.`, 'success', 'Archived');
+    showToast(`${staff.name} was deactivated and moved to the Archive Center.`, 'success', 'Deactivated');
 }
 
 /* ---- Archive Center screen ---- */
@@ -4624,7 +4636,7 @@ function openArchiveCenter(keepFilter) {
         slot.appendChild(clone);
     }
 
-    if (!keepFilter) _archiveFilter = (currentCategory === 'Teaching' || currentCategory === 'Non-Teaching') ? currentCategory : 'All';
+    _archiveFilter = (currentCategory === 'Non-Teaching') ? 'Non-Teaching' : 'Teaching';
     document.getElementById('archive-search').value = '';
     renderArchiveTable();
 
@@ -4658,9 +4670,8 @@ function renderArchiveTable() {
     document.querySelectorAll('#archive-tabs .archive-tab').forEach(btn =>
         btn.classList.toggle('active', btn.dataset.cat === _archiveFilter));
 
-    const label = _archiveFilter === 'Teaching' ? 'Teaching Staff Archive'
-                : _archiveFilter === 'Non-Teaching' ? 'Non-Teaching Staff Archive'
-                : 'Archive Center';
+    const label = _archiveFilter === 'Teaching' ? 'Teaching Staff Archive Center'
+                : 'Non-Teaching Staff Archive Center';
     document.getElementById('archive-title').textContent = label;
     document.getElementById('archive-subject-th').textContent =
         _archiveFilter === 'Teaching' ? 'Subject' : _archiveFilter === 'Non-Teaching' ? 'Job Title' : 'Subject / Job Title';
@@ -4687,7 +4698,14 @@ function renderArchiveTable() {
             <td data-label="Name" class="td-bold">${esc(s.name || '')}</td>
             <td data-label="Subject / Job Title">${esc(subject) || '—'}</td>
             <td data-label="Date of Joining">${_arcFmtDate(s.joined)}</td>
-            <td data-label="Date of Leaving">${_arcFmtDate(s.leavingDate)}</td>`;
+            <td data-label="Date of Leaving">${_arcFmtDate(s.leavingDate)}</td>
+            <td data-label="Actions" class="archive-actions-cell">
+                <div class="archive-row-actions">
+                    <button type="button" class="btn btn-reactivate archive-act-btn" title="Reactivate staff" onclick="event.stopPropagation(); archiveRowAction('reactivate','${esc(s.id)}')"><i class="fas fa-rotate-left"></i> Reactivate</button>
+                    <button type="button" class="btn btn-edit archive-act-btn" title="Update record" onclick="event.stopPropagation(); archiveRowAction('edit','${esc(s.id)}')"><i class="fas fa-edit"></i> Update</button>
+                    <button type="button" class="btn btn-certificate archive-act-btn" title="Generate experience certificate" onclick="event.stopPropagation(); archiveRowAction('certificate','${esc(s.id)}')"><i class="fas fa-certificate"></i> Certificate</button>
+                </div>
+            </td>`;
         tbody.appendChild(tr);
     });
 
@@ -4729,6 +4747,42 @@ function backToArchiveCenter() {
     openArchiveCenter(true);
 }
 
+/* ---- Row actions inside the Archive Center ---- */
+let _archiveActionEdit = false;
+
+function archiveRowAction(action, id) {
+    const s = (archivedStaff || []).find(x => x.id === id);
+    if (!s) return;
+    currentCategory = s.type === 'Non-Teaching' ? 'Non-Teaching' : 'Teaching';
+    currentProfileId = s.id;
+    _viewingArchived = true;
+    if (action === 'reactivate') openReactivateModal();
+    else if (action === 'certificate') openCertificateModal();
+    else if (action === 'edit') { _archiveActionEdit = true; openEditForm(); }
+}
+
+/* After saving an edit started from the Archive Center, stay in the Archive Center */
+const _handleFormSubmit_beforeArchiveAct = handleFormSubmit;
+handleFormSubmit = function(e) {
+    _handleFormSubmit_beforeArchiveAct(e);
+    if (!_archiveActionEdit) return;
+    if (document.getElementById('form-modal').classList.contains('d-none')) {
+        _archiveActionEdit = false;
+        document.getElementById('profile-view').classList.add('d-none');
+        document.getElementById('directory-view').classList.remove('d-none');
+        renderArchiveTable();
+    }
+};
+
+/* Label the Archive Center button per category */
+const _showDirectoryView_beforeArchiveLabel = showDirectoryView;
+showDirectoryView = function(category) {
+    _showDirectoryView_beforeArchiveLabel(category);
+    const b = document.getElementById('archive-center-btn');
+    if (b) b.innerHTML = '<i class="fas fa-box-archive"></i> ' +
+        (category === 'Teaching' ? 'Teaching Archive Center' : 'Non-Teaching Archive Center');
+};
+
 /* ---- OVERRIDE: showProfileView — archived-aware buttons / details ---- */
 const _showProfileView_beforeArchive = showProfileView;
 showProfileView = function(staffId, category) {
@@ -4741,7 +4795,7 @@ showProfileView = function(staffId, category) {
     const pv = document.getElementById('profile-view');
     pv.classList.toggle('is-archived', _viewingArchived);
     document.getElementById('reactivate-btn').classList.toggle('d-none', !_viewingArchived);
-    document.querySelectorAll('.profile-actions .btn-archive, .profile-actions .btn-remove')
+    document.querySelectorAll('.profile-actions .btn-deactivate')
         .forEach(b => b.classList.toggle('d-none', _viewingArchived));
 
     if (arch) {
@@ -4810,6 +4864,11 @@ function executeReactivate() {
     currentCategory = cat;
     loadStaffCounts(false);
     closeReactivateModal();
+    if (!document.getElementById('archive-center').classList.contains('d-none')) {
+        renderArchiveTable();
+        showToast(`${staff.name} is active again.`, 'success', 'Reactivated');
+        return;
+    }
     showDirectoryView(cat);
     showToast(`${staff.name} is active again.`, 'success', 'Reactivated');
 }
