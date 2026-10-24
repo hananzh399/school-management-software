@@ -632,10 +632,28 @@ function _dashboardSalaryAmount(salaryRecords, staff, staffFines, staffBonus, mo
  * recomputes Pending Salaries and Total Net Expenses off that updated
  * paid figure.
  */
-function _dashboardAdvanceTotal(staffAdvances, monthKey, currentMonthKey) {
+function _dashboardAdvanceTotal(staffAdvances, monthKey, currentMonthKey, staff) {
+    // BUGFIX — "advance paid in Manage Finance doesn't show on the
+    // Dashboard": an advance is saved under the CALENDAR month
+    // (manage-finance.js getCurrentMonthKey()), but `currentMonthKey` here
+    // is the stored FEE/billing month, which can differ (e.g. after "Move
+    // to Next Month"). The strict monthKey match then silently dropped the
+    // advance. An unsettled advance is cash that has already left and is
+    // still outstanding no matter which month it was taken in — the same
+    // rule FinanceController#paySalary uses when it settles advances, and
+    // manage-finance.js's getTotalAdvance() — so for the current snapshot
+    // every unsettled advance counts. The previous-month snapshot still
+    // only counts advances tagged with that month.
+    const isCurrentSnapshot = monthKey === currentMonthKey;
+    // Deactivated staff are excluded from /api/staff/summary, so their
+    // advances must not count either (same rule as the salary pages).
+    const activeIds = new Set(_dashboardArray(staff).map(m => String(m.staffId)));
     return _dashboardArray(staffAdvances)
-        .filter(item => _dashboardBelongsToMonth(item.monthKey, monthKey, currentMonthKey))
+        .filter(item => isCurrentSnapshot
+            ? true
+            : _dashboardBelongsToMonth(item.monthKey, monthKey, currentMonthKey))
         .filter(item => String(item.paymentStatus || '').toLowerCase() !== 'settled')
+        .filter(item => activeIds.size === 0 || activeIds.has(String(item.staffId)))
         .reduce((total, item) => total + _dashboardNumber(item.amount), 0);
 }
 
@@ -817,7 +835,7 @@ async function _dashboardSnapshot(
     const { payable, paidFromPayroll, totalDue } = _dashboardSalaryAmount(
         salaryRecords, staff, staffFines, staffBonus, monthKey, currentMonthKey
     );
-    const advance = _dashboardAdvanceTotal(staffAdvances, monthKey, currentMonthKey);
+    const advance = _dashboardAdvanceTotal(staffAdvances, monthKey, currentMonthKey, staff);
     const paid = paidFromPayroll + advance;
     const pending = Math.max(0, totalDue - paid);
 
