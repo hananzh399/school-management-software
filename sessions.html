@@ -725,11 +725,21 @@
                     var cat = s.type || s.category || '';
                     var teaching = /teach/i.test(cat) && !/non/i.test(cat);
                     var joinKey = monthKeyOf(s.joined); if (!isSane(joinKey)) joinKey = null;
+                    // Staff Management's Deactivate button sets archived + leavingDate. A deactivated
+                    // staff member counts as "Went" in the session they left, and is not carried into
+                    // any later session. Everyone still active carries into every new session
+                    // automatically ("Before Transfer"), so nothing is copied or duplicated.
+                    var isArchived = s.archived === true || String(s.archived).toLowerCase() === 'true';
+                    var leftKey = null;
+                    if (isArchived) {
+                        leftKey = monthKeyOf(s.leavingDate);
+                        if (!isSane(leftKey)) leftKey = DB.nowKey;   // deactivated, but no leaving date on record
+                    }
                     return {
                         staffId: s.staffId || '', name: s.name || '', category: cat || '—',
                         designation: (teaching ? (s.role || s.subjects) : s.job) || s.role || s.job || '—',
                         qualification: s.qualification || '—', gender: s.gender || '—',
-                        joinKey: joinKey, leftKey: null, removed: false
+                        joinKey: joinKey, leftKey: leftKey, removed: false, archived: isArchived
                     };
                 });
                 var rm = r[2] || {};
