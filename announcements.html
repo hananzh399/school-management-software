@@ -102,6 +102,20 @@
 
     <!-- message actions + delete confirmation -->
     <div class="am-menu" id="am-menu" hidden></div>
+    <!-- message info (tap one of your own messages) -->
+    <div class="am-sov" id="am-sov" hidden></div>
+    <div class="am-info" id="am-info" role="dialog" aria-modal="true" aria-label="Message info" hidden>
+        <p class="am-info-title">Message info</p>
+        <p class="am-info-prev" id="am-info-prev"></p>
+        <div id="am-info-rows"></div>
+        <p class="am-info-note" id="am-info-note"></p>
+        <div class="am-info-actions" id="am-info-actions">
+            <button type="button" data-sa="edit"><i class="fas fa-pen"></i> Edit message</button>
+            <button type="button" data-sa="copy"><i class="fas fa-copy"></i> Copy text</button>
+            <button type="button" class="del" data-sa="del"><i class="fas fa-trash"></i> Delete message</button>
+        </div>
+        <button type="button" class="am-info-close" data-sa="close">Close</button>
+    </div>
     <div class="am-modal" id="am-confirm" hidden>
         <div class="am-sheet am-small">
             <b>Delete this message?</b>

@@ -26,7 +26,7 @@
 
     var state = {
         threads: [], filter: "all", q: "", active: null, msgs: [], editing: null, menuFor: null,
-        pulse: { lastId: -1, unread: -1, count: -1, edited: "" }, dir: null, sending: false, drafts: {}, online: true,
+        pulse: { lastId: -1, unread: -1, count: -1, edited: "", reads: -1 }, dir: null, sheetFor: null, savedDraft: "", mark: null, markSet: false, sending: false, drafts: {}, online: true,
         pins: store.get("ann_pins", []), notify: store.get("ann_popup", true), sound: store.get("ann_sound", true),
         seen: null, newBelow: 0,
         cm: { who: "teacher", mode: "all", sel: {}, cls: "", q: "", busy: false }
@@ -189,17 +189,32 @@
             '<div class="am-av ' + d.type + '">' + initial(d.type === "teacher" ? d.name : d.studentName) + "</div>" +
             '<div class="meta"><b>' + esc(title) + "</b><span>" + esc(sub) + '</span></div><span class="am-live' + (state.online ? "" : " off") + '" id="am-live">' + (state.online ? "Live" : "Offline") + "</span></div>" +
             '<div class="am-bodywrap"><div class="am-body" id="am-body"></div><button class="am-down" id="am-down" hidden><i class="fas fa-arrow-down"></i><span></span></button></div>' +
+            '<div class="am-editbar" id="am-editbar" hidden><i class="fas fa-pen"></i><div class="eb"><b>Editing message</b><span id="am-edit-text"></span></div><button type="button" id="am-edit-cancel" aria-label="Cancel editing"><i class="fas fa-xmark"></i></button></div>' +
             '<div class="am-compose"><button class="am-qr" id="am-qr" type="button" title="Quick replies" aria-label="Quick replies"><i class="fas fa-bolt"></i></button>' +
             '<textarea id="am-in" rows="1" maxlength="' + MAX_LEN + '" placeholder="Write a message…  (Enter to send, Shift+Enter for a new line)">' + esc(state.drafts[d.key] || "") + '</textarea>' +
             '<span class="am-count" id="am-count"></span><button class="am-send" id="am-send" aria-label="Send"><i class="fas fa-paper-plane"></i></button></div>';
         renderMessages(true);
         grow($("#am-in"));
     }
-    function receiptOf(m) {
-        if (m.pending) return " ⏱";
-        if (state.active && state.active.type === "teacher") return m.readByTeacher ? ' <span title="Read" style="color:#7dd3fc">✓✓</span>' : " ✓";
-        return " ✓";
+    /* ───────── receipts (same ticks as the parent portal: clock = sending, ✓ = sent, ✓✓ blue = read) ───────── */
+    var RECEIPT_LABEL = { sending: "Sending", sent: "Sent", read: "Read" };
+    function receiptHTML(status) {
+        var key = RECEIPT_LABEL[status] ? status : "sent", svg;
+        if (key === "sending") svg = '<svg viewBox="0 0 12 12" aria-hidden="true"><circle cx="6" cy="6" r="4.8"/><path d="M6 3.4V6l1.8 1.1"/></svg>';
+        else if (key === "sent") svg = '<svg viewBox="0 0 14.5 11" aria-hidden="true"><path d="M1.5 5.8 5.3 9.4 13 1.6"/></svg>';
+        else svg = '<svg viewBox="0 0 19 11" aria-hidden="true"><path d="M1.5 5.8 5.3 9.4 13 1.6"/><path d="M6 5.8 9.8 9.4 17.5 1.6"/></svg>';
+        return '<span class="receipt receipt-' + key + '" role="img" aria-label="' + RECEIPT_LABEL[key] + '" title="' + RECEIPT_LABEL[key] + '">' + svg + "</span>";
     }
+    /** Status of one of the admin's own messages. A message is "read" once the teacher / parent opened the chat. */
+    function statusOf(m) {
+        if (m.pending) return "sending";
+        var teacher = state.active && state.active.type === "teacher";
+        return (teacher ? m.readByTeacher : m.readByParent) ? "read" : "sent";
+    }
+    /** Edit / delete are offered only for your own, saved, not-yet-read messages (the server enforces this too). */
+    function canChange(m) { return !!m && m.senderType === "ADMIN" && !!m.id && statusOf(m) !== "read"; }
+    var READ_LOCK = "This message has been read, so it can't be edited or deleted.";
+
     function renderMessages(forceBottom) {
         var body = $("#am-body"); if (!body) return;
         var near = body.scrollHeight - body.scrollTop - body.clientHeight < 100, top = body.scrollTop;
@@ -210,21 +225,17 @@
         var html = "", last = "";
         state.msgs.forEach(function (m) {
             var dl = dayLabel(m.createdAt); if (dl !== last) { html += '<div class="am-day">' + dl + "</div>"; last = dl; }
-            var me = m.senderType === "ADMIN";
+            if (state.mark && m.id && m.id === state.mark.id) html += '<div class="am-unread"><span>' + state.mark.count + (state.mark.count === 1 ? " unread message" : " unread messages") + "</span></div>";
+            var me = m.senderType === "ADMIN", tap = me && !!m.id;
             var who = me ? "" : '<span class="who">' + esc(m.senderType === "PARENT" ? (m.guardianName || "Parent") + " (parent)" : (m.senderName || "Teacher")) + "</span>";
             var grp = m.broadcastId ? '<span class="grp"><i class="fas fa-bullhorn"></i> Announcement</span>' : "";
-            var menu = m.id ? '<button class="am-mm" data-mid="' + m.id + '" aria-label="Message options"><i class="fas fa-chevron-down"></i></button>' : "";
-            var inner;
-            if (state.editing === m.id && me) {
-                inner = '<div class="am-edit"><textarea id="am-edit-in" rows="2" maxlength="' + MAX_LEN + '">' + esc(m.body) + '</textarea><div><button id="am-edit-x" type="button">Cancel</button><button class="ok" id="am-edit-ok" type="button">Save</button></div></div>';
-            } else {
-                inner = grp + "<p>" + esc(m.body) + '</p><span class="t">' + (m.editedAt ? "edited · " : "") + clock(m.createdAt) + (me ? receiptOf(m) : "") + "</span>";
-            }
-            html += '<div class="am-b ' + (me ? "me" : "them") + (m.pending ? " sending" : "") + '" data-mid="' + (m.id || "") + '">' + menu + who + inner + "</div>";
+            var menu = !me && m.id ? '<button class="am-mm" data-mid="' + m.id + '" aria-label="Message options"><i class="fas fa-chevron-down"></i></button>' : "";
+            var meta = '<span class="t">' + (m.editedAt ? '<em class="am-edited">Edited</em>' : "") + clock(m.createdAt) + (me ? ' <span class="receipt-slot">' + receiptHTML(statusOf(m)) + "</span>" : "") + "</span>";
+            html += '<div class="am-b ' + (me ? "me" : "them") + (m.pending ? " sending" : "") + (tap ? " tappable" : "") + (state.editing === m.id && me ? " is-editing" : "") + '" data-mid="' + (m.id || "") + '"' +
+                (tap ? ' tabindex="0" role="button" aria-label="Your message. Press for details."' : "") + ">" + menu + who + grp + "<p>" + esc(m.body) + "</p>" + meta + "</div>";
         });
         body.innerHTML = html;
         body.scrollTop = (forceBottom || near) ? body.scrollHeight : top;
-        if (state.editing) { var ed = $("#am-edit-in"); if (ed) { ed.focus(); ed.setSelectionRange(ed.value.length, ed.value.length); } }
         syncDown();
     }
     function syncDown() {
@@ -244,12 +255,16 @@
             var incoming = list.filter(function (m) { return m.senderType !== "ADMIN" && !state.msgs.some(function (x) { return x.id === m.id; }); }).length;
             var pend = state.msgs.filter(function (m) { return m.pending; });
             state.msgs = list.concat(pend);
-            if (state.editing && !list.some(function (m) { return m.id === state.editing; })) state.editing = null;   // it was deleted elsewhere
-            if (!state.editing) {
-                var body = $("#am-body"), wasAway = body && body.scrollHeight - body.scrollTop - body.clientHeight > 160;
-                renderMessages(forceBottom);
-                if (prevIds && incoming && wasAway && !forceBottom) { state.newBelow += incoming; syncDown(); }
+            if (state.editing && !list.some(function (m) { return m.id === state.editing; })) cancelEdit();   // it was deleted elsewhere
+            if (!state.markSet) {                                                       // remember where the unread messages start (shown as a divider)
+                var firstNew = list.filter(function (m) { return m.senderType !== "ADMIN" && !m.readByAdmin; });
+                state.mark = firstNew.length ? { id: firstNew[0].id, count: firstNew.length } : null;
+                state.markSet = true;
             }
+            var body = $("#am-body"), wasAway = body && body.scrollHeight - body.scrollTop - body.clientHeight > 160;
+            renderMessages(forceBottom);
+            if (prevIds && incoming && wasAway && !forceBottom) { state.newBelow += incoming; syncDown(); }
+            refreshInfo();
             if (list.some(function (m) { return m.senderType !== "ADMIN" && !m.readByAdmin; }) && !document.hidden) {
                 api("/messages/read", { method: "POST", body: JSON.stringify(d.type === "teacher" ? { staffId: d.staffId } : { regNo: d.regNo }) })
                     .then(loadThreads).catch(function () { /* retried on next change */ });
@@ -257,8 +272,8 @@
         });
     }
     function open(desc) {
-        if (state.active) state.drafts[state.active.key] = ($("#am-in") || {}).value || state.drafts[state.active.key] || "";
-        state.active = desc; state.msgs = []; state.editing = null; state.newBelow = 0; closeMenu();
+        if (state.active) state.drafts[state.active.key] = (state.editing ? state.savedDraft : ($("#am-in") || {}).value) || state.drafts[state.active.key] || "";
+        state.active = desc; state.msgs = []; state.editing = null; state.savedDraft = ""; state.mark = null; state.markSet = false; state.newBelow = 0; closeMenu(); closeInfo();
         $("#am-wrap").classList.add("chat-open");
         renderThreads(); renderChatShell();
         loadMessages(true).catch(function (e) { if (e.message !== "401") toast("Could not load the chat.", true); });
@@ -270,6 +285,7 @@
     }
 
     function send() {
+        if (state.editing) return saveEdit();
         var d = state.active, ta = $("#am-in"); if (!d || !ta || state.sending) return;
         var text = ta.value.trim(); if (!text) return;
         state.sending = true; $("#am-send").disabled = true;
@@ -301,31 +317,81 @@
         var m = msgById(btn.dataset.mid); if (!m) return;
         if (state.menuFor === m.id) { closeMenu(); return; }
         state.menuFor = m.id;
-        var mine = m.senderType === "ADMIN";
-        showMenu(btn, (mine ? '<button data-act="edit"><i class="fas fa-pen"></i> Edit</button>' : "") +
-            '<button data-act="copy"><i class="fas fa-copy"></i> Copy text</button>' +
-            (mine ? '<button class="del" data-act="del"><i class="fas fa-trash"></i> Delete</button>' : ""));
+        showMenu(btn, '<button data-act="copy"><i class="fas fa-copy"></i> Copy text</button>');   // your own messages: tap the bubble
     }
     function copyText(t) {
         var done = function () { toast("Copied."); };
         if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(t).then(done, function () { toast("Could not copy.", true); });
         else { var x = document.createElement("textarea"); x.value = t; document.body.appendChild(x); x.select(); try { document.execCommand("copy"); done(); } catch (e) { toast("Could not copy.", true); } x.remove(); }
     }
-    function saveEdit() {
-        var m = msgById(state.editing), ta = $("#am-edit-in"); if (!m || !ta) return;
-        var text = ta.value.trim(); if (!text) { toast("A message cannot be empty.", true); return; }
-        if (text === m.body) { state.editing = null; renderMessages(false); return; }
-        api("/messages/" + m.id, { method: "PUT", body: JSON.stringify({ body: text }) })
-            .then(function (r) { m.body = text; m.editedAt = r.editedAt || new Date().toISOString(); state.editing = null; renderMessages(false); loadThreads(); })
-            .catch(function (e) { if (e.message !== "401") toast(e.message || "Could not edit.", true); });
+    /* ───────── edit in the composer (like the parent portal) ───────── */
+    function startEdit(m) {
+        var ta = $("#am-in"); if (!ta || !canChange(m)) return;
+        if (!state.editing) state.savedDraft = ta.value;                                 // keep any half-typed message
+        state.editing = m.id;
+        ta.value = m.body; grow(ta);
+        $("#am-edit-text").textContent = m.body; $("#am-editbar").hidden = false;
+        var sb = $("#am-send"); sb.classList.add("is-editing"); sb.setAttribute("aria-label", "Save changes"); sb.querySelector("i").className = "fas fa-check";
+        renderMessages(false); ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length);
     }
+    function cancelEdit() {
+        if (!state.editing) return;
+        state.editing = null;
+        var ta = $("#am-in"); if (ta) { ta.value = state.savedDraft; grow(ta); }
+        state.savedDraft = "";
+        var bar = $("#am-editbar"); if (bar) bar.hidden = true;
+        var sb = $("#am-send"); if (sb) { sb.classList.remove("is-editing"); sb.setAttribute("aria-label", "Send"); sb.querySelector("i").className = "fas fa-paper-plane"; }
+        renderMessages(false);
+    }
+    function saveEdit() {
+        var m = msgById(state.editing), ta = $("#am-in"); if (!m || !ta) { cancelEdit(); return; }
+        var text = ta.value.trim(); if (!text) { toast("A message cannot be empty.", true); return; }
+        if (text === m.body) { cancelEdit(); return; }
+        if (!canChange(m)) { cancelEdit(); toast(READ_LOCK, true); return; }
+        api("/messages/" + m.id, { method: "PUT", body: JSON.stringify({ body: text }) })
+            .then(function (r) { m.body = text; m.editedAt = r.editedAt || new Date().toISOString(); cancelEdit(); loadThreads(); toast("Message updated."); })
+            .catch(function (e) { if (e.message === "401") return; toast(e.message || "Could not edit.", true); cancelEdit(); loadMessages(false).catch(function () {}); });
+    }
+
+    /* ───────── message info sheet: tap one of your own messages ───────── */
+    function openInfo(id) {
+        var m = msgById(id); if (!m || m.senderType !== "ADMIN") return;
+        closeMenu(); state.sheetFor = m.id; renderInfo(m);
+        $("#am-sov").hidden = false; $("#am-info").hidden = false;
+        var first = $("#am-info").querySelector(canChange(m) ? '[data-sa="edit"]' : '[data-sa="close"]'); if (first) first.focus();
+    }
+    function closeInfo() { state.sheetFor = null; var o = $("#am-sov"), i = $("#am-info"); if (o) o.hidden = true; if (i) i.hidden = true; }
+    function refreshInfo() { if (state.sheetFor == null) return; var m = msgById(state.sheetFor); if (!m) closeInfo(); else renderInfo(m); }
+    function renderInfo(m) {
+        var st = statusOf(m), sent = st !== "sending", read = st === "read";
+        $("#am-info-prev").textContent = m.body;
+        function row(key, label, done, value) {
+            return '<div class="am-info-row"><span class="ic">' + receiptHTML(key) + '</span><span class="lb">' + label + '</span><span class="vl' + (done ? "" : " pending") + '">' + value + "</span></div>";
+        }
+        $("#am-info-rows").innerHTML =
+            row("sent", "Sent", sent, sent ? dayLabel(m.createdAt) + ", " + clock(m.createdAt) : "Sending…") +
+            row("read", "Read", read, read ? "Read" : "Not read yet");
+        var ok = canChange(m);
+        $("#am-info-actions").querySelector('[data-sa="edit"]').hidden = !ok;
+        $("#am-info-actions").querySelector('[data-sa="del"]').hidden = !ok;
+        $("#am-info-note").textContent = ok ? "You can edit or delete this message until it has been read." : (m.pending ? "" : READ_LOCK);
+    }
+    function infoAction(a) {
+        var id = state.sheetFor, m = id == null ? null : msgById(id);
+        if (a === "close" || !m) { closeInfo(); return; }
+        if (a === "copy") { closeInfo(); copyText(m.body); return; }
+        if (!canChange(m)) { closeInfo(); toast(READ_LOCK, true); return; }
+        closeInfo();
+        if (a === "edit") startEdit(m); else if (a === "del") askDelete(m.id);
+    }
+
     var pendingDelete = null;
     function askDelete(id) { pendingDelete = id; $("#am-confirm").hidden = false; }
     function doDelete() {
         var id = pendingDelete; pendingDelete = null; $("#am-confirm").hidden = true; if (!id) return;
         api("/messages/" + id, { method: "DELETE" })
             .then(function () { state.msgs = state.msgs.filter(function (m) { return String(m.id) !== String(id); }); renderMessages(false); return loadThreads(); })
-            .catch(function (e) { if (e.message !== "401") toast(e.message || "Could not delete.", true); });
+            .catch(function (e) { if (e.message !== "401") { toast(e.message || "Could not delete.", true); loadMessages(false).catch(function () {}); } });
     }
 
     /* ───────── live updates (polls a tiny endpoint; reloads only when something changed) ───────── */
@@ -337,7 +403,7 @@
         api("/messages/pulse").then(function (p) {
             setOnline(true);
             var o = state.pulse;
-            var changed = p.lastId !== o.lastId || p.unread !== o.unread || p.count !== o.count || p.edited !== o.edited;
+            var changed = p.lastId !== o.lastId || p.unread !== o.unread || p.count !== o.count || p.edited !== o.edited || p.reads !== o.reads;
             state.pulse = p;
             if (changed) { loadThreads().catch(function () {}); if (state.active) loadMessages(false).catch(function () {}); }
         }).catch(function (e) { if (e.message !== "401") setOnline(false); });
@@ -493,19 +559,21 @@
                 closeMenu(); state.menuFor = "qr";
                 showMenu(q, '<div class="qr-t">Quick replies</div>' + QUICK.map(function (s, i) { return '<button data-qr="' + i + '">' + esc(s) + "</button>"; }).join(""), "qr");
             }
+            else if (t.closest("#am-edit-cancel")) cancelEdit();
             else if (t.closest(".am-mm")) { e.stopPropagation(); openMessageMenu(t.closest(".am-mm")); }
-            else if (t.closest("#am-edit-ok")) saveEdit();
-            else if (t.closest("#am-edit-x")) { state.editing = null; renderMessages(false); }
+            else if (t.closest(".am-b.tappable")) openInfo(t.closest(".am-b.tappable").dataset.mid);
         });
+        $("#am-sov").addEventListener("click", closeInfo);
+        $("#am-info").addEventListener("click", function (e) { var b = e.target.closest("[data-sa]"); if (b) infoAction(b.dataset.sa); });
         $("#am-chat").addEventListener("scroll", function (e) { if (e.target.id === "am-body") syncDown(); }, true);
-        $("#am-chat").addEventListener("input", function (e) { if (e.target.id === "am-in") { grow(e.target); if (state.active) state.drafts[state.active.key] = e.target.value; } });
+        $("#am-chat").addEventListener("input", function (e) { if (e.target.id === "am-in") { grow(e.target); if (state.active && !state.editing) state.drafts[state.active.key] = e.target.value; } });
         $("#am-chat").addEventListener("keydown", function (e) {
             if (e.target.id === "am-in" && e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); }
-            if (e.target.id === "am-edit-in") { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); saveEdit(); } if (e.key === "Escape") { state.editing = null; renderMessages(false); } }
+            if ((e.key === "Enter" || e.key === " ") && e.target.classList && e.target.classList.contains("tappable")) { e.preventDefault(); openInfo(e.target.dataset.mid); }
         });
         $("#am-menu").addEventListener("click", function (e) {
             var b = e.target.closest("button"); if (!b) return;
-            if (b.dataset.qr != null) { var ta = $("#am-in"); if (ta) { ta.value = (ta.value ? ta.value + " " : "") + QUICK[+b.dataset.qr]; grow(ta); ta.focus(); if (state.active) state.drafts[state.active.key] = ta.value; } closeMenu(); return; }
+            if (b.dataset.qr != null) { var ta = $("#am-in"); if (ta && !state.editing) { ta.value = (ta.value ? ta.value + " " : "") + QUICK[+b.dataset.qr]; grow(ta); ta.focus(); if (state.active) state.drafts[state.active.key] = ta.value; } closeMenu(); return; }
             var m = msgById(state.menuFor); closeMenu(); if (!m) return;
             if (b.dataset.act === "copy") copyText(m.body);
             else if (b.dataset.act === "edit") { state.editing = m.id; renderMessages(false); }
@@ -518,7 +586,7 @@
         window.addEventListener("resize", closeMenu);
         document.addEventListener("visibilitychange", function () { if (!document.hidden) tick(); });
         window.addEventListener("focus", function () { if (state.active) loadMessages(false).catch(function () {}); });
-        document.addEventListener("keydown", function (e) { if (e.key === "Escape") { $("#am-modal").hidden = true; $("#am-confirm").hidden = true; closeMenu(); } });
+        document.addEventListener("keydown", function (e) { if (e.key === "Escape") { $("#am-modal").hidden = true; $("#am-confirm").hidden = true; closeMenu(); if (state.sheetFor != null) closeInfo(); else cancelEdit(); } });
     }
 
     chrome(); bind(); renderChatShell();

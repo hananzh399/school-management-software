@@ -478,7 +478,7 @@
      • Parents · <class> – your messages to the parents of a class (parent replies will land here once the parent portal is linked)
      Messages are saved on the phone first, then sent in the background (clock → tick), and retried if the network drops. */
   const enc = encodeURIComponent;
-  const chat = { items: store.get("chat", []), thread: null, draft: {}, started: store.get("chat_started", []) };
+  const chat = { items: store.get("chat", []), thread: null, draft: {}, started: store.get("chat_started", []), editing: null, savedDraft: "", mark: null };
   const saveChat = () => store.set("chat", chat.items.slice(-600));
   const chatUnread = () => chat.items.filter((m) => m.senderType !== "TEACHER" && !m.read).length;
   const fmtClock = (ms) => new Date(ms).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
@@ -509,10 +509,12 @@
       const list = await api("/messages?schoolId=" + enc(schoolId) + "&staffId=" + enc(staff.staffId || ""));
       if (!Array.isArray(list)) return;
       const localRead = {}; chat.items.forEach((m) => { if (m.read && m.id) localRead[m.id] = 1; });
-      const server = list.map((x) => ({ id: x.id, clientId: x.clientId || "s" + x.id, channel: x.channel, className: x.className || "", regNo: x.regNo || "", studentName: x.studentName || "", guardianName: x.guardianName || "", senderType: x.senderType, senderName: x.senderName || "", body: x.body, at: Date.parse(x.createdAt) || 0, read: x.senderType === "TEACHER" ? true : (!!x.readByTeacher || !!localRead[x.id]), status: "sent" }));
+      const server = list.map((x) => ({ id: x.id, clientId: x.clientId || "s" + x.id, channel: x.channel, className: x.className || "", regNo: x.regNo || "", studentName: x.studentName || "", guardianName: x.guardianName || "", senderType: x.senderType, senderName: x.senderName || "", body: x.body, at: Date.parse(x.createdAt) || 0, read: x.senderType === "TEACHER" ? true : (!!x.readByTeacher || !!localRead[x.id]), status: "sent",
+        seen: x.senderType === "TEACHER" && (x.channel === "admin" ? !!x.readByAdmin : !!x.readByParent), edited: !!x.editedAt }));
       const have = {}; server.forEach((m) => (have[m.clientId] = 1));
       const pending = chat.items.filter((m) => m.senderType === "TEACHER" && m.status !== "sent" && !have[m.clientId]);
       chat.items = server.concat(pending); saveChat(); flushChat();
+      if (chat.editing) { const em = myMsg(chat.editing); if (!em || !canChangeMsg(em)) { cancelChatEdit(); if (em) toast(READ_LOCK, true); } }
     } catch (e) { /* offline or endpoint not live — keep the cached copy */ }
     updateDot();
   }
@@ -550,8 +552,10 @@
     let html = "", last = "";
     list.forEach((m) => {
       const dl = dayLabel(m.at); if (dl !== last) { html += `<div class="day-sep"><span>${dl}</span></div>`; last = dl; }
-      const me = m.senderType === "TEACHER", ic = m.status === "sending" ? "fa-clock" : m.status === "failed" ? "fa-circle-exclamation" : "fa-check";
-      html += `<div class="bub ${me ? "me" : "them"} ${m.status === "failed" ? "failed" : ""}" ${m.status === "failed" ? `data-retry="${esc(m.clientId)}"` : ""}>${me ? "" : `<small class="who">${esc(m.senderName || (m.senderType === "ADMIN" ? "Admin" : "Parent"))}</small>`}<p>${esc(m.body).replace(/\n/g, "<br>")}</p><span class="meta">${fmtClock(m.at)}${me ? ` <i class="fas ${ic}"></i>` : ""}${m.status === "failed" ? " · " + esc(m.error || "Not sent") + " · tap to retry" : ""}</span></div>`;
+      if (chat.mark && chat.mark.key === th.key && chat.mark.clientId === m.clientId) html += `<div class="unread-sep"><span>${chat.mark.count} unread message${chat.mark.count === 1 ? "" : "s"}</span></div>`;
+      const me = m.senderType === "TEACHER", failed = m.status === "failed", tap = me && !failed;
+      const tick = !me ? "" : failed ? ` <i class="fas fa-circle-exclamation"></i>` : ` <span class="receipt-slot">${receiptHTML(chatStatus(m))}</span>`;
+      html += `<div class="bub ${me ? "me" : "them"} ${failed ? "failed" : ""} ${tap ? "tappable" : ""} ${chat.editing === m.clientId ? "is-editing" : ""}" ${failed ? `data-retry="${esc(m.clientId)}"` : ""} ${tap ? `data-cid="${esc(m.clientId)}"` : ""}>${me ? "" : `<small class="who">${esc(m.senderName || (m.senderType === "ADMIN" ? "Admin" : "Parent"))}</small>`}<p>${esc(m.body).replace(/\n/g, "<br>")}</p><span class="meta">${m.edited ? `<em class="edited">Edited</em>` : ""}${fmtClock(m.at)}${tick}${failed ? " · " + esc(m.error || "Not sent") + " · tap to retry" : ""}</span></div>`;
     });
     return html;
   }
@@ -571,9 +575,11 @@
       body.innerHTML = threadBodyHtml(th); body.scrollTop = near && th.kind === "chat" ? body.scrollHeight : top;
       markRead(th); return;
     }
+    chat.editing = null; chat.savedDraft = "";
+    { const un = th.kind === "chat" ? msgsOf(th).filter((m) => m.senderType !== "TEACHER" && !m.read) : []; chat.mark = un.length ? { key: th.key, clientId: un[0].clientId, count: un.length } : null; }
     view.innerHTML = `<div class="chat-wrap"><div class="chat-head"><button class="back-ic" data-chatback="1" aria-label="Back"><i class="fas fa-arrow-left"></i></button><div class="thr-ic ${th.kind}"><i class="fas ${th.icon}"></i></div><div class="ch-t"><b>${esc(th.title)}</b><span>${esc(th.sub)}</span></div></div>
       <div class="chat-body" id="chat-body" data-key="${esc(th.key)}">${threadBodyHtml(th)}</div>
-      ${th.kind === "chat" ? `<div class="composer"><textarea id="chat-in" rows="1" maxlength="1000" placeholder="Message…">${esc(chat.draft[th.key] || "")}</textarea><button class="send" id="chat-send" aria-label="Send"><i class="fas fa-paper-plane"></i></button></div>` : `<div class="chat-note">Only the admin can post notices.</div>`}</div>`;
+      ${th.kind === "chat" ? `<div class="editbar" id="chat-editbar" hidden><i class="fas fa-pen"></i><div class="eb"><b>Editing message</b><span id="chat-edit-text"></span></div><button class="eb-x" data-editcancel="1" aria-label="Cancel editing"><i class="fas fa-xmark"></i></button></div><div class="composer"><textarea id="chat-in" rows="1" maxlength="1000" placeholder="Message…">${esc(chat.draft[th.key] || "")}</textarea><button class="send" id="chat-send" aria-label="Send"><i class="fas fa-paper-plane"></i></button></div>` : `<div class="chat-note">Only the admin can post notices.</div>`}</div>`;
     const b = $("#chat-body"); if (b) b.scrollTop = th.kind === "chat" ? b.scrollHeight : 0;
     const ta = $("#chat-in"); if (ta) autoGrow(ta);
     markRead(th);
@@ -598,11 +604,89 @@
   }
   function autoGrow(ta) { ta.style.height = "auto"; ta.style.height = Math.min(ta.scrollHeight, 120) + "px"; }
   function sendChat() {
+    if (chat.editing) return saveChatEdit();
     const th = threadList().find((t) => t.key === chat.thread), ta = $("#chat-in");
     if (!th || th.kind !== "chat" || !ta) return;
     const body = ta.value.trim(); if (!body) return;
     chat.items.push({ id: null, clientId: uid(), channel: th.channel, className: th.className || "", regNo: th.regNo || "", studentName: th.title.replace(/^Parent of /, ""), senderType: "TEACHER", senderName: staff.name || "", body, at: Date.now(), read: true, status: "sending" });
     chat.draft[th.key] = ""; ta.value = ""; autoGrow(ta); saveChat(); inbox(); flushChat();
+  }
+
+  /* ── ticks, edit & delete (same behaviour as the parent portal chat) ──
+     clock = sending · ✓ = sent · ✓✓ blue = read. Tap one of your own messages for details, edit or delete;
+     edit / delete are offered until the admin / parent has read it (the server enforces this too). */
+  const RECEIPT_LABEL = { sending: "Sending", sent: "Sent", read: "Read" };
+  function receiptHTML(status) {
+    const key = RECEIPT_LABEL[status] ? status : "sent";
+    const svg = key === "sending" ? '<svg viewBox="0 0 12 12" aria-hidden="true"><circle cx="6" cy="6" r="4.8"/><path d="M6 3.4V6l1.8 1.1"/></svg>'
+      : key === "sent" ? '<svg viewBox="0 0 14.5 11" aria-hidden="true"><path d="M1.5 5.8 5.3 9.4 13 1.6"/></svg>'
+      : '<svg viewBox="0 0 19 11" aria-hidden="true"><path d="M1.5 5.8 5.3 9.4 13 1.6"/><path d="M6 5.8 9.8 9.4 17.5 1.6"/></svg>';
+    return `<span class="receipt receipt-${key}" role="img" aria-label="${RECEIPT_LABEL[key]}" title="${RECEIPT_LABEL[key]}">${svg}</span>`;
+  }
+  const READ_LOCK = "This message has been read, so it can't be edited or deleted.";
+  const myMsg = (cid) => chat.items.find((x) => x.clientId === cid && x.senderType === "TEACHER");
+  const chatStatus = (m) => m.status === "sending" ? "sending" : m.seen ? "read" : "sent";
+  const canChangeMsg = (m) => !!m && m.senderType === "TEACHER" && (m.status === "failed" || (m.status === "sent" && !!m.id && !m.seen));
+  function openMsgSheet(cid) {
+    const m = myMsg(cid); if (!m) return;
+    const st = chatStatus(m), sent = st !== "sending", read = st === "read", ok = canChangeMsg(m);
+    const row = (k, label, done, val) => `<div class="mi-row"><span class="mi-ic">${receiptHTML(k)}</span><b>${label}</b><span class="${done ? "" : "pend"}">${val}</span></div>`;
+    openSheet(`<div class="sheet-head"><div><b>Message info</b></div><button class="icon-btn dark" data-close="1" aria-label="Close"><i class="fas fa-xmark"></i></button></div>
+      <p class="mi-prev">${esc(m.body)}</p>
+      ${row("sent", "Sent", sent, sent ? dayLabel(m.at) + ", " + fmtClock(m.at) : "Sending…")}${row("read", "Read", read, read ? "Read" : "Not read yet")}
+      <p class="mi-note">${ok ? "You can edit or delete this message until it has been read." : m.status === "sending" ? "This message is still sending." : READ_LOCK}</p>
+      ${ok ? `<div class="mi-actions"><button data-cs="edit"><i class="fas fa-pen"></i> Edit message</button><button data-cs="copy"><i class="fas fa-copy"></i> Copy text</button><button class="del" data-cs="del"><i class="fas fa-trash"></i> Delete message</button></div>` : `<div class="mi-actions"><button data-cs="copy"><i class="fas fa-copy"></i> Copy text</button></div>`}`);
+    $("#sheet-body").dataset.cid = cid;
+  }
+  function startChatEdit(cid) {
+    const m = myMsg(cid), ta = $("#chat-in"); if (!m || !ta || !canChangeMsg(m)) return;
+    if (!chat.editing) chat.savedDraft = ta.value;
+    chat.editing = cid; ta.value = m.body; autoGrow(ta);
+    $("#chat-edit-text").textContent = m.body; $("#chat-editbar").hidden = false;
+    const sb = $("#chat-send"); sb.classList.add("is-editing"); sb.setAttribute("aria-label", "Save changes"); sb.innerHTML = '<i class="fas fa-check"></i>';
+    inbox(); ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length);
+  }
+  function cancelChatEdit() {
+    if (!chat.editing) return;
+    chat.editing = null;
+    const ta = $("#chat-in"); if (ta) { ta.value = chat.savedDraft; autoGrow(ta); }
+    chat.savedDraft = "";
+    const bar = $("#chat-editbar"); if (bar) bar.hidden = true;
+    const sb = $("#chat-send"); if (sb) { sb.classList.remove("is-editing"); sb.setAttribute("aria-label", "Send"); sb.innerHTML = '<i class="fas fa-paper-plane"></i>'; }
+    if (current === "inbox" && chat.thread) inbox();
+  }
+  async function saveChatEdit() {
+    const m = myMsg(chat.editing), ta = $("#chat-in"); if (!m || !ta) return cancelChatEdit();
+    const text = ta.value.trim(); if (!text) return toast("A message cannot be empty.", true);
+    if (text === m.body) return cancelChatEdit();
+    if (!canChangeMsg(m)) { cancelChatEdit(); return toast(READ_LOCK, true); }
+    if (m.status === "failed") { m.body = text; saveChat(); cancelChatEdit(); return toast("Message updated."); }      // not on the server yet
+    try {
+      await api("/messages/" + enc(m.id), { method: "PUT", body: JSON.stringify({ body: text }) });
+      m.body = text; m.edited = true; saveChat(); cancelChatEdit(); toast("Message updated.");
+    } catch (e) { if (e.message === "401") return; toast(e.message || "Could not edit.", true); cancelChatEdit(); loadChat().then(() => current === "inbox" && inbox()); }
+  }
+  async function deleteChatMsg(cid) {
+    const m = myMsg(cid); if (!m) return;
+    if (!canChangeMsg(m)) return toast(READ_LOCK, true);
+    if (!confirm("Delete this message? It will be removed from the conversation.")) return;
+    try {
+      if (m.status !== "failed") await api("/messages/" + enc(m.id), { method: "DELETE" });
+      chat.items = chat.items.filter((x) => x !== m); saveChat();
+      if (chat.editing === cid) cancelChatEdit();
+      if (current === "inbox") inbox(); updateDot(); toast("Message deleted.");
+    } catch (e) { if (e.message === "401") return; toast(e.message || "Could not delete.", true); loadChat().then(() => current === "inbox" && inbox()); }
+  }
+  function copyMsgText(t) {
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(t).then(() => toast("Copied."), () => toast("Could not copy.", true));
+    else { const x = document.createElement("textarea"); x.value = t; document.body.appendChild(x); x.select(); try { document.execCommand("copy"); toast("Copied."); } catch (e) { toast("Could not copy.", true); } x.remove(); }
+  }
+  function chatSheetAction(a) {
+    const cid = $("#sheet-body").dataset.cid, m = myMsg(cid);
+    closeSheet(); if (!m) return;
+    if (a === "copy") return copyMsgText(m.body);
+    if (!canChangeMsg(m)) return toast(READ_LOCK, true);
+    if (a === "edit") startChatEdit(cid); else if (a === "del") deleteChatMsg(cid);
   }
 
   /* ── DIARY: class → subject → pictures → sent to the class's parents ── */
@@ -823,11 +907,13 @@
     if (tab === "diary" && !dz.loaded) loadDiary().then(() => current === "diary" && diary());
     if (["home", "classes", "quizzes", "diary"].includes(tab) && !att.students && !att.loading) ensureStudents().then(() => current === tab && VIEWS[tab]());
   }
-  document.querySelectorAll(".tab").forEach((t) => t.addEventListener("click", () => { if (t.dataset.tab === "quizzes") quizView = "list"; if (t.dataset.tab === "inbox") chat.thread = null; if (t.dataset.tab === "classes") classOpen = null; go(t.dataset.tab); }));
+  document.querySelectorAll(".tab").forEach((t) => t.addEventListener("click", () => { if (t.dataset.tab === "quizzes") quizView = "list"; if (t.dataset.tab === "inbox") { chat.thread = null; chat.editing = null; chat.mark = null; } if (t.dataset.tab === "classes") classOpen = null; go(t.dataset.tab); }));
   $("#btn-profile").addEventListener("click", () => go("profile"));
 
   view.addEventListener("click", (e) => {
     const th = e.target.closest("[data-thread]"); if (th) { chat.thread = th.dataset.thread; return current === "inbox" ? inbox() : go("inbox"); }
+    const ec = e.target.closest("[data-editcancel]"); if (ec) return cancelChatEdit();
+    const tb = e.target.closest(".bub.tappable"); if (tb && tb.dataset.cid) return openMsgSheet(tb.dataset.cid);
     const rt = e.target.closest("[data-retry]"); if (rt) { const m = chat.items.find((x) => x.clientId === rt.dataset.retry); if (m) { m.status = "sending"; m.error = ""; saveChat(); inbox(); flushChat(); } return; }
     const tt = e.target.closest("[data-test]"); if (tt && !e.target.closest("button[data-go]")) { openTest = tt.dataset.test; quizView = "detail"; return go("quizzes"); }
     const im = e.target.closest("img[data-dimg]"); if (im && im.src) { openSheet(`<div class="sheet-head"><div><b>Diary picture</b></div><button class="icon-btn dark" data-close="1" aria-label="Close"><i class="fas fa-xmark"></i></button></div><img src="${im.src}" alt="" class="fullimg">`, "tall"); return; }
@@ -854,7 +940,7 @@
     /* messages */
     if (d.newparent != null) return openParentPicker();
     if (d.msgparent != null) return startParentChat(d.msgparent);
-    if (d.chatback != null) { chat.thread = null; return inbox(); }
+    if (d.chatback != null) { chat.thread = null; chat.editing = null; chat.mark = null; return inbox(); }
     if (t.id === "chat-send") return sendChat();
     /* classes */
     if (d.openclass != null) { classOpen = +d.openclass; return classes(); }
@@ -873,10 +959,12 @@
   view.addEventListener("keydown", (e) => {
     if (e.key === "Enter" && e.target.id === "todo-in") addTodo();
     if (e.key === "Enter" && (e.ctrlKey || e.metaKey) && e.target.id === "chat-in") { e.preventDefault(); sendChat(); }
+    if (e.key === "Escape" && chat.editing) cancelChatEdit();
+    if ((e.key === "Enter" || e.key === " ") && e.target.classList && e.target.classList.contains("tappable") && e.target.dataset.cid) { e.preventDefault(); openMsgSheet(e.target.dataset.cid); }
   });
   view.addEventListener("input", (e) => {
     const t = e.target;
-    if (t.id === "chat-in") { chat.draft[chat.thread] = t.value; autoGrow(t); }
+    if (t.id === "chat-in") { if (!chat.editing) chat.draft[chat.thread] = t.value; autoGrow(t); }
     else if (t.id === "d-note") dz.note = t.value;
     else if (t.id === "d-subj") { dz.subject = t.value.trim(); const b = $("#d-send"); }
     else if (t.id === "class-q") { const q = t.value.trim().toLowerCase(); view.querySelectorAll(".srow").forEach((r) => (r.hidden = !!q && r.dataset.q.indexOf(q) < 0)); }
@@ -896,6 +984,7 @@
     if (b.id === "card-dl") return cardDownload();
     if (b.id === "mk-save") return saveMarks();
     if (b.dataset.pickparent) return startParentChat(b.dataset.pickparent);
+    if (b.dataset.cs) return chatSheetAction(b.dataset.cs);
     if (gradeCtx && b.dataset.abs) {
       const reg = b.dataset.abs, on = !gradeCtx.abs[reg]; gradeCtx.abs[reg] = on; b.classList.toggle("on", on);
       const inp = b.parentElement.querySelector(".mk-in"); inp.disabled = on; if (on) inp.value = ""; else inp.focus();
@@ -922,7 +1011,7 @@
         actually changed — and never while the teacher is typing, marking or has a sheet open. ── */
   const LIVE_MS = 8000;
   let syncing = false, stale = false;
-  const liveSig = () => JSON.stringify([ann.received.map((a) => [a.id, a.title, a.body, a.date]), chat.items.map((m) => [m.id, m.status, m.read]), dz.list.map((d) => d.id), att.saved, att.students ? att.students.length : -1, tests.map((t) => [t.id, t.marked, Object.keys(t.results || {}).length]), school.name, school.logo ? school.logo.length : 0]);
+  const liveSig = () => JSON.stringify([ann.received.map((a) => [a.id, a.title, a.body, a.date]), chat.items.map((m) => [m.id, m.status, m.read, m.seen, m.edited, m.body]), dz.list.map((d) => d.id), att.saved, att.students ? att.students.length : -1, tests.map((t) => [t.id, t.marked, Object.keys(t.results || {}).length]), school.name, school.logo ? school.logo.length : 0]);
   function userBusy() {
     const a = document.activeElement;
     if (!$("#sheet").hidden) return true;
