@@ -1048,7 +1048,7 @@
             "<b>" + list.length + "</b> parent" + (list.length === 1 ? "" : "s") + " will be able to see: " + incl.map(x => esc(x.p.subj)).join(", ") + "." +
             (skipped ? "<br><b>" + skipped + "</b> selected student" + (skipped === 1 ? " has" : "s have") + " no marks and will be skipped." : "") +
             (heldPicked ? "<br><b>" + heldPicked + "</b> held-back student" + (heldPicked === 1 ? " is" : "s are") + " included because you selected them." : "") + "</p>" +
-            '<label class="ex-check"><input type="checkbox" id="ps-notify"' + (db.prefs.pnotify === false ? "" : " checked") + "> Also tell the parents (a message in their School Office chat)</label>" +
+            '<label class="ex-check"><input type="checkbox" id="ps-notify"' + (db.prefs.pnotify === false ? "" : " checked") + "> Also tell the parents (a result notice in their Announcements)</label>" +
             "<div class='row'><button class='ex-btn ghost' data-close>Cancel</button><button class='ex-btn' id='ps-ok'><i class='fas fa-paper-plane'></i> Send</button></div>", s => {
             $("#ps-ok", s).addEventListener("click", async () => {
                 const notify = $("#ps-notify", s).checked; db.prefs.pnotify = notify; save();

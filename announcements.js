@@ -228,7 +228,7 @@
             if (state.mark && m.id && m.id === state.mark.id) html += '<div class="am-unread"><span>' + state.mark.count + (state.mark.count === 1 ? " unread message" : " unread messages") + "</span></div>";
             var me = m.senderType === "ADMIN", tap = me && !!m.id;
             var who = me ? "" : '<span class="who">' + esc(m.senderType === "PARENT" ? (m.guardianName || "Parent") + " (parent)" : (m.senderName || "Teacher")) + "</span>";
-            var grp = m.broadcastId ? '<span class="grp"><i class="fas fa-bullhorn"></i> Announcement</span>' : "";
+            var grp = m.broadcastId ? '<span class="grp"><i class="fas fa-users"></i> Group message</span>' : "";
             var menu = !me && m.id ? '<button class="am-mm" data-mid="' + m.id + '" aria-label="Message options"><i class="fas fa-chevron-down"></i></button>' : "";
             var meta = '<span class="t">' + (m.editedAt ? '<em class="am-edited">Edited</em>' : "") + clock(m.createdAt) + (me ? ' <span class="receipt-slot">' + receiptHTML(statusOf(m)) + "</span>" : "") + "</span>";
             html += '<div class="am-b ' + (me ? "me" : "them") + (m.pending ? " sending" : "") + (tap ? " tappable" : "") + (state.editing === m.id && me ? " is-editing" : "") + '" data-mid="' + (m.id || "") + '"' +
