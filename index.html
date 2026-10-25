@@ -35,8 +35,14 @@
       <a href="#about-us" data-section="about-us">About</a>
       <a href="#news" data-section="news">News</a>
       <a href="#contact" data-section="contact">Contact</a>
+      <button class="nav-demo-mobile btn-ripple" onclick="openVideo()" type="button">
+        <i class="fas fa-play"></i> Watch Demo
+      </button>
     </nav>
     <div class="nav-actions">
+      <button class="btn-demo-nav btn-ripple" onclick="openVideo()" type="button">
+        <i class="fas fa-play"></i> <span>Watch Demo</span>
+      </button>
       <button class="btn-login-top btn-ripple" onclick="openLogin()" aria-label="Login to dashboard">
         <i class="fas fa-lock"></i> <span>Login</span>
       </button>
@@ -604,6 +610,15 @@
         <div class="gs-option-text">
           <div class="gs-option-title">Register your school</div>
           <div class="gs-option-sub">Use the School ID and security code given by Soft School</div>
+        </div>
+        <i class="fas fa-arrow-right gs-arrow"></i>
+      </button>
+
+      <button class="gs-option gs-option-video" onclick="openVideoFromGs()">
+        <div class="gs-option-icon gs-icon-teal"><i class="fas fa-play"></i></div>
+        <div class="gs-option-text">
+          <div class="gs-option-title">Watch the demo</div>
+          <div class="gs-option-sub">See Soft School in action before you commit</div>
         </div>
         <i class="fas fa-arrow-right gs-arrow"></i>
       </button>

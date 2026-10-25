@@ -19,7 +19,8 @@
 
    Leave both empty to show a "coming soon" placeholder.
    ══════════════════════════════════════════════════════ */
-const DEMO_VIDEO_ID = "PJYZTVhMNfo"; // YouTube video ID
+const DEMO_VIDEO_ID = ""; // YouTube video ID (not used)
+const DEMO_VIDEO_FB_URL = "https://www.facebook.com/share/v/1C7qTHkZvw/"; // Facebook video URL
 const DEMO_VIDEO_SRC = ""; // Direct video URL  e.g. 'https://example.com/demo.mp4'
 
 /* ── SHOW A TOAST IF REDIRECTED HERE AFTER A BLOCK ── */
@@ -339,7 +340,19 @@ function buildVideoContent() {
 
   container.innerHTML = "";
 
-  if (DEMO_VIDEO_ID) {
+  if (DEMO_VIDEO_FB_URL) {
+    /* Facebook video embed */
+    const iframe = document.createElement("iframe");
+    iframe.src =
+      "https://www.facebook.com/plugins/video.php?href=" +
+      encodeURIComponent(DEMO_VIDEO_FB_URL) +
+      "&show_text=false&autoplay=true&allowfullscreen=true";
+    iframe.allow =
+      "autoplay; clipboard-write; encrypted-media; picture-in-picture; web-share";
+    iframe.allowFullscreen = true;
+    iframe.title = "Soft School Demo Video";
+    container.appendChild(iframe);
+  } else if (DEMO_VIDEO_ID) {
     /* YouTube embed */
     const iframe = document.createElement("iframe");
     iframe.src = `https://www.youtube.com/embed/${DEMO_VIDEO_ID}?autoplay=1&rel=0&modestbranding=1`;
