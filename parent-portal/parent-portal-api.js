@@ -360,4 +360,17 @@
   };
   ensureSoftwareFavicon();
   loadSchoolBranding();
+
+  // Alerts for new messages, announcements and results (parent-portal-push.js). Loaded from here so every
+  // portal page gets it without each page having to include it.
+  (function loadNotifier() {
+    try {
+      var cs = document.currentScript;
+      var base = cs && cs.src ? cs.src.replace(/[^\/?#]*([?#].*)?$/, '') : '';
+      var s = document.createElement('script');
+      s.src = base + 'parent-portal-push.js';
+      s.defer = true;
+      (document.head || document.documentElement).appendChild(s);
+    } catch (e) { /* notifications are optional */ }
+  })();
 })(window);

@@ -31,14 +31,16 @@
   // ===================================================
   const ANNOUNCEMENTS = [];
 
-  // Notices posted to this child's class. Urgent ones are shown under "Notice" with the new-dot.
+  // Everything the school sent this child's parent: announcements for all parents / the class, and result notices.
+  // The category (Notice / Event / Holiday / Result) is the one the school chose; it drives the filter chips.
   async function loadData() {
     const list = await PortalAPI.get(PortalAPI.forChild('/announcements'));
     ANNOUNCEMENTS.length = 0;
     (list || []).forEach((a) => {
       const date = PortalAPI.fmtDate(a.date), time = PortalAPI.fmtTime(a.date);
+      const cat = ['event', 'holiday', 'result'].indexOf(a.category) >= 0 ? a.category : 'notice';
       ANNOUNCEMENTS.push({
-        id: 'a' + a.id, category: 'notice', categoryLabel: 'Notice',
+        id: 'a' + a.id, category: cat, categoryLabel: cat.charAt(0).toUpperCase() + cat.slice(1),
         heading: a.title, text: a.body, date: date, time: time,
         timestamp: date + ' · ' + time, isNew: !!a.isNew
       });

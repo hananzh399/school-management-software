@@ -83,7 +83,7 @@
       var w = when(a.date);
       if (!w) return null;
       return { id: 'ann|' + (a.id != null ? a.id : w.date + '|' + (a.title || '')),
-        date: w.date, time: w.time, type: 'default',
+        date: w.date, time: w.time, type: a.category === 'result' ? 'result' : 'default',
         title: a.title || tr('notifAnnouncement', 'New announcement'), body: a.body || '' };
     });
   }
