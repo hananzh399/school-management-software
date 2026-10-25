@@ -63,11 +63,72 @@
   };
 
   const TERM_LABELS = {
+    'monthly-test': 'Monthly Test',
     'first-term': 'First Term',
-    'second-term': 'Second Term'
+    'mid-term': 'Mid Term',
+    'second-term': 'Second Term',
+    'final-term': 'Final Term'
   };
 
-  const TERM_KEYS = { 'first-term': 'firstTerm', 'second-term': 'secondTerm' };
+  const TERM_KEYS = {
+    'monthly-test': 'monthlyTest',
+    'first-term': 'firstTerm',
+    'mid-term': 'midTerm',
+    'second-term': 'secondTerm',
+    'final-term': 'finalTerm'
+  };
+  const TERM_ORDER = ['monthly-test', 'first-term', 'mid-term', 'second-term', 'final-term'];
+
+  // The session / term lists come from what the school has actually sent (nothing is hard-coded).
+  function prettyKey(k) {
+    return String(k).split(/[-_]+/).filter(Boolean).map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+  }
+  function sessionLabel(k) { return SESSION_LABELS[k] || String(k).replace('-', ' – '); }
+  function termLabel(k) {
+    return onScreen(TERM_KEYS[k] ? tr(TERM_KEYS[k], TERM_LABELS[k]) : prettyKey(k));
+  }
+  function sortedTerms(session) {
+    const keys = Object.keys(RESULT_DATA[session] || {});
+    const rank = (k) => { const i = TERM_ORDER.indexOf(k); return i < 0 ? 99 : i; };
+    return keys.sort((a, b) => rank(a) - rank(b) || a.localeCompare(b));
+  }
+  function fillSelect(el, items, keep) {
+    if (!el) return;
+    const first = el.options[0];
+    el.innerHTML = '';
+    if (first) el.appendChild(first);
+    items.forEach((it) => {
+      const o = document.createElement('option');
+      o.value = it.value;
+      o.textContent = it.label;
+      el.appendChild(o);
+    });
+    el.value = items.some((it) => it.value === keep) ? keep : '';
+  }
+  function populateFilters() {
+    const sessionEl = document.getElementById('resultSession');
+    const termEl = document.getElementById('resultTerm');
+    const sessions = Object.keys(RESULT_DATA).sort().reverse();
+    fillSelect(sessionEl, sessions.map((k) => ({ value: k, label: sessionLabel(k) })), sessionEl ? sessionEl.value : '');
+    if (sessionEl && !sessionEl.value && sessions.length) sessionEl.value = sessions[0];   // newest session first
+    populateTerms();
+    const none = document.getElementById('resultPrompt');
+    if (none && !sessions.length) {
+      const title = none.querySelector('.result-prompt-title');
+      const text = none.querySelector('.result-prompt-text');
+      if (title) title.textContent = onScreen(tr('noResultsTitle', 'No results shared yet'));
+      if (text) text.textContent = onScreen(tr('noResultsText', 'Results appear here as soon as the school sends them.'));
+    }
+  }
+  function populateTerms() {
+    const sessionEl = document.getElementById('resultSession');
+    const termEl = document.getElementById('resultTerm');
+    if (!termEl) return;
+    const session = sessionEl ? sessionEl.value : '';
+    const terms = session ? sortedTerms(session) : [];
+    fillSelect(termEl, terms.map((k) => ({ value: k, label: termLabel(k) })), termEl.value);
+    if (!termEl.value && terms.length === 1) termEl.value = terms[0];                      // only one term sent: open it
+  }
 
   const SUBJECT_KEYS = {
     'Maths': 'subMaths', 'English': 'subEnglish', 'Physics': 'subPhysics',
@@ -219,8 +280,8 @@
     // Update applied banner
     const appliedSessionEl = document.getElementById('resultAppliedSession');
     const appliedTermEl = document.getElementById('resultAppliedTerm');
-    if (appliedSessionEl) appliedSessionEl.textContent = SESSION_LABELS[session] || session;
-    if (appliedTermEl) appliedTermEl.textContent = onScreen(tr(TERM_KEYS[term], TERM_LABELS[term] || term));
+    if (appliedSessionEl) appliedSessionEl.textContent = sessionLabel(session);
+    if (appliedTermEl) appliedTermEl.textContent = termLabel(term);
 
     const sessionData = RESULT_DATA[session];
     const termData = sessionData ? sessionData[term] : null;
@@ -250,8 +311,11 @@
       let totalObtained = 0;
 
       termData.subjects.forEach((subject) => {
-        totalMarks += Number(subject.total) || 0;
-        totalObtained += Number(subject.obtained) || 0;
+        const absent = subject.absent === true;       // absent in this paper: shown as "Abs", left out of the totals
+        if (!absent) {
+          totalMarks += Number(subject.total) || 0;
+          totalObtained += Number(subject.obtained) || 0;
+        }
 
         const percent = subject.total > 0
           ? (subject.obtained / subject.total) * 100
@@ -263,9 +327,9 @@
         row.innerHTML = `
           <span class="result-subject">${escapeHtml(onScreen(subjectLabel(subject.name)))}</span>
           <span class="result-cell">${subject.total}</span>
-          <span class="result-cell result-cell-obtained">${subject.obtained}</span>
+          <span class="result-cell result-cell-obtained">${absent ? escapeHtml(onScreen(tr('absentShort', 'Abs'))) : subject.obtained}</span>
           <span class="result-cell result-cell-percent">
-            <span class="result-percent-pill${percentRounded < 60 ? ' low' : ''}">${percentRounded}%</span>
+            ${absent ? '—' : `<span class="result-percent-pill${percentRounded < 60 ? ' low' : ''}">${percentRounded}%</span>`}
           </span>
         `;
         tableBody.appendChild(row);
@@ -310,7 +374,7 @@
     const sessionEl = document.getElementById('resultSession');
     const termEl = document.getElementById('resultTerm');
 
-    if (sessionEl) sessionEl.addEventListener('change', renderResult);
+    if (sessionEl) sessionEl.addEventListener('change', () => { populateTerms(); renderResult(); });
     if (termEl) termEl.addEventListener('change', renderResult);
   }
 
@@ -388,10 +452,11 @@
   async function boot() {
     try { await loadData(); } catch (err) { PortalAPI.showError(err); }
     populateStudentHeader();
+    populateFilters();
     initFilters();
     initDrawer();
-    updateVisibilityState('', '');
-    console.log('Result page ready — awaiting filter selection.');
+    renderResult();
+    console.log('Result page ready.');
   }
 
   if (document.readyState === 'loading') {
