@@ -335,6 +335,7 @@
             ["results", "file-arrow-up", "#10b981", "Result Upload", "Pick a generated paper and enter or import marks for the real students of its class.", waiting + " awaiting", waiting ? "warn" : "ok"],
             ["datesheet", "calendar-days", "#8b5cf6", "Date Sheet", "Plan the exam timetable for every class — dates, timings and rooms — and print it.", up.length + " upcoming", "info"],
             ["cards", "award", "#17716A", "Report Cards", "Result cards with grades, percentage, position and remarks, ready to print.", pubd + " published", ""],
+            ["parents", "people-roof", "#0ea5e9", "Send to Parents", "Choose which published results parents can see — a whole class or selected students — and hold back any result.", "Parent portal", ""],
             ["analysis", "chart-column", "#ec4899", "Result Analysis", "Subject averages, grade spread, toppers and students who need attention.", "Charts & insights", ""],
             ["grading", "ranking-star", "#f59e0b", "Grading Scheme", "Set the grade scale (A+, A, B …) and choose which grades are Pass or Fail on marks sheets, report cards and analysis.", SCALE.length + " grades · " + SCALE.filter(s => s.pass === false).length + " fail", ""]
         ];
@@ -570,7 +571,7 @@
         const ro = sheetRows(), locked = RS.status === "published";
         ROOT().innerHTML = head("file-arrow-up", esc(paper.title), esc(paper.term) + " · " + esc(clsLabel(paper.cls, paper.section)) + " · " + esc(paper.subj),
             '<a class="ex-btn ghost" href="#results"><i class="fas fa-list"></i> All papers</a><button class="ex-btn ghost" id="ru-tpl"><i class="fas fa-download"></i> CSV Template</button><button class="ex-btn ghost" id="ru-print"><i class="fas fa-print"></i> Print</button>' +
-            (locked ? '<button class="ex-btn ghost" id="ru-unpub"><i class="fas fa-lock-open"></i> Unpublish</button>' : '<button class="ex-btn ghost" id="ru-draft"><i class="fas fa-floppy-disk"></i> Save Draft</button><button class="ex-btn" id="ru-pub"><i class="fas fa-paper-plane"></i> Publish</button>')) +
+            (locked ? '<button class="ex-btn ghost" id="ru-unpub"><i class="fas fa-lock-open"></i> Unpublish</button><button class="ex-btn" id="ru-parents"><i class="fas fa-people-roof"></i> Send to parents</button>' : '<button class="ex-btn ghost" id="ru-draft"><i class="fas fa-floppy-disk"></i> Save Draft</button><button class="ex-btn" id="ru-pub"><i class="fas fa-paper-plane"></i> Publish</button>')) +
             dataBanner() +
             '<div class="ex-panel"><div class="ex-grid">' + field("Paper", '<input value="' + esc(paper.subj) + '" disabled>') + field("Class", '<input value="' + esc(clsLabel(paper.cls, paper.section)) + '" disabled>') +
             field("Maximum marks", '<input type="number" id="ru-total" min="1" value="' + RS.total + '"' + (locked ? " disabled" : "") + ">") + field("Status", '<div class="ex-statusbox"><span class="ex-chip ' + (locked ? "ok" : RS.status === "draft" ? "warn" : "info") + '">' + (locked ? "Published" : RS.status === "draft" ? "Draft" : "Not saved") + "</span></div>") + "</div>" +
@@ -597,6 +598,7 @@
         const d = $("#ru-draft"); if (d) d.addEventListener("click", () => persist("draft", ro));
         const p = $("#ru-pub"); if (p) p.addEventListener("click", () => publish(ro));
         const u = $("#ru-unpub"); if (u) u.addEventListener("click", () => { persist("draft", ro, true); vSheet(id); toast("Results unpublished."); });
+        const sp = $("#ru-parents"); if (sp) sp.addEventListener("click", () => { db.prefs.cls = paper.cls; db.prefs.term = paper.term; db.prefs.psec = paper.section || ""; save(); location.hash = "#parents"; });
     }
     function drawRows(ro, locked) {
         $("#ru-body").innerHTML = ro.map((s, i) => '<tr data-r="' + esc(s.reg) + '"><td>' + (i + 1) + "</td><td>" + esc(s.roll || "—") + "</td><td class='muted'>" + esc(s.reg) + "</td><td><b>" + esc(s.name) + "</b></td><td>" + esc(s.father || "—") +
@@ -676,8 +678,8 @@
         const vals = ro.map(s => RS.marks[s.reg]), bad = vals.filter(m => calc(m).res === "Invalid").length, entered = vals.filter(m => m != null && String(m).trim() !== "").length, blank = ro.length - entered;
         if (bad) return toast(bad + " row(s) have invalid marks (more than the maximum or not a number).", 1);
         if (!entered) return toast("Enter at least one mark before publishing.", 1);
-        openModal("<h3>Publish results?</h3><p class='ex-modal-p'><b>" + esc(RS.paper.title) + "</b><br>" + entered + " of " + ro.length + " students have marks" + (blank ? "; <b>" + blank + " still blank</b>" : "") + ". Published results feed Report Cards and Result Analysis.</p><div class='row'><button class='ex-btn ghost' data-close>Cancel</button><button class='ex-btn' id='pub-ok'>Publish</button></div>", s => {
-            $("#pub-ok", s).addEventListener("click", () => { persist("published", ro, true); closeModal(); vSheet(RS.paper.id); toast("Results published."); });
+        openModal("<h3>Publish results?</h3><p class='ex-modal-p'><b>" + esc(RS.paper.title) + "</b><br>" + entered + " of " + ro.length + " students have marks" + (blank ? "; <b>" + blank + " still blank</b>" : "") + ". Published results feed Report Cards and Result Analysis. <b>Parents do not see them until you send them</b> from Send to Parents.</p><div class='row'><button class='ex-btn ghost' data-close>Cancel</button><button class='ex-btn' id='pub-ok'>Publish</button></div>", s => {
+            $("#pub-ok", s).addEventListener("click", () => { persist("published", ro, true); closeModal(); vSheet(RS.paper.id); toast("Results published. Parents see them only after you send them."); });
         });
     }
     function printSheet(ro) {
@@ -785,7 +787,7 @@
         const st = ro.find(s => s.reg === CARD.reg), rk = rankMap(ro, data);
         const any = data.length > 0, marked = ro.filter(s => cardOf(s, data).subs.length);
         const chips = data.map(({ p, r }) => '<span class="ex-chip ' + (r.status === "published" ? "ok" : "warn") + '">' + esc(p.subj) + (r.status === "published" ? "" : " · draft") + "</span>").join(" ");
-        ROOT().innerHTML = head("award", "Report <span>Cards</span>", "Built automatically from uploaded results.", '<button class="ex-btn ghost" id="rc-all"><i class="fas fa-layer-group"></i> ' + (CARD.all ? "Single view" : "All students (" + marked.length + ")") + '</button><button class="ex-btn" id="rc-print"' + (any && marked.length ? "" : " disabled") + '><i class="fas fa-print"></i> Print ' + (CARD.all ? "all" : "card") + "</button>") + dataBanner() +
+        ROOT().innerHTML = head("award", "Report <span>Cards</span>", "Built automatically from uploaded results.", '<a class="ex-btn ghost" href="#parents"><i class="fas fa-people-roof"></i> Send to parents</a><button class="ex-btn ghost" id="rc-all"><i class="fas fa-layer-group"></i> ' + (CARD.all ? "Single view" : "All students (" + marked.length + ")") + '</button><button class="ex-btn" id="rc-print"' + (any && marked.length ? "" : " disabled") + '><i class="fas fa-print"></i> Print ' + (CARD.all ? "all" : "card") + "</button>") + dataBanner() +
             '<div class="ex-panel">' + termClassBar(CARD.all ? "" : field("Student", '<select id="rc-st">' + ro.map(s => '<option value="' + esc(s.reg) + '"' + (s.reg === CARD.reg ? " selected" : "") + ">" + esc((s.roll ? s.roll + " — " : "") + s.name) + "</option>").join("") + "</select>")) +
             (any ? '<p class="ex-note" style="margin-top:12px"><b>Subjects included:</b> ' + chips + "</p>" : "") + "</div>" +
             (!ro.length ? '<div class="ex-panel">' + empty("user-slash", "No students in this class", "Add students in Student Management.") + "</div>" :
@@ -907,9 +909,186 @@
     }
 
     /* ============================================================
+       SEND TO PARENTS — nothing reaches a parent until the admin sends it.
+       Per student + session + term the server keeps one of three states (see ParentAdminController):
+         not sent · sent (parent sees it) · held back (parent never sees it; skipped by "send whole class").
+       Only PUBLISHED papers can be sent, and the admin picks which subjects and which students.
+       ============================================================ */
+    const PS = { key: "", ctx: null, server: null, err: "", sel: null, subj: {}, busy: false };
+    const termKey = t => String(t || "").trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+    const sessionBase = () => { const d = new Date(); return d.getMonth() >= 3 ? d.getFullYear() : d.getFullYear() - 1; };
+    const sessionOptions = () => { const b = sessionBase(); return [b - 1, b, b + 1].map(y => y + "-" + (y + 1)); };
+    async function parentCall(method, path, body) {
+        const token = sessionStorage.getItem("softschool_api_token") || "";
+        const r = await fetch(API_ORIGIN + "/api/parent-admin" + path, {
+            method, headers: Object.assign({ Accept: "application/json", Authorization: "Bearer " + token }, body !== undefined ? { "Content-Type": "application/json" } : {}),
+            body: body !== undefined ? JSON.stringify(body) : undefined
+        });
+        let j = null; try { j = await r.json(); } catch (e) { /* no body */ }
+        if (!r.ok) throw new Error(r.status === 404 ? "The server does not have the parent-results service yet (HTTP 404)." : (j && (j.error || j.message)) || "HTTP " + r.status);
+        return j;
+    }
+    /* latest uploaded paper per subject (and section) of this class + term */
+    function sendPapers(cls, term, sec) {
+        const by = {};
+        db.papers.filter(p => p.term === term && p.cls === cls && (!sec || !p.section || p.section === sec) && db.results[p.id]).forEach(p => {
+            const r = db.results[p.id], k = p.subj.toLowerCase() + "|" + (p.section || ""), cur = by[k];
+            if (!cur || r.at > cur.r.at) by[k] = { p, r, pub: r.status === "published" };
+        });
+        return Object.keys(by).map(k => by[k]).sort((a, b) => a.p.subj.localeCompare(b.p.subj) || (a.p.section || "").localeCompare(b.p.section || ""));
+    }
+    /* what this student's parent would see: only published papers the admin left ticked */
+    function subjectsFor(s, papers) {
+        const out = {};
+        papers.forEach(({ p, r, pub }) => {
+            if (!pub || PS.subj[p.id] === false) return;
+            if (p.section && p.section !== s.section) return;
+            const m = r.marks[s.reg]; if (m == null || String(m).trim() === "") return;
+            out[p.subj] = isAbs(m) ? { name: p.subj, total: r.total, obtained: 0, absent: true } : { name: p.subj, total: r.total, obtained: +m };
+        });
+        return Object.keys(out).map(k => out[k]);
+    }
+    function sameSubs(srv, cur) {
+        if (!Array.isArray(srv) || srv.length !== cur.length) return false;
+        return cur.every(c => srv.some(x => x.name === c.name && Math.abs(x.total - c.total) < 1e-9 && Math.abs(x.obtained - c.obtained) < 1e-9 && !!x.absent === !!c.absent));
+    }
+    function psRows(papers) {
+        return studentsOf(PS.ctx.cls, PS.ctx.sec).map(s => {
+            const subs = subjectsFor(s, papers), sv = PS.server ? PS.server[s.reg] : null; let got = 0, out = 0;
+            subs.forEach(x => { if (!x.absent) { got += x.obtained; out += x.total; } });
+            const state = sv ? sv.state : "none";
+            return { s, subs, sv, state, same: state === "sent" && sameSubs(sv.subjects, subs), pct: out ? got / out * 100 : null };
+        });
+    }
+    function psChip(r) {
+        if (!PS.server) return '<span class="ex-chip">…</span>';
+        if (r.state === "held") return '<span class="ex-chip bad"><i class="fas fa-hand"></i> Held back</span>';
+        if (r.state === "sent") {
+            const d = new Date(r.sv.updatedAt), when = isNaN(d) ? "" : " · " + fmt(iso(d));
+            return r.same || !r.subs.length ? '<span class="ex-chip ok"><i class="fas fa-check"></i> Sent' + when + "</span>" : '<span class="ex-chip warn" title="Marks or subjects changed since you sent this. Send again to update the parent.">Sent' + when + " · changed</span>";
+        }
+        return r.subs.length ? '<span class="ex-chip info">Not sent</span>' : '<span class="ex-chip">No marks</span>';
+    }
+    async function loadStatus(key) {
+        const c = PS.ctx;
+        try {
+            const list = await parentCall("GET", "/results?session=" + encodeURIComponent(c.sess) + "&term=" + encodeURIComponent(termKey(c.term)));
+            if (PS.key !== key) return;
+            PS.server = {}; (Array.isArray(list) ? list : []).forEach(x => { PS.server[x.regNo] = x; }); PS.err = ""; PS.sel = null;
+        } catch (e) { if (PS.key !== key) return; PS.server = null; PS.err = e.message || "Could not load the status."; }
+        if ((location.hash || "").indexOf("#parents") === 0) drawParentsBody();
+    }
+    function vParents(_, keep) {
+        ensurePrefs();
+        if (!/^\d{4}-\d{4}$/.test(db.prefs.psess || "")) db.prefs.psess = sessionOptions()[1];
+        const cls = db.prefs.cls, term = db.prefs.term, sess = db.prefs.psess, secs = sectionsOf(cls);
+        let sec = db.prefs.psec || ""; if (sec && secs.indexOf(sec) < 0) sec = db.prefs.psec = "";
+        const key = [cls, term, sess, sec].join("|");
+        if (!keep || PS.key !== key) { PS.key = key; PS.ctx = { cls, term, sess, sec }; PS.server = null; PS.err = ""; PS.sel = null; PS.subj = {}; loadStatus(key); }
+        const sessList = sessionOptions(); if (sessList.indexOf(sess) < 0) sessList.push(sess);
+        ROOT().innerHTML = head("people-roof", "Send to <span>Parents</span>", "Parents see a result only after you send it here — to the whole class or to chosen students.",
+            '<a class="ex-btn ghost" href="#results"><i class="fas fa-file-arrow-up"></i> Result Upload</a>') + dataBanner() +
+            '<div class="ex-panel">' + termClassBar(field("Session", '<select data-pref="psess">' + opts(sessList.sort(), sess) + "</select>") +
+                (secs.length ? field("Section", '<select data-pref="psec">' + opts(secs, sec, "All sections") + "</select>") : "")) +
+            '<p class="ex-note" style="margin-top:12px"><i class="fas fa-shield-halved"></i> <b>Nothing is shared automatically.</b> Marks you upload or publish stay private until you press <b>Send</b>. You can hold back any student and withdraw a result later.</p></div>' +
+            '<div id="ps-body"></div>';
+        bindPrefs(ROOT(), () => vParents(null, true)); bindReload();
+        drawParentsBody();
+    }
+    function drawParentsBody() {
+        const box = $("#ps-body"); if (!box || !PS.ctx) return;
+        const c = PS.ctx, papers = sendPapers(c.cls, c.term, c.sec), rows = psRows(papers), incl = papers.filter(x => x.pub && PS.subj[x.p.id] !== false);
+        if (PS.server && !PS.sel) { PS.sel = {}; rows.forEach(r => { PS.sel[r.s.reg] = r.subs.length > 0 && r.state !== "held" && !(r.state === "sent" && r.same); }); }
+        const n = f => rows.filter(f).length;
+        const subjHtml = papers.length ? '<div class="ex-subj">' + papers.map(({ p, r, pub }) =>
+            '<label class="ex-check' + (pub ? "" : " off") + '"><input type="checkbox" data-subj="' + esc(p.id) + '"' + (pub && PS.subj[p.id] !== false ? " checked" : "") + (pub ? "" : " disabled") + "> <b>" + esc(p.subj) + (p.section ? " (" + esc(p.section) + ")" : "") + "</b> <small>" + (pub ? "out of " + r.total : "draft · publish it in Result Upload first") + "</small></label>").join("") + "</div>"
+            : empty("file-circle-question", "No uploaded results for this class and term", "Upload marks in " + link("#results", "Result Upload") + " and publish them, then come back here.");
+        box.innerHTML =
+            (PS.err ? '<div class="ex-alert warn"><i class="fas fa-triangle-exclamation"></i><div><b>Could not check what parents can already see</b><span>' + esc(PS.err) + '</span></div><button class="ex-btn sm" id="ps-retry">Retry</button></div>' : "") +
+            '<section class="quick-stats-strip">' + stat("icon-students", "user-graduate", rows.length, "Students") + stat("icon-present-students", "circle-check", PS.server ? n(r => r.state === "sent") : "…", "Sent to parents") +
+            stat("icon-present-staff", "hand", PS.server ? n(r => r.state === "held") : "…", "Held back") + stat("icon-staff", "hourglass-half", PS.server ? n(r => r.subs.length && (r.state === "none" || (r.state === "sent" && !r.same))) : "…", "Ready to send") + "</section>" +
+            '<div class="ex-panel"><h3><i class="fas fa-book-open"></i> Subjects parents will see <small>' + incl.length + " of " + papers.length + " selected</small></h3>" + subjHtml + "</div>" +
+            '<div class="ex-panel"><h3><i class="fas fa-user-graduate"></i> Students <small>' + esc(clsLabel(c.cls, c.sec)) + "</small></h3>" +
+            (rows.length ? '<div class="ex-psbar"><div class="ex-pssel">Select: <button type="button" data-sel="ready">Ready to send</button><button type="button" data-sel="all">All</button><button type="button" data-sel="held">Held back</button><button type="button" data-sel="none">None</button></div><div class="ex-psact" id="ps-actions"></div></div>' +
+                '<div class="ex-tablewrap"><table class="ex-table"><thead><tr><th style="width:34px"><input type="checkbox" id="ps-all" aria-label="Select all"' + (PS.server ? "" : " disabled") + '></th><th>Roll No</th><th>Student</th><th>Father / Guardian</th><th>Subjects</th><th>Overall</th><th>Parent can see</th></tr></thead><tbody>' +
+                rows.map(r => '<tr><td><input type="checkbox" data-ps="' + esc(r.s.reg) + '"' + (PS.sel && PS.sel[r.s.reg] ? " checked" : "") + (PS.server ? "" : " disabled") + ' aria-label="Select ' + esc(r.s.name) + '"></td><td>' + esc(r.s.roll || "—") + "</td><td><b>" + esc(r.s.name) + "</b><br><small class='muted'>" + esc(r.s.reg) + "</small></td><td>" + esc(r.s.father || "—") + "</td><td>" + r.subs.length + " / " + incl.length + "</td><td>" + (r.pct == null ? "—" : r.pct.toFixed(1) + "%") + "</td><td>" + psChip(r) + "</td></tr>").join("") + "</tbody></table></div>"
+                : empty("user-slash", "No students in this class", "Add students in Student Management.")) + "</div>";
+        const retry = $("#ps-retry"); if (retry) retry.addEventListener("click", () => { PS.err = ""; loadStatus(PS.key); drawParentsBody(); });
+        $$("[data-subj]", box).forEach(i => i.addEventListener("change", () => { PS.subj[i.dataset.subj] = i.checked; drawParentsBody(); }));
+        $$("[data-ps]", box).forEach(i => i.addEventListener("change", () => { PS.sel[i.dataset.ps] = i.checked; drawActions(rows); }));
+        const all = $("#ps-all", box); if (all) all.addEventListener("change", () => { rows.forEach(r => { PS.sel[r.s.reg] = all.checked; }); drawParentsBody(); });
+        $$("[data-sel]", box).forEach(b => b.addEventListener("click", () => {
+            const k = b.dataset.sel; if (!PS.server) return;
+            rows.forEach(r => { PS.sel[r.s.reg] = k === "all" ? true : k === "none" ? false : k === "held" ? r.state === "held" : r.subs.length > 0 && r.state !== "held" && !(r.state === "sent" && r.same); });
+            drawParentsBody();
+        }));
+        if (rows.length) drawActions(rows);
+    }
+    function drawActions(rows) {
+        const el = $("#ps-actions"); if (!el) return;
+        rows = rows || psRows(sendPapers(PS.ctx.cls, PS.ctx.term, PS.ctx.sec));
+        const picked = rows.filter(r => PS.sel && PS.sel[r.s.reg]), sendable = picked.filter(r => r.subs.length);
+        const classReady = rows.filter(r => r.subs.length && r.state !== "held" && !(r.state === "sent" && r.same)), ready = !!PS.server && !PS.busy;
+        const all = $("#ps-all"); if (all) { all.checked = rows.length > 0 && picked.length === rows.length; all.indeterminate = picked.length > 0 && picked.length < rows.length; }
+        el.innerHTML = '<button class="ex-btn" id="ps-send"' + (ready && sendable.length ? "" : " disabled") + '><i class="fas fa-paper-plane"></i> Send to ' + sendable.length + " parent" + (sendable.length === 1 ? "" : "s") + "</button>" +
+            '<button class="ex-btn ghost" id="ps-class"' + (ready && classReady.length ? "" : " disabled") + ' title="Everyone with results, except students you are holding back"><i class="fas fa-people-roof"></i> Send whole class (' + classReady.length + ")</button>" +
+            '<button class="ex-btn ghost" id="ps-hold"' + (ready && picked.length ? "" : " disabled") + '><i class="fas fa-hand"></i> Hold back</button>' +
+            '<button class="ex-btn ghost" id="ps-wd"' + (ready && picked.some(r => r.state !== "none") ? "" : " disabled") + '><i class="fas fa-rotate-left"></i> Withdraw</button>';
+        $("#ps-send").addEventListener("click", () => psConfirmSend(sendable, picked.length - sendable.length));
+        $("#ps-class").addEventListener("click", () => { rows.forEach(r => { PS.sel[r.s.reg] = classReady.indexOf(r) >= 0; }); psConfirmSend(classReady, 0); drawParentsBody(); });
+        $("#ps-hold").addEventListener("click", () => psConfirmChange("hold", picked));
+        $("#ps-wd").addEventListener("click", () => psConfirmChange("withdraw", picked.filter(r => r.state !== "none")));
+    }
+    function psConfirmSend(list, skipped) {
+        const c = PS.ctx, papers = sendPapers(c.cls, c.term, c.sec), incl = papers.filter(x => x.pub && PS.subj[x.p.id] !== false);
+        if (!list.length) return toast("Choose at least one student who has marks.", 1);
+        if (!incl.length) return toast("Tick at least one published subject first.", 1);
+        const heldPicked = list.filter(r => r.state === "held").length;
+        openModal("<h3>Send results to parents?</h3><p class='ex-modal-p'><b>" + esc(clsLabel(c.cls, c.sec)) + "</b> · " + esc(c.term) + " · " + esc(c.sess) + "<br>" +
+            "<b>" + list.length + "</b> parent" + (list.length === 1 ? "" : "s") + " will be able to see: " + incl.map(x => esc(x.p.subj)).join(", ") + "." +
+            (skipped ? "<br><b>" + skipped + "</b> selected student" + (skipped === 1 ? " has" : "s have") + " no marks and will be skipped." : "") +
+            (heldPicked ? "<br><b>" + heldPicked + "</b> held-back student" + (heldPicked === 1 ? " is" : "s are") + " included because you selected them." : "") + "</p>" +
+            '<label class="ex-check"><input type="checkbox" id="ps-notify"' + (db.prefs.pnotify === false ? "" : " checked") + "> Also tell the parents (a message in their School Office chat)</label>" +
+            "<div class='row'><button class='ex-btn ghost' data-close>Cancel</button><button class='ex-btn' id='ps-ok'><i class='fas fa-paper-plane'></i> Send</button></div>", s => {
+            $("#ps-ok", s).addEventListener("click", async () => {
+                const notify = $("#ps-notify", s).checked; db.prefs.pnotify = notify; save();
+                const btn = $("#ps-ok", s); btn.disabled = true; btn.textContent = "Sending…"; PS.busy = true;
+                try {
+                    const payload = list.map(r => ({ regNo: r.s.reg, subjects: r.subs }));
+                    let sent = 0, told = 0;
+                    for (let i = 0; i < payload.length; i += 500) {
+                        const res = await parentCall("PUT", "/results", { session: c.sess, term: termKey(c.term), notify, results: payload.slice(i, i + 500) });
+                        sent += res.saved || 0; told += res.notified || 0;
+                    }
+                    closeModal(); PS.busy = false;
+                    toast("Sent to " + sent + " parent" + (sent === 1 ? "" : "s") + (notify && told ? " · " + told + " notified" : "") + ".");
+                    await loadStatus(PS.key);
+                } catch (e) { PS.busy = false; closeModal(); toast(e.message || "Could not send.", 1); drawParentsBody(); }
+            });
+        });
+    }
+    function psConfirmChange(kind, list) {
+        if (!list.length) return;
+        const c = PS.ctx, hold = kind === "hold";
+        openModal("<h3>" + (hold ? "Hold back these results?" : "Withdraw from parents?") + "</h3><p class='ex-modal-p'><b>" + list.length + "</b> student" + (list.length === 1 ? "" : "s") + " · " + esc(clsLabel(c.cls, c.sec)) + " · " + esc(c.term) + "<br>" +
+            (hold ? "Parents will <b>not</b> see these results (if one was already sent it is hidden again), and \"Send whole class\" will skip them until you send them yourself."
+                  : "Parents will no longer see these results, and they go back to <b>Not sent</b>.") + "</p>" +
+            "<div class='row'><button class='ex-btn ghost' data-close>Cancel</button><button class='ex-btn danger' id='ps-ok'>" + (hold ? "Hold back" : "Withdraw") + "</button></div>", s => {
+            $("#ps-ok", s).addEventListener("click", async () => {
+                const btn = $("#ps-ok", s); btn.disabled = true; PS.busy = true;
+                try {
+                    await parentCall("POST", "/results/" + kind, { session: c.sess, term: termKey(c.term), regNos: list.map(r => r.s.reg) });
+                    closeModal(); PS.busy = false; toast(hold ? "Held back." : "Withdrawn from parents.");
+                    await loadStatus(PS.key);
+                } catch (e) { PS.busy = false; closeModal(); toast(e.message || "Could not update.", 1); drawParentsBody(); }
+            });
+        });
+    }
+
+    /* ============================================================
        ROUTER + PAGE CHROME
        ============================================================ */
-    const views = { hub: vHub, paper: vPaper, results: vResults, datesheet: vDate, cards: vCards, analysis: vAnalysis, grading: vGrading };
+    const views = { hub: vHub, paper: vPaper, results: vResults, datesheet: vDate, cards: vCards, analysis: vAnalysis, grading: vGrading, parents: vParents };
     function route() {
         const parts = (location.hash || "#hub").slice(1).split("/");
         freshRoot();
@@ -946,5 +1125,9 @@
          PUT    /datesheet/{id}   DELETE /datesheet/{id}
          PUT    /grading          DELETE /grading
          POST   /import                         one-time upload of this browser's older local data
+       PARENT PORTAL (ParentAdminController, /api/parent-admin) — only what the admin SENDS reaches parents:
+         GET    /results?session=&term=         who has been sent / held back
+         PUT    /results                        send   { session, term, notify, results:[{regNo, subjects:[{name,total,obtained,absent?}]}] }
+         POST   /results/hold | /results/withdraw   { session, term, regNos:[...] }
        ------------------------------------------------------------ */
 })();
