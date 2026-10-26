@@ -4491,3 +4491,16 @@ body { min-height: 100vh; min-height: 100dvh; }
     color: #ef4444;
 }
 .btn-deactivate:hover { background: rgba(239, 68, 68, 0.2); }
+
+/* ── Sidebar scrollbar: thin & themed on every admin page (matches Student Management) ── */
+.sidebar-nav {
+    scrollbar-width: thin;
+    scrollbar-color: var(--border-hover, rgba(148,163,184,0.28)) transparent;
+    overflow-y: auto;
+    overflow-x: hidden;
+}
+.sidebar-nav::-webkit-scrollbar { width: 6px; }
+.sidebar-nav::-webkit-scrollbar-button { display: none; width: 0; height: 0; }
+.sidebar-nav::-webkit-scrollbar-track { background: transparent; }
+.sidebar-nav::-webkit-scrollbar-thumb { background: var(--border-hover, rgba(148,163,184,0.28)); border-radius: 10px; }
+.sidebar-nav::-webkit-scrollbar-thumb:hover { background: var(--text-muted, #64748b); }
