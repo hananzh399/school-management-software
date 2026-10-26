@@ -199,6 +199,234 @@ async function apiRequest(endpoint, method = "GET", body = null) {
     }
 }
 
+/* ============================================================================
+   ACADEMIC SESSION LINK  (Sessions page  <->  Fees & Finance)
+   ----------------------------------------------------------------------------
+   sessions.html lets the school define session ranges (GET /api/sessions) and
+   mark ONE as "current" (PUT /api/sessions/{id}/current). This block makes
+   Fees & Finance follow that choice:
+     - a banner shows the current session and the billing month, with a link
+       to the Sessions page;
+     - the month pickers (Fine Records, Fee Defaulters, Salary Records, Fine
+       overview) list the session's months instead of an arbitrary window;
+     - "Move to Next Month" cannot silently run past the session's last month:
+       it either switches to the next session (if one exists) or sends the
+       admin to Sessions to create it;
+     - if the stored billing month sits outside the current session, the
+       banner says so and (when it is BEFORE the session) offers a one-click
+       fix. Nothing is ever changed without a confirmation.
+   Every helper degrades to the old behaviour when no session is set or the
+   sessions request fails, so Finance never breaks because of this link.
+   ============================================================================ */
+const SESSIONS_API_BASE = "https://167-86-120-247.sslip.io/api/sessions";
+const SESSIONS_PAGE_URL = "sessions.html";
+let _sessionsCache = [];          // every session of this school
+let _currentSessionCache = null;  // the one flagged currentSession, or null
+let _sessionsLoaded = false;
+
+function _sessionMonthStr(v) {
+    const m = /^(\d{4})-(\d{2})/.exec(String(v || ''));
+    return m ? `${m[1]}-${m[2]}` : '';
+}
+function _sessionMonthIndex(key) {
+    const m = /^(\d{4})-(\d{2})$/.exec(String(key || ''));
+    return m ? (+m[1]) * 12 + (+m[2] - 1) : null;
+}
+function _sessionKeyFromIndex(i) {
+    return `${Math.floor(i / 12)}-${String((i % 12) + 1).padStart(2, '0')}`;
+}
+function _sessionRange(sess) {
+    const start = sess && _sessionMonthStr(sess.startMonth);
+    const end = sess && _sessionMonthStr(sess.endMonth);
+    return (start && end && start <= end) ? { start, end } : null;
+}
+function _sessionLongLabel(key) {
+    const [y, m] = String(key).split('-').map(Number);
+    return new Date(y, m - 1, 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+}
+function sessionTitleOf(sess) {
+    const r = _sessionRange(sess);
+    return r ? `${_sessionLongLabel(r.start)} – ${_sessionLongLabel(r.end)}` : '';
+}
+
+async function refreshSessionCache() {
+    const schoolId = getCurrentSchoolId();
+    if (!schoolId) return;
+    try {
+        const res = await fetch(`${SESSIONS_API_BASE}?schoolId=${encodeURIComponent(schoolId)}`);
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const text = await res.text();
+        const data = text ? JSON.parse(text) : [];
+        _sessionsCache = Array.isArray(data) ? data : [];
+        _currentSessionCache = _sessionsCache.find(x => x && (x.currentSession === true || String(x.currentSession).toLowerCase() === 'true') && _sessionRange(x)) || null;
+        _sessionsLoaded = true;
+    } catch (e) {
+        // Keep whatever we had: a network blip must not make the session "disappear".
+        console.warn('[Finance] could not load sessions', e);
+    }
+}
+
+function getCurrentSessionRange() { return _sessionRange(_currentSessionCache); }
+
+function isMonthInCurrentSession(monthKey) {
+    const r = getCurrentSessionRange();
+    return !r || (monthKey >= r.start && monthKey <= r.end);
+}
+
+/** Keeps only session months. Falls back to the original list if that would leave nothing. */
+function filterMonthKeysToSession(keys) {
+    const r = getCurrentSessionRange();
+    if (!r) return keys;
+    const kept = keys.filter(k => k >= r.start && k <= r.end);
+    return kept.length ? kept : keys;
+}
+
+/**
+ * Session months, newest first, from `anchorKey` (clamped to the session end)
+ * back to the session's first month. Returns null when there is no session or
+ * the anchor is outside it, so callers keep their previous behaviour.
+ */
+function getSessionMonthKeysUpTo(anchorKey) {
+    const r = getCurrentSessionRange();
+    if (!r || anchorKey < r.start) return null;
+    const top = anchorKey > r.end ? r.end : anchorKey;
+    const from = _sessionMonthIndex(r.start), to = _sessionMonthIndex(top);
+    if (from === null || to === null) return null;
+    const out = [];
+    for (let i = to; i >= from; i--) out.push(_sessionKeyFromIndex(i));
+    return out;
+}
+
+function _ensureSessionBannerStyles() {
+    if (document.getElementById('session-link-styles')) return;
+    const st = document.createElement('style');
+    st.id = 'session-link-styles';
+    st.textContent = `
+#session-link-banner{display:flex;flex-wrap:wrap;align-items:center;gap:10px 14px;margin:12px 0 4px;padding:10px 14px;border-radius:12px;border:1px solid var(--border-subtle,rgba(148,163,184,.25));background:var(--bg-card,rgba(255,255,255,.04));color:var(--text-primary,inherit);font-size:13px;line-height:1.4}
+#session-link-banner .slb-ico{width:30px;height:30px;border-radius:9px;display:inline-flex;align-items:center;justify-content:center;flex:none;background:rgba(59,130,246,.14);color:#3b82f6}
+#session-link-banner .slb-text{flex:1 1 240px;min-width:0}
+#session-link-banner .slb-text b{font-weight:700}
+#session-link-banner .slb-sub{display:block;color:var(--text-secondary,#8892a8);font-size:12px;margin-top:1px}
+#session-link-banner .slb-actions{display:flex;flex-wrap:wrap;gap:8px}
+#session-link-banner .slb-btn{display:inline-flex;align-items:center;gap:6px;padding:7px 12px;border-radius:9px;border:1px solid var(--border-subtle,rgba(148,163,184,.3));background:transparent;color:inherit;font:inherit;font-weight:600;font-size:12.5px;cursor:pointer;text-decoration:none}
+#session-link-banner .slb-btn:hover{background:rgba(128,128,128,.14)}
+#session-link-banner .slb-btn.primary{background:#3b82f6;border-color:#3b82f6;color:#fff}
+#session-link-banner .slb-btn.primary:hover{filter:brightness(1.06)}
+#session-link-banner.slb-warn{border-color:rgba(245,158,11,.55);background:rgba(245,158,11,.09)}
+#session-link-banner.slb-warn .slb-ico{background:rgba(245,158,11,.18);color:#d97706}
+#session-link-banner.slb-none .slb-ico{background:rgba(128,128,128,.16);color:#94a3b8}`;
+    document.head.appendChild(st);
+}
+
+function _sessionBannerHost() {
+    let el = document.getElementById('session-link-banner');
+    if (el) return el;
+    el = document.createElement('div');
+    el.id = 'session-link-banner';
+    const header = document.querySelector('.main-content > .main-header, main .main-header, .main-header');
+    if (header && header.parentNode) header.parentNode.insertBefore(el, header.nextSibling);
+    else {
+        const main = document.querySelector('.main-content') || document.body;
+        main.insertBefore(el, main.firstChild);
+    }
+    return el;
+}
+
+function renderSessionBanner() {
+    if (!_sessionsLoaded) return;
+    _ensureSessionBannerStyles();
+    const el = _sessionBannerHost();
+    const range = getCurrentSessionRange();
+    const link = `<a class="slb-btn" href="${SESSIONS_PAGE_URL}"><i class="fas fa-calendar-alt"></i> Sessions</a>`;
+
+    if (!range) {
+        el.className = 'slb-none';
+        el.innerHTML = `<span class="slb-ico"><i class="fas fa-calendar-alt"></i></span>
+            <span class="slb-text"><b>No current session set</b>
+            <span class="slb-sub">Fees &amp; Finance is not tied to a session yet. Choose "Make as current" on the Sessions page.</span></span>
+            <span class="slb-actions">${link}</span>`;
+        return;
+    }
+
+    let billing = '', warn = '', fixBtn = '';
+    if (_generatedVouchersLoaded) {
+        const fm = getCurrentFeeMonthKey();
+        billing = `Billing month: ${escapeHtml(getCurrentFeeMonthLabel())}`;
+        if (fm < range.start) {
+            warn = `The billing month is before this session starts.`;
+            fixBtn = `<button type="button" class="slb-btn primary" onclick="alignFeeMonthToSession()"><i class="fas fa-arrow-right"></i> Move billing month to ${escapeHtml(_sessionLongLabel(range.start))}</button>`;
+        } else if (fm > range.end) {
+            warn = `The billing month is after this session ended. Create or select the next session.`;
+        }
+    }
+    el.className = warn ? 'slb-warn' : '';
+    el.innerHTML = `<span class="slb-ico"><i class="fas ${warn ? 'fa-triangle-exclamation' : 'fa-calendar-check'}"></i></span>
+        <span class="slb-text"><b>Session: ${escapeHtml(sessionTitleOf(_currentSessionCache))}</b>
+        <span class="slb-sub">${[billing, warn].filter(Boolean).join(' · ')}</span></span>
+        <span class="slb-actions">${fixBtn}${link}</span>`;
+}
+
+/** One-click fix for a billing month that sits before the session's first month. */
+async function alignFeeMonthToSession() {
+    const range = getCurrentSessionRange();
+    if (!range || !_generatedVouchersLoaded) return;
+    const fm = getCurrentFeeMonthKey();
+    if (fm >= range.start) { renderSessionBanner(); return; }
+    const ok = await ssConfirm(
+        `The billing month is ${getCurrentFeeMonthLabel()}, but the current session starts in ${_sessionLongLabel(range.start)}.\n\nMove the billing month to ${_sessionLongLabel(range.start)}? Nothing is deleted. Vouchers already generated stay under their own months, and unpaid balances carry forward the next time a voucher is generated.`,
+        { title: 'Align billing month with session', confirmLabel: 'Move billing month', cancelLabel: 'Cancel', danger: false }
+    );
+    if (!ok) return;
+    setFeeMonthOverride(range.start);
+    try { await refreshStudentFeeStatusCache(); } catch (e) { /* best-effort */ }
+    showFinanceToast(`Billing month moved to ${feeMonthDisplayLabel(range.start)}.`, 'success');
+    renderSessionBanner();
+    renderClassCardGrid();
+    updateFeeStatsHeader();
+    if (typeof currentFeeClassName !== 'undefined' && currentFeeClassName) renderFees(currentFeeClassName);
+}
+window.alignFeeMonthToSession = alignFeeMonthToSession;
+
+/**
+ * Called by "Move to Next Month" before it does anything. Returns true when
+ * it is fine to go ahead, false when the move was cancelled or redirected.
+ */
+async function guardMoveWithinSession(nextKey) {
+    const range = getCurrentSessionRange();
+    if (!range || nextKey <= range.end) return true;
+
+    const nextSession = _sessionsCache.find(x => {
+        if (!x || x.id === _currentSessionCache.id) return false;
+        const r = _sessionRange(x);
+        return r && nextKey >= r.start && nextKey <= r.end;
+    });
+
+    if (nextSession) {
+        const ok = await ssConfirm(
+            `${_sessionLongLabel(nextKey)} belongs to the session ${sessionTitleOf(nextSession)}, but the current session is ${sessionTitleOf(_currentSessionCache)}.\n\nMake ${sessionTitleOf(nextSession)} the current session and move to ${_sessionLongLabel(nextKey)}?`,
+            { title: 'Start next session', confirmLabel: 'Start next session', cancelLabel: 'Cancel', danger: false }
+        );
+        if (!ok) return false;
+        try {
+            const res = await fetch(`${SESSIONS_API_BASE}/${encodeURIComponent(nextSession.id)}/current?schoolId=${encodeURIComponent(getCurrentSchoolId())}`, { method: 'PUT' });
+            if (!res.ok) throw new Error('HTTP ' + res.status);
+        } catch (e) {
+            showFinanceToast('Could not switch to the next session. Try again from the Sessions page.', 'error');
+            return false;
+        }
+        await refreshSessionCache();
+        renderSessionBanner();
+        return true;
+    }
+
+    const goSessions = await ssConfirm(
+        `${_sessionLongLabel(nextKey)} is after the last month of the current session (${sessionTitleOf(_currentSessionCache)}), and no session covers it yet.\n\nCreate the next session on the Sessions page first, then come back and move to the next month.`,
+        { title: 'Session ends here', confirmLabel: 'Open Sessions', cancelLabel: 'Stay here', danger: false }
+    );
+    if (goSessions) window.location.href = SESSIONS_PAGE_URL;
+    return false;
+}
+
 let currentDetailedFines = []; // Global cache for current student's fines
 
 // FinanceController serializes the Java entity field as `paymentStatus`.
@@ -819,7 +1047,9 @@ async function refreshFinanceCachesPhase1() {
     await Promise.all([
         refreshClassConfigsCache(),
         refreshLatefeeConfigCache(),
+        refreshSessionCache(),
     ]);
+    renderSessionBanner();
 }
 
 async function refreshFinanceCachesPhase2() {
@@ -868,7 +1098,10 @@ function refreshCurrentFinanceView() {
 }
 
 async function liveSyncTick() {
-    await refreshAllFinanceCaches();
+    // Sessions are polled too, so "Make as current" on the Sessions page
+    // (another tab / device) shows up here without a reload.
+    await Promise.all([refreshAllFinanceCaches(), refreshSessionCache()]);
+    renderSessionBanner();
     refreshCurrentFinanceView();
 }
 
@@ -902,6 +1135,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // awaited: the page is already usable, and re-rendering when the data
     // lands fills in the real figures without ever showing a blank screen.
     refreshFinanceCachesPhase2().then(() => {
+        renderSessionBanner();   // billing month is known now, so the session check can run
         renderClassCardGrid();
         refreshCurrentFinanceView();
         startLiveSync();
@@ -1421,6 +1655,12 @@ function getFineRecordsMonthOptions() {
     const opts = [];
     // Anchor on the active fee month (not the calendar): student fines are
     // filed under the fee month, so the viewer has to open on that same month.
+    // With a current session set, list that session's months (newest first)
+    // instead of a fixed 6-month window.
+    const sessionKeys = getSessionMonthKeysUpTo(getCurrentFeeMonthKey());
+    if (sessionKeys) {
+        return sessionKeys.map(key => ({ key, label: feeMonthDisplayLabel(key) }));
+    }
     const [anchorYear, anchorMonth] = getCurrentFeeMonthKey().split('-').map(Number);
     for (let i = 0; i < 6; i++) {
         const d = new Date(anchorYear, (anchorMonth - 1) - i, 1);
@@ -4694,6 +4934,10 @@ async function resetFeesForNextMonth() {
     const nextKey = _nextMonthKeyAfter(currentKey);
     const nextLabel = _monthKeyLabel(nextKey);
 
+    // Session link: never step past the current session's last month without
+    // either starting the next session or creating it first.
+    if (!(await guardMoveWithinSession(nextKey))) return;
+
     const students = getRealStudents();
     const thisMonthRecords = getGeneratedVouchers().filter(r => r.monthKey === currentKey);
     let paidCount = 0, pendingCount = 0;
@@ -4719,6 +4963,7 @@ async function resetFeesForNextMonth() {
     // and class cards don't show the previous month's numbers.
     try { await refreshStudentFeeStatusCache(); } catch (e) { /* best-effort */ }
     showFinanceToast(`Fee cycle moved to ${nextLabel}. You can now generate next month's vouchers.`, 'success');
+    renderSessionBanner();
     renderClassCardGrid();
     updateFeeStatsHeader();
     if (currentFeeClassName) renderFees(currentFeeClassName);
@@ -4987,7 +5232,7 @@ function _frMonthKeys() {
     getGeneratedVouchers().forEach(r => {
         if (r && /^\d{4}-\d{2}$/.test(r.monthKey || '')) set.add(r.monthKey);
     });
-    return Array.from(set).sort().slice(-FR_MAX_MONTHS);
+    return filterMonthKeysToSession(Array.from(set).sort()).slice(-FR_MAX_MONTHS);
 }
 
 async function _frFetchMonth(monthKey, force) {
@@ -8518,13 +8763,18 @@ function initFeeDefaulterPage() {
 function _populateFdMonthDropdown() {
     const sel = document.getElementById('fd-month-filter');
     if (!sel) return;
-    const [curYear, curMonth] = _monthKey().split('-').map(Number);
     const opts = [];
-    for (let i = 0; i < 12; i++) {
-        const d = new Date(curYear, (curMonth - 1) - i, 1);
-        const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
-        const lbl = feeMonthDisplayLabel(key);
-        opts.push(`<option value="${key}">${lbl}</option>`);
+    const sessionKeys = getSessionMonthKeysUpTo(_monthKey());
+    if (sessionKeys) {
+        sessionKeys.forEach(key => opts.push(`<option value="${key}">${feeMonthDisplayLabel(key)}</option>`));
+    } else {
+        const [curYear, curMonth] = _monthKey().split('-').map(Number);
+        for (let i = 0; i < 12; i++) {
+            const d = new Date(curYear, (curMonth - 1) - i, 1);
+            const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+            const lbl = feeMonthDisplayLabel(key);
+            opts.push(`<option value="${key}">${lbl}</option>`);
+        }
     }
     sel.innerHTML = opts.join('');
 }
@@ -9532,9 +9782,19 @@ function _populateSalaryRecordsMonthFilter() {
     // the middle of a year (for example, August 2025 through July 2026),
     // which made it difficult to review a staff member's records month by
     // month within the same year.
-    const months = Array.from({ length: 12 }, (_, index) =>
+    let months = Array.from({ length: 12 }, (_, index) =>
         `${currentYear}-${String(index + 1).padStart(2, '0')}`
     );
+    // With a current session set, the filter lists the session's own months
+    // (oldest first), which may cross a calendar-year boundary.
+    const sessionRange = getCurrentSessionRange();
+    if (sessionRange) {
+        const from = _sessionMonthIndex(sessionRange.start), to = _sessionMonthIndex(sessionRange.end);
+        if (from !== null && to !== null) {
+            months = [];
+            for (let i = from; i <= to; i++) months.push(_sessionKeyFromIndex(i));
+        }
+    }
 
     sel.innerHTML = months.map(mk => {
         const [y, m] = mk.split('-');
@@ -9542,8 +9802,10 @@ function _populateSalaryRecordsMonthFilter() {
         return `<option value="${mk}">${label}</option>`;
     }).join('');
 
-    // Default to current month
-    sel.value = currentMk;
+    // Default to the current month; if it is outside the session, the
+    // nearest session edge (session over -> last month, not started -> first).
+    if (months.includes(currentMk)) sel.value = currentMk;
+    else sel.value = currentMk > months[months.length - 1] ? months[months.length - 1] : months[0];
 }
 
 function setSalaryRecordsTab(category) {

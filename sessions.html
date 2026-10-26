@@ -268,6 +268,10 @@
         .session-menu button.danger:hover:not(:disabled),.session-menu button.danger:focus-visible{background:rgba(239,68,68,.14)}
         .session-delete-btn{background:var(--ss-red);border-color:var(--ss-red)}
         .session-save-btn:disabled,.session-delete-btn:disabled{opacity:.7;cursor:wait;transform:none}
+        .ss-link-btn{display:inline-flex;align-items:center;gap:8px;min-height:38px;padding:7px 14px;border:1px solid var(--ss-line);border-radius:999px;background:transparent;color:inherit;font:inherit;font-size:.86rem;font-weight:600;text-decoration:none;cursor:pointer;transition:background .15s,border-color .15s}
+        .ss-link-btn:hover{background:var(--ss-soft-2);border-color:var(--ss-accent)}
+        .detail-links{display:flex;flex-wrap:wrap;gap:10px;margin:-6px 0 16px}
+        .fs-head-actions{display:flex;align-items:center;gap:10px;flex:none}
         .confirm-panel{height:auto;max-width:440px}
         .confirm-panel .fs-head h2 i{background:rgba(239,68,68,.14);color:var(--ss-red)}
         .confirm-panel p{margin:0 0 16px;font-size:.92rem;line-height:1.5}
@@ -374,6 +378,9 @@
             <button class="back-btn" id="back-btn"><i class="fas fa-arrow-left"></i> Back to Sessions</button>
             <h2><i class="fas fa-calendar-check"></i> Session <span id="d-title"></span></h2>
             <p class="ss-note" id="detail-note" hidden></p>
+            <div class="detail-links">
+                <a class="ss-link-btn" href="manage-finance.html" id="open-finance-link"><i class="fas fa-file-invoice-dollar"></i> Open Fees &amp; Finance</a>
+            </div>
 
             <h3 class="table-title t-students"><i class="fas fa-user-graduate"></i> Students</h3>
             <div class="table-wrap">
@@ -492,7 +499,10 @@
         <div class="fs-panel" role="dialog" aria-modal="true" aria-labelledby="fe-title">
             <div class="fs-head">
                 <h2 id="fe-title"><i class="fas fa-money-bill-wave"></i> <span id="fe-title-text">Fees</span></h2>
-                <button class="fs-close" id="fe-close" aria-label="Close"><i class="fas fa-times"></i></button>
+                <div class="fs-head-actions">
+                    <a class="ss-link-btn" href="manage-finance.html"><i class="fas fa-file-invoice-dollar"></i> Fees &amp; Finance</a>
+                    <button class="fs-close" id="fe-close" aria-label="Close"><i class="fas fa-times"></i></button>
+                </div>
             </div>
             <div class="fee-sections" id="fee-sections"></div>
         </div>
@@ -536,6 +546,7 @@
     <!-- ROW ACTION MENU (positioned by script, so the table's scroll area never clips it) -->
     <div class="session-menu" id="session-menu" role="menu" aria-label="Session actions" hidden>
         <button type="button" role="menuitem" data-action="current"><i class="fas fa-circle-check"></i> Make as current</button>
+        <button type="button" role="menuitem" data-action="finance"><i class="fas fa-file-invoice-dollar"></i> Open Fees &amp; Finance</button>
         <button type="button" role="menuitem" data-action="edit"><i class="fas fa-pen"></i> Edit</button>
         <button type="button" role="menuitem" class="danger" data-action="delete"><i class="fas fa-trash"></i> Delete</button>
     </div>
@@ -570,6 +581,8 @@
         //                                               droppedDate, graduatedDate)
         //  Staff    : GET /api/staff, /api/finance/dropout-staff
         //  Fees     : GET /api/finance/status-all/{YYYY-MM}   (one call per month)
+        //  Link     : manage-finance.js reads GET /api/sessions and follows the session marked
+        //             current (banner, month pickers, Move to Next Month guard).
         //  Income / : GET /api/finance/expenses, /salary/records, /staff-advances,
         //  Expense    /custom-fees, /vouchers (current fee month marker)
         // =====================================================================
@@ -794,6 +807,16 @@
             el.textContent = text || '';
             el.className = 'ss-note' + (isErr ? ' err' : '');
             el.hidden = !text;
+        }
+        /* The current session should contain the billing month Fees & Finance is working on. */
+        function billingMonthNote(i) {
+            var s = sessions[i];
+            if (!s || !s.current || !isValidSessionKey(DB.curFeeKey)) return '';
+            if (DB.curFeeKey >= s.startKey && DB.curFeeKey <= s.endKey) return '';
+            return 'Fees & Finance is currently billing ' + monthName(DB.curFeeKey) + ', which is outside this session. Open Fees & Finance to move the billing month into this session.';
+        }
+        function detailNoteText(i) {
+            return [warningText(), billingMonthNote(i)].filter(Boolean).join(' ');
         }
         function warningText() {
             return loadWarnings.length ? 'Some data could not be loaded (' + loadWarnings.join(', ') + '), so the figures below may be incomplete.' : '';
@@ -1128,13 +1151,13 @@
             fill('sf', sessionPeople('staff', i));
             var pending = ['fe-generated', 'fe-fine', 'fe-paid', 'fe-pending', 'fe-imported', 'ie-paid', 'ie-extra', 'ie-income', 'ie-salaries', 'ie-expenses', 'ie-expense', 'ie-pl'];
             if (feeData[i]) {
-                fillFees(i); fillFinance(i); setNote('detail-note', warningText(), true);
+                fillFees(i); fillFinance(i); setNote('detail-note', detailNoteText(i), true);
             } else {
                 pending.forEach(function (id) { document.getElementById(id).textContent = '…'; });
                 setNote('detail-note', 'Loading fee and income / expense figures\u2026', false);
                 loadSessionFees(i).then(function () {
                     if (currentSession !== i) return;
-                    fillFees(i); fillFinance(i); setNote('detail-note', warningText(), true);
+                    fillFees(i); fillFinance(i); setNote('detail-note', detailNoteText(i), true);
                 }).catch(function (err) {
                     console.error('[Sessions] fee load failed', err);
                     if (currentSession !== i) return;
@@ -1279,7 +1302,8 @@
             var s = sessions[menuIndex], action = b.dataset.action;
             closeMenu(false);
             if (!s) return;
-            if (action === 'edit') openSessionForm(s);
+            if (action === 'finance') window.location.href = 'manage-finance.html';
+            else if (action === 'edit') openSessionForm(s);
             else if (action === 'current') makeCurrent(s);
             else if (action === 'delete') askDelete(s);
         });
