@@ -33,8 +33,13 @@
 
   // Everything the school sent this child's parent: announcements for all parents / the class, and result notices.
   // The category (Notice / Event / Holiday / Result) is the one the school chose; it drives the filter chips.
+  let newestAnnouncementId = null;   // newest id on screen, used to spot a new one arriving live
+
   async function loadData() {
     const list = await PortalAPI.get(PortalAPI.forChild('/announcements'));
+    newestAnnouncementId = (list || []).reduce((max, a) => (a.id > max ? a.id : max), 0);
+    // The parent has now seen these: clear the red number on the dashboard card.
+    if (window.PortalBadges) window.PortalBadges.markAnnouncementsSeen(list || []);
     ANNOUNCEMENTS.length = 0;
     (list || []).forEach((a) => {
       const date = PortalAPI.fmtDate(a.date), time = PortalAPI.fmtTime(a.date);
@@ -289,11 +294,31 @@
   // ===================================================
   // Boot
   // ===================================================
+  function activeFilter() {
+    const chip = document.querySelector('.ann-filter-chip.active');
+    return (chip && chip.dataset.filter) || 'all';
+  }
+
+  // Live: when the pulse says a newer announcement exists, reload the list by itself.
+  let refreshing = false;
+  window.addEventListener('portal-pulse', async (e) => {
+    const reg = String(PortalAPI.childId() || '');
+    const newest = Number(e.detail && e.detail.annByChild && e.detail.annByChild[reg]);
+    if (!reg || !newest || newestAnnouncementId === null || newest === newestAnnouncementId || refreshing) return;
+    refreshing = true;
+    try {
+      await loadData();
+      renderFeed(activeFilter());
+    } catch (err) { /* try again on the next pulse */ }
+    refreshing = false;
+  });
+
   async function boot() {
-    try { await loadData(); } catch (err) { PortalAPI.showError(err); }
-    renderFeed('all');
+    // The menu and filter chips work immediately; they do not wait for the network.
     initFilters();
     initDrawer();
+    try { await loadData(); } catch (err) { PortalAPI.showError(err); }
+    renderFeed(activeFilter());
     console.log('Announcement page ready.');
   }
 

@@ -10,7 +10,12 @@
   var page = (location.pathname.split('/').pop() || '').toLowerCase();
   var onlyNeedsToken = page === 'parent-portal-change-password.html'; // a first-time session may only change its password
 
-  // One shared loader handles initial page checks, API activity, and navigation.
+  // Loader policy (kept deliberately quiet so the portal feels instant):
+  //   - Pages are shown IMMEDIATELY when this browser already knows the parent's children (they are cached at
+  //     login). The session is re-checked in the background; only a rejected session sends the parent back.
+  //   - Reading data (GET) never covers the screen. The full-screen loader is used only for the very first
+  //     check when nothing is cached, and for actions that change data (sending, submitting, saving).
+  //   - Navigating between pages shows no overlay and no moving line.
   var startupPending = true;
   var networkCount = 0;
   var networkVisible = false;
@@ -24,7 +29,7 @@
   var transitionTimer = null;
   var visibleSince = 0;
   var MIN_VISIBLE_MS = 480;
-  var SHOW_DELAY_MS = 160;
+  var SHOW_DELAY_MS = 350;
   var loaderTitle;
   var loaderDetail;
   document.documentElement.classList.add('pp-auth-pending');
@@ -41,12 +46,9 @@
     '.pp-loader-orbit-inner{position:absolute;inset:16px;border:2px solid rgba(46,139,122,.12);border-bottom-color:#74b4a3;border-radius:50%;animation:pp-spin-reverse 1.6s linear infinite}',
     '.pp-loader-mark svg{width:28px;height:28px;color:#247262;z-index:1}',
     '.pp-loader-title{display:block;font-size:1.03rem;font-weight:800;letter-spacing:-.02em}',
-    '.pp-loader-detail{margin:8px 0 20px;color:#667a75;font-size:.88rem;line-height:1.5}',
-    '.pp-loader-track{height:4px;overflow:hidden;border-radius:999px;background:#e7f2ed}',
-    '.pp-loader-track:after{content:"";display:block;width:38%;height:100%;border-radius:inherit;background:linear-gradient(90deg,#56a894,#2e8b7a,#91cdbb);animation:pp-progress 1.35s ease-in-out infinite}',
+    '.pp-loader-detail{margin:8px 0 0;color:#667a75;font-size:.88rem;line-height:1.5}',
     '@keyframes pp-spin{to{transform:rotate(360deg)}}',
     '@keyframes pp-spin-reverse{to{transform:rotate(-360deg)}}',
-    '@keyframes pp-progress{0%{transform:translateX(-110%)}100%{transform:translateX(280%)}}',
     '@keyframes pp-card-in{from{opacity:0;transform:translateY(10px) scale(.98)}to{opacity:1;transform:translateY(0) scale(1)}}',
     '#pp-student-picker{position:fixed;inset:0;z-index:2147483001;display:grid;place-items:center;padding:20px;background:rgba(13,35,31,.50);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#17332e;animation:pp-picker-fade .18s ease both}',
     '.pp-picker-panel-wrap{position:relative;width:min(100%,460px)}',
@@ -67,7 +69,7 @@
     '.pp-picker-cancel,.pp-picker-close{border:0;background:transparent;color:#55726a;font:inherit;font-weight:700;cursor:pointer}',
     '.pp-picker-close{position:absolute;z-index:1;top:14px;inset-inline-end:14px;width:38px;height:38px;border-radius:12px;background:#f2f7f4;font-size:1.35rem}',
     '@keyframes pp-picker-fade{from{opacity:0}to{opacity:1}}',
-    '@media(prefers-reduced-motion:reduce){#pp-global-loader,.pp-loader-card,#pp-student-picker,.pp-picker-choice{animation:none;transition:none}.pp-loader-orbit,.pp-loader-orbit-inner,.pp-loader-track:after{animation:none}}'
+    '@media(prefers-reduced-motion:reduce){#pp-global-loader,.pp-loader-card,#pp-student-picker,.pp-picker-choice{animation:none;transition:none}.pp-loader-orbit,.pp-loader-orbit-inner{animation:none}}'
   ].join('\n');
   (document.head || document.documentElement).appendChild(loaderStyle);
 
@@ -88,17 +90,13 @@
   loaderDetail = document.createElement('p');
   loaderDetail.className = 'pp-loader-detail';
   loaderDetail.textContent = 'Please wait while we get everything ready.';
-  var loaderTrack = document.createElement('div');
-  loaderTrack.className = 'pp-loader-track';
-  loaderTrack.setAttribute('aria-hidden', 'true');
   loaderCard.appendChild(loaderTitle);
   loaderCard.appendChild(loaderDetail);
-  loaderCard.appendChild(loaderTrack);
   loader.appendChild(loaderCard);
   document.documentElement.appendChild(loader);
 
   function isPending() {
-    return startupPending || networkVisible || operationVisible || navigationPending;
+    return startupPending || operationVisible;
   }
 
   function setLoaderCopy(title, detail) {
@@ -165,49 +163,7 @@
     };
   }
 
-  function finishNetworkRequest() {
-    networkCount = Math.max(0, networkCount - 1);
-    if (networkCount === 0) {
-      if (networkTimer) { clearTimeout(networkTimer); networkTimer = null; }
-      networkVisible = false;
-      updateLoader();
-    }
-  }
-
-  // Catch direct fetch calls too; the API wrapper keeps its loader active until
-  // response bodies have been parsed.
-  if (typeof window.fetch === 'function' && !window.__parentPortalFetchWrapped) {
-    var originalFetch = window.fetch.bind(window);
-    window.fetch = function () {
-      if (quietDepth > 0) return originalFetch.apply(null, arguments);
-      networkCount += 1;
-      if (networkCount === 1 && !startupPending && operationCount === 0 && !operationVisible && !navigationPending) {
-        networkTimer = window.setTimeout(function () {
-          if (networkCount > 0 && operationCount === 0 && !startupPending && !navigationPending) {
-            networkVisible = true;
-            setLoaderCopy('Loading your information', 'Please wait while we prepare this page.');
-            updateLoader();
-          }
-        }, SHOW_DELAY_MS);
-      }
-
-      var result;
-      try {
-        result = originalFetch.apply(null, arguments);
-      } catch (error) {
-        finishNetworkRequest();
-        throw error;
-      }
-      return Promise.resolve(result).then(function (response) {
-        finishNetworkRequest();
-        return response;
-      }, function (error) {
-        finishNetworkRequest();
-        throw error;
-      });
-    };
-    window.__parentPortalFetchWrapped = true;
-  }
+  // (Plain fetch calls are no longer wrapped: reading data must never put a loader over the page.)
 
   window.ParentPortalLoading = {
     begin: beginOperation,
@@ -312,9 +268,6 @@
       }
       window.__parentPortalChildren = kids;
       closePicker();
-      navigationPending = true;
-      setLoaderCopy('Opening student profile', 'Preparing ' + studentName(student) + '’s information.');
-      updateLoader();
       window.location.href = targetUrl;
     }
 
@@ -435,35 +388,39 @@
       }
     }
 
-    if (destination.pathname === window.location.pathname
-        && destination.search === window.location.search
-        && destination.hash !== window.location.hash) return;
-    if (destination.href === window.location.href) return;
-    navigationPending = true;
-    setLoaderCopy('Opening your page', 'Please wait while we prepare the next screen.');
-    updateLoader();
   }
 
   document.addEventListener('click', handleNavigation);
-  window.addEventListener('beforeunload', function () {
-    navigationPending = true;
-    setLoaderCopy('Opening your page', 'Please wait while we prepare the next screen.');
-    updateLoader();
-  });
 
-  function check() {
-    startupPending = true;
-    document.documentElement.classList.add('pp-auth-pending');
-    setLoaderCopy('Preparing your portal', 'Securely checking your parent account…');
-    updateLoader();
+  function cachedKids() {
+    try {
+      var saved = JSON.parse(sessionStorage.getItem('studentsList') || '[]');
+      return Array.isArray(saved) ? saved : [];
+    } catch (e) { return []; }
+  }
+
+  function check(background) {
     var token = null;
     try { token = sessionStorage.getItem('softschool_parent_token'); } catch (e) { /* ignore */ }
     if (!token) return deny();
     if (onlyNeedsToken) return reveal();
 
+    // Fast path: the login already cached this parent's children, so show the page at once and
+    // confirm the session quietly in the background (it never blocks or covers the page).
+    var haveCache = cachedKids().length > 0;
+    if (haveCache && !background) {
+      reveal();
+    } else if (!haveCache) {
+      startupPending = true;
+      document.documentElement.classList.add('pp-auth-pending');
+      setLoaderCopy('Preparing your portal', 'Securely checking your parent account…');
+      updateLoader();
+    }
+
     fetch(API + '/children', { headers: { Authorization: 'Bearer ' + token } })
       .then(function (res) {
-        if (!res.ok) return deny();
+        if (res.status === 401 || res.status === 403) return deny();
+        if (!res.ok) { if (!haveCache) return deny(); return; }   // server hiccup: keep the cached page
         return res.json().then(function (kids) {
           if (!Array.isArray(kids) || !kids.length) return deny();
           try { sessionStorage.setItem('studentsList', JSON.stringify(kids)); } catch (e) { /* ignore */ }
@@ -474,10 +431,10 @@
           reveal();
         });
       })
-      .catch(deny);   // cannot confirm the session -> do not show the portal
+      .catch(function () { if (!haveCache) deny(); });   // offline with a cached session: keep the page usable
   }
 
-  check();
-  // Back/forward cache: re-check when the page is restored from history.
-  window.addEventListener('pageshow', function (e) { if (e.persisted) check(); });
+  check(false);
+  // Back/forward cache: re-check (quietly) when the page is restored from history.
+  window.addEventListener('pageshow', function (e) { if (e.persisted) check(true); });
 })();

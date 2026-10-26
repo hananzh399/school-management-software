@@ -107,6 +107,7 @@
   let teacherId = 1;
   let teacher = null;
   let firstUnreadId = null;
+  let knownMessageCount = null;   // how many messages were on screen at the last refresh (live updates)
   let openedUnreadCount = 0;
   let teacherTyping = false;
   let parentTypingActive = false;
@@ -380,11 +381,20 @@
       if (e.teacherId !== teacherId) return;
 
       if (e.type === 'refresh') {
+        const wasNearBottom = isNearBottom();
         teacher = Store.get(teacherId) || teacher;
         renderTopBar();
         rerender();
         renderQuickReplies();
         if (sheetMsgId) renderSheet(Store.getMessage(teacherId, sheetMsgId));
+        // A new message arrived while this chat is open: show it, keep the view at the bottom if the parent
+        // was already reading the latest messages, and mark it read (the parent is looking right at it).
+        const count = teacher.messages.length;
+        if (knownMessageCount !== null && count > knownMessageCount) {
+          if (wasNearBottom) scrollToBottom(true);
+          if (document.visibilityState === 'visible' && Store.unreadCount(teacherId) > 0) Store.markRead(teacherId);
+        }
+        knownMessageCount = count;
       } else if (e.type === 'send-error' || e.type === 'edit-error' || e.type === 'delete-error') {
         showToast((e.error && e.error.message) || tr('messageActionFailed', 'Message could not be saved.'));
         teacher = Store.get(teacherId) || teacher;
@@ -749,6 +759,7 @@
     openedUnreadCount = Store.unreadCount(teacherId);
     firstUnreadId = Store.firstUnreadId(teacherId);
     Store.markRead(teacherId);
+    knownMessageCount = teacher.messages.length;
 
     renderTopBar();
     renderMessages();

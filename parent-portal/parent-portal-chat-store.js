@@ -280,8 +280,26 @@
   }
   var ready = loadData();
   ready.then(function () {
-    global.setInterval(refresh, 30000);
+    // Safety net (also picks up read receipts, which the pulse does not carry).
+    global.setInterval(refresh, 15000);
   }).catch(function () { /* the page reports the initial connection error */ });
+
+  // Live updates: parent-portal-push.js fires "portal-pulse" every few seconds. The moment the newest message
+  // or the unread numbers change, reload the conversation so new messages appear without any manual refresh.
+  var lastPulseSig = null;
+  global.addEventListener('portal-pulse', function (e) {
+    var p = e && e.detail;
+    if (!p || !currentRegNo) return;
+    var sig = String(p.lastId || 0) + '|' + JSON.stringify(p.byChild || {});
+    var changed = lastPulseSig !== null && sig !== lastPulseSig;
+    lastPulseSig = sig;
+    if (p.byChild) unreadByChild = p.byChild;
+    if (changed) refresh();
+  });
+  // Coming back to the tab: catch up immediately.
+  document.addEventListener('visibilitychange', function () {
+    if (document.visibilityState === 'visible' && currentRegNo) refresh();
+  });
 
   function get(id) { return state.teachers[String(id)] || null; }
   function list() {

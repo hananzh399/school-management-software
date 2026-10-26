@@ -12,14 +12,29 @@
   function logout() { try { sessionStorage.clear(); } catch (e) { /* ignore */ } location.replace(LOGIN); }
   function pad(n) { return n < 10 ? '0' + n : '' + n; }
 
+  // Identical GET requests that are already in flight share ONE network call (several scripts on a page
+  // often ask for the same thing at the same moment).
+  var inflight = {};
+
   function request(method, path, body) {
+    if (method === 'GET') {
+      var key = path + '|' + (token() || '');
+      if (inflight[key]) return inflight[key];
+      var p = rawRequest(method, path, body);
+      inflight[key] = p;
+      var clear = function () { delete inflight[key]; };
+      p.then(clear, clear);
+      return p;
+    }
+    return rawRequest(method, path, body);
+  }
+
+  function rawRequest(method, path, body) {
     var currentToken = token();
     if (!currentToken) return Promise.reject(new Error('Please log in to the parent portal first.'));
-    var finishLoading = global.ParentPortalLoading
-      ? global.ParentPortalLoading.begin(
-          method === 'GET' ? 'Loading your information' : 'Processing your request',
-          method === 'GET' ? 'Please wait while we prepare this page.' : 'Please wait while we securely complete this action.'
-        )
+    // Reading data never covers the page with a loader; only actions that change data do.
+    var finishLoading = (method !== 'GET' && global.ParentPortalLoading)
+      ? global.ParentPortalLoading.begin('Processing your request', 'Please wait while we securely complete this action.')
       : function () {};
     var opts = { method: method, headers: { Authorization: 'Bearer ' + currentToken, Accept: 'application/json' } };
     if (body instanceof FormData) opts.body = body;
@@ -120,7 +135,17 @@
     setTimeout(function () { bar.remove(); }, 6000);
   }
 
-  function school() { return request('GET', '/school'); }
+  // School name/logo rarely change, so remember them for this session and refresh quietly.
+  var SCHOOL_CACHE = 'portalSchoolBrand';
+  function cachedSchool() {
+    try { return JSON.parse(sessionStorage.getItem(SCHOOL_CACHE) || 'null'); } catch (e) { return null; }
+  }
+  function school() {
+    return request('GET', '/school').then(function (data) {
+      try { if (data) sessionStorage.setItem(SCHOOL_CACHE, JSON.stringify(data)); } catch (e) { /* too large / unavailable */ }
+      return data;
+    });
+  }
 
   // Use the SoftSchool product mark in the browser tab on every portal page.
   function ensureSoftwareFavicon() {
@@ -302,6 +327,10 @@
   }
 
   function loadSchoolBranding() {
+    var cached = cachedSchool();
+    if (cached && typeof cached.name === 'string' && cached.name.trim()) {
+      installSchoolBranding({ name: cached.name.trim(), logo: cached.logo || null });   // instant, no flicker
+    }
     school().then(function (data) {
       if (!data || typeof data.name !== 'string' || !data.name.trim()) return;
       installSchoolBranding({
@@ -315,13 +344,10 @@
 
   // Fetches a protected file (photo, diary picture) and returns a blob: URL for <img src>.
   function blobUrl(path) {
-    var finishLoading = global.ParentPortalLoading
-      ? global.ParentPortalLoading.begin('Loading your information', 'Please wait while we load this image.')
-      : function () {};
     return fetch(API + path, { headers: { Authorization: 'Bearer ' + token() } }).then(function (res) {
       if (!res.ok) throw new Error('file');
       return res.blob();
-    }).then(function (b) { return URL.createObjectURL(b); }).finally(finishLoading);
+    }).then(function (b) { return URL.createObjectURL(b); });
   }
 
   // Child photos: set on every photo element the pages use.
@@ -361,16 +387,19 @@
   ensureSoftwareFavicon();
   loadSchoolBranding();
 
-  // Alerts for new messages, announcements and results (parent-portal-push.js). Loaded from here so every
-  // portal page gets it without each page having to include it.
+  // Alerts for new messages, announcements and results (parent-portal-push.js) and the live badges
+  // (parent-portal-badges.js). Loaded from here so every portal page gets them without editing each page.
   (function loadNotifier() {
     try {
       var cs = document.currentScript;
       var base = cs && cs.src ? cs.src.replace(/[^\/?#]*([?#].*)?$/, '') : '';
-      var s = document.createElement('script');
-      s.src = base + 'parent-portal-push.js';
-      s.defer = true;
-      (document.head || document.documentElement).appendChild(s);
+      // badges first (number/dot on the Messages tab and Announcement card), then the notifier that feeds them
+      ['parent-portal-badges.js', 'parent-portal-push.js'].forEach(function (file) {
+        var s = document.createElement('script');
+        s.src = base + file;
+        s.async = false;                 // keep this order
+        (document.head || document.documentElement).appendChild(s);
+      });
     } catch (e) { /* notifications are optional */ }
   })();
 })(window);

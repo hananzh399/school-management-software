@@ -9,7 +9,10 @@
 //        * a small in-app banner while the portal is open.
 //   - tapping a notification opens the right page (the chat, or the Announcements page).
 //
-// Included at the end of every parent page. Only one open tab polls at a time, so nothing is shown twice.
+// Every poll also broadcasts a "portal-pulse" event on window (detail = the raw pulse), which is what makes
+// the message dot/number, the lists and the chat update live without the parent refreshing anything.
+//
+// Included at the end of every parent page. Only one open tab shows alerts at a time, so nothing is shown twice.
 // Limit: the browser must be running (a background tab or an installed home-screen app is fine). Alerts while the
 // browser is completely closed would need a real Web Push server key - parent-portal-sw.js already handles that.
 (function (global) {
@@ -18,8 +21,9 @@
   var API = global.PortalAPI;
   if (!API) return;
 
-  var POLL_MS = 20000;            // how often the pulse is checked
-  var LEASE_MS = 35000;           // one tab "owns" polling for this long
+  var POLL_VISIBLE_MS = 8000;     // pulse check while the portal is on screen (feels live; the server allows 300 calls/min per IP)
+  var POLL_HIDDEN_MS = 30000;     // pulse check while the tab is in the background (saves battery/data)
+  var LEASE_MS = 40000;           // one tab "owns" showing alerts for this long
   var ASK_AGAIN_DAYS = 7;         // after "Not now", ask again after a week
   var MAX_SINGLE = 3;             // more than this many new announcements -> one summary notification
   var ME = Math.random().toString(36).slice(2);
@@ -27,6 +31,9 @@
   var swReg = null;
   var queued = [];                // alerts that arrived while the tab was hidden and system alerts are off
   var bannerShown = false;
+  var polling = false;
+  var lastPulse = null;
+  var failStreak = 0;             // consecutive failed polls -> wait longer (offline, rate limit, server busy)
 
   // ---------- tiny helpers ----------
   function lsGet(key) { try { return JSON.parse(localStorage.getItem(key) || 'null'); } catch (e) { return null; } }
@@ -58,10 +65,12 @@
   function onChatPage() { return /parent-portal-(chat|messages)\.html/.test(global.location.pathname); }
 
   // ---------- one tab polls at a time ----------
+  // A visible tab always wins over a background one, so the alert appears where the parent is looking.
   function takeLease() {
     var now = Date.now(), l = lsGet('portalPush:lead');
-    if (l && l.id !== ME && now - l.t < LEASE_MS) return false;
-    lsSet('portalPush:lead', { id: ME, t: now });
+    var visible = document.visibilityState === 'visible';
+    if (l && l.id !== ME && now - l.t < LEASE_MS && !(visible && !l.v)) return false;
+    lsSet('portalPush:lead', { id: ME, t: now, v: visible });
     return true;
   }
   function releaseLease() {
@@ -117,7 +126,7 @@
     var tx = el('div', 'pp-push-tx'); tx.appendChild(el('b', '', n.title)); tx.appendChild(el('span', '', n.body));
     var x = el('button', 'pp-push-no', '×'); x.type = 'button'; x.setAttribute('aria-label', 'Dismiss');
     box.appendChild(ic); box.appendChild(tx); box.appendChild(x);
-    var timer = setTimeout(close, 7000);
+    var timer = setTimeout(close, 8000);
     function close() { clearTimeout(timer); if (box.parentNode) box.parentNode.removeChild(box); }
     box.addEventListener('click', function (e) {
       if (e.target === x) { close(); return; }
@@ -240,29 +249,54 @@
     if (!key || !p) return;
     var st = lsGet(key) || { ann: {}, unread: {} };
     st.ann = st.ann || {}; st.unread = st.unread || {};
+    st.inId = st.inId || {};
     var annJobs = [], msgJobs = [];
     Object.keys(p.annByChild || {}).forEach(function (reg) {
       var cur = Number(p.annByChild[reg]) || 0, prev = st.ann[reg];
       if (prev != null && cur > prev) annJobs.push({ reg: reg, since: prev });
       st.ann[reg] = cur;
     });
+    // A NEW incoming message is the newest school/teacher message id going up (the server sends inByChild).
+    // Older servers only send the unread counter, so that is still used as a fallback.
+    var haveIn = p.inByChild && typeof p.inByChild === 'object';
     Object.keys(p.byChild || {}).forEach(function (reg) {
       var cur = Number(p.byChild[reg]) || 0, prev = st.unread[reg];
-      if (prev != null && cur > prev) msgJobs.push(reg);
+      if (!haveIn && prev != null && cur > prev) msgJobs.push(reg);
       st.unread[reg] = cur;
     });
+    if (haveIn) {
+      Object.keys(p.inByChild).forEach(function (reg) {
+        var curIn = Number(p.inByChild[reg]) || 0, prevIn = st.inId[reg];
+        if (prevIn != null && curIn > prevIn && (Number((p.byChild || {})[reg]) || 0) > 0) msgJobs.push(reg);
+        st.inId[reg] = curIn;
+      });
+    }
     lsSet(key, st);                      // first run only records the baseline - no flood of old items
     var jobs = [];
     if (annJobs.length) jobs.push(notifyAnnouncements(annJobs));
     msgJobs.forEach(function (reg) { jobs.push(notifyMessages(reg)); });
     return Promise.all(jobs);
   }
+  function broadcast(p) {
+    lastPulse = p;
+    try { global.dispatchEvent(new CustomEvent('portal-pulse', { detail: p })); } catch (e) { /* old browser */ }
+  }
   function poll() {
     if (!token() || !kids().length) return Promise.resolve();
-    if (!takeLease()) return Promise.resolve();
+    if (polling) return Promise.resolve();            // never overlap two requests
+    polling = true;
     return quietly(function () { return API.pulse(); }).then(function (p) {
+      failStreak = 0;
+      broadcast(p);                                   // every open page updates its badges and lists
+      if (!takeLease()) return;                       // another tab owns the alerts
       return Promise.resolve(handle(p)).then(function () { setTimeout(maybeAskBanner, 1500); });
-    }).catch(function () { /* offline or session ended: try again next round */ });
+    }).catch(function () { failStreak = Math.min(failStreak + 1, 4); /* offline or busy: back off, retry later */ })
+      .then(function () { polling = false; });
+  }
+  function schedule() {
+    var wait = document.visibilityState === 'visible' ? POLL_VISIBLE_MS : POLL_HIDDEN_MS;
+    wait = wait * Math.pow(2, failStreak);            // 8s, 16s, 32s ... up to 16x after repeated failures
+    setTimeout(function () { poll().then(schedule); }, wait);
   }
 
   // ---------- Settings page card (optional markup: #pushStatus + #pushBtn) ----------
@@ -298,8 +332,7 @@
     if (!token()) return;
     if (canSystem()) registerSW();
     wireSettings();
-    setTimeout(poll, 1200);
-    setInterval(poll, POLL_MS);
+    setTimeout(function () { poll().then(schedule); }, 500);
     document.addEventListener('visibilitychange', function () {
       if (document.visibilityState === 'visible') { flushQueue(); poll(); }
     });
@@ -307,6 +340,6 @@
     global.addEventListener('pagehide', releaseLease);
   }
 
-  global.PortalPush = { enable: enable, permission: permission, poll: poll };
+  global.PortalPush = { enable: enable, permission: permission, poll: poll, last: function () { return lastPulse; } };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot); else boot();
 })(window);

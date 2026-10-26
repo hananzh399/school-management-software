@@ -1785,3 +1785,71 @@ svg { display: block; flex-shrink: 0; }
   border-radius: 13px;
   box-shadow: 0 2px 8px rgba(28, 73, 63, 0.12);
 }
+
+/* ===================================================== */
+/* ============ BACK BUTTON ON THE LEFT ================ */
+/* ===================================================== */
+/* Every inner page has the same top bar: back button, school name, menu button.
+   The back button now comes first (left side; right side in right-to-left languages like Urdu)
+   and the menu button moves to the other end. Done with "order" so no page markup has to change. */
+/* (Matched through data-i18n-aria so it keeps working after the page is translated.) */
+.app-topbar > .icon-btn[data-i18n-aria^="back"] {
+  order: -1;
+}
+/* Only on pages that have a back button; the home page keeps its menu button on the left. */
+.app-topbar:has(> .icon-btn[data-i18n-aria^="back"]) > .app-brand {
+  order: 1;
+}
+.app-topbar:has(> .icon-btn[data-i18n-aria^="back"]) > #hamburgerBtn {
+  order: 2;
+}
+
+/* ===================================================== */
+/* ================= LIVE BADGES ======================= */
+/* ===================================================== */
+/* Red number on the Messages tab and the Announcement card (see parent-portal-badges.js). */
+.tab-item,
+.feature-card {
+  position: relative;
+}
+
+.live-badge {
+  position: absolute;
+  z-index: 2;
+  box-sizing: border-box;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: #E5484D;
+  color: #fff;
+  font-size: 0.68rem;
+  font-weight: 700;
+  line-height: 18px;
+  text-align: center;
+  letter-spacing: 0;
+  box-shadow: 0 0 0 2px var(--surface, #fff);
+  pointer-events: none;
+  animation: liveBadgePop 0.25s ease-out;
+}
+
+.live-badge[hidden] { display: none; }
+
+.tab-item > .live-badge {
+  top: 2px;
+  inset-inline-start: calc(50% + 6px);
+}
+
+.feature-card > .live-badge {
+  top: 10px;
+  inset-inline-end: 10px;
+}
+
+@keyframes liveBadgePop {
+  from { transform: scale(0.4); opacity: 0; }
+  to   { transform: scale(1);   opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .live-badge { animation: none; }
+}
