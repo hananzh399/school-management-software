@@ -308,6 +308,19 @@ function switchTab(name, btn) {
 }
 
 // ═══════════════════════════════════════════════
+//  DEEP LINK:  settings.html#classes  (also #schoolinfo, #latefee, #variables, #attendance-timing, #teacherlogin)
+//  Used by the dashboard setup card so its buttons land on the right tab.
+// ═══════════════════════════════════════════════
+function openTabFromHash() {
+  const name = (location.hash || '').replace('#', '');
+  if (!name || !document.getElementById('tab-' + name)) return;
+  const btn = Array.from(document.querySelectorAll('.tab-btn')).find(b => (b.getAttribute('onclick') || '').indexOf("'" + name + "'") > -1);
+  if (btn) switchTab(name, btn);
+}
+document.addEventListener('DOMContentLoaded', openTabFromHash);
+window.addEventListener('hashchange', openTabFromHash);
+
+// ═══════════════════════════════════════════════
 //  TEACHER LOGIN  (default password + reset)
 // ═══════════════════════════════════════════════
 const STAFF_API_BASE = 'https://167-86-120-247.sslip.io/api/staff';

@@ -1526,6 +1526,11 @@
                 sessions = buildSessions();
                 render();
                 route();
+                // coming from the dashboard's "Set session" button
+                if (location.hash === '#new') {
+                    try { history.replaceState(null, '', location.pathname + location.search); } catch (e) { /* ignore */ }
+                    openSessionForm(null);
+                }
             }).catch(function (err) {
                 console.error('[Sessions] could not load data', err);
                 sessions = [];
