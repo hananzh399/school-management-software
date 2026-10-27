@@ -1542,7 +1542,7 @@ appendTeacherCard = function (t, isNew) {
   return card;
 };
 // ═══════════════════════════════════════════════
-//  Attendance Timing Control
+//  Attendance Setting (auto-save times + daily absent notice)
 //  Two daily auto-save times: the first slot auto-saves
 //  Staff attendance, the second slot auto-saves Student
 //  attendance (see attendance.js's triggerSave()).
@@ -1561,6 +1561,7 @@ const DEFAULT_ATT_TIMING = {
 function loadAttendanceTiming() {
   const s = _serverSettings || {};
   return {
+    dailyAbsentNotify: s.dailyAbsentNotify === true,
     first:  Object.assign({}, DEFAULT_ATT_TIMING.first,  {
       hour:     s.autosave1Hour     ?? DEFAULT_ATT_TIMING.first.hour,
       minute:   s.autosave1Minute   ?? DEFAULT_ATT_TIMING.first.minute,
@@ -1590,6 +1591,7 @@ function renderAttendanceTiming() {
   set('autosave2-minute',   t.second.minute);
   set('autosave2-meridiem', t.second.meridiem);
   check('autosave2-enabled', t.second.enabled);
+  check('absent-notify-enabled', t.dailyAbsentNotify);
 }
 
 function _readTimingSlot(prefix) {
@@ -1624,6 +1626,7 @@ async function saveAttendanceTiming() {
     autosave2Minute:   timing.second.minute,
     autosave2Meridiem: timing.second.meridiem,
     autosave2Enabled:  timing.second.enabled,
+    dailyAbsentNotify: !!(document.getElementById('absent-notify-enabled') || {}).checked,
   };
 
   try {
@@ -1631,14 +1634,14 @@ async function saveAttendanceTiming() {
     _serverSettings = saved;
 
     if (status) {
-      status.textContent = '✓ Saved. Auto-save times updated.';
+      status.textContent = '✓ Saved.';
       setTimeout(() => (status.textContent = ''), 2500);
     }
     window.dispatchEvent(new CustomEvent('eduflow-attendance-timing-changed', { detail: timing }));
-    if (typeof showToast === 'function') showToast('Attendance timings saved.', 'success');
+    if (typeof showToast === 'function') showToast('Attendance settings saved.', 'success');
   } catch (e) {
     if (status) status.textContent = '⚠ ' + e.message;
-    if (typeof showToast === 'function') showToast('Could not save timings to the server.', 'error');
+    if (typeof showToast === 'function') showToast('Could not save attendance settings to the server.', 'error');
   }
 }
 

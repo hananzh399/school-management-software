@@ -1324,3 +1324,8 @@ select option { background: var(--bg-secondary); color: var(--text-primary); }
 .sidebar-nav::-webkit-scrollbar-track { background: transparent; }
 .sidebar-nav::-webkit-scrollbar-thumb { background: var(--border-hover, rgba(148,163,184,0.28)); border-radius: 10px; }
 .sidebar-nav::-webkit-scrollbar-thumb:hover { background: var(--text-muted, #64748b); }
+
+/* Attendance Setting: parent notification card sits under the two timing cards */
+.timing-notify { margin: 0 24px 20px; }
+.timing-notify .switch-row { margin-top: 0; }
+.timing-badge .fas { font-size: 12px; }

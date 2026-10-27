@@ -165,6 +165,7 @@
                 <button class="back-btn" data-back="classes"><i class="fas fa-arrow-left"></i> Back</button>
                 <h2 class="stage-title" id="table-title">Attendance</h2>
                 <button id="table-view-attendance-btn" class="view-attendance-btn"><i class="fas fa-chart-line"></i> View Attendance</button>
+                <button id="table-send-report-btn" class="view-attendance-btn send-report-btn" type="button"><i class="fas fa-paper-plane"></i> Send Report to Parents</button>
             </div>
 
             <div class="toolbar">
@@ -353,6 +354,7 @@
                     <span id="month-label" style="font-weight:600;min-width:200px;text-align:center;"></span>
                     <button id="month-next" class="bulk-btn" style="padding:8px 12px;cursor:pointer;"><i class="fas fa-chevron-right"></i></button>
                     <button id="open-report-btn" class="bulk-btn" style="padding:8px 14px;cursor:pointer;background:var(--indigo);color:#fff;border:none;border-radius:8px;font-weight:600;margin-left:8px;"><i class="fas fa-file-chart-column"></i> Generate Attendance Report</button>
+                    <button id="monthly-send-report-btn" class="bulk-btn send-report-btn" type="button" style="padding:8px 14px;cursor:pointer;border:none;border-radius:8px;font-weight:600;"><i class="fas fa-paper-plane"></i> Send Report to Parents</button>
                 </div>
                 <div style="margin-left:auto;font-size:0.8rem;color:var(--text-secondary);">
                     Legend: <strong style="color:var(--emerald);">P</strong> Present &middot;
@@ -546,6 +548,18 @@
                         <button class="report-action" id="report-print-btn"><i class="fas fa-print"></i> Print</button>
                     </div>
                 </div>
+            </div>
+        </div>
+
+        <!-- SEND ATTENDANCE REPORT TO PARENTS MODAL (filled by attendance.js) -->
+        <div id="parent-report-modal" class="report-modal hidden" aria-hidden="true">
+            <div class="report-modal__backdrop" data-close-parent-report></div>
+            <div class="report-modal__panel pr-panel" role="dialog" aria-modal="true" aria-labelledby="parent-report-title">
+                <div class="report-modal__head">
+                    <h3 id="parent-report-title"><i class="fas fa-paper-plane"></i> Send Attendance Report to Parents</h3>
+                    <button class="report-modal__close" data-close-parent-report aria-label="Close" type="button"><i class="fas fa-times"></i></button>
+                </div>
+                <div id="parent-report-body" class="report-scope"></div>
             </div>
         </div>
 
@@ -773,7 +787,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@zxing/library@0.21.3/umd/index.min.js"></script>
-    <script src="attendance.js?v=20261005"></script>
+    <script src="attendance.js?v=20261026"></script>
 <script src="announce-badge.js"></script>
 </body>
 </html>

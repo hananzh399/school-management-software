@@ -4393,3 +4393,118 @@ function normalizeBiometricPath(raw) {
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
     else init();
 })();
+
+
+/* ============================================================================
+   SEND ATTENDANCE REPORT TO PARENTS
+   Button on the class student list and on the class attendance table. Two choices:
+   weekly report card / monthly report card. The server builds each student's report from the saved
+   attendance and puts it in the parent's "School Office" chat in the parent portal
+   (POST /api/parent-admin/attendance-report). Students with nothing marked in the period are skipped.
+   The week (Mon-Sun) / month it covers comes from what the admin is looking at, never past today.
+   ============================================================================ */
+(function () {
+    "use strict";
+    const PARENT_ADMIN_API = "https://167-86-120-247.sslip.io/api/parent-admin";
+    const DAY = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+    const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    const esc = v => String(v == null ? "" : v).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+    const iso = d => d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+    const nice = d => DAY[d.getDay()] + " " + d.getDate() + " " + MON[d.getMonth()];
+    const niceY = d => nice(d) + " " + d.getFullYear();
+    const plural = (n, w) => n + " " + w + (n === 1 ? "" : "s");
+
+    /* same rule as the server: week = Mon-Sun, month = 1st-last, both cut off at today */
+    function rangeOf(period, ref) {
+        const today = new Date(); today.setHours(0, 0, 0, 0);
+        let r = new Date(ref); r.setHours(0, 0, 0, 0); if (r > today) r = today;
+        let from, to;
+        if (period === "monthly") { from = new Date(r.getFullYear(), r.getMonth(), 1); to = new Date(r.getFullYear(), r.getMonth() + 1, 0); }
+        else { from = new Date(r); from.setDate(r.getDate() - ((r.getDay() + 6) % 7)); to = new Date(from); to.setDate(from.getDate() + 6); }
+        if (to > today) to = today;
+        return { from, to };
+    }
+
+    let ctx = null;   // { clsName, section, ref, students }
+    const modal = () => document.getElementById("parent-report-modal");
+    const body = () => document.getElementById("parent-report-body");
+    function close() { const m = modal(); if (m) { m.classList.add("hidden"); m.setAttribute("aria-hidden", "true"); } ctx = null; }
+
+    function openFor(cls, section, ref) {
+        if (!cls) { toast("Open a class first.", "error"); return; }
+        const sec = !section || section === "ALL" ? "" : section;
+        const students = STUDENTS.filter(s => s.class === cls.name && (!sec || s.section === sec));
+        ctx = { clsName: cls.name, section: sec, ref: ref || new Date(), students };
+        stepPick();
+        const m = modal(); m.classList.remove("hidden"); m.setAttribute("aria-hidden", "false");
+    }
+    const who = () => esc(ctx.clsName) + (ctx.section ? " · Section " + esc(ctx.section) : "") + " · " + plural(ctx.students.length, "student");
+
+    function stepPick() {
+        if (!ctx.students.length) {
+            body().innerHTML = '<p class="report-scope__hint">There are no students in this selection.</p>';
+            return;
+        }
+        const w = rangeOf("weekly", ctx.ref), m = rangeOf("monthly", ctx.ref);
+        body().innerHTML =
+            '<p class="report-scope__hint"><b>' + who() + '</b><br>Choose which report card to send. Parents get it in the parent portal.</p>' +
+            '<div class="report-scope__btns">' +
+            '<button type="button" class="scope-btn" data-pr="weekly"><i class="fas fa-calendar-week"></i><span class="scope-btn__title">Send Weekly Report Card</span><span class="scope-btn__sub">' + esc(nice(w.from)) + " – " + esc(nice(w.to)) + '</span></button>' +
+            '<button type="button" class="scope-btn" data-pr="monthly"><i class="fas fa-calendar-day"></i><span class="scope-btn__title">Send Monthly Report Card</span><span class="scope-btn__sub">' + esc(nice(m.from)) + " – " + esc(nice(m.to)) + '</span></button></div>' +
+            '<p class="pr-note"><i class="fas fa-circle-info"></i> Each report shows present, absent, leave, attendance % and the days absent. Students with no attendance marked in that period are skipped.</p>';
+        body().querySelectorAll("[data-pr]").forEach(b => b.addEventListener("click", () => stepConfirm(b.dataset.pr)));
+    }
+
+    function stepConfirm(period) {
+        const r = rangeOf(period, ctx.ref), label = period === "monthly" ? "monthly" : "weekly";
+        body().innerHTML =
+            '<p class="report-scope__hint">Ready to send the <b>' + label + ' report card</b> to the parents of:</p>' +
+            '<div class="pr-sum"><b>' + who() + '</b><span>' + esc(niceY(r.from)) + " – " + esc(niceY(r.to)) + '</span></div>' +
+            '<p class="pr-note"><i class="fas fa-triangle-exclamation"></i> Sending again later sends the report again, so use it when you are ready for parents to see it.</p>' +
+            '<div class="report-actions"><button type="button" class="report-action" id="pr-back"><i class="fas fa-arrow-left"></i> Back</button>' +
+            '<button type="button" class="report-action report-action--primary pr-send" id="pr-send"><i class="fas fa-paper-plane"></i> Send to ' + plural(ctx.students.length, "parent") + '</button></div>';
+        document.getElementById("pr-back").addEventListener("click", stepPick);
+        document.getElementById("pr-send").addEventListener("click", () => send(period));
+    }
+
+    async function send(period) {
+        const btn = document.getElementById("pr-send"); btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sending…';
+        const c = ctx;
+        try {
+            const res = await fetch(PARENT_ADMIN_API + "/attendance-report", {
+                method: "POST",
+                headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: "Bearer " + (sessionStorage.getItem("softschool_api_token") || "") },
+                body: JSON.stringify({ period, className: c.clsName, section: c.section, date: iso(c.ref > new Date() ? new Date() : c.ref) })
+            });
+            let j = null; try { j = await res.json(); } catch (e) { /* no body */ }
+            if (!res.ok) throw new Error(res.status === 404 ? "The server does not have this feature yet — update the backend." : res.status === 401 ? "Your session expired — log in again." : (j && (j.error || j.message)) || "HTTP " + res.status);
+            const sent = j.sent || 0, skipped = j.skipped || 0;
+            body().innerHTML = '<div class="pr-done"><i class="fas fa-circle-check"></i><h4>' + (sent ? "Sent to " + plural(sent, "parent") : "Nothing was sent") + '</h4>' +
+                '<p>' + (period === "monthly" ? "Monthly" : "Weekly") + " report card · " + esc(j.from) + " to " + esc(j.to) +
+                (skipped ? '<br>' + plural(skipped, "student") + " skipped — no attendance marked in this period." : "") + '</p>' +
+                '<button type="button" class="report-action" data-close-parent-report>Close</button></div>';
+            body().querySelector("[data-close-parent-report]").addEventListener("click", close);
+            if (sent) toast("Report card sent to " + plural(sent, "parent") + ".", "success");
+            else toast("No attendance was marked in this period.", "info");
+        } catch (e) {
+            btn.disabled = false; btn.innerHTML = '<i class="fas fa-paper-plane"></i> Try again';
+            toast(e.message || "Could not send the report.", "error");
+        }
+    }
+
+    document.addEventListener("DOMContentLoaded", () => {
+        const m = modal(); if (!m) return;
+        m.querySelectorAll("[data-close-parent-report]").forEach(el => el.addEventListener("click", close));
+        document.addEventListener("keydown", e => { if (e.key === "Escape" && !m.classList.contains("hidden")) close(); });
+
+        const t = document.getElementById("table-send-report-btn");
+        if (t) t.addEventListener("click", () => openFor(state.selectedClass, state.selectedSection, new Date()));
+
+        const mo = document.getElementById("monthly-send-report-btn");
+        if (mo) mo.addEventListener("click", () => {
+            const p = state.monthlyViewPeriod;      // follow what is on screen: that week / that month / today
+            const ref = p === "week" && state.monthlyWeekStart ? state.monthlyWeekStart : p === "month" && state.monthlyDate ? state.monthlyDate : new Date();
+            openFor(state.monthlyClass, state.monthlySection, ref);
+        });
+    });
+})();

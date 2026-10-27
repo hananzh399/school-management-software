@@ -1648,3 +1648,18 @@ body, .table-card, .save-bar, .attn-stat-card, .choice-card, .class-card, .kpi-c
 .sidebar-nav::-webkit-scrollbar-track { background: transparent; }
 .sidebar-nav::-webkit-scrollbar-thumb { background: var(--border-hover, rgba(148,163,184,0.28)); border-radius: 10px; }
 .sidebar-nav::-webkit-scrollbar-thumb:hover { background: var(--text-muted, #64748b); }
+
+/* ── Send attendance report to parents ── */
+.send-report-btn { background: var(--emerald, #10b981) !important; color: #fff !important; }
+.stage-header .send-report-btn { margin-left: 8px; }
+.pr-panel { width: min(560px, 100%); }
+.pr-note { margin: 16px 0 0; font-size: 0.8rem; color: var(--text-secondary); display: flex; gap: 8px; align-items: flex-start; line-height: 1.5; }
+.pr-note i { margin-top: 2px; color: var(--indigo-light); }
+.pr-sum { display: flex; flex-direction: column; gap: 4px; padding: 14px 16px; border: 1px solid var(--border-subtle); border-radius: var(--radius-md); background: var(--bg-card); color: var(--text-primary); }
+.pr-sum span { font-size: 0.85rem; color: var(--text-secondary); }
+.pr-panel .report-actions { margin-top: 18px; padding: 0; border: 0; background: none; }
+.pr-send[disabled] { opacity: .7; cursor: wait; }
+.pr-done { text-align: center; padding: 8px 4px 4px; }
+.pr-done > i { font-size: 2.4rem; color: var(--emerald, #10b981); }
+.pr-done h4 { margin: 10px 0 6px; font-size: 1.05rem; color: var(--text-primary); }
+.pr-done p { margin: 0 0 16px; font-size: 0.85rem; color: var(--text-secondary); line-height: 1.6; }

@@ -7,7 +7,7 @@
     <link rel="icon" type="image/png" href="logo-icon.png">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
 <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
-<link rel="stylesheet" href="settings.css">
+<link rel="stylesheet" href="settings.css?v=20261026">
 <script>(function(){const s=localStorage.getItem('eduflow-theme');document.documentElement.setAttribute('data-theme',(s==='light'||s==='dark')?s:'dark');})()</script>
 <style>
   .timing-subtitle{font-weight:500;font-size:0.8em;color:var(--text-muted,#8a8f98);}
@@ -98,7 +98,7 @@
         <i class="fas fa-sliders-h"></i> Pay Variables
       </button>
       <button class="tab-btn" onclick="switchTab('attendance-timing', this)">
-        <i class="fas fa-clock"></i> Attendance Timing
+        <i class="fas fa-clipboard-check"></i> Attendance Setting
       </button>
       <button class="tab-btn" onclick="switchTab('teacherlogin', this)">
         <i class="fas fa-user-lock"></i> Teacher Login
@@ -311,13 +311,13 @@
     </div>
 
 
-    <!-- ═══════════════════ TAB: ATTENDANCE TIMING ═══════════════════ -->
+    <!-- ═══════════════════ TAB: ATTENDANCE SETTING ═══════════════════ -->
     <div class="tab-panel" id="tab-attendance-timing">
       <div class="section-card">
         <div class="section-header">
           <div class="section-header-info">
-            <h2><i class="fas fa-clock"></i> Attendance Timing Control</h2>
-            <p>Daily auto-save times for attendance.</p>
+            <h2><i class="fas fa-clipboard-check"></i> Attendance Setting</h2>
+            <p>Daily auto-save times and parent notifications for attendance.</p>
           </div>
         </div>
 
@@ -369,9 +369,22 @@
           </div>
         </div>
 
+        <!-- PARENT NOTIFICATION -->
+        <div class="timing-card timing-notify">
+          <div class="timing-card-head">
+            <span class="timing-badge"><i class="fas fa-bell"></i></span>
+            <h3>Parent Notification <span class="timing-subtitle">— Absent Students</span></h3>
+          </div>
+          <label class="switch-row">
+            <input type="checkbox" id="absent-notify-enabled">
+            <span>Enable daily send notification of student absent</span>
+          </label>
+          <div class="var-hint">When on, the parent of every student marked absent today receives one message in the parent portal (School Office chat) as soon as attendance is saved. Nothing is sent when this is off, and a parent is never notified twice for the same day.</div>
+        </div>
+
         <div class="timing-actions">
           <button class="btn-primary" onclick="saveAttendanceTiming()">
-            <i class="fas fa-save"></i> Save Timings
+            <i class="fas fa-save"></i> Save Settings
           </button>
           <span id="timing-status" class="timing-status"></span>
         </div>
@@ -454,7 +467,7 @@
 </div>
 
 <script src="shared-data.js"></script>
-<script src="settings.js"></script>
+<script src="settings.js?v=20261026"></script>
 <script src="announce-badge.js"></script>
 </body>
 </html>
