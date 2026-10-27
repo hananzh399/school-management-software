@@ -21,7 +21,7 @@
   var API = global.PortalAPI;
   if (!API) return;
 
-  var POLL_VISIBLE_MS = 8000;     // pulse check while the portal is on screen (feels live; the server allows 300 calls/min per IP)
+  var POLL_VISIBLE_MS = 10000;    // pulse check while the portal is on screen (the server answers it from memory; limit is 300 calls/min per IP)
   var POLL_HIDDEN_MS = 30000;     // pulse check while the tab is in the background (saves battery/data)
   var LEASE_MS = 40000;           // one tab "owns" showing alerts for this long
   var ASK_AGAIN_DAYS = 7;         // after "Not now", ask again after a week
@@ -271,8 +271,46 @@
         st.inId[reg] = curIn;
       });
     }
+    // Homework, results and today's attendance (sent by newer servers; older ones simply omit them).
+    st.diary = st.diary || {}; st.res = st.res || {}; st.att = st.att || {};
+    var extra = [];
+    Object.keys(p.diaryByChild || {}).forEach(function (reg) {
+      var cur = Number(p.diaryByChild[reg]) || 0, prev = st.diary[reg];
+      if (prev != null && cur > prev) {
+        extra.push({ kind: 'diary', title: tr('notifHomework', 'New homework posted') + (kids().length > 1 && nameOf(reg) ? ' \u00b7 ' + nameOf(reg) : ''),
+          body: tr('pushNewDiaryBody', 'Your child has new homework in the diary.'), url: 'parent-portal-diary.html', tag: 'pp-diary-' + reg });
+      }
+      st.diary[reg] = cur;
+    });
+    Object.keys(p.resultsByChild || {}).forEach(function (reg) {
+      var cur = Number(p.resultsByChild[reg]) || 0, prev = st.res[reg];
+      if (prev != null && cur > prev) {
+        extra.push({ kind: 'result', title: tr('notifResult', 'Result announced') + (kids().length > 1 && nameOf(reg) ? ' \u00b7 ' + nameOf(reg) : ''),
+          body: tr('pushNewResultBody', 'A new result is available.'), url: 'parent-portal-result.html', tag: 'pp-result-' + reg });
+      }
+      st.res[reg] = cur;
+    });
+    Object.keys(p.attByChild || {}).forEach(function (reg) {
+      var cur = String(p.attByChild[reg] || ''), day = String(p.today || ''), prev = st.att[reg];
+      var stamp = day + '|' + cur;
+      // Alert when today's status first appears or changes (a new day starts from "nothing marked").
+      if (prev != null && cur && prev !== stamp) {
+        var who = nameOf(reg) || tr('yourChild', 'Your child');
+        var word = cur === 'present' ? tr('attPresentWord', 'present') : cur === 'absent' ? tr('attAbsentWord', 'absent') : tr('attLeaveWord', 'on leave');
+        extra.push({ kind: 'attendance', title: tr('notifAttendance', 'Attendance update'), body: who + ' ' + tr('attMarkedWord', 'was marked') + ' ' + word + '.',
+          url: 'parent-portal-attendance.html', tag: 'pp-att-' + reg });
+      }
+      st.att[reg] = stamp;
+    });
     lsSet(key, st);                      // first run only records the baseline - no flood of old items
     var jobs = [];
+    if (extra.length > 1 && document.visibilityState === 'visible') {
+      // one banner can only show one item, so several at once become a single summary
+      show({ kind: 'summary', title: tr('pushManyTitle', 'New updates from school'), body: extra.length + ' ' + tr('pushManyBody', 'new notifications'),
+             url: 'parent-portal-notifications.html', tag: 'pp-many' });
+    } else {
+      extra.forEach(function (n) { show(n); });
+    }
     if (annJobs.length) jobs.push(notifyAnnouncements(annJobs));
     msgJobs.forEach(function (reg) { jobs.push(notifyMessages(reg)); });
     return Promise.all(jobs);
@@ -310,7 +348,7 @@
       btn.hidden = true;
     } else if (p === 'granted') {
       status.textContent = tr('pushGranted', 'Notifications are on for this device.');
-      btn.textContent = tr('pushTest', 'Send a test notification');
+      btn.hidden = true;                  // nothing to press: they are already on
     } else if (p === 'denied') {
       status.textContent = tr('pushDenied', 'Notifications are blocked. Allow them for this site in your browser settings, then reload.');
       btn.hidden = true;
@@ -319,18 +357,14 @@
       btn.textContent = tr('pushAskYes', 'Turn on');
     }
     btn.onclick = function () {
-      if (permission() === 'granted') {
-        system({ title: tr('pushTestTitle', 'Test notification'), body: tr('pushTestBody', 'Notifications are working on this device.'), url: 'parent-portal-index.html', tag: 'pp-test' });
-      } else {
-        enable().then(wireSettings);
-      }
+      if (permission() !== 'granted') enable().then(wireSettings);
     };
   }
 
   // ---------- boot ----------
   function boot() {
     if (!token()) return;
-    if (canSystem()) registerSW();
+    registerSW();                         // always: system alerts need it (Android Chrome) as soon as permission is granted
     wireSettings();
     setTimeout(function () { poll().then(schedule); }, 500);
     document.addEventListener('visibilitychange', function () {

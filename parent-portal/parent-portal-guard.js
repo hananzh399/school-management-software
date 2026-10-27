@@ -33,6 +33,13 @@
   var loaderTitle;
   var loaderDetail;
   document.documentElement.classList.add('pp-auth-pending');
+  try {   // open the connection to the API server while the rest of the page is still loading
+    var pre = document.createElement('link');
+    pre.rel = 'preconnect';
+    pre.href = API.replace(/^(https?:\/\/[^\/]+).*$/, '$1');
+    pre.crossOrigin = 'anonymous';
+    document.head.appendChild(pre);
+  } catch (e) { /* optional */ }
 
   var loaderStyle = document.createElement('style');
   loaderStyle.textContent = [

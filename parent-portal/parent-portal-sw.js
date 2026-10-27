@@ -1,9 +1,42 @@
 // Parent Portal – service worker.
 // It lets the portal show system notifications (Android Chrome needs a service worker for this) and opens the
 // right page when one is tapped. It also understands real Web Push messages, so server push can be added later
-// without touching the portal pages. It does not cache anything.
+// without touching the portal pages.
+//
+// It also keeps the portal's own static files (scripts, styles, images) so repeat visits and page-to-page
+// navigation start instantly. Stale-while-revalidate: the saved copy is shown at once and refreshed in the
+// background, so an update is picked up on the next open. API calls and HTML pages are never cached.
+var STATIC_CACHE = 'pp-static-v1';
+
 self.addEventListener('install', function () { self.skipWaiting(); });
-self.addEventListener('activate', function (event) { event.waitUntil(self.clients.claim()); });
+self.addEventListener('activate', function (event) {
+  event.waitUntil(
+    caches.keys().then(function (names) {
+      return Promise.all(names.filter(function (n) { return n.indexOf('pp-static-') === 0 && n !== STATIC_CACHE; })
+        .map(function (n) { return caches.delete(n); }));
+    }).then(function () { return self.clients.claim(); })
+  );
+});
+
+self.addEventListener('fetch', function (event) {
+  var req = event.request;
+  if (req.method !== 'GET') return;
+  var url = new URL(req.url);
+  if (url.origin !== self.location.origin) return;                       // never the API
+  if (!/\.(?:js|css|png|jpe?g|svg|webp|woff2?)$/i.test(url.pathname)) return;
+  if (/parent-portal-sw\.js$/.test(url.pathname)) return;
+  event.respondWith(
+    caches.open(STATIC_CACHE).then(function (cache) {
+      return cache.match(req).then(function (saved) {
+        var fresh = fetch(req).then(function (res) {
+          if (res && res.ok) cache.put(req, res.clone());
+          return res;
+        }).catch(function () { return saved; });
+        return saved || fresh;
+      });
+    })
+  );
+});
 
 // Real push (only used once the backend sends Web Push): { title, body, url, tag }
 self.addEventListener('push', function (event) {

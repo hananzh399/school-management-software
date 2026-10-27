@@ -16,17 +16,53 @@
   // often ask for the same thing at the same moment).
   var inflight = {};
 
+  // Short-lived copy of read-only answers, so moving between portal pages does not re-download the same
+  // lists every time (the server also caches them, this saves the round trip). Lives in sessionStorage,
+  // so it disappears on logout/tab close. Anything the parent changes (send, submit, mark read) clears it,
+  // and live data (pulse, chat) is never cached here.
+  var CACHE_TTL_MS = 20000;
+  var CACHE_PREFIX = 'ppc:';
+  var CACHE_MAX_CHARS = 250000;
+  function cacheable(path) { return !/^\/(pulse|messages)/.test(path); }
+  function cacheGet(path) {
+    try {
+      var raw = sessionStorage.getItem(CACHE_PREFIX + path);
+      if (!raw) return undefined;
+      var e = JSON.parse(raw);
+      if (!e || Date.now() - e.t > CACHE_TTL_MS) { sessionStorage.removeItem(CACHE_PREFIX + path); return undefined; }
+      return e.d;
+    } catch (err) { return undefined; }
+  }
+  function cacheSet(path, data) {
+    try {
+      var raw = JSON.stringify({ t: Date.now(), d: data });
+      if (raw.length <= CACHE_MAX_CHARS) sessionStorage.setItem(CACHE_PREFIX + path, raw);
+    } catch (err) { /* storage full or unavailable: just skip caching */ }
+  }
+  function cacheClear() {
+    try {
+      Object.keys(sessionStorage).forEach(function (k) { if (k.indexOf(CACHE_PREFIX) === 0) sessionStorage.removeItem(k); });
+    } catch (err) { /* ignore */ }
+  }
+
   function request(method, path, body) {
     if (method === 'GET') {
+      var useCache = cacheable(path);
+      if (useCache) {
+        var hit = cacheGet(path);
+        if (hit !== undefined) return Promise.resolve(hit);
+      }
       var key = path + '|' + (token() || '');
       if (inflight[key]) return inflight[key];
       var p = rawRequest(method, path, body);
+      if (useCache) p = p.then(function (data) { cacheSet(path, data); return data; });
       inflight[key] = p;
       var clear = function () { delete inflight[key]; };
       p.then(clear, clear);
       return p;
     }
-    return rawRequest(method, path, body);
+    // A write may change what the lists show: forget every cached read once it has succeeded.
+    return rawRequest(method, path, body).then(function (r) { cacheClear(); return r; });
   }
 
   function rawRequest(method, path, body) {
@@ -40,7 +76,9 @@
     if (body instanceof FormData) opts.body = body;
     else if (body !== undefined) { opts.headers['Content-Type'] = 'application/json'; opts.body = JSON.stringify(body); }
     return fetch(API + path, opts).then(function (res) {
-      if (res.status === 401) { logout(); throw new Error('Session expired.'); }
+      // A 401 normally means the session ended. The password form is the exception: there the server answers
+      // 401 for a wrong CURRENT password, and the parent must stay signed in to try again.
+      if (res.status === 401 && path !== '/change-password') { logout(); throw new Error('Session expired.'); }
       if (res.status === 204) return null;
       return res.json().catch(function () { return null; }).then(function (data) {
         if (!res.ok) throw new Error((data && data.error) || 'Something went wrong. Please try again.');

@@ -895,7 +895,6 @@
   function handleDrawerAction(action) {
     switch (action) {
       case 'change-password': console.log('→ Change Password'); break;
-      case 'info':            console.log('→ Info'); break;
       case 'demo-videos':     console.log('→ Demo Videos'); break;
       case 'submit-feedback': console.log('→ Submit Feedback'); break;
       case 'logout':

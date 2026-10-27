@@ -245,12 +245,11 @@
   function handleDrawerAction(action) {
     switch (action) {
       case 'change-password':
-        window.location.href = 'parent-portal-change-password.html';
+        window.location.href = 'parent-portal-settings.html';
         break;
       case 'settings':
         window.location.href = 'parent-portal-settings.html';
         break;
-      case 'info':            console.log('→ Info'); break;
       case 'demo-videos':     console.log('→ Demo Videos'); break;
       case 'submit-feedback':
         window.location.href = 'parent-portal-feedback.html';

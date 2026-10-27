@@ -77,6 +77,53 @@
       <button type="button" class="st-push-btn" id="pushBtn" hidden>Turn on</button>
     </section>
 
+    <section class="st-card" aria-labelledby="pwTitle" id="pwCard">
+      <div class="st-card-head">
+        <span class="st-card-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+        </span>
+        <div>
+          <h2 class="st-card-title" id="pwTitle" data-i18n="stSecurityTitle">Change Password</h2>
+          <p class="st-card-sub" data-i18n="stSecuritySub">Use a new 7-digit password to sign in</p>
+        </div>
+      </div>
+
+      <button type="button" class="st-push-btn" id="pwOpenBtn" data-i18n="stPwOpen">Change password</button>
+
+      <form id="pwForm" class="st-pw-form" novalidate hidden>
+        <div class="st-form-error" id="pwFormError" role="alert"></div>
+        <div class="st-field" id="field-oldPassword">
+          <label class="st-label" for="oldPassword" data-i18n="cpOld">Old Password</label>
+          <div class="st-input-wrap">
+            <input class="st-input" type="password" id="oldPassword" inputmode="numeric" pattern="[0-9]*" maxlength="7" placeholder="Enter your current password" data-i18n-placeholder="cpOldPh" autocomplete="current-password" required>
+            <button type="button" class="st-eye" data-target="oldPassword" aria-label="Show password" data-i18n-aria="cpShowPw"><svg class="icon-eye" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg><svg class="icon-eye-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg></button>
+          </div>
+          <p class="st-error" id="error-oldPassword" role="alert"></p>
+        </div>
+        <div class="st-field" id="field-newPassword">
+          <label class="st-label" for="newPassword" data-i18n="cpNew">New Password</label>
+          <div class="st-input-wrap">
+            <input class="st-input" type="password" id="newPassword" inputmode="numeric" pattern="[0-9]*" maxlength="7" placeholder="Create a new password" data-i18n-placeholder="cpNewPh" autocomplete="new-password" required>
+            <button type="button" class="st-eye" data-target="newPassword" aria-label="Show password" data-i18n-aria="cpShowPw"><svg class="icon-eye" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg><svg class="icon-eye-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg></button>
+          </div>
+          <p class="st-error" id="error-newPassword" role="alert"></p>
+        </div>
+        <div class="st-field" id="field-confirmPassword">
+          <label class="st-label" for="confirmPassword" data-i18n="cpConfirm">Confirm New Password</label>
+          <div class="st-input-wrap">
+            <input class="st-input" type="password" id="confirmPassword" inputmode="numeric" pattern="[0-9]*" maxlength="7" placeholder="Re-enter your new password" data-i18n-placeholder="cpConfirmPh" autocomplete="new-password" required>
+            <button type="button" class="st-eye" data-target="confirmPassword" aria-label="Show password" data-i18n-aria="cpShowPw"><svg class="icon-eye" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg><svg class="icon-eye-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg></button>
+          </div>
+          <p class="st-error" id="error-confirmPassword" role="alert"></p>
+        </div>
+        <p class="st-hint" data-i18n="cpRuleLength">Exactly 7 digits</p>
+        <div class="st-pw-actions">
+          <button type="submit" class="st-push-btn" id="pwSubmit"><span id="pwSubmitText" data-i18n="changePassword">Change Password</span></button>
+          <button type="button" class="st-ghost-btn" id="pwCancel" data-i18n="stPwCancel">Cancel</button>
+        </div>
+      </form>
+    </section>
+
     <p class="st-note">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
       <span data-i18n="autoSave">Changes are saved automatically</span>
