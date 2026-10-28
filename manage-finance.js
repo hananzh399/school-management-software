@@ -3995,7 +3995,18 @@ function computeFeeBreakdown(s) {
             const dueBeforeFines = Math.max(0, voucherTotal - fineFromBackend);
             const settledByDeadline = _amountSettledByDeadline(s, feeMonthKey, graceEndOfDay);
             const settledOnTime = Math.round(settledByDeadline) >= Math.round(dueBeforeFines);
-            isPastDue = !settledOnTime;
+            // BUGFIX — "Rs. 200 pending after the full fee is already paid":
+            // the late fee exists only in this screen; the backend ledger
+            // (netPayable / remainingBalance) never contains it. A bill whose
+            // fee is fully paid — even if paid after the due date — therefore
+            // showed Partial with Rs. 200 pending; paying that 200 pushed the
+            // ledger over its real amount, and leaving it unpaid carried it
+            // into next month's arrears. The late fee now only applies while
+            // part of the real bill is still unpaid, and drops off the moment
+            // the real amount is cleared.
+            const paidSoFar = getPaidThisMonthAuthoritative(s, feeMonthKey);
+            const realBillCleared = Math.round(paidSoFar) >= Math.round(voucherTotal);
+            isPastDue = !settledOnTime && !realBillCleared;
         }
     }
     const payableNow = isPastDue ? (voucherTotal + lateFeeSurcharge) : voucherTotal;
