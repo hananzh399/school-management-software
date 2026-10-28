@@ -1227,6 +1227,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (modalId === 'student-modal') {
             const isEdit = editIdHidden.value !== "";
+            // New school with no current session / no classes yet: show the setup message instead of the form
+            if (!isEdit && window.SoftSchoolSetupCheck && window.SoftSchoolSetupCheck.blockAdmission()) return;
             if (!isEdit && !canAdmitNewStudent()) {
                 showToast("Limit Reached", `Your plan allows up to ${getStudentLimit()} active students. Upgrade your plan to register more.`, "danger");
                 return;
