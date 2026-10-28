@@ -408,10 +408,12 @@ nav a.active { color: var(--teal-700); font-weight: 600; }
 .orb {
   position: absolute;
   border-radius: 50%;
-  filter: blur(90px);
+  /* PERFORMANCE: was `filter: blur(90px)` + an infinite animation. A 400px+ element blurred by 90px and moved
+     every frame forces the GPU to re-blur it continuously (slow/janky on school PCs and phones). A soft radial
+     mask gives the same glow, is static, and costs almost nothing to paint. */
+  -webkit-mask-image: radial-gradient(circle, #000 0%, transparent 70%);
+  mask-image: radial-gradient(circle, #000 0%, transparent 70%);
   opacity: 0.35;
-  animation: floatY 9s ease-in-out infinite;
-  will-change: transform;
 }
 .orb-1 {
   width: 420px; height: 420px;
@@ -1067,9 +1069,10 @@ nav a.active { color: var(--teal-700); font-weight: 600; }
 .orb-a, .orb-b {
   position: absolute;
   border-radius: 50%;
-  filter: blur(100px);
+  /* PERFORMANCE: same change as .orb above (no animated blur filter). */
+  -webkit-mask-image: radial-gradient(circle, #000 0%, transparent 70%);
+  mask-image: radial-gradient(circle, #000 0%, transparent 70%);
   opacity: 0.3;
-  animation: floatY 10s ease-in-out infinite;
 }
 .orb-a { width: 400px; height: 400px; background: var(--teal-500); top: -100px; left: -100px; }
 .orb-b { width: 350px; height: 350px; background: var(--amber-500); bottom: -100px; right: -50px; opacity: 0.15; animation-delay: -5s; }

@@ -79,9 +79,20 @@ const SCHOOL_API_BASE_URL = "https://167-86-120-247.sslip.io/api/school";
   function saveSchools(list) {
     localStorage.setItem(SCHOOLS_KEY, JSON.stringify(list));
   }
+  /* PERFORMANCE: the session embeds the whole school record, including the base64 logo (can be hundreds of KB).
+     getSession()/getCurrentSchool() are called many times per page (every fetch helper asks for the school id),
+     and each call used to JSON.parse all of it again. Parse only when the stored text actually changed.
+     Callers only read the result; they never mutate it. */
+  let _sessRaw = null, _sessParsed = null;
   function getSession() {
-    try { return JSON.parse(localStorage.getItem(SESSION_KEY)) || null; }
-    catch (e) { return null; }
+    try {
+      const raw = localStorage.getItem(SESSION_KEY);
+      if (raw === _sessRaw) return _sessParsed;
+      _sessParsed = JSON.parse(raw) || null;
+      _sessRaw = raw;
+      return _sessParsed;
+    }
+    catch (e) { _sessRaw = null; _sessParsed = null; return null; }
   }
   /* Accepts either:
        setSession(schoolIdString)   — legacy callers, kept for compatibility
