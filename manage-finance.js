@@ -3971,12 +3971,32 @@ function computeFeeBreakdown(s) {
     // the bill still had money due at the deadline: it is skipped when
     // nothing is payable, or when the bill was already fully settled
     // (payments + discounts) by the end of the grace period.
+    // BUGFIX — "late fee misreads data / Rs. 200 pending after paying":
+    //  1) The on-time check ran even when this month's payment data had not
+    //     loaded yet (status cache for another month, or not fetched), so
+    //     _amountSettledByDeadline() returned 0 and EVERY student looked
+    //     late. The fine is now only decided once this month's payment data
+    //     is actually known.
+    //  2) The on-time test compared payments with voucherTotal, which also
+    //     contains fines added AFTER the deadline/payment. A student who paid
+    //     the full fee on time then looked "short" and got the late fee on
+    //     top. The test now uses the amount due before fines.
+    //  3) Amounts are compared rounded to whole rupees so float noise (or a
+    //     percent-based figure) can't leave a phantom 1-paisa shortfall that
+    //     turned a settled bill into "Partial".
     let isPastDue = false;
     if (vs.lateFineEnabled && lateFeeSurcharge > 0
         && today.getTime() > graceEndOfDay.getTime()) {
-        const settledOnTime = _amountSettledByDeadline(s, getCurrentFeeMonthKey(), graceEndOfDay)
-            >= voucherTotal - 0.01;
-        isPastDue = !settledOnTime;
+        const feeMonthKey = getCurrentFeeMonthKey();
+        const hasLocalPayments = Array.isArray(s.feePayments)
+            && s.feePayments.some(p => p && p.monthKey === feeMonthKey);
+        const paymentDataKnown = (_studentFeeStatusMonthKey === feeMonthKey) || hasLocalPayments;
+        if (paymentDataKnown) {
+            const dueBeforeFines = Math.max(0, voucherTotal - fineFromBackend);
+            const settledByDeadline = _amountSettledByDeadline(s, feeMonthKey, graceEndOfDay);
+            const settledOnTime = Math.round(settledByDeadline) >= Math.round(dueBeforeFines);
+            isPastDue = !settledOnTime;
+        }
     }
     const payableNow = isPastDue ? (voucherTotal + lateFeeSurcharge) : voucherTotal;
 
