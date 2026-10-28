@@ -19,8 +19,10 @@
  *     (students/summary, staff/summary) plus teacher-password. staff/summary is not cached on the server and scans a
  *     month of attendance each time. Those 3 calls are gone: only /api/sessions and /api/settings/{id} are used now.
  *   - Runs when the browser is idle, after the page's own requests, never before them.
- *   - Once the school is fully set up the answer is remembered for 30 minutes (per tab), so normal page loads make
- *     ZERO extra requests.
+ *   - Once the school is fully set up the answer is remembered for 5 minutes (per tab), so quick page-to-page
+ *     navigation makes ZERO extra requests. The memory is IGNORED (fresh check) when you arrive from Sessions or
+ *     Settings, on the New Admission page, and when coming back with the Back button - exactly the moments when
+ *     something may have just been deleted.
  *   - One shared in-flight check, so the dashboard and the admission page never ask twice at the same time.
  *   - No page lock, no grayscale/opacity filter on the dashboard any more.
  *
@@ -33,12 +35,13 @@
     var ORIGIN = (typeof window.SOFTSCHOOL_API_ORIGIN === 'string' && window.SOFTSCHOOL_API_ORIGIN.trim())
         ? window.SOFTSCHOOL_API_ORIGIN.trim().replace(/\/+$/, '')
         : 'https://167-86-120-247.sslip.io';
-    var OK_TTL_MS = 30 * 60 * 1000;
+    var OK_TTL_MS = 5 * 60 * 1000;   // short on purpose: sessions/classes can be deleted at any time
 
     var IS_DASHBOARD = !!document.querySelector('main.main-content .quick-stats-strip') || /(^|\/)main\.html$/.test(location.pathname);
     var IS_ADMISSION = !!document.getElementById('card-add-student');
 
     var lastModel = null;      // newest result: { requiredDone, steps, extras }
+    var lastCheckedAt = 0;     // when lastModel came from the server (ms), used to re-verify on every New Admission click
     var inflight = null;       // shared promise
 
     function schoolId() {
@@ -121,6 +124,7 @@
             }
             writeOk(requiredDone && extras.every(function (e) { return e.done; }));
             lastModel = { requiredDone: requiredDone, steps: steps, extras: extras };
+            lastCheckedAt = Date.now();
             return lastModel;
         });
         var clear = function () { inflight = null; };
@@ -218,8 +222,10 @@
     }
     // Hidden state only affects the AUTO popup. Pressing "New Admission" while setup is missing always shows it again.
     function hideKey(kind) { return 'softschool-setup-hidden:' + kind + ':' + schoolId() + ':' + new Date().toDateString(); }
-    function isHidden(kind) { try { return sessionStorage.getItem(hideKey(kind)) === '1'; } catch (e) { return false; } }
-    function hideFor(kind) { try { sessionStorage.setItem(hideKey(kind), '1'); } catch (e) { /* ignore */ } }
+    // Only the OPTIONAL "next steps" popup is hidden for the day. A missing session/class is REQUIRED setup, so its popup
+    // simply closes for now and comes back the next time the page loads while it is still missing.
+    function isHidden(kind) { if (kind !== 'next') return false; try { return sessionStorage.getItem(hideKey(kind)) === '1'; } catch (e) { return false; } }
+    function hideFor(kind) { if (kind !== 'next') return; try { sessionStorage.setItem(hideKey(kind), '1'); } catch (e) { /* ignore */ } }
 
     /* --------------------------------------------------------------- auto-show */
     function autoShow(model) {
@@ -242,20 +248,47 @@
             .catch(function (e) { console.warn('[setup-check] skipped:', e && e.message ? e.message : e); });
     }
 
-    /** Called by manage-students.js before the admission form opens. Returns true when it was blocked (popup shown). */
+    /**
+     * Called by manage-students.js every time "New Admission" is pressed.
+     * Returns true when the click was blocked (popup shown, form must NOT open).
+     *
+     *  - Missing setup  -> popup shows EVERY time, however often it was closed before.
+     *  - The answer is verified live in the background on every click (skipped only if it is under 3 seconds old),
+     *    so it is never stale:
+     *      * it was blocked but the admin has since fixed it (e.g. in another tab) -> popup closes, form opens;
+     *      * it was allowed (or the first check had not finished / had failed) but setup is in fact missing
+     *        -> popup shows and the half-open form is closed.
+     */
     function blockAdmission() {
-        if (lastModel && !lastModel.requiredDone) { openPop(lastModel, 'admission'); return true; }
+        var blocked = !!(lastModel && !lastModel.requiredDone);
+        if (!inflight && Date.now() - lastCheckedAt > 3000) {
+            evaluate(true).then(function (m) {
+                if (blocked && m.requiredDone) {
+                    closePop();
+                    if (typeof window.openModal === 'function') window.openModal('student-modal');
+                } else if (!blocked && !m.requiredDone) {
+                    if (typeof window.closeModal === 'function') { try { window.closeModal('student-modal'); } catch (e) { /* ignore */ } }
+                    openPop(m, 'admission');
+                }
+            }).catch(function () { /* offline / token expired: keep the current behaviour, never block on an error */ });
+        }
+        if (blocked) { openPop(lastModel, 'admission'); return true; }
         return false;
     }
 
     window.SoftSchoolSetupCheck = { run: run, evaluate: evaluate, blockAdmission: blockAdmission, close: dismissPop };
 
     /* Wait until the page's own requests have started, then check when the browser is idle. */
+    // Arriving from Sessions / Settings (where sessions and classes get deleted) must never trust the 5-minute memory.
+    function cameFromSetupPage() {
+        try { return /\/(sessions|settings)\.html$/i.test(new URL(document.referrer).pathname); } catch (e) { return false; }
+    }
     var scheduled = false;
     function schedule() {
         if (scheduled) return;
         scheduled = true;
-        var go = function () { run(false); };
+        var force = IS_ADMISSION || cameFromSetupPage();
+        var go = function () { run(force); };
         if (typeof window.requestIdleCallback === 'function') window.requestIdleCallback(go, { timeout: 4000 });
         else setTimeout(go, 1500);
     }
@@ -263,5 +296,5 @@
     if (document.readyState === 'complete') schedule();
     else window.addEventListener('load', schedule);
     // coming back with the browser's back button: re-check only if the school was not fully set up
-    window.addEventListener('pageshow', function (e) { if (e.persisted && !readOk()) run(true); });
+    window.addEventListener('pageshow', function (e) { if (e.persisted) run(true); });
 })();
