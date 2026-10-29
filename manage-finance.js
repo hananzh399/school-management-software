@@ -793,16 +793,51 @@ async function refreshGeneratedVouchersCache() {
     }
 }
 
+// BUGFIX — "moved to next month and every voucher doubled, even for students
+// who paid in full": student.feePayments is never persisted (payments live in
+// the backend Finance ledger, one row per student+month), so after any page
+// load it is empty. computeOutstandingArrears() only looked at that empty
+// array, saw Rs. 0 paid against last month's bill, and rolled the FULL last
+// bill into the new month as arrears (new fee + whole old bill = double).
+// This keeps the real per-month ledger of each student's previous billed
+// month so the arrears roll-forward can see what was actually paid.
+let _priorMonthLedgerCache = {};      // monthKey -> { regNo -> ledger record }
+let _priorMonthLedgerFetchedAt = {};  // monthKey -> ms timestamp of last fetch
+
+async function refreshPriorMonthLedgerCache(currentMonthKey, force) {
+    try {
+        const latestByStudent = {};
+        getGeneratedVouchers().forEach(r => {
+            if (!r || !r.monthKey || r.monthKey >= currentMonthKey) return;
+            const id = String(r.studentId);
+            if (!latestByStudent[id] || r.monthKey > latestByStudent[id]) latestByStudent[id] = r.monthKey;
+        });
+        const months = Array.from(new Set(Object.values(latestByStudent)));
+        const now = Date.now();
+        await Promise.all(months.map(async mk => {
+            if (!force && _priorMonthLedgerCache[mk] && (now - (_priorMonthLedgerFetchedAt[mk] || 0)) < 30000) return;
+            const data = await _backendGet(API_BASE, `/status-all/${encodeURIComponent(mk)}`);
+            if (!Array.isArray(data)) return;
+            const m = {};
+            data.forEach(rec => { if (rec && rec.regNo) m[rec.regNo] = rec; });
+            _priorMonthLedgerCache[mk] = m;
+            _priorMonthLedgerFetchedAt[mk] = Date.now();
+        }));
+    } catch (e) { /* best effort — arrears falls back to local payments */ }
+}
+
 async function refreshStudentFeeStatusCache() {
     const monthKey = getCurrentFeeMonthKey();
     const data = await _backendGet(API_BASE, `/status-all/${encodeURIComponent(monthKey)}`);
-    if (!Array.isArray(data)) return;
-    const map = {};
-    data.forEach(rec => {
-        if (rec && rec.regNo) map[rec.regNo] = rec;
-    });
-    _studentFeeStatusCache = map;
-    _studentFeeStatusMonthKey = monthKey;
+    if (Array.isArray(data)) {
+        const map = {};
+        data.forEach(rec => {
+            if (rec && rec.regNo) map[rec.regNo] = rec;
+        });
+        _studentFeeStatusCache = map;
+        _studentFeeStatusMonthKey = monthKey;
+    }
+    await refreshPriorMonthLedgerCache(monthKey, false);
 }
 
 /**
@@ -7294,7 +7329,18 @@ function computeOutstandingArrears(student) {
         })
         .reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
 
-    return Math.max(0, billed - paidSinceLastVoucher);
+    let outstanding = Math.max(0, billed - paidSinceLastVoucher);
+
+    // BUGFIX — see _priorMonthLedgerCache: the local payment list above is
+    // empty after a reload, so it can only OVER-state what is owed. The
+    // backend ledger row for that last billed month holds the real
+    // remaining balance; never roll forward more than it says is unpaid.
+    const priorLedger = _priorMonthLedgerCache[last.monthKey];
+    const ledgerRec = priorLedger ? priorLedger[studentId] : null;
+    if (ledgerRec && ledgerRec.remainingBalance != null && !isNaN(Number(ledgerRec.remainingBalance))) {
+        outstanding = Math.min(outstanding, Math.max(0, Number(ledgerRec.remainingBalance)));
+    }
+    return outstanding;
 }
 
 /**
@@ -7652,7 +7698,8 @@ function batchGenerateVouchers(students, source, onDone, importPrevious = true) 
             }, 250);
         }
     }
-    processChunk();
+    // Make sure last month's real ledger is loaded before arrears are locked in.
+    refreshPriorMonthLedgerCache(getCurrentFeeMonthKey(), true).then(processChunk, processChunk);
 }
 
 // ---------------------------------------------------------------------------
