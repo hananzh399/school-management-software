@@ -8771,3 +8771,33 @@ input[type="date"]::-webkit-calendar-picker-indicator {
     color: #fff;
 }
 @media print { .pv-print-confirm-bar { display: none !important; } }
+
+
+/* ===== Pay Bill — "Fine Waived Off" panel ===== */
+.afm-waive-panel { background: linear-gradient(180deg,#fff7ed 0%,#ffffff 100%); border-color:#fed7aa; }
+.afm-waive-panel .afm-panel-title i { color:#ea580c; }
+.afm-waive-check { display:flex; align-items:center; gap:10px; cursor:pointer; user-select:none; }
+.afm-waive-check input { position:absolute; opacity:0; pointer-events:none; }
+.afm-waive-box {
+    width:22px; height:22px; flex-shrink:0; border-radius:6px; border:2px solid #fdba74;
+    background:#fff; display:flex; align-items:center; justify-content:center;
+    color:transparent; font-size:12px; transition:all .15s ease;
+}
+.afm-waive-check input:checked + .afm-waive-box { background:#ea580c; border-color:#ea580c; color:#fff; }
+.afm-waive-check input:focus-visible + .afm-waive-box { box-shadow:0 0 0 3px rgba(234,88,12,.25); }
+.afm-waive-text { display:flex; flex-direction:column; line-height:1.25; }
+.afm-waive-text strong { font-size:.9rem; color:#9a3412; }
+.afm-waive-text span { font-size:.78rem; color:#c2410c; }
+.afm-waive-reason { margin-top:10px; width:100%; box-sizing:border-box; }
+.afm-waive-info { margin:0 0 10px; font-size:.85rem; color:#15803d; font-weight:600; }
+.afm-waive-undo-btn {
+    border:1px solid #fdba74; background:#fff; color:#c2410c; border-radius:8px;
+    padding:6px 12px; font-size:.8rem; font-weight:600; cursor:pointer;
+}
+.afm-waive-undo-btn:hover { background:#ffedd5; }
+[data-theme="dark"] .afm-waive-panel { background: linear-gradient(180deg,rgba(234,88,12,.12) 0%,rgba(234,88,12,.04) 100%); border-color:rgba(251,146,60,.35); }
+[data-theme="dark"] .afm-waive-box { background:rgba(255,255,255,.06); border-color:rgba(251,146,60,.5); }
+[data-theme="dark"] .afm-waive-text strong { color:#fdba74; }
+[data-theme="dark"] .afm-waive-text span { color:#fb923c; }
+[data-theme="dark"] .afm-waive-info { color:#4ade80; }
+[data-theme="dark"] .afm-waive-undo-btn { background:transparent; color:#fdba74; border-color:rgba(251,146,60,.5); }

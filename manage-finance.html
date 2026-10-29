@@ -1133,6 +1133,29 @@
                                 <p class="afm-helper-text">One-time discount on this payment.</p>
                             </div>
 
+                            <!-- Late fine waiver: only visible when a late fine is applied to this bill -->
+                            <div class="afm-left-panel afm-waive-panel" id="afm-waive-panel" style="display:none;">
+                                <div class="afm-panel-title"><i class="fas fa-hand-holding-heart"></i> Late Fine</div>
+                                <div id="afm-waive-active" style="display:none;">
+                                    <p class="afm-waive-info" id="afm-waive-active-text"></p>
+                                    <button type="button" class="afm-waive-undo-btn" onclick="undoLateFineWaiver()">
+                                        <i class="fas fa-rotate-left"></i> Undo Waiver
+                                    </button>
+                                </div>
+                                <div id="afm-waive-form">
+                                    <label class="afm-waive-check" for="afm-waive-checkbox">
+                                        <input type="checkbox" id="afm-waive-checkbox" onchange="onLateFineWaiveToggle()">
+                                        <span class="afm-waive-box"><i class="fas fa-check"></i></span>
+                                        <span class="afm-waive-text">
+                                            <strong>Fine Waived Off</strong>
+                                            <span id="afm-waive-amount-text">Late fine: Rs. 0</span>
+                                        </span>
+                                    </label>
+                                    <input type="text" id="afm-waive-reason" class="afm-input afm-waive-reason" placeholder="Reason for waiver (optional)" style="display:none;">
+                                    <p class="afm-helper-text">Removes the late fine from this month's bill.</p>
+                                </div>
+                            </div>
+
                             <div class="afm-left-panel afm-paybill-panel">
                                 <div class="afm-panel-title"><i class="fas fa-money-bill-wave"></i> Pay Bill</div>
                                 <div class="afm-paybill-grid">

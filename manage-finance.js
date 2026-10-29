@@ -877,6 +877,8 @@ async function refreshStudentFeeStatusCache() {
         _studentFeeStatusCache = map;
         _studentFeeStatusMonthKey = monthKey;
     }
+    // FEATURE — "Fine Waived Off": late-fine waivers live on the backend too.
+    await refreshLateFineWaiverCache(monthKey);
     await refreshPriorMonthLedgerCache(monthKey, false);
 }
 
@@ -3903,6 +3905,102 @@ function _amountSettledByDeadline(student, monthKey, deadline) {
     return onTime;
 }
 
+// ============================================================================
+// FEATURE — "Fine Waived Off": let the admin waive a student's LATE FINE for a
+// month while taking a payment (Pay Bill screen).
+//
+// The late fine is derived on this page (see isPastDue in computeFeeBreakdown),
+// it is not a row in the backend ledger. A waiver is therefore a small record
+// "student X, month Y: late fine waived" that computeFeeBreakdown() checks.
+//
+// SOURCE OF TRUTH = the backend (FinanceController):
+//   POST   /waive-late-fine                  { regNo, monthKey, amount, reason }
+//   DELETE /waive-late-fine/{regNo}/{monthKey}
+//   GET    /late-fine-waivers/{monthKey}     -> [{ regNo, monthKey, amount, reason, date }]
+// The GET result is cached in _lateFineWaiverCache (refreshed together with the
+// fee-status cache) so computeFeeBreakdown() can stay synchronous.
+//
+// localStorage is only a FALLBACK: if the backend can't be reached when a
+// waiver is saved, it is kept on this device so the fine is still waived here,
+// and the admin is told it did not sync.
+//   fallback record: { amount, reason, date }   key: "<regNo>|<monthKey>"
+// ============================================================================
+const LATE_FINE_WAIVER_LS_KEY = 'edu_late_fine_waivers';
+let _lateFineWaiverCache = { monthKey: '', map: {} };   // map: regNo -> waiver
+
+function _lateWaiverStorageKey() {
+    let sid = '';
+    try { sid = getCurrentSchoolId() || ''; } catch (e) {}
+    return LATE_FINE_WAIVER_LS_KEY + (sid ? ':' + sid : '');
+}
+function _readLateFineWaivers() {
+    try {
+        const raw = localStorage.getItem(_lateWaiverStorageKey());
+        const obj = raw ? JSON.parse(raw) : {};
+        return (obj && typeof obj === 'object') ? obj : {};
+    } catch (e) { return {}; }
+}
+function _writeLateFineWaivers(map) {
+    try { localStorage.setItem(_lateWaiverStorageKey(), JSON.stringify(map)); } catch (e) {}
+}
+function _lateWaiverKey(student, monthKey) {
+    return String((student && (student.regNo || student.id)) || '') + '|' + monthKey;
+}
+function _lateWaiverRegNo(student) {
+    return String((student && (student.regNo || student.id)) || '');
+}
+
+/** Loads this month's waivers from the backend into the cache. Keeps the old cache if the call fails. */
+async function refreshLateFineWaiverCache(monthKey) {
+    const data = await _backendGet(API_BASE, `/late-fine-waivers/${encodeURIComponent(monthKey)}`);
+    if (Array.isArray(data)) {
+        const map = {};
+        data.forEach(w => { if (w && w.regNo != null) map[String(w.regNo)] = w; });
+        _lateFineWaiverCache = { monthKey, map };
+    }
+}
+
+/** The waiver record for this student + month, or null. Backend first, local fallback second. */
+function getLateFineWaiver(student, monthKey) {
+    if (!student || !monthKey) return null;
+    if (_lateFineWaiverCache.monthKey === monthKey) {
+        const w = _lateFineWaiverCache.map[_lateWaiverRegNo(student)];
+        if (w) return w;
+    }
+    return _readLateFineWaivers()[_lateWaiverKey(student, monthKey)] || null;
+}
+
+/** Saves a waiver. Resolves to true when the backend stored it, false when only this device did. */
+async function setLateFineWaiver(student, monthKey, amount, reason) {
+    const regNo = _lateWaiverRegNo(student);
+    const amt = Number(amount) || 0;
+    const res = await apiRequest('/waive-late-fine', 'POST', { regNo, monthKey, amount: amt, reason: reason || '' });
+    const map = _readLateFineWaivers();
+    if (res) {
+        // Stored on the server — make it visible immediately and drop any stale local copy.
+        if (_lateFineWaiverCache.monthKey !== monthKey) _lateFineWaiverCache = { monthKey, map: {} };
+        _lateFineWaiverCache.map[regNo] = res;
+        delete map[_lateWaiverKey(student, monthKey)];
+        _writeLateFineWaivers(map);
+        return true;
+    }
+    map[_lateWaiverKey(student, monthKey)] = { amount: amt, reason: reason || '', date: new Date().toISOString() };
+    _writeLateFineWaivers(map);
+    return false;
+}
+
+/** Removes a waiver everywhere. Resolves to true when the backend confirmed it. */
+async function clearLateFineWaiver(student, monthKey) {
+    const regNo = _lateWaiverRegNo(student);
+    const res = await apiRequest('/waive-late-fine/' + encodeURIComponent(regNo)
+        + '/' + encodeURIComponent(monthKey), 'DELETE');
+    if (_lateFineWaiverCache.monthKey === monthKey) delete _lateFineWaiverCache.map[regNo];
+    const map = _readLateFineWaivers();
+    delete map[_lateWaiverKey(student, monthKey)];
+    _writeLateFineWaivers(map);
+    return !!res;
+}
+
 function computeFeeBreakdown(s) {
     const today = new Date();
     // The month label on the voucher comes from the same stored fee-month key
@@ -4124,6 +4222,12 @@ function computeFeeBreakdown(s) {
             isPastDue = !settledOnTime && !realBillCleared;
         }
     }
+    // FEATURE — "Fine Waived Off": a waiver recorded in Pay Bill removes the
+    // late fine from this month's bill entirely.
+    const lateFineWaiver = (lateFeeSurcharge > 0 && vs.lateFineEnabled)
+        ? getLateFineWaiver(s, getCurrentFeeMonthKey()) : null;
+    const lateFineWaived = !!lateFineWaiver;
+    if (lateFineWaived) isPastDue = false;
     const payableNow = isPastDue ? (voucherTotal + lateFeeSurcharge) : voucherTotal;
 
     return {
@@ -4137,10 +4241,13 @@ function computeFeeBreakdown(s) {
         isCustom,
         customRows, // null unless a saved "Edit Voucher" breakdown exists
         voucherTotal: voucherTotal,
-        totalAfterDueDate: voucherTotal + lateFeeSurcharge,
+        totalAfterDueDate: voucherTotal + (lateFineWaived ? 0 : lateFeeSurcharge),
         isPastDue,
         payableNow,
-        lateFineEnabled: vs.lateFineEnabled,
+        lateFineWaived,
+        lateFineWaiver,
+        // Hides the "Payable After Due Date" note on the voucher once waived.
+        lateFineEnabled: vs.lateFineEnabled && !lateFineWaived,
         lateFeeSurcharge: lateFeeSurcharge,
         dueDateStr: dueDate.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
         expiryDateStr: graceExpiryDate.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
@@ -5144,6 +5251,8 @@ function findStudentExact(students, studentId, fullName) {
 }
 
 let afmCurrentPendingAmount = 0;
+// FEATURE — "Fine Waived Off": true while the waiver box is ticked in Pay Bill.
+let afmWaiveLateFine = false;
 
 // BUGFIX — "Pay Bill doesn't show fines that View Voucher shows": this used
 // to be synchronous and never touched the backend at all — it rendered the
@@ -5158,6 +5267,9 @@ async function openAddFeesModal(studentId, fullName) {
     const student = findStudentExact(students, studentId, fullName);
     if (!student) { showFinanceToast('Student not found.', 'error'); return; }
     afmCurrentStudent = student;
+    afmWaiveLateFine = false;
+    const _wvReason = document.getElementById('afm-waive-reason');
+    if (_wvReason) _wvReason.value = '';
 
     document.getElementById('add-fees-student-id').value = studentId;
 
@@ -5239,7 +5351,13 @@ function renderAddFeesModal(student) {
     // print it as a note on the voucher — use payableNow (voucherTotal +
     // the fine when isPastDue) instead of the pre-fine voucherTotal. See
     // computeFeeBreakdown's isPastDue/payableNow BUGFIX.
-    const amountDueNow = f.payableNow;
+    // FEATURE — "Fine Waived Off": when the box is ticked, take the late fine
+    // off what is due (a saved waiver is already excluded from payableNow).
+    const lateFineWaivable = !!(f.isPastDue && f.lateFeeSurcharge > 0);
+    if (!lateFineWaivable) afmWaiveLateFine = false;
+    const waivingNow = lateFineWaivable && afmWaiveLateFine;
+    const amountDueNow = waivingNow ? Math.max(0, f.payableNow - f.lateFeeSurcharge) : f.payableNow;
+    renderLateFineWaivePanel(f, lateFineWaivable);
 
     // Header strip: name, monthly total, paid so far
     const headerEl = document.getElementById('afm-pay-header');
@@ -5248,7 +5366,9 @@ function renderAddFeesModal(student) {
             <div class="afm-pay-header-name">${student.fullName || 'Student'}</div>
             <div class="afm-pay-header-stats">
                 <div><span>Monthly Total</span><strong>Rs. ${f.voucherTotal.toLocaleString()}</strong></div>
-                ${f.isPastDue ? `<div><span>Late Fee (overdue)</span><strong style="color:#dc2626;">Rs. ${f.lateFeeSurcharge.toLocaleString()}</strong></div>` : ''}
+                ${f.isPastDue ? `<div><span>Late Fee (overdue)</span><strong style="color:#dc2626;${waivingNow ? 'text-decoration:line-through;opacity:.6;' : ''}">Rs. ${f.lateFeeSurcharge.toLocaleString()}</strong></div>` : ''}
+                ${waivingNow ? `<div><span>Late Fine</span><strong style="color:#16a34a;">Waived</strong></div>` : ''}
+                ${f.lateFineWaived ? `<div><span>Late Fine</span><strong style="color:#16a34a;">Waived</strong></div>` : ''}
                 <div><span>Paid This Month</span><strong style="color:#16a34a;">Rs. ${thisMonthPaid.toLocaleString()}</strong></div>
                 <div><span>Remaining</span><strong style="color:#c2410c;">Rs. ${Math.max(0, amountDueNow - thisMonthPaid).toLocaleString()}</strong></div>
             </div>`;
@@ -5270,6 +5390,57 @@ function renderAddFeesModal(student) {
     }
 
     recalcSimpleAFTotal();
+}
+
+/** Shows / hides the "Late Fine" waiver panel in Pay Bill. */
+function renderLateFineWaivePanel(f, lateFineWaivable) {
+    const panel = document.getElementById('afm-waive-panel');
+    if (!panel) return;
+    const active = document.getElementById('afm-waive-active');
+    const form = document.getElementById('afm-waive-form');
+    const cb = document.getElementById('afm-waive-checkbox');
+    const reasonEl = document.getElementById('afm-waive-reason');
+
+    if (f.lateFineWaived && f.lateFineWaiver) {
+        // Already waived earlier — show it and allow undoing it.
+        panel.style.display = '';
+        if (form) form.style.display = 'none';
+        if (active) active.style.display = '';
+        const w = f.lateFineWaiver;
+        const when = w.date ? new Date(w.date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '';
+        const t = document.getElementById('afm-waive-active-text');
+        if (t) t.textContent = `Late fine of Rs. ${(Number(w.amount) || f.lateFeeSurcharge).toLocaleString()} was waived off`
+            + (when ? ` on ${when}` : '') + (w.reason ? ` — ${w.reason}` : '') + '.';
+        return;
+    }
+    if (active) active.style.display = 'none';
+    if (form) form.style.display = '';
+    if (!lateFineWaivable) { panel.style.display = 'none'; return; }
+
+    panel.style.display = '';
+    if (cb) cb.checked = afmWaiveLateFine;
+    if (reasonEl) reasonEl.style.display = afmWaiveLateFine ? '' : 'none';
+    const amt = document.getElementById('afm-waive-amount-text');
+    if (amt) amt.textContent = `Late fine: Rs. ${f.lateFeeSurcharge.toLocaleString()}`;
+}
+
+function onLateFineWaiveToggle() {
+    const cb = document.getElementById('afm-waive-checkbox');
+    afmWaiveLateFine = !!(cb && cb.checked);
+    if (afmCurrentStudent) renderAddFeesModal(afmCurrentStudent);
+}
+
+async function undoLateFineWaiver() {
+    if (!afmCurrentStudent) return;
+    if (!confirm('Undo the late fine waiver? The late fine will be charged again.')) return;
+    const removedOnServer = await clearLateFineWaiver(afmCurrentStudent, getCurrentFeeMonthKey());
+    if (!removedOnServer) showFinanceToast('Could not reach the server — the waiver may still exist there.', 'error');
+    afmWaiveLateFine = false;
+    renderAddFeesModal(afmCurrentStudent);
+    try { await refreshStudentFeeStatusCache(); } catch (e) {}
+    const className = currentFeeClassName;
+    if (className) renderFees(className);
+    showFeeSuccessToast('Late fine waiver removed');
 }
 
 function recalcSimpleAFTotal() {
@@ -5760,12 +5931,29 @@ async function saveSimpleStudentFeePayment() {
     // Today keeps its real time; a backdated payment is filed at noon of that day.
     const paymentDateStamp = (paymentDateIso === _todayIsoDate() ? new Date() : paymentDateObj).toISOString();
 
-    if (paid <= 0 && discount <= 0) {
+    // FEATURE — "Fine Waived Off": ticking the waiver is enough on its own,
+    // even when no money is being paid right now.
+    if (paid <= 0 && discount <= 0 && !afmWaiveLateFine) {
         showFinanceToast('Please enter a payment amount.', 'error');
         return;
     }
 
     const monthKey = getCurrentFeeMonthKey();
+
+    // Record the waiver BEFORE anything is saved, so every total below
+    // (remaining balance, auto-settle of fines) is calculated without the fine.
+    let waivedAmount = 0;
+    if (afmWaiveLateFine && afmCurrentStudent) {
+        const fw = computeFeeBreakdown(afmCurrentStudent);
+        if (fw.isPastDue && fw.lateFeeSurcharge > 0) {
+            const reasonEl = document.getElementById('afm-waive-reason');
+            waivedAmount = fw.lateFeeSurcharge;
+            const waiverSynced = await setLateFineWaiver(afmCurrentStudent, monthKey, waivedAmount, reasonEl ? reasonEl.value.trim() : '');
+            if (!waiverSynced) {
+                showFinanceToast('Late fine waived on this device only — could not reach the server.', 'error');
+            }
+        }
+    }
     // Label the payment with the fee-billing month (monthKey), not the raw
     // calendar month, so the month name in payment history always matches the
     // month the payment was filed under.
@@ -5846,7 +6034,10 @@ async function saveSimpleStudentFeePayment() {
     await autoSettleFinesIfFullyPaid(student, monthKey);
     refreshFineRecordsListIfVisible();
 
-    showFeeSuccessToast(`Payment of Rs. ${paid} recorded successfully`);
+    afmWaiveLateFine = false;
+    showFeeSuccessToast(paid > 0
+        ? `Payment of Rs. ${paid} recorded successfully` + (waivedAmount > 0 ? ` (late fine Rs. ${waivedAmount} waived)` : '')
+        : (waivedAmount > 0 ? `Late fine of Rs. ${waivedAmount} waived off` : 'Saved'));
     closeAddFeesModal();
     const className = currentFeeClassName
         || document.getElementById('selected-class-title').innerText.replace('Fee Records: ', '');
