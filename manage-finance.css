@@ -8688,3 +8688,24 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 /* Performance fix: disable blur/glow effects for smoother pages */
 * { backdrop-filter: none !important; }
 .glow-spot { display: none !important; }
+
+
+/* Expense date field (Add Expense form + hub form) */
+.expense-date-input,
+.form-group input.expense-date-input {
+    width: 100%;
+    padding: 11px 14px;
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-md, 8px);
+    background: var(--bg-input);
+    color: var(--text-primary);
+    font-size: 0.9rem;
+    font-family: inherit;
+    box-sizing: border-box;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+.expense-date-input:focus {
+    outline: none;
+    border-color: #6366f1;
+    box-shadow: 0 0 0 3px rgba(99,102,241,0.15);
+}

@@ -1342,6 +1342,7 @@ function showPage(pageId) {
     if (pageId === 'page-salary-non-teaching') initNonTeachingSalaryPage();
     if (pageId === 'page-salary-records') initSalaryRecordsPage();
     if (pageId === 'page-expense-hub') initExpenseHub();
+    if (pageId === 'page-add-expense') setExpenseDateInput('exp-date');
     if (pageId === 'page-bonus-teaching') initBonusPage('teaching');
     if (pageId === 'page-bonus-non-teaching') initBonusPage('non-teaching');
     if (pageId === 'page-custom-fee')          initCfWorkspace();
@@ -2363,6 +2364,39 @@ function saveExpensesData(arr) {
     _backendSave(API_BASE, ENDPOINTS.expenses, 'PUT', { items: arr });
 }
 
+/* ---- Expense date helpers ----
+   The date field defaults to today but can be changed to any date (typed or
+   via the browser calendar). The chosen date is stored on the expense as
+   `date` (same en-US "M/D/YYYY" format used before, so View Records, the
+   Daily filter and any other reader keep working) plus `isoDate`
+   ("YYYY-MM-DD"), and `monthKey` is derived from the CHOSEN date so a
+   back-dated expense lands in the correct month. */
+function setExpenseDateInput(id) {
+    const el = document.getElementById(id);
+    if (el) el.value = todayIsoDate();
+}
+/* Returns { iso, date, monthKey } for the date input, or null if invalid. */
+function readExpenseDate(id) {
+    const el = document.getElementById(id);
+    const iso = (el && el.value) ? el.value : todayIsoDate();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(iso)) return null;
+    const [y, m, d] = iso.split('-').map(Number);
+    const check = new Date(y, m - 1, d);
+    if (check.getFullYear() !== y || check.getMonth() !== m - 1 || check.getDate() !== d) return null;
+    return { iso: iso, date: `${m}/${d}/${y}`, monthKey: `${y}-${String(m).padStart(2, '0')}` };
+}
+function buildExpenseRecord(desc, amount, dateInfo) {
+    const now = new Date();
+    return {
+        description: desc,
+        amount: amount,
+        date: dateInfo.date,
+        isoDate: dateInfo.iso,
+        time: now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
+        monthKey: dateInfo.monthKey
+    };
+}
+
 /* SECURITY: schema-validated amount/description (see handleAddStudentFine above). */
 function handleExpenseSubmitNew() {
     const expCheck = SSValidate.validate(
@@ -2383,14 +2417,20 @@ function handleExpenseSubmitNew() {
     const amount = expCheck.values.amount;
     const desc = expCheck.values.description;
 
+    const dateInfo = readExpenseDate('exp-date');
+    if (!dateInfo) {
+        showFinanceToast('Please enter a valid expense date.', 'error');
+        return;
+    }
+
     const list = getExpensesData();
-    const now = new Date();
-    list.push({ description: desc, amount: amount, date: now.toLocaleDateString('en-US'), time: now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }), monthKey: getCurrentMonthKey() });
+    list.push(buildExpenseRecord(desc, amount, dateInfo));
     saveExpensesData(list);
 
     showFinanceToast(`Operational expense of RS ${amount.toLocaleString()} logged successfully.`, 'success');
     document.getElementById('exp-amount').value = '';
     document.getElementById('exp-desc').value = '';
+    setExpenseDateInput('exp-date');
     showPage('page-expense-hub');
 }
 
@@ -10099,6 +10139,7 @@ function initExpenseHub() {
     const descEl = document.getElementById('hub-exp-desc');
     if (amtEl) amtEl.value = '';
     if (descEl) descEl.value = '';
+    setExpenseDateInput('hub-exp-date');
 }
 
 function clearExpenseHubForm() {
@@ -10106,6 +10147,7 @@ function clearExpenseHubForm() {
     const descEl = document.getElementById('hub-exp-desc');
     if (amtEl) amtEl.value = '';
     if (descEl) descEl.value = '';
+    setExpenseDateInput('hub-exp-date');
 }
 
 /* Quick-amount chips on the expense form */
@@ -10143,15 +10185,14 @@ function handleExpenseSubmitHub() {
     const amount = expCheck.values.amount;
     const desc = expCheck.values.description;
 
+    const dateInfo = readExpenseDate('hub-exp-date');
+    if (!dateInfo) {
+        showFinanceToast('Please enter a valid expense date.', 'error');
+        return;
+    }
+
     const list = getExpensesData();
-    const now = new Date();
-    list.push({
-        description: desc,
-        amount: amount,
-        date: now.toLocaleDateString('en-US'),
-        time: now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
-        monthKey: getCurrentMonthKey()
-    });
+    list.push(buildExpenseRecord(desc, amount, dateInfo));
     saveExpensesData(list);
 
     // Show success toast and clear the form — user stays on hub

@@ -570,6 +570,10 @@
                                 <label>Description</label>
                                 <input type="text" id="hub-exp-desc" placeholder="e.g. Electricity bill, maintenance supplies, stationery…">
                             </div>
+                            <div class="form-group">
+                                <label for="hub-exp-date">Expense Date</label>
+                                <input type="date" id="hub-exp-date" class="expense-date-input">
+                            </div>
                         </div>
                         <div class="expense-hub-actions">
                             <button type="button" class="btn btn-cancel" onclick="clearExpenseHubForm()">
@@ -602,6 +606,10 @@
                 <div class="form-group full-width">
                     <label>Description</label>
                     <input type="text" id="exp-desc" placeholder="e.g. Electricity bill, maintenance supplies">
+                </div>
+                <div class="form-group full-width">
+                    <label for="exp-date">Expense Date</label>
+                    <input type="date" id="exp-date" class="expense-date-input">
                 </div>
                 <div class="modal-actions mt-20">
                     <button type="button" class="btn btn-cancel" onclick="showPage('page-expense-hub')">Cancel</button>
