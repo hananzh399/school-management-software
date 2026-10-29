@@ -548,6 +548,8 @@ const ENDPOINTS = {
     staffAdvances: '/staff-advances',
     salaryRecords: '/salary/records',
     vouchers:      '/vouchers',
+    voucherPrint:  '/voucher-print',
+    voucherPrintReset: '/voucher-print-reset',
 };
 
 async function _backendGet(base, path) {
@@ -5103,6 +5105,10 @@ async function resetFeesForNextMonth() {
     if (!ok) return;
 
     setFeeMonthOverride(nextKey);
+    // Print status is per fee month, so the new month starts with nothing
+    // printed. Also clear the finished month's marks so none are left behind.
+    // Not awaited / never blocks the move (_backendSave swallows failures).
+    _backendSave(API_BASE, ENDPOINTS.voucherPrintReset, 'POST', { monthKey: currentKey });
     // Pull the new month's paid/pending figures straight away so the header
     // and class cards don't show the previous month's numbers.
     try { await refreshStudentFeeStatusCache(); } catch (e) { /* best-effort */ }
@@ -8195,31 +8201,182 @@ function buildFamilyVoucherHTML(studentsGroup) {
     return `<div class="voucher-sheet voucher-sheet-family">${copy('School Copy')}${copy('Student Copy')}</div>`;
 }
 
+/** Whether "Reprint already-printed Family Vouchers" is ticked in the Print Vouchers modal. */
+function _pvReprintPrintedEnabled() {
+    const el = document.getElementById('pv-reprint-printed');
+    return !!(el && el.checked);
+}
+
+/** Guards against a double-click firing two print jobs while the backend check is in flight. */
+let _pvPrintInFlight = false;
+
+/** Tells the backend the Print button was pressed for these Family Vouchers.
+ *  The backend checks each family ID (guardian) against this fee month's
+ *  "Printed" marks, marks the new ones Printed, and answers which to print
+ *  and which to skip. Single (non-family) vouchers are never tracked.
+ *  Returns { units, skippedFamilies, failed }. If the backend can't be
+ *  reached, nothing is dropped (printing is never blocked) and failed=true. */
+async function _pvApplyPrintedFamilyCheck(units) {
+    const isFamily = u => u.type === 'family' && u.students.length > 1;
+    const familyUnits = units.filter(isFamily);
+    if (familyUnits.length === 0) return { units, skippedFamilies: 0, failed: false };
+
+    const res = await _backendSave(API_BASE, ENDPOINTS.voucherPrint, 'POST', {
+        monthKey: getCurrentFeeMonthKey(),
+        force: _pvReprintPrintedEnabled(),
+        printedAt: Date.now(),
+        families: familyUnits.map(u => ({
+            familyKey: _familyKey(u.students[0]),
+            regNos: u.students.map(s => s.regNo || s.id),
+            // When a child's voucher was last generated this month. If that is
+            // later than the family's print time, the backend treats the
+            // family as NOT yet printed (its printed copy is out of date).
+            latestVoucherAt: _pvLatestVoucherAt(u.students)
+        }))
+    });
+    if (!res || !Array.isArray(res.skipped)) return { units, skippedFamilies: 0, printedKeys: [], failed: true };
+
+    const skipped = new Set(res.skipped);
+    const kept = units.filter(u => !(isFamily(u) && skipped.has(_familyKey(u.students[0]))));
+    return {
+        units: kept,
+        skippedFamilies: units.length - kept.length,
+        printedKeys: Array.isArray(res.toPrint) ? res.toPrint : [],
+        failed: false
+    };
+}
+
+/** Latest generatedAt (ms) among these students' vouchers for the current fee month; 0 if none. */
+function _pvLatestVoucherAt(students) {
+    const monthKey = getCurrentFeeMonthKey();
+    const ids = new Set(students.map(s => String(s.regNo || s.id)));
+    let latest = 0;
+    getGeneratedVouchers().forEach(r => {
+        if (r.monthKey === monthKey && r.generatedAt && ids.has(String(r.studentId))) {
+            const t = new Date(r.generatedAt).getTime();
+            if (t > latest) latest = t;
+        }
+    });
+    return latest;
+}
+
+/* ---- After the browser print box closes: let the user undo the "Printed" marks ----
+   The marks are saved the moment Print is pressed, but the browser gives no
+   way to tell "printed" from "cancelled" — so once the box closes we ask. */
+function _pvShowPrintedPrompt(familyKeys) {
+    const old = document.getElementById('pv-print-confirm-bar');
+    if (old) old.remove();
+
+    const n = familyKeys.length;
+    const bar = document.createElement('div');
+    bar.id = 'pv-print-confirm-bar';
+    bar.className = 'pv-print-confirm-bar';
+    bar.innerHTML = `
+        <div class="pv-print-confirm-text">
+            <i class="fas fa-print"></i>
+            <span><strong>${n} Family Voucher${n === 1 ? '' : 's'} marked as printed.</strong> Did you cancel the print? Reset it so ${n === 1 ? 'it' : 'they'} can be printed again.</span>
+        </div>
+        <div class="pv-print-confirm-actions">
+            <button type="button" class="pv-print-confirm-keep">Keep as printed</button>
+            <button type="button" class="pv-print-confirm-reset"><i class="fas fa-undo"></i> Reset print status</button>
+        </div>`;
+    document.body.appendChild(bar);
+
+    bar.querySelector('.pv-print-confirm-keep').onclick = () => bar.remove();
+    bar.querySelector('.pv-print-confirm-reset').onclick = async () => {
+        const res = await _backendSave(API_BASE, ENDPOINTS.voucherPrintReset, 'POST', {
+            monthKey: getCurrentFeeMonthKey(),
+            familyKeys: familyKeys
+        });
+        bar.remove();
+        if (res) showFinanceToast(`Print status reset for ${res.reset} Family Voucher${res.reset === 1 ? '' : 's'}.`, 'success');
+        else showFinanceToast('Could not reset print status. Please try again.', 'error');
+    };
+}
+
+/** "Reset print status for this month" button in the Print Vouchers modal. */
+async function resetPrintStatusForMonth() {
+    const label = getCurrentFeeMonthLabel();
+    const ok = await ssConfirm(
+        `Reset the printed status of every Family Voucher for ${label}?\n\nThey will all be printed again the next time you press Print.`,
+        { title: 'Reset Print Status', confirmLabel: 'Reset', cancelLabel: 'Cancel', danger: true }
+    );
+    if (!ok) return;
+    const res = await _backendSave(API_BASE, ENDPOINTS.voucherPrintReset, 'POST', {
+        monthKey: getCurrentFeeMonthKey()
+    });
+    if (res) showFinanceToast(`Print status reset for ${res.reset} Family Voucher${res.reset === 1 ? '' : 's'} (${label}).`, 'success');
+    else showFinanceToast('Could not reset print status. Please try again.', 'error');
+}
+window.resetPrintStatusForMonth = resetPrintStatusForMonth;
+
 /** Renders one or more students' vouchers into the hidden print area and triggers print.
  *  When combineSiblings is true (the default), students who share a guardian are
- *  merged into a single Family Voucher; everyone else prints exactly as before. */
-function printStudentsSequentially(students, emptyMessage, combineSiblings) {
+ *  merged into a single Family Voucher; everyone else prints exactly as before.
+ *  Family Vouchers already marked Printed for this fee month are left out (see
+ *  _pvApplyPrintedFamilyCheck) unless "Reprint" is ticked. */
+async function printStudentsSequentially(students, emptyMessage, combineSiblings) {
     if (students.length === 0) {
         showFinanceToast(emptyMessage || 'No students to print.', 'info');
         return;
     }
+    if (_pvPrintInFlight) return;
     if (combineSiblings === undefined) combineSiblings = _pvCombineSiblingsEnabled();
 
-    const units = groupStudentsForPrinting(students, combineSiblings);
-    const printArea = document.getElementById('voucher-print-area');
-    printArea.innerHTML = units
-        .map(u => (u.type === 'family' && u.students.length > 1) ? buildFamilyVoucherHTML(u.students) : buildVoucherHTML(u.students[0]))
-        .join('<div class="print-page-break"></div>');
-    closePrintVouchersModal();
+    _pvPrintInFlight = true;
+    try {
+        let units = groupStudentsForPrinting(students, combineSiblings);
+        const check = await _pvApplyPrintedFamilyCheck(units);
+        units = check.units;
 
-    const familyCount = units.filter(u => u.type === 'family' && u.students.length > 1).length;
-    const singleCount = units.length - familyCount;
-    const msg = familyCount > 0
-        ? `Preparing ${singleCount} voucher${singleCount === 1 ? '' : 's'} + ${familyCount} family voucher${familyCount === 1 ? '' : 's'} for print…`
-        : `Preparing ${units.length} voucher${units.length === 1 ? '' : 's'} for print…`;
-    showFinanceToast(msg, 'info');
-    preparePrintLayout();
-    setTimeout(() => { preparePrintLayout(); window.print(); }, 200);
+        if (check.failed) {
+            showFinanceToast('Could not check printed Family Vouchers — printing everything.', 'error');
+        }
+        if (units.length === 0) {
+            showFinanceToast(
+                `${check.skippedFamilies} Family Voucher${check.skippedFamilies === 1 ? ' was' : 's were'} already printed this month — nothing to print. Tick "Reprint already-printed Family Vouchers" to print again.`,
+                'info'
+            );
+            return;
+        }
+
+        const printArea = document.getElementById('voucher-print-area');
+        printArea.innerHTML = units
+            .map(u => (u.type === 'family' && u.students.length > 1) ? buildFamilyVoucherHTML(u.students) : buildVoucherHTML(u.students[0]))
+            .join('<div class="print-page-break"></div>');
+        closePrintVouchersModal();
+
+        const familyCount = units.filter(u => u.type === 'family' && u.students.length > 1).length;
+        const singleCount = units.length - familyCount;
+        let msg = familyCount > 0
+            ? `Preparing ${singleCount} voucher${singleCount === 1 ? '' : 's'} + ${familyCount} family voucher${familyCount === 1 ? '' : 's'} for print…`
+            : `Preparing ${units.length} voucher${units.length === 1 ? '' : 's'} for print…`;
+        if (check.skippedFamilies > 0) {
+            msg += ` Skipped ${check.skippedFamilies} already-printed family voucher${check.skippedFamilies === 1 ? '' : 's'}.`;
+        }
+        showFinanceToast(msg, 'info');
+        preparePrintLayout();
+
+        // Once the browser print box closes (printed OR cancelled), offer to
+        // reset the marks this job just saved.
+        const markedKeys = check.printedKeys || [];
+        let promptShown = false;
+        const showPrompt = () => {
+            if (promptShown || markedKeys.length === 0) return;
+            promptShown = true;
+            window.removeEventListener('afterprint', showPrompt);
+            _pvShowPrintedPrompt(markedKeys);
+        };
+        window.addEventListener('afterprint', showPrompt);
+        setTimeout(() => {
+            preparePrintLayout();
+            window.print();
+            // Fallback for browsers that don't fire afterprint reliably.
+            setTimeout(showPrompt, 1000);
+        }, 200);
+    } finally {
+        _pvPrintInFlight = false;
+    }
 }
 
 function printAllVouchers() {

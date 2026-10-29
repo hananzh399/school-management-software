@@ -1385,6 +1385,21 @@
                         </span>
                     </label>
 
+                    <!-- Reprint override: by default a Family Voucher already marked Printed this month is skipped -->
+                    <label class="pv-sibling-toggle" for="pv-reprint-printed">
+                        <input type="checkbox" id="pv-reprint-printed">
+                        <span class="pv-sibling-toggle-box"><i class="fas fa-check"></i></span>
+                        <span class="pv-sibling-toggle-text">
+                            <strong><i class="fas fa-redo"></i> Reprint already-printed Family Vouchers</strong>
+                            <span>Off by default: a Family Voucher already printed this month is skipped so no pages are wasted.</span>
+                        </span>
+                    </label>
+
+                    <!-- Clears this month's "Printed" marks (e.g. after cancelling the browser print box) -->
+                    <button type="button" class="pv-reset-print-btn" onclick="resetPrintStatusForMonth()">
+                        <i class="fas fa-undo"></i> Reset print status for this month
+                    </button>
+
                     <!-- Step 1: choose a mode -->
                     <div id="pv-mode-select">
                         <button type="button" class="pv-option-btn" onclick="printAllVouchers()">
