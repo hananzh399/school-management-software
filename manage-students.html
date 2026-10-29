@@ -862,12 +862,20 @@
                                     <label class="vo-sort-opt"><input type="checkbox" data-group="record" value="missing" onchange="voSortChanged()"><span>Missing details</span></label>
                                     <!-- Appears only while "Missing details" is ticked -->
                                     <div class="vo-sort-sub" id="vo-missing-sub" hidden>
-                                        <div class="vo-sort-sub-title">Which pictures are missing?</div>
+                                        <div class="vo-sort-sub-title">Which details are missing?</div>
                                         <div class="vo-sort-sub-grid">
                                             <label class="vo-sort-opt"><input type="checkbox" data-group="missingFields" value="photo" onchange="voSortChanged()"><span>Photo</span></label>
                                             <label class="vo-sort-opt"><input type="checkbox" data-group="missingFields" value="certData" onchange="voSortChanged()"><span>B-Form Picture</span></label>
+                                            <label class="vo-sort-opt"><input type="checkbox" data-group="missingFields" value="dob" onchange="voSortChanged()"><span>Date of Birth</span></label>
+                                            <label class="vo-sort-opt"><input type="checkbox" data-group="missingFields" value="phone1" onchange="voSortChanged()"><span>Contact</span></label>
+                                            <label class="vo-sort-opt"><input type="checkbox" data-group="missingFields" value="permanentAddress" onchange="voSortChanged()"><span>Address</span></label>
+                                            <label class="vo-sort-opt"><input type="checkbox" data-group="missingFields" value="studentBform" onchange="voSortChanged()"><span>B-Form Number</span></label>
+                                            <label class="vo-sort-opt"><input type="checkbox" data-group="missingFields" value="guardianName" onchange="voSortChanged()"><span>Guardian Name</span></label>
+                                            <label class="vo-sort-opt"><input type="checkbox" data-group="missingFields" value="guardianCnic" onchange="voSortChanged()"><span>Guardian CNIC</span></label>
+                                            <label class="vo-sort-opt"><input type="checkbox" data-group="missingFields" value="fatherFullName" onchange="voSortChanged()"><span>Father Name</span></label>
+                                            <label class="vo-sort-opt"><input type="checkbox" data-group="missingFields" value="fatherCnic" onchange="voSortChanged()"><span>Father CNIC</span></label>
                                         </div>
-                                        <div class="vo-sort-sub-note">Leave both unticked to show students missing either one.</div>
+                                        <div class="vo-sort-sub-note">Leave all unticked to show students missing any of these.</div>
                                     </div>
                                     <label class="vo-sort-opt"><input type="checkbox" data-group="record" value="incorrect" onchange="voSortChanged()"><span>Incorrect details</span></label>
                                 </div>

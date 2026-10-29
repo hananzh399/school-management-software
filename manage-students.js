@@ -632,8 +632,10 @@ const VO_AGE_BUCKETS = [
     { key: '15+',   min: 15, max: Infinity }
 ];
 
-/* "Missing details" now means the two pictures only: the student photo and the B-Form picture.
-   (To count more fields as missing again, push them onto `missing` / `missingKeys` in voGetRecordIssues.) */
+/* "Missing details" covers the student photo, the B-Form picture, and these blank text fields:
+   date of birth, contact, address, B-Form number, guardian name/CNIC and father name/CNIC.
+   (To count more fields as missing, push them onto `missing` / `missingKeys` in voGetRecordIssues
+   and add a matching checkbox under #vo-missing-sub in the HTML.) */
 
 function voAgeFromDob(dob) {
     if (!dob) return null;
@@ -729,6 +731,25 @@ function voGetRecordIssues(s) {
     if (!hasPhoto) { missing.push('Photo'); missingKeys.push('photo'); }
     const mediaReady = typeof window.ssStudentMediaReady !== 'function' || window.ssStudentMediaReady();
     if (mediaReady && !val('certData')) { missing.push('B-Form Picture'); missingKeys.push('certData'); }
+
+    // Missing text details: blank (or whitespace-only) values.
+    // When the guardian IS the father, the form hides the Father section and saves the
+    // guardian's name/CNIC as the father's — so those guardian values count for the father too.
+    const guardianIsFather = val('guardianRole') === 'Father';
+    const fatherName = val('fatherFullName') || (guardianIsFather ? val('guardianName') : '');
+    const fatherCnic = val('fatherCnic')     || (guardianIsFather ? val('guardianCnic') : '');
+    [
+        ['dob',               'Date of Birth',    val('dob')],
+        ['phone1',            'Contact',          val('phone1')],
+        ['permanentAddress',  'Address',          val('permanentAddress')],
+        ['studentBform',      'B-Form Number',    val('studentBform')],
+        ['guardianName',      'Guardian Name',    val('guardianName')],
+        ['guardianCnic',      'Guardian CNIC',    val('guardianCnic')],
+        ['fatherFullName',    'Father Name',      fatherName],
+        ['fatherCnic',        'Father CNIC',      fatherCnic]
+    ].forEach(([key, label, value]) => {
+        if (!value) { missing.push(label); missingKeys.push(key); }
+    });
 
     // Names
     [['fullName', 'Name'], ['guardianName', 'Guardian Name'], ['fatherFullName', 'Father Name']].forEach(([k, label]) => {
