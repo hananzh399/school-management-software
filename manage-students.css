@@ -6545,3 +6545,161 @@ select option {
     .cs-toggle .cs-opt { flex: 1 1 calc(50% - 6px); }
     .cs-toggle .cs-opt span { width: 100%; justify-content: center; }
 }
+
+/* ============================================
+   DISCHARGE DATE DIALOG (Deactivate student)
+   ============================================ */
+.discharge-dialog-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.7);
+    backdrop-filter: blur(3px);
+    -webkit-backdrop-filter: blur(3px);
+    z-index: 10001;               /* above every modal, incl. profile (5000) and edit (5500) */
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+}
+
+.discharge-dialog-overlay.show {
+    display: flex;
+    animation: fadeInOverlay 0.25s ease-out;
+}
+
+.discharge-dialog-box {
+    background: var(--bg-secondary);   /* solid — --bg-card is see-through in dark mode */
+    border: 1px solid var(--border-subtle);
+    border-top: 4px solid var(--accent-danger);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-card);
+    padding: 34px 30px 28px;
+    width: 100%;
+    max-width: 420px;
+    text-align: center;
+    animation: dialogSlideUp 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.discharge-dialog-icon {
+    width: 64px; height: 64px;
+    margin: 0 auto 18px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.6rem;
+    color: var(--accent-danger);
+    background: rgba(239, 68, 68, 0.12);
+    box-shadow: 0 4px 12px rgba(239, 68, 68, 0.2);
+}
+
+.discharge-dialog-title {
+    font-size: 1.25rem;
+    font-weight: 800;
+    color: var(--text-primary);
+    margin-bottom: 10px;
+}
+
+.discharge-dialog-body {
+    font-size: 0.9rem;
+    line-height: 1.6;
+    color: var(--text-secondary);
+    margin-bottom: 20px;
+}
+
+.discharge-dialog-body strong {
+    color: var(--text-primary);
+    font-weight: 700;
+    word-break: break-word;
+}
+
+.discharge-dialog-field {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    text-align: left;
+    margin-bottom: 24px;
+}
+
+.discharge-dialog-field label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.discharge-dialog-field label i { color: var(--accent-danger); }
+
+.discharge-date-input {
+    width: 100%;
+    min-height: 46px;
+    color-scheme: dark;            /* dark calendar popup + visible calendar icon */
+    cursor: pointer;
+}
+
+[data-theme="light"] .discharge-date-input { color-scheme: light; }
+
+.discharge-date-input:focus {
+    border-color: var(--accent-danger);
+    box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.2);
+}
+
+.discharge-date-input.invalid {
+    border-color: var(--accent-danger);
+    box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.2);
+}
+
+.discharge-dialog-error {
+    min-height: 16px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--accent-danger);
+}
+
+.discharge-dialog-actions {
+    display: flex;
+    gap: 12px;
+}
+
+.discharge-btn-cancel,
+.discharge-btn-confirm {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 12px 18px;
+    border-radius: var(--radius-sm);
+    font-family: 'Inter', sans-serif;
+    font-size: 0.92rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all var(--transition);
+}
+
+.discharge-btn-cancel {
+    background: var(--bg-card);
+    color: var(--text-secondary);
+    border: 1px solid var(--border-subtle);
+}
+
+.discharge-btn-cancel:hover {
+    background: rgba(148, 163, 184, 0.12);
+    border-color: var(--border-hover);
+    color: var(--text-primary);
+}
+
+.discharge-btn-confirm {
+    background: linear-gradient(135deg, var(--accent-danger), #f87171);
+    color: #fff;
+    border: none;
+    box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
+}
+
+.discharge-btn-confirm:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 18px rgba(239, 68, 68, 0.4);
+}
+
+@media (max-width: 480px) {
+    .discharge-dialog-box { padding: 26px 20px 22px; }
+    .discharge-dialog-icon { width: 56px; height: 56px; font-size: 1.4rem; margin-bottom: 14px; }
+    .discharge-dialog-actions { flex-direction: column-reverse; }
+}

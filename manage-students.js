@@ -6844,76 +6844,71 @@ ${pagesHtml}
 
 
     // ── DISCHARGE DATE PROMPT (shown when deactivating a student) ───────────
-    // Centered dialog with a date field (defaults to today; can be typed or
-    // picked from the calendar), plus Cancel / Confirm. Resolves with the
-    // chosen yyyy-mm-dd string on Confirm, or null on Cancel / Esc / backdrop.
-    function ssDischargeDatePrompt() {
-        if (!document.getElementById('ss-discharge-styles')) {
-            const style = document.createElement('style');
-            style.id = 'ss-discharge-styles';
-            style.textContent = `
-.ss-discharge-input{width:100%;padding:11px 12px;border-radius:var(--radius-md,12px);border:1px solid var(--border-subtle,rgba(148,163,184,.3));background:var(--bg-input,transparent);color:var(--text-primary,#e8ecf4);font-family:inherit;font-size:14px;margin-bottom:6px;box-sizing:border-box;color-scheme:dark;}
-[data-theme="light"] .ss-discharge-input{color-scheme:light;}
-.ss-discharge-input:focus{outline:none;border-color:#17716A;box-shadow:0 0 0 3px rgba(23,113,106,.2);}
-.ss-discharge-label{display:block;text-align:left;font-size:12px;font-weight:700;color:var(--text-secondary,#8892a8);margin-bottom:6px;}
-.ss-discharge-error{min-height:16px;text-align:left;font-size:12px;color:#ef4444;margin-bottom:12px;}
-`;
-            document.head.appendChild(style);
+    // Uses the #discharge-dialog-overlay markup in manage-students.html
+    // (styles: "DISCHARGE DATE DIALOG" in manage-students.css). The date
+    // field defaults to today and can be typed or picked from the calendar.
+    // Resolves with the chosen yyyy-mm-dd string on Confirm, or null on
+    // Cancel / Esc / backdrop click.
+    function ssDischargeDatePrompt(studentName) {
+        const overlay   = document.getElementById('discharge-dialog-overlay');
+        const input     = document.getElementById('discharge-date-input');
+        const errEl     = document.getElementById('discharge-date-error');
+        const nameEl    = document.getElementById('discharge-student-name');
+        const cancelBtn = document.getElementById('discharge-cancel-btn');
+        const okBtn     = document.getElementById('discharge-confirm-btn');
+        if (!overlay || !input || !cancelBtn || !okBtn) {
+            console.error('Discharge dialog markup is missing from the page.');
+            return Promise.resolve(null);
         }
 
+        // Local-time "today" (toISOString() would be UTC and can be off by a day).
+        const now = new Date();
+        const today = now.getFullYear() + '-' +
+            String(now.getMonth() + 1).padStart(2, '0') + '-' +
+            String(now.getDate()).padStart(2, '0');
+
+        input.value = today;
+        input.classList.remove('invalid');
+        errEl.textContent = '';
+        nameEl.textContent = studentName || 'this student';
+
+        overlay.classList.add('show');
+        overlay.setAttribute('aria-hidden', 'false');
+        setTimeout(() => input.focus(), 50);
+
         return new Promise(resolve => {
-            const now = new Date();
-            const today = now.getFullYear() + '-' +
-                String(now.getMonth() + 1).padStart(2, '0') + '-' +
-                String(now.getDate()).padStart(2, '0');
-
-            const overlay = document.createElement('div');
-            overlay.className = 'ss-confirm-overlay';
-            overlay.style.zIndex = '10001';
-            overlay.innerHTML = `
-                <div class="ss-confirm-box" role="dialog" aria-modal="true">
-                    <div class="ss-confirm-icon ss-danger"><i class="fas fa-user-slash"></i></div>
-                    <h4 class="ss-confirm-title">Deactivate Student</h4>
-                    <p class="ss-confirm-message">Select the discharge date for this student.</p>
-                    <label class="ss-discharge-label" for="ss-discharge-date">Discharge Date</label>
-                    <input type="date" id="ss-discharge-date" class="ss-discharge-input" value="${today}">
-                    <div class="ss-discharge-error" id="ss-discharge-error"></div>
-                    <div class="ss-confirm-actions">
-                        <button type="button" class="ss-confirm-btn ss-discharge-cancel">Cancel</button>
-                        <button type="button" class="ss-confirm-btn ss-confirm-ok ss-danger-btn ss-discharge-ok">Confirm</button>
-                    </div>
-                </div>`;
-            document.body.appendChild(overlay);
-            requestAnimationFrame(() => overlay.classList.add('show'));
-
-            const input = overlay.querySelector('#ss-discharge-date');
-            const errEl = overlay.querySelector('#ss-discharge-error');
-            setTimeout(() => input.focus(), 50);
-
             function close(result) {
                 overlay.classList.remove('show');
-                setTimeout(() => overlay.remove(), 200);
-                document.removeEventListener('keydown', keyHandler);
+                overlay.setAttribute('aria-hidden', 'true');
+                cancelBtn.removeEventListener('click', onCancel);
+                okBtn.removeEventListener('click', onConfirm);
+                overlay.removeEventListener('click', onBackdrop);
+                input.removeEventListener('input', onInput);
+                document.removeEventListener('keydown', onKey, true);
                 resolve(result);
             }
-            function confirmDate() {
+            function onCancel()   { close(null); }
+            function onBackdrop(e){ if (e.target === overlay) close(null); }
+            function onInput()    { input.classList.remove('invalid'); errEl.textContent = ''; }
+            function onConfirm() {
                 const val = input.value;
-                if (!val || !/^\d{4}-\d{2}-\d{2}$/.test(val) || isNaN(new Date(val).getTime())) {
+                if (!/^\d{4}-\d{2}-\d{2}$/.test(val) || isNaN(new Date(val).getTime())) {
+                    input.classList.add('invalid');
                     errEl.textContent = 'Please select a valid discharge date.';
                     return;
                 }
                 close(val);
             }
-            function keyHandler(e) {
-                if (e.key === 'Escape') close(null);
-                else if (e.key === 'Enter') { e.preventDefault(); confirmDate(); }
+            function onKey(e) {
+                if (e.key === 'Escape') { e.stopPropagation(); close(null); }
+                else if (e.key === 'Enter') { e.preventDefault(); onConfirm(); }
             }
 
-            input.addEventListener('input', () => { errEl.textContent = ''; });
-            overlay.querySelector('.ss-discharge-cancel').addEventListener('click', () => close(null));
-            overlay.querySelector('.ss-discharge-ok').addEventListener('click', confirmDate);
-            overlay.addEventListener('click', e => { if (e.target === overlay) close(null); });
-            document.addEventListener('keydown', keyHandler);
+            cancelBtn.addEventListener('click', onCancel);
+            okBtn.addEventListener('click', onConfirm);
+            overlay.addEventListener('click', onBackdrop);
+            input.addEventListener('input', onInput);
+            document.addEventListener('keydown', onKey, true);
         });
     }
 
@@ -6927,7 +6922,8 @@ ${pagesHtml}
         }
         // Ask for the discharge date (defaults to today, can be changed).
         // Returns the chosen yyyy-mm-dd string, or null if cancelled.
-        const dischargeDate = await ssDischargeDatePrompt();
+        const _dischargeStudent = getDatabase().find(x => x.regNo === studentId || x.id === studentId);
+        const dischargeDate = await ssDischargeDatePrompt(_dischargeStudent ? _dischargeStudent.fullName : '');
         if (!dischargeDate) return;
 
         const db    = getDatabase();

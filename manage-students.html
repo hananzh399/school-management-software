@@ -1656,6 +1656,31 @@
         </div>
     </div>
 
+    <!-- DISCHARGE DATE DIALOG — shown when a student is deactivated.
+         Opened/closed by ssDischargeDatePrompt() in manage-students.js. -->
+    <div id="discharge-dialog-overlay" class="discharge-dialog-overlay" aria-hidden="true">
+        <div class="discharge-dialog-box" role="dialog" aria-modal="true" aria-labelledby="discharge-dialog-title">
+            <div class="discharge-dialog-icon"><i class="fas fa-user-slash"></i></div>
+            <h3 class="discharge-dialog-title" id="discharge-dialog-title">Deactivate Student</h3>
+            <p class="discharge-dialog-body">
+                Select the discharge date for <strong id="discharge-student-name">this student</strong>.
+            </p>
+            <div class="discharge-dialog-field">
+                <label for="discharge-date-input"><i class="fas fa-calendar-day"></i> Discharge Date</label>
+                <input type="date" id="discharge-date-input" class="discharge-date-input">
+                <div class="discharge-dialog-error" id="discharge-date-error" role="alert"></div>
+            </div>
+            <div class="discharge-dialog-actions">
+                <button type="button" class="discharge-btn-cancel" id="discharge-cancel-btn">
+                    <i class="fas fa-times"></i> Cancel
+                </button>
+                <button type="button" class="discharge-btn-confirm" id="discharge-confirm-btn">
+                    <i class="fas fa-check"></i> Confirm
+                </button>
+            </div>
+        </div>
+    </div>
+
     <!-- SUBSCRIPTION EXPIRY WARNING — fixed-position, doesn't affect page layout.
          Shown by renderSubscriptionExpiryBadge() in manage-students.js starting
          30 days before School.expiryDate. -->
