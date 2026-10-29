@@ -6703,3 +6703,9 @@ select option {
     .discharge-dialog-icon { width: 56px; height: 56px; font-size: 1.4rem; margin-bottom: 14px; }
     .discharge-dialog-actions { flex-direction: column-reverse; }
 }
+
+/* Archive Center: stand-alone filter row (Dropped Out tab has no header filter bar) */
+.archive-filter-bar--solo {
+    margin-left: 0;
+    margin-bottom: 14px;
+}

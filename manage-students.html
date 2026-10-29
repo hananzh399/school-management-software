@@ -356,6 +356,12 @@
                                 <button type="button" class="archive-seg-btn" data-val="B" onclick="archiveSetGradSection('B')">B</button>
                             </div>
                             <div class="archive-filter-group">
+                                <label>Session</label>
+                                <select id="archive-grad-session-filter" onchange="archiveGradSessionChanged()">
+                                    <option value="ALL">All Sessions</option>
+                                </select>
+                            </div>
+                            <div class="archive-filter-group">
                                 <label>Year</label>
                                 <select id="archive-grad-year-filter" onchange="renderArchiveGraduatedTable()">
                                     <option value="0">This Year</option>
@@ -394,6 +400,14 @@
                 <div class="msc-stage-header">
                     <button class="btn-ghost msc-back-btn" onclick="archiveBackToHub()"><i class="fas fa-arrow-left"></i> Back</button>
                     <h4 class="msc-stage-title"><i class="fas fa-user-slash"></i> Dropped Out Students</h4>
+                </div>
+                <div class="archive-filter-bar archive-filter-bar--solo">
+                    <div class="archive-filter-group">
+                        <label>Session</label>
+                        <select id="archive-drop-session-filter" onchange="renderArchiveDroppedTable()">
+                            <option value="ALL">All Sessions</option>
+                        </select>
+                    </div>
                 </div>
                 <div class="upd-search-row">
                     <div class="search-box-wrapper upd-search-bar">

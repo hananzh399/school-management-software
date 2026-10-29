@@ -6527,6 +6527,8 @@ ${pagesHtml}
         });
         const classSearch = document.getElementById('archive-grad-class-search');
         if (classSearch) classSearch.value = '';
+        const gradSessionReset = document.getElementById('archive-grad-session-filter');
+        if (gradSessionReset) gradSessionReset.value = 'ALL';
         archivePopulateGradClassFilter();
         renderArchiveGraduatedTable();
     };
@@ -6535,6 +6537,8 @@ ${pagesHtml}
         archiveShowStage('dropped');
         const dropSearch = document.getElementById('archive-drop-search');
         if (dropSearch) dropSearch.value = '';
+        const dropSessionReset = document.getElementById('archive-drop-session-filter');
+        if (dropSessionReset) dropSessionReset.value = 'ALL';
         renderArchiveDroppedTable();
     };
 
@@ -6556,6 +6560,46 @@ ${pagesHtml}
         if (current && Array.from(sel.options).some(o => o.value === current)) sel.value = current;
     }
 
+    // ── ARCHIVE CENTER: ACADEMIC SESSION FILTER ──────────────────────────────
+    // Sessions run April → March, matching getCurrentAcademicSession()
+    // (e.g. 12 Jun 2026 and 20 Feb 2027 both belong to "2026 – 2027").
+    // Graduated students are placed by graduatedDate, dropped-out students
+    // by droppedDate (the discharge date). The dropdowns list only sessions
+    // that actually contain archived students, newest first.
+    function archiveSessionOfDate(value) {
+        if (!value) return '';
+        const d = new Date(value);
+        if (isNaN(d.getTime())) return '';
+        const y = d.getFullYear();
+        return d.getMonth() + 1 >= 4 ? `${y} – ${y + 1}` : `${y - 1} – ${y}`;
+    }
+
+    function archiveSessionOfStudent(s, kind) {
+        return archiveSessionOfDate(kind === 'graduated' ? s.graduatedDate : s.droppedDate);
+    }
+
+    /** Rebuild a Session <select> from the given students; keeps the current pick if it still exists. */
+    function archivePopulateSessionFilter(selectId, students, kind) {
+        const sel = document.getElementById(selectId);
+        if (!sel) return;
+        const found = new Set();
+        students.forEach(s => { const ses = archiveSessionOfStudent(s, kind); if (ses) found.add(ses); });
+        const sessions = Array.from(found).sort((a, b) => parseInt(b, 10) - parseInt(a, 10)); // newest first
+
+        const current = sel.value;
+        sel.innerHTML = '<option value="ALL">All Sessions</option>' +
+            sessions.map(x => `<option value="${x}">${x}</option>`).join('');
+        sel.value = (current && sessions.includes(current)) ? current : 'ALL';
+    }
+
+    /** Picking a specific session in Graduated shows every year, so the "This Year" default can't hide it. */
+    window.archiveGradSessionChanged = function() {
+        const ses = document.getElementById('archive-grad-session-filter');
+        const yr  = document.getElementById('archive-grad-year-filter');
+        if (ses && yr && ses.value !== 'ALL') yr.value = 'ALL';
+        renderArchiveGraduatedTable();
+    };
+
     /** Single merged table inside Graduated: full roster across ALL graduating batches, filterable by class / section / year */
     window.renderArchiveGraduatedTable = function() {
         const tbody = document.getElementById('archive-grad-tbody');
@@ -6574,6 +6618,11 @@ ${pagesHtml}
 
         let list = getGraduatedStudents();
 
+        // Session dropdown lists every session that has graduates (built from the full roster, before filtering)
+        archivePopulateSessionFilter('archive-grad-session-filter', list, 'graduated');
+        const sessionSel = document.getElementById('archive-grad-session-filter');
+        const sessionVal = sessionSel ? sessionSel.value : 'ALL';
+
         if (classVal && classVal !== ALL_STUDENTS_KEY) {
             list = list.filter(s => s.graduatedClass === classVal);
         }
@@ -6584,6 +6633,9 @@ ${pagesHtml}
         if (yearVal !== 'ALL') {
             const targetYear = new Date().getFullYear() - parseInt(yearVal, 10);
             list = list.filter(s => Number(s.graduatedYear) === targetYear);
+        }
+        if (sessionVal !== 'ALL') {
+            list = list.filter(s => archiveSessionOfStudent(s, 'graduated') === sessionVal);
         }
         if (q) list = list.filter(s => studentMatchesSearch(s, q));
 
@@ -6604,6 +6656,14 @@ ${pagesHtml}
         const q   = qEl ? qEl.value.toLowerCase().trim() : '';
 
         let list = getDroppedStudents();
+
+        archivePopulateSessionFilter('archive-drop-session-filter', list, 'dropped');
+        const dropSessionSel = document.getElementById('archive-drop-session-filter');
+        const dropSessionVal = dropSessionSel ? dropSessionSel.value : 'ALL';
+        if (dropSessionVal !== 'ALL') {
+            list = list.filter(s => archiveSessionOfStudent(s, 'dropped') === dropSessionVal);
+        }
+
         if (q) list = list.filter(s => studentMatchesSearch(s, q));
         list.sort((a, b) => new Date(b.droppedDate || 0) - new Date(a.droppedDate || 0));
 
