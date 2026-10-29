@@ -332,38 +332,76 @@ function _sessionBannerHost() {
     return el;
 }
 
+/*
+ * The session is shown as a small chip beside the header date instead of a
+ * full-width banner (that banner sat in the page flow and overlapped the Back
+ * button / stat cards). Same information, same warning + one-click fix.
+ */
+function _ensureSessionChipStyles() {
+    if (document.getElementById('session-chip-styles')) return;
+    const st = document.createElement('style');
+    st.id = 'session-chip-styles';
+    st.textContent = `
+#session-chip{display:inline-flex;align-items:center;gap:6px;padding:6px 11px;border-radius:999px;font-size:12px;font-weight:600;line-height:1;white-space:nowrap;cursor:pointer;text-decoration:none;border:1px solid var(--border-subtle,rgba(148,163,184,.28));background:rgba(59,130,246,.10);color:var(--text-primary,#e2e8f0);margin-right:10px;transition:background .15s}
+#session-chip:hover{background:rgba(59,130,246,.20)}
+#session-chip i{font-size:11px;color:#3b82f6}
+#session-chip.sc-warn{border-color:rgba(245,158,11,.6);background:rgba(245,158,11,.12)}
+#session-chip.sc-warn i{color:#d97706}
+#session-chip.sc-none{background:rgba(128,128,128,.12)}
+#session-chip.sc-none i{color:#94a3b8}
+@media (max-width:640px){#session-chip{padding:5px 9px;font-size:11px;margin-right:6px}}`;
+    document.head.appendChild(st);
+}
+
+function _sessionChipHost() {
+    let el = document.getElementById('session-chip');
+    if (el) return el;
+    const right = document.querySelector('.main-header .header-right');
+    if (!right) return null;
+    el = document.createElement('a');
+    el.id = 'session-chip';
+    right.insertBefore(el, right.firstChild);
+    return el;
+}
+
 function renderSessionBanner() {
     if (!_sessionsLoaded) return;
-    _ensureSessionBannerStyles();
-    const el = _sessionBannerHost();
-    const range = getCurrentSessionRange();
-    const link = `<a class="slb-btn" href="${SESSIONS_PAGE_URL}"><i class="fas fa-calendar-alt"></i> Sessions</a>`;
+    // Remove the old full-width banner if a previous version left one behind.
+    const oldBanner = document.getElementById('session-link-banner');
+    if (oldBanner) oldBanner.remove();
 
+    _ensureSessionChipStyles();
+    const el = _sessionChipHost();
+    if (!el) return;
+    el.onclick = null;
+    el.href = SESSIONS_PAGE_URL;
+
+    const range = getCurrentSessionRange();
     if (!range) {
-        el.className = 'slb-none';
-        el.innerHTML = `<span class="slb-ico"><i class="fas fa-calendar-alt"></i></span>
-            <span class="slb-text"><b>No current session set</b>
-            <span class="slb-sub">Fees &amp; Finance is not tied to a session yet. Choose "Make as current" on the Sessions page.</span></span>
-            <span class="slb-actions">${link}</span>`;
+        el.className = 'sc-none';
+        el.title = 'No current session set. Choose "Make as current" on the Sessions page.';
+        el.innerHTML = '<i class="fas fa-calendar-alt"></i><span>No session</span>';
         return;
     }
 
-    let billing = '', warn = '', fixBtn = '';
+    const shortLabel = k => {
+        const [y, m] = String(k).split('-').map(Number);
+        return new Date(y, (m || 1) - 1, 1).toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+    };
+    const text = `${shortLabel(range.start)} – ${shortLabel(range.end)}`;
+    let warn = '', canFix = false;
     if (_generatedVouchersLoaded) {
         const fm = getCurrentFeeMonthKey();
-        billing = `Billing month: ${escapeHtml(getCurrentFeeMonthLabel())}`;
-        if (fm < range.start) {
-            warn = `The billing month is before this session starts.`;
-            fixBtn = `<button type="button" class="slb-btn primary" onclick="alignFeeMonthToSession()"><i class="fas fa-arrow-right"></i> Move billing month to ${escapeHtml(_sessionLongLabel(range.start))}</button>`;
-        } else if (fm > range.end) {
-            warn = `The billing month is after this session ended. Create or select the next session.`;
-        }
+        if (fm < range.start) { warn = 'The billing month is before this session starts. Click to move it to the session start.'; canFix = true; }
+        else if (fm > range.end) { warn = 'The billing month is after this session ended. Create or select the next session.'; }
     }
-    el.className = warn ? 'slb-warn' : '';
-    el.innerHTML = `<span class="slb-ico"><i class="fas ${warn ? 'fa-triangle-exclamation' : 'fa-calendar-check'}"></i></span>
-        <span class="slb-text"><b>Session: ${escapeHtml(sessionTitleOf(_currentSessionCache))}</b>
-        <span class="slb-sub">${[billing, warn].filter(Boolean).join(' · ')}</span></span>
-        <span class="slb-actions">${fixBtn}${link}</span>`;
+    el.className = warn ? 'sc-warn' : '';
+    el.title = `Session: ${sessionTitleOf(_currentSessionCache)}` + (warn ? `\n${warn}` : '\nClick to open Sessions');
+    el.innerHTML = `<i class="fas ${warn ? 'fa-triangle-exclamation' : 'fa-calendar-check'}"></i><span>${escapeHtml(text)}</span>`;
+    if (canFix) {
+        el.removeAttribute('href');
+        el.onclick = (e) => { e.preventDefault(); alignFeeMonthToSession(); };
+    }
 }
 
 /** One-click fix for a billing month that sits before the session's first month. */
