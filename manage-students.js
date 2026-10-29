@@ -6842,6 +6842,81 @@ ${pagesHtml}
 };
     // ── 9. DELETE STUDENT ────────────────────────────────────────────────────
 
+
+    // ── DISCHARGE DATE PROMPT (shown when deactivating a student) ───────────
+    // Centered dialog with a date field (defaults to today; can be typed or
+    // picked from the calendar), plus Cancel / Confirm. Resolves with the
+    // chosen yyyy-mm-dd string on Confirm, or null on Cancel / Esc / backdrop.
+    function ssDischargeDatePrompt() {
+        if (!document.getElementById('ss-discharge-styles')) {
+            const style = document.createElement('style');
+            style.id = 'ss-discharge-styles';
+            style.textContent = `
+.ss-discharge-input{width:100%;padding:11px 12px;border-radius:var(--radius-md,12px);border:1px solid var(--border-subtle,rgba(148,163,184,.3));background:var(--bg-input,transparent);color:var(--text-primary,#e8ecf4);font-family:inherit;font-size:14px;margin-bottom:6px;box-sizing:border-box;color-scheme:dark;}
+[data-theme="light"] .ss-discharge-input{color-scheme:light;}
+.ss-discharge-input:focus{outline:none;border-color:#17716A;box-shadow:0 0 0 3px rgba(23,113,106,.2);}
+.ss-discharge-label{display:block;text-align:left;font-size:12px;font-weight:700;color:var(--text-secondary,#8892a8);margin-bottom:6px;}
+.ss-discharge-error{min-height:16px;text-align:left;font-size:12px;color:#ef4444;margin-bottom:12px;}
+`;
+            document.head.appendChild(style);
+        }
+
+        return new Promise(resolve => {
+            const now = new Date();
+            const today = now.getFullYear() + '-' +
+                String(now.getMonth() + 1).padStart(2, '0') + '-' +
+                String(now.getDate()).padStart(2, '0');
+
+            const overlay = document.createElement('div');
+            overlay.className = 'ss-confirm-overlay';
+            overlay.style.zIndex = '10001';
+            overlay.innerHTML = `
+                <div class="ss-confirm-box" role="dialog" aria-modal="true">
+                    <div class="ss-confirm-icon ss-danger"><i class="fas fa-user-slash"></i></div>
+                    <h4 class="ss-confirm-title">Deactivate Student</h4>
+                    <p class="ss-confirm-message">Select the discharge date for this student.</p>
+                    <label class="ss-discharge-label" for="ss-discharge-date">Discharge Date</label>
+                    <input type="date" id="ss-discharge-date" class="ss-discharge-input" value="${today}">
+                    <div class="ss-discharge-error" id="ss-discharge-error"></div>
+                    <div class="ss-confirm-actions">
+                        <button type="button" class="ss-confirm-btn ss-discharge-cancel">Cancel</button>
+                        <button type="button" class="ss-confirm-btn ss-confirm-ok ss-danger-btn ss-discharge-ok">Confirm</button>
+                    </div>
+                </div>`;
+            document.body.appendChild(overlay);
+            requestAnimationFrame(() => overlay.classList.add('show'));
+
+            const input = overlay.querySelector('#ss-discharge-date');
+            const errEl = overlay.querySelector('#ss-discharge-error');
+            setTimeout(() => input.focus(), 50);
+
+            function close(result) {
+                overlay.classList.remove('show');
+                setTimeout(() => overlay.remove(), 200);
+                document.removeEventListener('keydown', keyHandler);
+                resolve(result);
+            }
+            function confirmDate() {
+                const val = input.value;
+                if (!val || !/^\d{4}-\d{2}-\d{2}$/.test(val) || isNaN(new Date(val).getTime())) {
+                    errEl.textContent = 'Please select a valid discharge date.';
+                    return;
+                }
+                close(val);
+            }
+            function keyHandler(e) {
+                if (e.key === 'Escape') close(null);
+                else if (e.key === 'Enter') { e.preventDefault(); confirmDate(); }
+            }
+
+            input.addEventListener('input', () => { errEl.textContent = ''; });
+            overlay.querySelector('.ss-discharge-cancel').addEventListener('click', () => close(null));
+            overlay.querySelector('.ss-discharge-ok').addEventListener('click', confirmDate);
+            overlay.addEventListener('click', e => { if (e.target === overlay) close(null); });
+            document.addEventListener('keydown', keyHandler);
+        });
+    }
+
     window.deleteRecord = async function(studentId) {
         // Dropping a student moves them into the Archive Center ("dropped"),
         // so it counts against the plan's archiveStudentLimit just like a
@@ -6850,11 +6925,10 @@ ${pagesHtml}
             showToast("Archive Limit Reached", `Your plan allows up to ${getArchiveLimit()} archived students. Upgrade your plan to remove more students.`, "danger");
             return;
         }
-        const deleteConfirmed = await ssConfirm(
-            'Are you sure you want to remove this student from the Database?',
-            { title: 'Remove Student', confirmLabel: 'Remove' }
-        );
-        if (!deleteConfirmed) return;
+        // Ask for the discharge date (defaults to today, can be changed).
+        // Returns the chosen yyyy-mm-dd string, or null if cancelled.
+        const dischargeDate = await ssDischargeDatePrompt();
+        if (!dischargeDate) return;
 
         const db    = getDatabase();
         const index = db.findIndex(s => s.regNo === studentId || s.id === studentId);
@@ -6870,10 +6944,10 @@ ${pagesHtml}
         // stamp, record stays in db). Without setting droppedDate here, the
         // Archive Center had nothing to show but "-" in the Date column.
         student.status      = 'dropped';
-        student.droppedDate = new Date().toISOString().slice(0, 10);
+        student.droppedDate = dischargeDate;   // date chosen in the discharge-date box
         saveDatabase(db);
 
-        showToast("Success", "Student removed from the database", "success");
+        showToast("Success", "Student deactivated with discharge date " + dischargeDate, "success");
         closeModal('student-modal');
         updateDashboardStats();
         renderStudentTable();
