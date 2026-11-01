@@ -204,7 +204,8 @@ async function handleLogin(e) {
 
   SoftSchoolAuth.startSession(result);
   showToast("Redirecting to your dashboard…", "success");
-  setTimeout(() => { window.location.href = "main.html"; }, 900);
+  // was 900ms of pure waiting; the toast is still visible for the instant it takes to navigate
+  setTimeout(() => { window.location.href = "main.html"; }, 200);
 }
 
 /* ── LOGIN LOCKOUT COUNTDOWN ──
