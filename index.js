@@ -383,7 +383,7 @@ function buildVideoContent() {
         in <code style="background:rgba(255,255,255,0.15);padding:2px 6px;border-radius:4px;font-size:0.82rem;">login.js</code>
         to embed your YouTube video here.
       </p>
-      <a href="https://wa.me/923181909541?text=Hello%20Soft%20School,%20I%20want%20to%20book%20a%20live%20demo!"
+      <a href="https://wa.me/923105040365?text=Hello%20Soft%20School,%20I%20want%20to%20book%20a%20live%20demo!"
          target="_blank" rel="noopener noreferrer"
          style="margin-top:1.2rem;display:inline-flex;align-items:center;gap:8px;padding:12px 22px;background:var(--amber-500);color:var(--teal-900);border-radius:10px;font-weight:700;font-size:0.9rem;text-decoration:none;transition:all 0.25s;"
          onmouseover="this.style.background='#C97A1B';this.style.color='#fff';"
