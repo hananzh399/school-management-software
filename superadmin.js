@@ -1648,6 +1648,9 @@ let fbFilter = "all";    // all | suggestion | bug
 let fbSort = "newest";   // newest | oldest
 let fbData = null;       // last response for fbSource
 let fbRequestId = 0;     // ignores a response if the user already switched portal
+// ids of the feedbacks that were new when this portal was opened. They keep the green style until the
+// user leaves the portal (the server already counts them as seen, so a Refresh would not report them).
+let fbNewIds = { parent: new Set(), teacher: new Set() };
 
 function fbById(id) { return document.getElementById(id); }
 
@@ -1674,12 +1677,45 @@ function fbShowChooser() {
   fbSource = null;
   fbData = null;
   fbRequestId++;
+  fbNewIds = { parent: new Set(), teacher: new Set() };
   fbById("fbChooser").hidden = false;
   fbById("fbListView").hidden = true;
+  fbLoadSummary();
+}
+
+/* Red circle on a portal card = how many feedbacks have not been seen yet. */
+function fbSetBadge(src, count) {
+  const el = fbById(src === "parent" ? "fbBadgeParent" : "fbBadgeTeacher");
+  if (!el) return;
+  const n = Number(count) || 0;
+  el.hidden = n <= 0;
+  el.textContent = n > 99 ? "99+" : String(n);
+  el.setAttribute("aria-label", n + " new");
+}
+
+async function fbLoadSummary() {
+  try {
+    const s = await apiRequest("/feedback/summary");
+    if (fbSource) return; // user already opened a portal; the circles are not on screen
+    fbSetBadge("parent", s && s.parent && s.parent.new);
+    fbSetBadge("teacher", s && s.teacher && s.teacher.new);
+  } catch (err) { /* indicators are optional; the cards still work without them */ }
+}
+
+/* The list is on screen, so tell the server everything up to its highest id is seen. */
+async function fbMarkSeen(src, items) {
+  if (!items.some(it => it.isNew)) return;
+  const upTo = items.reduce((max, it) => Math.max(max, Number(it.id) || 0), 0);
+  try {
+    await apiRequest("/feedback/seen?source=" + encodeURIComponent(src), {
+      method: "POST", body: JSON.stringify({ upTo })
+    });
+    fbSetBadge(src, 0);
+  } catch (err) { /* stays "new" and is retried the next time the portal is opened */ }
 }
 
 function fbOpenPortal(src) {
-  if (fbSource !== src) { fbFilter = "all"; fbData = null; }
+  if (fbSource !== src) { fbFilter = "all"; fbData = null; fbNewIds = { parent: new Set(), teacher: new Set() }; }
   fbSource = src;
   fbById("fbChooser").hidden = true;
   fbById("fbListView").hidden = false;
@@ -1698,7 +1734,9 @@ async function fbLoad() {
     const data = await apiRequest("/feedback?source=" + encodeURIComponent(src) + "&type=all");
     if (myRequest !== fbRequestId) return;
     fbData = data;
+    (data.items || []).forEach(it => { if (it.isNew) fbNewIds[src].add(it.id); });
     fbRender();
+    fbMarkSeen(src, data.items || []);
   } catch (err) {
     if (myRequest !== fbRequestId) return;
     if (err && /session expired/i.test(err.message)) return; // already sent to login
@@ -1754,9 +1792,10 @@ function fbRender() {
       : '<span class="sa-badge sa-badge-basic"><i class="fas fa-lightbulb"></i> Suggestion</span>';
     const school = it.schoolName && it.schoolName !== it.schoolId
       ? esc(it.schoolName) + " (" + esc(it.schoolId || "") + ")" : esc(it.schoolId || "Unknown school");
+    const isFresh = fbNewIds[fbSource] && fbNewIds[fbSource].has(it.id);
     const from = [it.fromName, it.fromDetail].filter(Boolean).map(esc).join(" · ");
-    return '<div class="sa-fb-item">' +
-      '<div class="sa-fb-item-top">' + badge +
+    return '<div class="sa-fb-item' + (isFresh ? ' is-new' : '') + '">' +
+      '<div class="sa-fb-item-top">' + badge + (isFresh ? '<span class="sa-fb-new-pill">New</span>' : '') +
         (it.title ? '<span class="sa-fb-item-title">' + esc(it.title) + '</span>' : '') +
         '<span class="sa-fb-item-date">' + esc(fbFormatDate(it.createdAt)) + '</span>' +
       '</div>' +
