@@ -40,6 +40,7 @@
         <button class="sa-btn-secondary" id="btnPrintPlansTop"><i class="fas fa-print"></i> Print Plans</button>
         <button class="sa-btn-secondary" id="btnOpenCreatePlan"><i class="fas fa-layer-group"></i> Create Plan</button>
         <button class="sa-btn-secondary" id="btnOpenManagePlans"><i class="fas fa-pen-to-square"></i> Manage Plans</button>
+        <button class="sa-btn-secondary" id="btnOpenFeedback"><i class="fas fa-comments"></i> Feedback</button>
         <button class="sa-btn-add" id="btnOpenAddSchool"><i class="fas fa-plus"></i> Add School</button>
       </div>
     </div>
@@ -60,6 +61,71 @@
         </div>
       </div>
       <div id="schoolsTableWrap"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════ FEEDBACK PAGE ══════════════
+     A second "page" living in this same file. Opened by the Feedback button
+     (URL hash #feedback, #feedback-parent, #feedback-teacher) — see the
+     FEEDBACK PAGE block in superadmin.js. Hidden until routed to. ══════════════ -->
+<div id="saFeedbackPage">
+  <div class="sa-topbar">
+    <div class="sa-topbar-brand">
+      <img src="logo-icon.png" alt="Soft School">
+      <div>
+        <span>Soft<strong>School</strong></span>
+        <small>Super Admin</small>
+      </div>
+    </div>
+    <div class="sa-topbar-right">
+      <button class="sa-btn-secondary" id="btnFeedbackBack"><i class="fas fa-arrow-left"></i> Back to Schools</button>
+    </div>
+  </div>
+
+  <div class="sa-main">
+    <div class="sa-header-row">
+      <div>
+        <h1>Feedback</h1>
+        <p>Bug reports and suggestions sent by parents and teachers from every school.</p>
+      </div>
+    </div>
+
+    <!-- Step 1: choose a portal -->
+    <div class="sa-fb-choices" id="fbChooser">
+      <button type="button" class="sa-fb-choice" id="fbChooseParent">
+        <span class="sa-fb-choice-icon"><i class="fas fa-people-roof"></i></span>
+        <span class="sa-fb-choice-title">Parent Portal</span>
+        <span class="sa-fb-choice-sub">Feedback from parents</span>
+      </button>
+      <button type="button" class="sa-fb-choice" id="fbChooseTeacher">
+        <span class="sa-fb-choice-icon"><i class="fas fa-chalkboard-user"></i></span>
+        <span class="sa-fb-choice-title">Teacher Portal</span>
+        <span class="sa-fb-choice-sub">Feedback from teachers</span>
+      </button>
+    </div>
+
+    <!-- Step 2: that portal's feedback, with Suggestions / Bugs sorting -->
+    <div class="sa-panel" id="fbListView" hidden>
+      <div class="sa-panel-head">
+        <div class="sa-fb-headleft">
+          <button type="button" class="sa-fb-back" id="fbBackToSections"><i class="fas fa-arrow-left"></i> Sections</button>
+          <h2 id="fbListTitle">Feedback</h2>
+        </div>
+        <div class="sa-fb-controls">
+          <select id="fbSortSelect" aria-label="Sort by date">
+            <option value="newest">Newest first</option>
+            <option value="oldest">Oldest first</option>
+          </select>
+          <button type="button" class="sa-mini-btn" id="fbRefresh"><i class="fas fa-rotate"></i> Refresh</button>
+        </div>
+      </div>
+      <div class="sa-fb-tabs" id="fbTabs" role="tablist">
+        <button type="button" class="sa-fb-tab active" data-filter="all" role="tab">All <span class="sa-fb-count" id="fbCountAll">0</span></button>
+        <button type="button" class="sa-fb-tab" data-filter="suggestion" role="tab"><i class="fas fa-lightbulb"></i> Suggestions <span class="sa-fb-count" id="fbCountSuggestion">0</span></button>
+        <button type="button" class="sa-fb-tab" data-filter="bug" role="tab"><i class="fas fa-bug"></i> Bugs <span class="sa-fb-count" id="fbCountBug">0</span></button>
+      </div>
+      <div id="fbList" class="sa-fb-list"></div>
     </div>
   </div>
 </div>

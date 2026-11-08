@@ -42,6 +42,8 @@ function clearAdminToken() {
 function showAdminLoginGate() {
   const app = document.getElementById("saApp");
   if (app) app.style.display = "none";
+  const fbPage = document.getElementById("saFeedbackPage");
+  if (fbPage) fbPage.classList.remove("show");
 
   let gate = document.getElementById("saLoginGate");
   if (!gate) {
@@ -1625,6 +1627,164 @@ function startExpiryWatcher() {
   setInterval(() => checkExpiries(false), EXPIRY_RECHECK_MS);
 }
 
+/* ══════════════ FEEDBACK PAGE ══════════════════════════════════
+   Second page of the panel (markup: #saFeedbackPage in superadmin.html).
+   Routing is by URL hash so Back / refresh / bookmarks work:
+     (none)              -> Schools page
+     #feedback           -> two section buttons (Parent Portal / Teacher Portal)
+     #feedback-parent    -> parent-portal feedback
+     #feedback-teacher   -> teacher-portal feedback
+   Data: GET /api/admin/feedback?source=parent|teacher  (FeedbackAdminController).
+   Each item: { id, type: "bug"|"suggestion", schoolId, schoolName, category,
+                title, body, fromName, fromDetail, createdAt }.
+   The Suggestions / Bugs tabs and the date sort work on the loaded list in the browser.
+   ═══════════════════════════════════════════════════════════════ */
+const FB_PORTALS = {
+  parent:  { label: "Parent Portal",  fromIcon: "fa-people-roof" },
+  teacher: { label: "Teacher Portal", fromIcon: "fa-chalkboard-user" }
+};
+let fbSource = null;     // "parent" | "teacher" | null (= section chooser)
+let fbFilter = "all";    // all | suggestion | bug
+let fbSort = "newest";   // newest | oldest
+let fbData = null;       // last response for fbSource
+let fbRequestId = 0;     // ignores a response if the user already switched portal
+
+function fbById(id) { return document.getElementById(id); }
+
+function routeSuperAdminView() {
+  if (!getAdminToken()) return; // the login gate owns the screen
+  const app = fbById("saApp");
+  const page = fbById("saFeedbackPage");
+  if (!app || !page) return;
+
+  const hash = (location.hash || "").replace(/^#/, "");
+  if (hash === "feedback" || hash.indexOf("feedback-") === 0) {
+    app.classList.remove("show");
+    page.classList.add("show");
+    const src = hash.split("-")[1];
+    if (FB_PORTALS[src]) fbOpenPortal(src); else fbShowChooser();
+  } else {
+    page.classList.remove("show");
+    app.classList.add("show");
+  }
+  window.scrollTo(0, 0);
+}
+
+function fbShowChooser() {
+  fbSource = null;
+  fbData = null;
+  fbRequestId++;
+  fbById("fbChooser").hidden = false;
+  fbById("fbListView").hidden = true;
+}
+
+function fbOpenPortal(src) {
+  if (fbSource !== src) { fbFilter = "all"; fbData = null; }
+  fbSource = src;
+  fbById("fbChooser").hidden = true;
+  fbById("fbListView").hidden = false;
+  fbById("fbListTitle").textContent = FB_PORTALS[src].label + " feedback";
+  fbById("fbSortSelect").value = fbSort;
+  fbLoad();
+}
+
+async function fbLoad() {
+  const src = fbSource;
+  if (!src) return;
+  const myRequest = ++fbRequestId;
+  fbSetState('<i class="fas fa-spinner fa-spin"></i> Loading feedback…');
+  fbById("fbRefresh").disabled = true;
+  try {
+    const data = await apiRequest("/feedback?source=" + encodeURIComponent(src) + "&type=all");
+    if (myRequest !== fbRequestId) return;
+    fbData = data;
+    fbRender();
+  } catch (err) {
+    if (myRequest !== fbRequestId) return;
+    if (err && /session expired/i.test(err.message)) return; // already sent to login
+    fbSetState(
+      '<i class="fas fa-circle-exclamation"></i> Could not load feedback: ' + SSValidate.escapeHtml(err.message || "unknown error") +
+      '<br><button type="button" class="sa-btn-secondary" id="fbRetry">Try again</button>');
+    const retry = fbById("fbRetry");
+    if (retry) retry.addEventListener("click", fbLoad);
+  } finally {
+    if (myRequest === fbRequestId) fbById("fbRefresh").disabled = false;
+  }
+}
+
+function fbSetState(html) {
+  fbById("fbList").innerHTML = '<div class="sa-fb-state">' + html + '</div>';
+}
+
+function fbFormatDate(iso) {
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return "";
+  return d.toLocaleString(undefined, { day: "numeric", month: "short", year: "numeric", hour: "numeric", minute: "2-digit" });
+}
+
+function fbRender() {
+  if (!fbData) return;
+  const counts = fbData.counts || {};
+  fbById("fbCountAll").textContent = counts.all || 0;
+  fbById("fbCountSuggestion").textContent = counts.suggestion || 0;
+  fbById("fbCountBug").textContent = counts.bug || 0;
+  document.querySelectorAll("#fbTabs .sa-fb-tab").forEach(tab => {
+    tab.classList.toggle("active", tab.dataset.filter === fbFilter);
+  });
+
+  const items = (fbData.items || [])
+    .filter(it => fbFilter === "all" || it.type === fbFilter)
+    .sort((a, b) => {
+      const diff = new Date(a.createdAt) - new Date(b.createdAt);
+      return fbSort === "oldest" ? diff : -diff;
+    });
+
+  if (!items.length) {
+    const what = fbFilter === "bug" ? "bug reports" : fbFilter === "suggestion" ? "suggestions" : "feedback";
+    fbSetState('<i class="fas fa-inbox" style="font-size:2rem;display:block;margin-bottom:10px;color:var(--teal-200);"></i>No ' + what + ' from the ' +
+      FB_PORTALS[fbSource].label.toLowerCase() + ' yet.');
+    return;
+  }
+
+  const esc = SSValidate.escapeHtml;
+  fbById("fbList").innerHTML = items.map(it => {
+    const isBug = it.type === "bug";
+    const badge = isBug
+      ? '<span class="sa-badge sa-badge-blocked"><i class="fas fa-bug"></i> Bug</span>'
+      : '<span class="sa-badge sa-badge-basic"><i class="fas fa-lightbulb"></i> Suggestion</span>';
+    const school = it.schoolName && it.schoolName !== it.schoolId
+      ? esc(it.schoolName) + " (" + esc(it.schoolId || "") + ")" : esc(it.schoolId || "Unknown school");
+    const from = [it.fromName, it.fromDetail].filter(Boolean).map(esc).join(" · ");
+    return '<div class="sa-fb-item">' +
+      '<div class="sa-fb-item-top">' + badge +
+        (it.title ? '<span class="sa-fb-item-title">' + esc(it.title) + '</span>' : '') +
+        '<span class="sa-fb-item-date">' + esc(fbFormatDate(it.createdAt)) + '</span>' +
+      '</div>' +
+      '<div class="sa-fb-item-body">' + esc(it.body || "") + '</div>' +
+      '<div class="sa-fb-item-meta">' +
+        '<span><i class="fas fa-school"></i>' + school + '</span>' +
+        (from ? '<span><i class="fas ' + FB_PORTALS[fbSource].fromIcon + '"></i>' + from + '</span>' : '') +
+        (it.category ? '<span><i class="fas fa-tag"></i>' + esc(it.category) + '</span>' : '') +
+      '</div>' +
+    '</div>';
+  }).join("");
+}
+
+fbById("btnOpenFeedback").addEventListener("click", () => { location.hash = "feedback"; });
+fbById("btnFeedbackBack").addEventListener("click", () => { history.pushState("", document.title, location.pathname + location.search); routeSuperAdminView(); });
+fbById("fbChooseParent").addEventListener("click", () => { location.hash = "feedback-parent"; });
+fbById("fbChooseTeacher").addEventListener("click", () => { location.hash = "feedback-teacher"; });
+fbById("fbBackToSections").addEventListener("click", () => { location.hash = "feedback"; });
+fbById("fbRefresh").addEventListener("click", fbLoad);
+fbById("fbSortSelect").addEventListener("change", (e) => { fbSort = e.target.value; fbRender(); });
+fbById("fbTabs").addEventListener("click", (e) => {
+  const tab = e.target.closest(".sa-fb-tab");
+  if (!tab) return;
+  fbFilter = tab.dataset.filter;
+  fbRender();
+});
+window.addEventListener("hashchange", routeSuperAdminView);
+
 /* ── BOOT (runs last so all consts are initialized) ──
    Gated behind admin auth: if there's no valid session token yet, show
    the login form instead of loading any data. initSuperAdminApp() is
@@ -1632,6 +1792,7 @@ function startExpiryWatcher() {
    tab/session) or after a successful login (see showAdminLoginGate). */
 async function initSuperAdminApp() {
   document.getElementById("saApp").classList.add("show");
+  routeSuperAdminView(); // opens the Feedback page instead if the URL hash asks for it
   try {
     await loadPlans();
   } catch (err) {
