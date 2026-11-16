@@ -11,9 +11,28 @@
 <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
 <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+  <script>try{if(sessionStorage.getItem("softschool_splash_seen"))document.documentElement.classList.add("splash-skip");}catch(e){}</script>
+  <link rel="stylesheet" href="splash.css">
   <link rel="stylesheet" href="index.css">
 </head>
 <body>
+<!-- ── SPLASH SCREEN (shown before the login/landing page) ── -->
+<div id="splash" role="status" aria-label="Soft School is loading">
+  <div class="sp-glow"></div>
+  <div class="sp-stage">
+    <img class="sp-layer sp-book-l" src="splash/book-left.png"  alt="" draggable="false">
+    <img class="sp-layer sp-book-r" src="splash/book-right.png" alt="" draggable="false">
+    <img class="sp-layer sp-cap"    src="splash/cap.png"        alt="" draggable="false">
+    <img class="sp-layer sp-bird"   src="splash/bird.png"       alt="" draggable="false">
+  </div>
+  <div class="sp-text">
+    <div class="sp-name"><span>Soft</span><span><b>School</b></span></div>
+    <div class="sp-tag">School Management Software</div>
+  </div>
+  <div class="sp-bar"><i></i></div>
+</div>
+<script src="splash.js"></script>
+
 
 <!-- ── SCROLL PROGESS ── -->
 <div id="scrollProgress"></div>
