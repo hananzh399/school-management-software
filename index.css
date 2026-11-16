@@ -44,8 +44,6 @@ body {
   line-height: 1.65;
   -webkit-font-smoothing: antialiased;
   overflow-x: hidden;
-  opacity: 0;
-  animation: pageLoad 0.5s ease 0.1s forwards;
 }
 
 h1, h2, h3, h4 {
