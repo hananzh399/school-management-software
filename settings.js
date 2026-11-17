@@ -305,6 +305,7 @@ function switchTab(name, btn) {
   document.getElementById('tab-' + name).classList.add('active');
   btn.classList.add('active');
   if (name === 'teacherlogin') refreshTeacherPasswordState();
+  if (name === 'whatsapp' && window.waOnOpen) window.waOnOpen(); else if (window.waOnClose) window.waOnClose();
 }
 
 // ═══════════════════════════════════════════════

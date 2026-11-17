@@ -100,6 +100,9 @@
       <button class="tab-btn" onclick="switchTab('attendance-timing', this)">
         <i class="fas fa-clipboard-check"></i> Attendance Setting
       </button>
+      <button class="tab-btn" onclick="switchTab('whatsapp', this)">
+        <i class="fab fa-whatsapp"></i> WhatsApp
+      </button>
       <button class="tab-btn" onclick="switchTab('teacherlogin', this)">
         <i class="fas fa-user-lock"></i> Teacher Login
       </button>
@@ -391,6 +394,83 @@
       </div>
     </div>
 
+    <!-- ═══════════════════ TAB: WHATSAPP ═══════════════════ -->
+    <div class="tab-panel" id="tab-whatsapp">
+      <div class="section-card">
+        <div class="section-header">
+          <div class="section-header-info">
+            <h2><i class="fab fa-whatsapp"></i> WhatsApp Automation</h2>
+            <p>Link your school's WhatsApp number once. Parents then receive absent alerts and fee receipts automatically from that number.</p>
+          </div>
+        </div>
+
+        <div id="wa-status-row" style="display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap">
+          <strong>Status:</strong> <span id="wa-state" class="timing-status">Checking…</span>
+          <span id="wa-number" style="opacity:.8"></span>
+        </div>
+
+        <!-- Not connected: link options -->
+        <div id="wa-link-box" style="display:none">
+          <p style="margin:0 0 10px"><b>Use a dedicated school SIM/number</b> (WhatsApp or WhatsApp Business installed on a phone). Then:</p>
+          <ol style="margin:0 0 14px 18px;line-height:1.7">
+            <li>Click <b>Show QR code</b> below.</li>
+            <li>On that phone open WhatsApp → <b>Linked devices</b> → <b>Link a device</b>.</li>
+            <li>Scan the QR code. (Or use a phone-number code instead — see the second option.)</li>
+          </ol>
+          <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:12px">
+            <button class="btn-primary" id="wa-qr-btn" onclick="waConnect(false)"><i class="fas fa-qrcode"></i> Show QR code</button>
+            <span style="opacity:.7">or</span>
+            <input id="wa-phone" type="tel" placeholder="School WhatsApp number e.g. 03001234567" style="min-width:260px">
+            <button class="btn-primary" onclick="waConnect(true)"><i class="fas fa-key"></i> Get link code</button>
+          </div>
+          <div id="wa-qr-wrap" style="display:none;text-align:center;margin:10px 0">
+            <img id="wa-qr-img" alt="WhatsApp QR code" width="280" height="280" style="background:#fff;padding:8px;border-radius:12px">
+            <div style="opacity:.75;margin-top:6px">QR refreshes automatically. Open WhatsApp → Linked devices → Link a device.</div>
+          </div>
+          <div id="wa-code-wrap" style="display:none;text-align:center;margin:10px 0">
+            <div style="opacity:.75">On the phone: WhatsApp → Linked devices → Link a device → <b>Link with phone number instead</b>, then type:</div>
+            <div id="wa-code" style="font-size:32px;font-weight:800;letter-spacing:6px;margin-top:6px"></div>
+          </div>
+        </div>
+
+        <!-- Connected: settings -->
+        <div id="wa-conn-box" style="display:none">
+          <label style="display:flex;gap:8px;align-items:center;margin-bottom:8px"><input type="checkbox" id="wa-enabled"> <b>Turn WhatsApp automation ON</b></label>
+          <label style="display:flex;gap:8px;align-items:center;margin-bottom:8px"><input type="checkbox" id="wa-absent"> Message parent when student is marked <b>absent</b></label>
+          <label style="display:flex;gap:8px;align-items:center;margin-bottom:12px"><input type="checkbox" id="wa-fee"> Send <b>fee receipt</b> when a payment is recorded</label>
+
+          <label for="wa-absent-tpl"><b>Absent message</b> <small style="opacity:.7">— use {student} {class} {date} {school}</small></label>
+          <textarea id="wa-absent-tpl" rows="3" maxlength="1000" style="width:100%;margin-bottom:10px"></textarea>
+          <label for="wa-fee-tpl"><b>Fee receipt message</b> <small style="opacity:.7">— use {student} {class} {amount} {balance} {month} {school}</small></label>
+          <textarea id="wa-fee-tpl" rows="3" maxlength="1000" style="width:100%;margin-bottom:10px"></textarea>
+
+          <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:16px">
+            <button class="btn-primary" onclick="waSaveConfig()"><i class="fas fa-save"></i> Save</button>
+            <input id="wa-test-phone" type="tel" placeholder="Your number for a test message">
+            <button class="btn-primary" onclick="waSendTest()"><i class="fas fa-paper-plane"></i> Send test</button>
+            <span id="wa-msg" class="timing-status"></span>
+          </div>
+
+          <details style="margin-bottom:16px">
+            <summary><b>Send a message to parents now</b> (announcement / fee reminder)</summary>
+            <div style="display:flex;gap:10px;flex-wrap:wrap;margin:10px 0">
+              <input id="wa-bc-class" placeholder="Class (blank = all)" style="width:150px">
+              <input id="wa-bc-section" placeholder="Section (optional)" style="width:150px">
+            </div>
+            <textarea id="wa-bc-text" rows="3" maxlength="1000" style="width:100%" placeholder="Dear parent of {student}, ..."></textarea>
+            <button class="btn-primary" style="margin-top:8px" onclick="waBroadcast()"><i class="fas fa-bullhorn"></i> Send to parents</button>
+          </details>
+
+          <button class="btn-primary" style="background:#b3261e" onclick="waLogout()"><i class="fas fa-unlink"></i> Disconnect this number</button>
+        </div>
+
+        <p id="wa-warn" style="margin-top:16px;font-size:13px;opacity:.75">
+          Messages are sent slowly (a few seconds apart) to protect your number. Keep the linked phone switched on and online —
+          WhatsApp unlinks it if it stays offline for about 2 weeks. Parent numbers are read from each student's Phone 1 / Phone 2.
+        </p>
+      </div>
+    </div>
+
     <!-- ═══════════════════ TAB: TEACHER LOGIN ═══════════════════ -->
     <div class="tab-panel" id="tab-teacherlogin">
       <div class="section-card">
@@ -468,6 +548,7 @@
 
 <script src="shared-data.js"></script>
 <script src="settings.js?v=20261027"></script>
+<script src="whatsapp-settings.js"></script>
 <script src="announce-badge.js"></script>
 </body>
 </html>
