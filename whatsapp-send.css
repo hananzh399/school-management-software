@@ -1,0 +1,70 @@
+/* "Send to parents on WhatsApp" popup — shared by Attendance, Fees and Announcements.
+   Self-contained (own light/dark colours) because those three pages use different theme variables. */
+.wsm-overlay{position:fixed;inset:0;z-index:10050;background:rgba(5,8,16,.62);backdrop-filter:blur(3px);display:flex;align-items:center;justify-content:center;padding:16px}
+.wsm{--w-bg:#161c2b;--w-bg2:#1e2740;--w-line:rgba(255,255,255,.1);--w-text:#e8ecf3;--w-muted:#98a2b8;--w-green:#1fa855;--w-red:#ef4444;--w-amber:#f59e0b;--w-accent:#6366f1;
+  width:min(780px,100%);max-height:92vh;display:flex;flex-direction:column;background:var(--w-bg);color:var(--w-text);border:1px solid var(--w-line);border-radius:16px;box-shadow:0 24px 60px -12px rgba(0,0,0,.6);font-family:'Inter',system-ui,-apple-system,'Segoe UI',sans-serif;font-size:13.5px;line-height:1.45}
+html[data-theme="light"] .wsm{--w-bg:#fff;--w-bg2:#f2f4f9;--w-line:rgba(15,23,42,.12);--w-text:#0f172a;--w-muted:#64748b;box-shadow:0 24px 60px -12px rgba(15,23,42,.25)}
+.wsm *{box-sizing:border-box}
+.wsm-head{display:flex;align-items:center;gap:12px;padding:16px 20px;border-bottom:1px solid var(--w-line)}
+.wsm-ico{width:36px;height:36px;border-radius:10px;background:rgba(31,168,85,.16);color:var(--w-green);display:grid;place-items:center;font-size:16px;flex:none}
+.wsm-title{margin:0;font-size:16px;font-weight:700}
+.wsm-sub{margin:2px 0 0;font-size:12px;color:var(--w-muted)}
+.wsm-x{margin-left:auto;width:32px;height:32px;border:0;border-radius:8px;background:transparent;color:var(--w-muted);cursor:pointer;font-size:15px}
+.wsm-x:hover{background:var(--w-bg2);color:var(--w-text)}
+.wsm-body{padding:16px 20px;overflow-y:auto;display:flex;flex-direction:column;gap:14px}
+.wsm-safe{display:flex;flex-wrap:wrap;gap:8px}
+.wsm-chip{display:inline-flex;align-items:center;gap:6px;padding:5px 10px;border-radius:99px;background:var(--w-bg2);border:1px solid var(--w-line);font-size:12px;color:var(--w-muted)}
+.wsm-chip b{color:var(--w-text);font-weight:600}
+.wsm-chip.warn{border-color:rgba(245,158,11,.5);color:var(--w-amber)}
+.wsm-chip.warn b{color:var(--w-amber)}
+.wsm-alert,.wsm-okbox,.wsm-note{padding:10px 12px;border-radius:10px;font-size:12.5px;border:1px solid}
+.wsm-alert{background:rgba(239,68,68,.1);border-color:rgba(239,68,68,.4);color:#f87171}
+html[data-theme="light"] .wsm-alert{color:#b91c1c}
+.wsm-okbox{background:rgba(31,168,85,.1);border-color:rgba(31,168,85,.4);color:#34d399}
+html[data-theme="light"] .wsm-okbox{color:#15803d}
+.wsm-note{background:rgba(245,158,11,.08);border-color:rgba(245,158,11,.35);color:var(--w-amber)}
+.wsm-alert a,.wsm-note a{color:inherit;font-weight:700;text-decoration:underline}
+.wsm-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px}
+.wsm-f label{display:block;margin-bottom:5px;font-size:12px;font-weight:600;color:var(--w-muted)}
+.wsm select,.wsm input[type=text],.wsm input[type=month],.wsm input[type=search],.wsm textarea{width:100%;height:38px;padding:0 12px;border-radius:10px;border:1px solid var(--w-line);background:var(--w-bg2);color:var(--w-text);font:inherit;outline:none}
+.wsm textarea{height:auto;min-height:92px;padding:10px 12px;resize:vertical}
+.wsm select:focus,.wsm input:focus,.wsm textarea:focus{border-color:var(--w-accent);box-shadow:0 0 0 3px rgba(99,102,241,.2)}
+.wsm-check{display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;padding-top:24px}
+.wsm-check input{width:16px;height:16px;accent-color:var(--w-green)}
+.wsm-hint{margin:5px 0 0;font-size:11.5px;color:var(--w-muted)}
+.wsm-prev{margin-top:8px;padding:10px 12px;border-radius:10px;background:var(--w-bg2);border:1px dashed var(--w-line);white-space:pre-wrap;font-size:12.5px}
+.wsm-tools{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.wsm-tools input{flex:1;min-width:150px}
+.wsm-count{margin-left:auto;font-size:12.5px;font-weight:600}
+.wsm-count.over{color:var(--w-red)}
+.wsm-list{border:1px solid var(--w-line);border-radius:12px;max-height:260px;overflow-y:auto}
+.wsm-row{display:grid;grid-template-columns:28px 1fr 84px 128px 90px;gap:8px;align-items:center;padding:8px 12px;border-bottom:1px solid var(--w-line);cursor:pointer}
+.wsm-row:last-child{border-bottom:0}
+.wsm-row:hover{background:var(--w-bg2)}
+.wsm-row.off{opacity:.5;cursor:not-allowed}
+.wsm-row input{width:16px;height:16px;accent-color:var(--w-green)}
+.wsm-nm{font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.wsm-nm small{display:block;font-weight:400;color:var(--w-muted);font-size:11.5px}
+.wsm-ph{color:var(--w-muted);font-size:12px}
+.wsm-ph.none{color:var(--w-red)}
+.wsm-bal{text-align:right;font-size:12px;font-weight:600}
+.wsm-empty{padding:26px 14px;text-align:center;color:var(--w-muted)}
+.wsm-foot{display:flex;align-items:center;gap:10px;padding:14px 20px;border-top:1px solid var(--w-line)}
+.wsm-foot .wsm-msg{flex:1;font-size:12px;color:var(--w-muted)}
+.wsm-btn{height:38px;padding:0 18px;border-radius:10px;border:1px solid var(--w-line);background:transparent;color:var(--w-text);font:inherit;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:8px}
+.wsm-btn:hover{background:var(--w-bg2)}
+.wsm-btn.go{background:var(--w-green);border-color:var(--w-green);color:#fff}
+.wsm-btn.go:hover{filter:brightness(1.08)}
+.wsm-btn:disabled{opacity:.5;cursor:not-allowed;filter:none}
+@media(max-width:640px){
+  .wsm-overlay{padding:0;align-items:stretch}.wsm{max-height:100vh;border-radius:0;width:100%}
+  .wsm-row{grid-template-columns:28px 1fr 80px}.wsm-row .wsm-cls,.wsm-row .wsm-bal{display:none}
+  .wsm-foot{flex-wrap:wrap}.wsm-foot .wsm-msg{flex-basis:100%}
+}
+
+/* trigger buttons placed on the host pages */
+.bulk-btn.wsm-trigger{background:#128C7E;color:#fff;border:none;padding:8px 14px;border-radius:8px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;font-weight:600}
+.bulk-btn.wsm-trigger:hover{filter:brightness(1.1)}
+.btn-global-action.btn-wa-global{background:transparent;color:#1fa855;border:1.5px solid rgba(31,168,85,.45)}
+.btn-global-action.btn-wa-global:hover{background:#1fa855;color:#fff;border-color:#1fa855;transform:translateY(-1px)}
+.an-new.an-wa{background:#1fa855}

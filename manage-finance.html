@@ -9,6 +9,7 @@
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <link rel="stylesheet" href="manage-staff.css">
     <link rel="stylesheet" href="manage-finance.css">
+    <link rel="stylesheet" href="whatsapp-send.css?v=1">
 
     <script>(function(){const s=localStorage.getItem('eduflow-theme');const t=(s==='light'||s==='dark')?s:'dark';document.documentElement.setAttribute('data-theme',t);})()</script>
     <script src="input-validation.js"></script>
@@ -167,6 +168,9 @@
                         </button>
                         <button type="button" class="btn-global-action btn-print-global" id="btn-print-vouchers-global" onclick="openPrintVouchersModal()">
                             <i class="fas fa-print"></i> Print Vouchers
+                        </button>
+                        <button type="button" class="btn-global-action btn-wa-global" data-wa-send="fee" title="Send fee vouchers to parents on WhatsApp">
+                            <i class="fab fa-whatsapp"></i> Send Vouchers on WhatsApp
                         </button>
                         <button type="button" class="btn-global-action btn-customfee-global" onclick="showPage('page-custom-fee')">
                             <i class="fas fa-tags"></i> Custom Fee
@@ -1999,6 +2003,7 @@
 </div>
 
     <script src="shared-data.js"></script>
+    <script src="whatsapp-send.js?v=1"></script>
     <script src="manage-finance.js"></script>
 <script src="announce-badge.js"></script>
 </body>

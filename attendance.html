@@ -9,6 +9,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <link rel="stylesheet" href="attendance.css?v=20261026">
+    <link rel="stylesheet" href="whatsapp-send.css?v=1">
     <!-- Saved theme is read from localStorage ('eduflow-theme') and applied immediately
          so there is no flash of the wrong theme. initTheme() in attendance.js saves changes. -->
     <script>(function(){var t='dark';try{var s=localStorage.getItem('eduflow-theme');if(s==='light'||s==='dark')t=s;}catch(e){}document.documentElement.setAttribute('data-theme',t);})()</script>
@@ -287,6 +288,9 @@
                     </button>
                     <button id="view-share-btn" class="bulk-btn" style="background:var(--emerald);color:#fff;border:none;padding:8px 14px;border-radius:8px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;font-weight:600;">
                         <i class="fas fa-share-alt"></i> Share
+                    </button>
+                    <button id="view-wa-btn" class="bulk-btn wsm-trigger" type="button" title="Send this attendance report to parents on WhatsApp">
+                        <i class="fab fa-whatsapp"></i> Send to Parents
                     </button>
                 </div>
             </div>
@@ -784,6 +788,7 @@
     </main>
 
     <script src="shared-data.js"></script>
+    <script src="whatsapp-send.js?v=1"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@zxing/library@0.21.3/umd/index.min.js"></script>

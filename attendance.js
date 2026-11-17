@@ -1189,6 +1189,20 @@ function initView() {
         });
     }
 
+    // ---------- SEND TO PARENTS (WhatsApp) ----------
+    const waBtn = document.getElementById("view-wa-btn");
+    if (waBtn) {
+        waBtn.addEventListener("click", () => {
+            if (!window.WhatsAppSend) return;
+            window.WhatsAppSend.open({
+                kind: "attendance",
+                className: state.selectedClass || "",
+                section: state.selectedSection && state.selectedSection !== "ALL" ? state.selectedSection : "",
+                days: state.viewRange || 30,
+            });
+        });
+    }
+
     // ---------- SHARE ----------
     const shareBtn = document.getElementById("view-share-btn");
     if (shareBtn) {
@@ -1227,6 +1241,8 @@ function initView() {
 function renderView() {
     const isStaff = state.mode === "staff";
     $("#view-title").textContent = isStaff ? "View Staff Attendance" : "View Student Attendance";
+    const waBtnEl = document.getElementById("view-wa-btn");
+    if (waBtnEl) waBtnEl.style.display = isStaff ? "none" : "";   // parents are only messaged about students
  
     const people = isStaff ? STAFF : STUDENTS;
     const idKey = isStaff ? "id" : "regNo";
