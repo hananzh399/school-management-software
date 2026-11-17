@@ -1,0 +1,48 @@
+/* Settings > WhatsApp tab — only the few things the shared Settings styles don't already cover.
+   Everything else uses the page's own components (section-card, timing-card, toggle-switch,
+   var-input, btn-primary / btn-outline / btn-danger), so fonts, sizes and colours match the rest. */
+
+.wa-pill {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 3px 10px; border-radius: 20px;
+  font-size: 12px; font-weight: 600; line-height: 1.5;
+}
+.wa-pill::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+.wa-pill.wa-on   { background: rgba(34,197,94,0.14);  color: #22c55e; }
+.wa-pill.wa-wait { background: var(--orange-light);   color: var(--orange); }
+.wa-pill.wa-off  { background: var(--red-light);      color: var(--red); }
+.wa-number { margin-left: 8px; font-size: 13px; font-weight: 600; color: var(--text-main); }
+
+.wa-steps {
+  margin: 0 0 14px 18px; padding: 0;
+  font-size: 13px; line-height: 1.7; color: var(--text-muted);
+}
+.wa-steps b { color: var(--text-main); font-weight: 600; }
+
+.wa-qr-box { text-align: center; margin: 4px 0 14px; }
+.wa-qr-img {
+  background: #fff; padding: 8px; border-radius: var(--radius-sm);
+  border: 1px solid var(--border); max-width: 100%; height: auto;
+}
+.wa-code {
+  display: inline-block; margin-top: 12px; padding: 10px 18px;
+  font-size: 26px; font-weight: 700; letter-spacing: 5px; color: var(--text-main);
+  background: var(--input-bg); border: 1px dashed var(--accent); border-radius: var(--radius-sm);
+}
+.wa-card-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 16px; }
+
+.wa-wide { max-width: 640px; }
+.wa-pair { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; max-width: 480px; }
+.wa-opt { font-weight: 500; color: var(--text-muted); }
+.wa-note { padding: 4px 4px 24px; line-height: 1.6; }
+.wa-note i { color: var(--orange); margin-right: 4px; }
+
+.timing-status.wa-err { color: var(--red); }
+.btn-primary:disabled, .btn-outline:disabled { opacity: 0.5; cursor: not-allowed; transform: none; box-shadow: none; }
+.btn-danger { display: inline-flex; align-items: center; gap: 7px; }
+#tab-whatsapp .timing-card input.var-input { margin-top: 0; }
+
+@media (max-width: 600px) {
+  .wa-code { font-size: 22px; letter-spacing: 3px; }
+  .wa-card-actions .btn-primary, .wa-card-actions .btn-outline { flex: 1; justify-content: center; }
+}

@@ -13,26 +13,32 @@
     return data;
   }
 
-  function say(text, bad) {
-    const el = $('wa-msg'); if (!el) return;
-    el.textContent = text || ''; el.style.color = bad ? '#e5484d' : '';
+  /** Shows a short result next to the button that was clicked (target = id of that card's status span). */
+  function say(target, text, bad) {
+    const el = $(target); if (!el) return;
+    el.textContent = text || '';
+    el.classList.toggle('wa-err', !!bad);
     if (text) setTimeout(() => { if (el.textContent === text) el.textContent = ''; }, 6000);
   }
 
   const LABEL = {
-    connected: 'Connected', connecting: 'Connecting…', qr: 'Waiting for scan', pairing: 'Waiting for code entry',
-    disconnected: 'Not connected', service_down: 'WhatsApp service is offline', not_configured: 'Not set up on the server yet',
+    connected: 'Connected', connecting: 'Connecting…', qr: 'Waiting for scan', pairing: 'Waiting for code',
+    disconnected: 'Not connected', service_down: 'Service offline', not_configured: 'Not set up on server',
   };
+  const TONE = { connected: 'wa-on', connecting: 'wa-wait', qr: 'wa-wait', pairing: 'wa-wait' };
 
   function render(st) {
     const state = st.state || 'disconnected';
-    $('wa-state').textContent = LABEL[state] || state;
+    const pill = $('wa-state');
+    pill.textContent = LABEL[state] || state;
+    pill.className = 'wa-pill ' + (TONE[state] || 'wa-off');
     $('wa-number').textContent = st.number ? '+' + st.number : '';
+
     const connected = state === 'connected';
     $('wa-conn-box').style.display = connected ? '' : 'none';
     $('wa-link-box').style.display = connected ? 'none' : '';
-    const unavailable = state === 'service_down' || state === 'not_configured';
-    $('wa-qr-btn').disabled = unavailable;
+    $('wa-disconnect-btn').style.display = connected ? '' : 'none';
+    $('wa-qr-btn').disabled = state === 'service_down' || state === 'not_configured';
 
     const qr = state === 'qr' && st.qr;
     $('wa-qr-wrap').style.display = qr ? '' : 'none';
@@ -54,7 +60,10 @@
 
   async function poll() {
     try { render(await call('/status')); }
-    catch (e) { $('wa-state').textContent = 'Could not reach server'; }
+    catch (e) {
+      const pill = $('wa-state');
+      pill.textContent = 'Could not reach server'; pill.className = 'wa-pill wa-off';
+    }
   }
 
   window.waOnOpen = function () { poll(); clearInterval(timer); timer = setInterval(poll, 2500); };
@@ -65,11 +74,11 @@
       const body = {};
       if (usePhone) {
         const p = $('wa-phone').value.trim();
-        if (p.replace(/\D/g, '').length < 10) return say('Enter the full WhatsApp number first.', true);
+        if (p.replace(/\D/g, '').length < 10) return say('wa-conn-msg', 'Enter the full WhatsApp number first.', true);
         body.phone = p;
       }
       render(await call('/connect', { method: 'POST', body: JSON.stringify(body) }));
-    } catch (e) { say(e.message, true); }
+    } catch (e) { say('wa-conn-msg', e.message, true); }
   };
 
   window.waSaveConfig = async function () {
@@ -78,32 +87,32 @@
         enabled: $('wa-enabled').checked, notifyAbsent: $('wa-absent').checked, notifyFeePaid: $('wa-fee').checked,
         absentTemplate: $('wa-absent-tpl').value, feeTemplate: $('wa-fee-tpl').value,
       }) });
-      say('Saved ✓');
-    } catch (e) { say(e.message, true); }
+      say('wa-msg', 'Saved ✓');
+    } catch (e) { say('wa-msg', e.message, true); }
   };
 
   window.waSendTest = async function () {
     const phone = $('wa-test-phone').value.trim();
-    if (!phone) return say('Enter a number to send the test to.', true);
-    try { await call('/test', { method: 'POST', body: JSON.stringify({ phone }) }); say('Test queued ✓ — check WhatsApp'); }
-    catch (e) { say(e.message, true); }
+    if (!phone) return say('wa-test-msg', 'Enter a number to send the test to.', true);
+    try { await call('/test', { method: 'POST', body: JSON.stringify({ phone }) }); say('wa-test-msg', 'Test queued ✓ — check WhatsApp'); }
+    catch (e) { say('wa-test-msg', e.message, true); }
   };
 
   window.waBroadcast = async function () {
     const text = $('wa-bc-text').value.trim();
-    if (!text) return say('Write the message first.', true);
+    if (!text) return say('wa-bc-msg', 'Write the message first.', true);
     const cls = $('wa-bc-class').value.trim();
     if (!confirm('Send this message to parents of ' + (cls ? 'class ' + cls : 'ALL students') + '?')) return;
     try {
       const r = await call('/broadcast', { method: 'POST', body: JSON.stringify({
         text, className: cls, section: $('wa-bc-section').value.trim() }) });
-      say('Queued ' + r.queued + ' messages' + (r.studentsWithoutNumber ? ' (' + r.studentsWithoutNumber + ' students have no number)' : ''));
-    } catch (e) { say(e.message, true); }
+      say('wa-bc-msg', 'Queued ' + r.queued + ' messages' + (r.studentsWithoutNumber ? ' (' + r.studentsWithoutNumber + ' students have no number)' : ''));
+    } catch (e) { say('wa-bc-msg', e.message, true); }
   };
 
   window.waLogout = async function () {
     if (!confirm('Disconnect this WhatsApp number? Automatic messages will stop until you link again.')) return;
     try { await call('/logout', { method: 'POST', body: '{}' }); cfgLoaded = false; poll(); }
-    catch (e) { say(e.message, true); }
+    catch (e) { say('wa-conn-msg', e.message, true); }
   };
 })();
