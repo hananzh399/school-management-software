@@ -46,3 +46,14 @@
   .wa-code { font-size: 22px; letter-spacing: 3px; }
   .wa-card-actions .btn-primary, .wa-card-actions .btn-outline { flex: 1; justify-content: center; }
 }
+
+/* Fee reminder schedule */
+.wa-rem-opts { margin: 4px 0 18px; padding: 14px 16px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--input-bg); max-width: 640px; }
+.wa-rem-title { font-size: 13px; font-weight: 600; color: var(--text-main); margin-bottom: 10px; }
+.wa-rem-when, .wa-days { display: flex; flex-wrap: wrap; gap: 8px; }
+.wa-rem-days { margin-top: 12px; }
+.wa-rem-lbl { display: block; font-size: 12px; color: var(--text-muted); margin-bottom: 6px; }
+.wa-chip { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border: 1px solid var(--border); border-radius: 20px; font-size: 13px; color: var(--text-main); cursor: pointer; user-select: none; }
+.wa-chip:has(input:checked) { border-color: var(--accent); background: rgba(99,102,241,0.12); }
+.wa-chip input { accent-color: var(--accent); margin: 0; }
+.wa-rem-opts .var-hint { margin-top: 12px; }

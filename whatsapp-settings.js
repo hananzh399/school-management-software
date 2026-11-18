@@ -34,6 +34,31 @@
   const RECONNECT_GRACE_MS = 45000;
   let lastConnectedAt = 0;
 
+  // ---- Fee reminder schedule (before / on / after the due date) ----
+  const BEFORE_DAYS = [1, 2, 3, 5, 7];
+  const AFTER_DAYS = [1, 2, 3, 5, 7, 10];
+
+  function buildDayChips(boxId, days, kind) {
+    const box = $(boxId); if (!box || box.childElementCount) return;
+    box.innerHTML = days.map((d) =>
+      '<label class="wa-chip"><input type="checkbox" data-rem="' + kind + '" value="' + d + '"> ' + d + (d === 1 ? ' day' : ' days') + '</label>').join('');
+  }
+  const pickedDays = (kind) =>
+    Array.from(document.querySelectorAll('input[data-rem="' + kind + '"]:checked')).map((i) => i.value).join(',');
+  function setPickedDays(kind, csv) {
+    const set = new Set(String(csv || '').split(',').map((x) => x.trim()).filter(Boolean));
+    document.querySelectorAll('input[data-rem="' + kind + '"]').forEach((i) => { i.checked = set.has(i.value); });
+  }
+  function syncReminderUi() {
+    const on = $('wa-reminder').checked;
+    $('wa-rem-opts').style.display = on ? '' : 'none';
+    $('wa-rem-before-box').style.display = on && $('wa-rem-before').checked ? '' : 'none';
+    $('wa-rem-after-box').style.display = on && $('wa-rem-after').checked ? '' : 'none';
+  }
+  document.addEventListener('change', (e) => {
+    if (['wa-reminder', 'wa-rem-before', 'wa-rem-after'].includes(e.target && e.target.id)) syncReminderUi();
+  });
+
   function render(st) {
     const rawState = st.state || 'disconnected';
     if (rawState === 'connected') lastConnectedAt = Date.now();
@@ -68,6 +93,14 @@
       $('wa-absent').checked = st.config.notifyAbsent !== false;
       $('wa-voucher').checked = !!st.config.notifyVoucher;
       $('wa-reminder').checked = !!st.config.notifyReminder;
+      buildDayChips('wa-rem-before-days', BEFORE_DAYS, 'before');
+      buildDayChips('wa-rem-after-days', AFTER_DAYS, 'after');
+      setPickedDays('before', st.config.reminderBeforeDays);
+      setPickedDays('after', st.config.reminderAfterDays);
+      $('wa-rem-before').checked = !!String(st.config.reminderBeforeDays || '').trim();
+      $('wa-rem-after').checked = !!String(st.config.reminderAfterDays || '').trim();
+      $('wa-rem-on').checked = !!st.config.reminderOnDue;
+      syncReminderUi();
       $('wa-absent-tpl').value = st.config.absentTemplate || '';
       $('wa-voucher-tpl').value = st.config.voucherTemplate || '';
       $('wa-reminder-tpl').value = st.config.reminderTemplate || '';
@@ -119,10 +152,20 @@
 
   window.waSaveConfig = async function () {
     try {
+      const remOn = $('wa-reminder').checked;
+      const useBefore = $('wa-rem-before').checked, useAfter = $('wa-rem-after').checked;
+      const before = useBefore ? pickedDays('before') : '';
+      const after = useAfter ? pickedDays('after') : '';
+      if (remOn) {
+        if (useBefore && !before) return say('wa-msg', 'Pick how many days before the due date.', true);
+        if (useAfter && !after) return say('wa-msg', 'Pick how many days after the due date.', true);
+        if (!before && !after && !$('wa-rem-on').checked) return say('wa-msg', 'Choose when to send fee reminders (before, on or after the due date).', true);
+      }
       await call('/config', { method: 'PUT', body: JSON.stringify({
         enabled: $('wa-enabled').checked, notifyAbsent: $('wa-absent').checked,
         dailyLimit: parseInt($('wa-limit').value, 10) || 0,
-        notifyVoucher: $('wa-voucher').checked, notifyReminder: $('wa-reminder').checked,
+        notifyVoucher: $('wa-voucher').checked, notifyReminder: remOn,
+        reminderBeforeDays: before, reminderAfterDays: after, reminderOnDue: remOn && $('wa-rem-on').checked,
         absentTemplate: $('wa-absent-tpl').value,
         voucherTemplate: $('wa-voucher-tpl').value, reminderTemplate: $('wa-reminder-tpl').value,
       }) });

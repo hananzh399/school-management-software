@@ -495,9 +495,26 @@
           <div class="latefee-toggle-bar">
             <div>
               <div class="toggle-label">Fee Reminder</div>
-              <div class="toggle-sub">After the fee deadline passes, remind only the parents whose fee is still pending.</div>
+              <div class="toggle-sub">Remind only the parents whose fee is still pending, before, on or after the due date.</div>
             </div>
             <label class="toggle-switch"><input type="checkbox" id="wa-reminder"><span class="toggle-slider"></span></label>
+          </div>
+          <div id="wa-rem-opts" class="wa-rem-opts" style="display:none">
+            <div class="wa-rem-title">When should reminders be sent?</div>
+            <div class="wa-rem-when">
+              <label class="wa-chip"><input type="checkbox" id="wa-rem-before"> Before due date</label>
+              <label class="wa-chip"><input type="checkbox" id="wa-rem-on"> On due date</label>
+              <label class="wa-chip"><input type="checkbox" id="wa-rem-after"> After due date</label>
+            </div>
+            <div id="wa-rem-before-box" class="wa-rem-days" style="display:none">
+              <span class="wa-rem-lbl">Days before due date</span>
+              <div class="wa-days" id="wa-rem-before-days"></div>
+            </div>
+            <div id="wa-rem-after-box" class="wa-rem-days" style="display:none">
+              <span class="wa-rem-lbl">Days after due date</span>
+              <div class="wa-days" id="wa-rem-after-days"></div>
+            </div>
+            <div class="var-hint">Reminders go out at 10:00 AM on the chosen days, only to parents whose fee is still unpaid. You can pick more than one day.</div>
           </div>
 
           <div class="variables-panel">
