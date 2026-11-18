@@ -5,12 +5,24 @@
  * at the cursor. The Style buttons wrap the selected words in *{b}*...*{/b}* (bold), {i} (italic) or {s}
  * (strikethrough) tags. The backend (WhatsAppService.fillCodes) replaces each %[code]% with the real value.
  *
- * Needs only the two textareas that already exist in settings.html (#wa-voucher-tpl, #wa-reminder-tpl).
+ * Works on: Fee voucher + Fee reminder (fee codes AND student codes), Absent message and the message to
+ * parents (student codes only). Any other textarea can opt in with data-wa-codes-for="student" or "fee,student".
+ * The student codes are filled by WhatsAppService.render() for every message type.
  */
 (function () {
   'use strict';
 
-  var CODES = [
+  // Codes that exist for every message: filled from the student record.
+  var STUDENT_CODES = [
+    { heading: 'Student Name',  code: 'stName' },
+    { heading: 'Class',         code: 'stClass' },
+    { heading: 'Section',       code: 'stSection' },
+    { heading: 'Guardian Name', code: 'grdName' },
+    { heading: 'Reg. Number',   code: 'regNo' },
+    { heading: 'Date (today)',  code: 'date' }
+  ];
+
+  var FEE_CODES = [
     { heading: 'Student Name',        code: 'stName' },
     { heading: 'Fee Month',           code: 'feeMonth' },
     { heading: 'Due Date',            code: 'dueDate' },
@@ -32,15 +44,40 @@
     { label: 'Strikethrough', key: 's', sample: 'Fee Month' }
   ];
 
-  var TARGETS = ['wa-voucher-tpl', 'wa-reminder-tpl'];
+  // textarea id -> which code sets it offers. The ids must match the textareas in settings.html;
+  // a textarea can also opt in itself with  data-wa-codes-for="student"  (see init()).
+  var TARGETS = [
+    { id: 'wa-voucher-tpl',  sets: ['fee', 'student'] },
+    { id: 'wa-reminder-tpl', sets: ['fee', 'student'] },
+    { id: 'wa-absent-tpl',   sets: ['student'] },
+    { id: 'wa-broadcast-tpl', sets: ['student'] },
+    { id: 'wa-broadcast-msg', sets: ['student'] }
+  ];
+
+  var SAMPLES = {
+    student: 'Dear %[grdName]%,*{nL}*Your child %[stName]% (Class %[stClass]%-%[stSection]%, Reg# %[regNo]%) was absent on %[date]%.'
+  };
+
+  function codesFor(sets) {
+    var seen = {}, out = [];
+    (sets.indexOf('fee') >= 0 ? FEE_CODES.concat(STUDENT_CODES) : STUDENT_CODES).forEach(function (r) {
+      if (!seen[r.code]) { seen[r.code] = 1; out.push(r); }
+    });
+    // fee boxes list the fee codes first, student codes after; student-only boxes just the student codes
+    return out;
+  }
+
 
   function tag(c) { return '%[' + c + ']%'; }
 
-  function sampleTemplate() {
-    return CODES.map(function (r) { return r.heading + ' : ' + tag(r.code); }).join('\n');
+  function sampleTemplate(sets) {
+    if (sets.indexOf('fee') >= 0) {
+      return FEE_CODES.map(function (r) { return r.heading + ' : ' + tag(r.code); }).join('\n');
+    }
+    return SAMPLES.student.replace(/\*\{nL\}\*/g, '\n');
   }
 
-  var overlay, status, activeBox, lastFocus;
+  var overlay, status, activeBox, activeSets = ['fee', 'student'], lastFocus, listEl;
 
   function el(name, cls, text) {
     var n = document.createElement(name);
@@ -73,7 +110,7 @@
 
     var intro = el('p', 'wa-codes-intro',
       'Write your message, then put a code where the value should appear. ' +
-      'Each code is replaced with the real fee detail of the student when the message is sent.');
+      'Each code is replaced with the real detail of the student when the message is sent.');
 
     var fmt = el('div', 'wa-codes-fmt');
     fmt.appendChild(el('span', 'wa-codes-fmt-label', 'Style text:'));
@@ -95,22 +132,7 @@
       'Put *{nL}* at the end of a line to continue on the next line.');
 
     var table = el('div', 'wa-codes-list');
-    var hr = el('div', 'wa-codes-row wa-codes-row-h');
-    hr.appendChild(el('span', null, 'Heading'));
-    hr.appendChild(el('span', null, 'Code'));
-    hr.appendChild(el('span', null, ''));
-    table.appendChild(hr);
-
-    CODES.forEach(function (r) {
-      var row = el('div', 'wa-codes-row');
-      row.appendChild(el('span', 'wa-codes-name', r.heading));
-      row.appendChild(el('code', 'wa-codes-code', tag(r.code)));
-      var b = el('button', 'wa-codes-insert', 'Insert');
-      b.type = 'button';
-      b.addEventListener('click', function () { insert(tag(r.code)); });
-      row.appendChild(b);
-      table.appendChild(row);
-    });
+    listEl = table;
 
     var foot = el('div', 'wa-codes-foot');
     status = el('span', 'wa-codes-status');
@@ -139,10 +161,32 @@
     });
   }
 
-  function open(textareaId) {
+  // (Re)fills the code list for the message box that was opened.
+  function renderRows() {
+    listEl.innerHTML = '';
+    var hr = el('div', 'wa-codes-row wa-codes-row-h');
+    hr.appendChild(el('span', null, 'Heading'));
+    hr.appendChild(el('span', null, 'Code'));
+    hr.appendChild(el('span', null, ''));
+    listEl.appendChild(hr);
+    codesFor(activeSets).forEach(function (r) {
+      var row = el('div', 'wa-codes-row');
+      row.appendChild(el('span', 'wa-codes-name', r.heading));
+      row.appendChild(el('code', 'wa-codes-code', tag(r.code)));
+      var b = el('button', 'wa-codes-insert', 'Insert');
+      b.type = 'button';
+      b.addEventListener('click', function () { insert(tag(r.code)); });
+      row.appendChild(b);
+      listEl.appendChild(row);
+    });
+  }
+
+  function open(textareaId, sets) {
     activeBox = document.getElementById(textareaId);
     if (!activeBox) return;
+    activeSets = sets;
     if (!overlay) build();
+    renderRows();
     lastFocus = document.activeElement;
     say('');
     overlay.removeAttribute('hidden');
@@ -197,7 +241,7 @@
   function useSample() {
     var box = activeBox;
     if (!box) return;
-    var t = sampleTemplate();
+    var t = sampleTemplate(activeSets);
     if (box.maxLength > 0 && t.length > box.maxLength) { say('Sample is longer than the message limit.'); return; }
     if (box.value.trim() && !window.confirm('Replace the current message with the sample template?')) return;
     box.value = t;
@@ -205,24 +249,34 @@
     say('Sample template added.');
   }
 
-  function attach(id) {
+  function attach(id, sets) {
     var box = document.getElementById(id);
     if (!box || box.getAttribute('data-wa-codes') === '1') return;
-    var label = document.querySelector('label[for="' + id + '"]');
-    if (!label) return;
     box.setAttribute('data-wa-codes', '1');
 
     var bar = el('div', 'wa-codes-bar');
-    label.parentNode.insertBefore(bar, label);
-    bar.appendChild(label);
+    var label = document.querySelector('label[for="' + id + '"]');
+    if (label) {
+      label.parentNode.insertBefore(bar, label);
+      bar.appendChild(label);
+    } else {
+      box.parentNode.insertBefore(bar, box);   // no label: the button sits right above the box
+    }
     var btn = el('button', 'btn-outline wa-codes-btn');
     btn.type = 'button';
     btn.innerHTML = '<i class="fas fa-code"></i> Codes';
-    btn.addEventListener('click', function () { open(id); });
+    btn.addEventListener('click', function () { open(id, sets); });
     bar.appendChild(btn);
   }
 
-  function init() { TARGETS.forEach(attach); }
+  function init() {
+    TARGETS.forEach(function (t) { attach(t.id, t.sets); });
+    // any other message box can opt in:  <textarea id="..." data-wa-codes-for="student">
+    Array.prototype.forEach.call(document.querySelectorAll('textarea[data-wa-codes-for]'), function (ta) {
+      if (!ta.id) return;
+      attach(ta.id, ta.getAttribute('data-wa-codes-for').split(',').map(function (x) { return x.trim(); }));
+    });
+  }
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
   else init();
