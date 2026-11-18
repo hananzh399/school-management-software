@@ -109,7 +109,7 @@
   }
 
   const WAIT_WHY = {
-    cooldown: 'resting between batches', hourly_limit: 'hourly limit reached', daily_limit: "today's limit reached",
+    cooldown: 'resting between batches', busy: 'sending', hourly_limit: 'hourly limit reached', daily_limit: "today's limit reached",
     errors: 'paused after errors',
   };
 
@@ -122,7 +122,7 @@
     if (st.queued) {
       t += ' · ' + st.queued + ' waiting in queue (about ' + (st.etaMinutes >= 90 ? Math.round(st.etaMinutes / 60) + ' hours' : st.etaMinutes + ' min') + ')';
       const w = st.waiting;
-      if (w) t += ' — ' + (w === 'quiet_hours' ? 'will continue at ' + String(st.window || '').split('-')[0] : (WAIT_WHY[w] || w));
+      if (w) t += ' — ' + (WAIT_WHY[w] || w);
     }
     el.textContent = t;
   }
