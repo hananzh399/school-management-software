@@ -87,7 +87,7 @@
     const st = S.status || {};
     const chips = [];
     chips.push(`<span class="wsm-chip">Max per send <b>${S.max}</b></span>`);
-    chips.push(`<span class="wsm-chip">Gap between sends <b>${st.cooldownMinutes || 10} min</b></span>`);
+    if (st.cooldownMinutes) chips.push(`<span class="wsm-chip">Gap between sends <b>${st.cooldownMinutes} min</b></span>`);
     if (st.dailyCap != null) {
       const low = (st.remainingToday || 0) < 20;
       chips.push(`<span class="wsm-chip ${low ? 'warn' : ''}">Left today <b>${st.remainingToday || 0} of ${st.dailyCap}</b></span>`);
