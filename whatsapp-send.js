@@ -128,9 +128,9 @@
     let html = safeStrip() + controls();
     if (S.kind === 'announcement') {
       html += `<div class="wsm-f"><label>Message</label>
-          <textarea id="wsm-text" maxlength="800" placeholder="e.g. School will remain closed on Monday due to rain."></textarea>
+          <textarea id="wsm-text" dir="auto" maxlength="800" placeholder="e.g. School will remain closed on Monday due to rain."></textarea>
           <p class="wsm-hint">Each parent gets <b>“Dear parent of {student} ({class}),”</b> added automatically so messages are personal. You can also use {student} and {class} yourself.</p>
-          <div class="wsm-prev" id="wsm-prev" hidden></div></div>`;
+          <div class="wsm-prev" id="wsm-prev" dir="auto" hidden></div></div>`;
     }
     html += `<div id="wsm-result"></div>
       <div class="wsm-tools">

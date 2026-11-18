@@ -45,3 +45,7 @@
   .wa-codes-name{grid-column:1 / -1;font-weight:600}
   .wa-codes-foot{flex-wrap:wrap}
 }
+
+/* Urdu / RTL templates: each line follows its own first strong letter; tags stay left-to-right and unmirrored */
+textarea.wa-rtl-aware{unicode-bidi:plaintext;text-align:start;font-family:'Noto Nastaliq Urdu','Jameel Noori Nastaleeq','Noto Naskh Arabic',inherit,sans-serif;line-height:1.9}
+.wa-codes-code{direction:ltr;unicode-bidi:isolate}

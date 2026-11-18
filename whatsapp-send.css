@@ -68,3 +68,5 @@ html[data-theme="light"] .wsm-okbox{color:#15803d}
 .btn-global-action.btn-wa-global{background:transparent;color:#1fa855;border:1.5px solid rgba(31,168,85,.45)}
 .btn-global-action.btn-wa-global:hover{background:#1fa855;color:#fff;border-color:#1fa855;transform:translateY(-1px)}
 .an-new.an-wa{background:#1fa855}
+
+.wsm textarea,.wsm-prev{unicode-bidi:plaintext;text-align:start}

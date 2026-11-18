@@ -116,6 +116,7 @@
     fmt.appendChild(el('span', 'wa-codes-fmt-label', 'Style text:'));
     FORMATS.forEach(function (f) {
       var fb = el('button', 'wa-codes-insert wa-codes-fmt-btn', f.label);
+      fb.setAttribute('dir', 'ltr');
       fb.type = 'button';
       fb.title = '*{' + f.key + '}*' + f.sample + '*{/' + f.key + '}*';
       fb.addEventListener('click', function () { wrap(f.key); });
@@ -172,7 +173,9 @@
     codesFor(activeSets).forEach(function (r) {
       var row = el('div', 'wa-codes-row');
       row.appendChild(el('span', 'wa-codes-name', r.heading));
-      row.appendChild(el('code', 'wa-codes-code', tag(r.code)));
+      var cd = el('code', 'wa-codes-code', tag(r.code));
+      cd.setAttribute('dir', 'ltr');   // keep %[code]% readable even if the page/browser is RTL
+      row.appendChild(cd);
       var b = el('button', 'wa-codes-insert', 'Insert');
       b.type = 'button';
       b.addEventListener('click', function () { insert(tag(r.code)); });
@@ -253,6 +256,8 @@
     var box = document.getElementById(id);
     if (!box || box.getAttribute('data-wa-codes') === '1') return;
     box.setAttribute('data-wa-codes', '1');
+    box.setAttribute('dir', 'auto');   // Urdu/Arabic lines start from the right, English lines from the left
+    box.classList.add('wa-rtl-aware');
 
     var bar = el('div', 'wa-codes-bar');
     var label = document.querySelector('label[for="' + id + '"]');
