@@ -9,7 +9,6 @@
 <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
 <link rel="stylesheet" href="settings.css?v=20261026">
 <link rel="stylesheet" href="whatsapp-settings.css?v=1">
-<link rel="stylesheet" href="wa-codes.css?v=1">
 <script>(function(){const s=localStorage.getItem('eduflow-theme');document.documentElement.setAttribute('data-theme',(s==='light'||s==='dark')?s:'dark');})()</script>
 <style>
   .timing-subtitle{font-weight:500;font-size:0.8em;color:var(--text-muted,#8a8f98);}
@@ -495,33 +494,16 @@
           <div class="latefee-toggle-bar">
             <div>
               <div class="toggle-label">Fee Reminder</div>
-              <div class="toggle-sub">Remind only the parents whose fee is still pending, before, on or after the due date.</div>
+              <div class="toggle-sub">After the fee deadline passes, remind only the parents whose fee is still pending.</div>
             </div>
             <label class="toggle-switch"><input type="checkbox" id="wa-reminder"><span class="toggle-slider"></span></label>
-          </div>
-          <div id="wa-rem-opts" class="wa-rem-opts" style="display:none">
-            <div class="wa-rem-title">When should reminders be sent?</div>
-            <div class="wa-rem-when">
-              <label class="wa-chip"><input type="checkbox" id="wa-rem-before"> Before due date</label>
-              <label class="wa-chip"><input type="checkbox" id="wa-rem-on"> On due date</label>
-              <label class="wa-chip"><input type="checkbox" id="wa-rem-after"> After due date</label>
-            </div>
-            <div id="wa-rem-before-box" class="wa-rem-days" style="display:none">
-              <span class="wa-rem-lbl">Days before due date</span>
-              <div class="wa-days" id="wa-rem-before-days"></div>
-            </div>
-            <div id="wa-rem-after-box" class="wa-rem-days" style="display:none">
-              <span class="wa-rem-lbl">Days after due date</span>
-              <div class="wa-days" id="wa-rem-after-days"></div>
-            </div>
-            <div class="var-hint">Reminders go out at 10:00 AM on the chosen days, only to parents whose fee is still unpaid. You can pick more than one day.</div>
           </div>
 
           <div class="variables-panel">
             <div class="var-item wa-wide">
               <label for="wa-limit">Daily sending limit (messages per day)</label>
               <input type="number" id="wa-limit" class="var-input" min="10" max="1000" step="10" placeholder="Default">
-              <div class="var-hint">Protects your number from being banned. Messages over the limit are not lost: they wait in a queue and go out slowly, a few minutes apart, within working hours (8am–9pm). A newly linked number starts low and increases over its first week.</div>
+              <div class="var-hint">Protects your number from being banned. When many messages are sent at once, the first few go out immediately and the rest wait in a queue and follow slowly, so nothing is lost. A newly linked number starts low and increases over its first week.</div>
               <div class="var-hint" id="wa-queue-info"></div>
             </div>
             <div class="var-item wa-wide">
@@ -677,7 +659,6 @@
 <script src="shared-data.js"></script>
 <script src="settings.js?v=20261027"></script>
 <script src="whatsapp-settings.js"></script>
-<script src="wa-codes.js?v=1"></script>
 <script src="announce-badge.js"></script>
 </body>
 </html>
