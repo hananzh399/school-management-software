@@ -403,7 +403,7 @@
         <div class="section-header">
           <div class="section-header-info">
             <h2><i class="fab fa-whatsapp"></i> WhatsApp Automation</h2>
-            <p>Link your school's WhatsApp number once. Parents then get absent alerts and fee receipts automatically.</p>
+            <p>Link your school's WhatsApp number once. Parents then get absent alerts, fee vouchers and fee reminders automatically.</p>
           </div>
         </div>
 
@@ -486,10 +486,17 @@
           </div>
           <div class="latefee-toggle-bar">
             <div>
-              <div class="toggle-label">Fee Receipt</div>
-              <div class="toggle-sub">Send a receipt when a fee payment is recorded.</div>
+              <div class="toggle-label">Fee Voucher</div>
+              <div class="toggle-sub">Send the fee voucher details to the parent as soon as a voucher is generated.</div>
             </div>
-            <label class="toggle-switch"><input type="checkbox" id="wa-fee"><span class="toggle-slider"></span></label>
+            <label class="toggle-switch"><input type="checkbox" id="wa-voucher"><span class="toggle-slider"></span></label>
+          </div>
+          <div class="latefee-toggle-bar">
+            <div>
+              <div class="toggle-label">Fee Reminder</div>
+              <div class="toggle-sub">After the fee deadline passes, remind only the parents whose fee is still pending.</div>
+            </div>
+            <label class="toggle-switch"><input type="checkbox" id="wa-reminder"><span class="toggle-slider"></span></label>
           </div>
 
           <div class="variables-panel">
@@ -499,9 +506,14 @@
               <div class="var-hint">Use: {student} {class} {date} {school}</div>
             </div>
             <div class="var-item wa-wide">
-              <label for="wa-fee-tpl">Fee receipt message</label>
-              <textarea id="wa-fee-tpl" class="var-input" rows="3" maxlength="1000"></textarea>
-              <div class="var-hint">Use: {student} {class} {amount} {balance} {month} {school}</div>
+              <label for="wa-voucher-tpl">Fee voucher message</label>
+              <textarea id="wa-voucher-tpl" class="var-input" rows="3" maxlength="1000"></textarea>
+              <div class="var-hint">Use: {student} {class} {amount} {balance} {month} {duedate} {school}</div>
+            </div>
+            <div class="var-item wa-wide">
+              <label for="wa-reminder-tpl">Fee reminder message</label>
+              <textarea id="wa-reminder-tpl" class="var-input" rows="3" maxlength="1000"></textarea>
+              <div class="var-hint">Use: {student} {class} {balance} {month} {duedate} {school}</div>
             </div>
           </div>
           <div class="timing-actions">

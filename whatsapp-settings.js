@@ -22,19 +22,31 @@
   }
 
   const LABEL = {
-    connected: 'Connected', connecting: 'Connecting…', qr: 'Waiting for scan', pairing: 'Waiting for code',
-    disconnected: 'Not connected', service_down: 'Service offline', not_configured: 'Not set up on server',
+    connected: 'Connected', connecting: 'Connecting…', reconnecting: 'Reconnecting…', qr: 'Waiting for scan',
+    pairing: 'Waiting for code', disconnected: 'Not connected', service_down: 'Service offline',
+    not_configured: 'Not set up on server',
   };
-  const TONE = { connected: 'wa-on', connecting: 'wa-wait', qr: 'wa-wait', pairing: 'wa-wait' };
+  const TONE = { connected: 'wa-on', connecting: 'wa-wait', reconnecting: 'wa-wait', qr: 'wa-wait', pairing: 'wa-wait' };
+
+  // A linked number can drop for a few seconds (network blip, WhatsApp asking for a restart) and then
+  // come straight back. Keep showing the "connected" screen for that short window instead of flipping
+  // to the QR / link screen and back, which looked like the connection was constantly resetting.
+  const RECONNECT_GRACE_MS = 45000;
+  let lastConnectedAt = 0;
 
   function render(st) {
-    const state = st.state || 'disconnected';
+    const rawState = st.state || 'disconnected';
+    if (rawState === 'connected') lastConnectedAt = Date.now();
+    const blip = rawState === 'connecting' && lastConnectedAt && (Date.now() - lastConnectedAt) < RECONNECT_GRACE_MS;
+    const state = blip ? 'reconnecting' : rawState;
+    if (rawState === 'disconnected' || rawState === 'qr' || rawState === 'pairing') lastConnectedAt = 0;
+
     const pill = $('wa-state');
     pill.textContent = LABEL[state] || state;
     pill.className = 'wa-pill ' + (TONE[state] || 'wa-off');
     $('wa-number').textContent = st.number ? '+' + st.number : '';
 
-    const connected = state === 'connected';
+    const connected = state === 'connected' || state === 'reconnecting';
     $('wa-conn-box').style.display = connected ? '' : 'none';
     $('wa-link-box').style.display = connected ? 'none' : '';
     $('wa-disconnect-btn').style.display = connected ? '' : 'none';
@@ -51,9 +63,11 @@
       cfgLoaded = true;
       $('wa-enabled').checked = !!st.config.enabled;
       $('wa-absent').checked = st.config.notifyAbsent !== false;
-      $('wa-fee').checked = !!st.config.notifyFeePaid;
+      $('wa-voucher').checked = !!st.config.notifyVoucher;
+      $('wa-reminder').checked = !!st.config.notifyReminder;
       $('wa-absent-tpl').value = st.config.absentTemplate || '';
-      $('wa-fee-tpl').value = st.config.feeTemplate || '';
+      $('wa-voucher-tpl').value = st.config.voucherTemplate || '';
+      $('wa-reminder-tpl').value = st.config.reminderTemplate || '';
     }
     if (!connected) cfgLoaded = false;
   }
@@ -84,8 +98,10 @@
   window.waSaveConfig = async function () {
     try {
       await call('/config', { method: 'PUT', body: JSON.stringify({
-        enabled: $('wa-enabled').checked, notifyAbsent: $('wa-absent').checked, notifyFeePaid: $('wa-fee').checked,
-        absentTemplate: $('wa-absent-tpl').value, feeTemplate: $('wa-fee-tpl').value,
+        enabled: $('wa-enabled').checked, notifyAbsent: $('wa-absent').checked,
+        notifyVoucher: $('wa-voucher').checked, notifyReminder: $('wa-reminder').checked,
+        absentTemplate: $('wa-absent-tpl').value,
+        voucherTemplate: $('wa-voucher-tpl').value, reminderTemplate: $('wa-reminder-tpl').value,
       }) });
       say('wa-msg', 'Saved ✓');
     } catch (e) { say('wa-msg', e.message, true); }

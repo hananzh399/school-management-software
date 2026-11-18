@@ -10,7 +10,6 @@
     <link rel="stylesheet" href="manage-staff.css">
     <link rel="stylesheet" href="main.css">
     <link rel="stylesheet" href="announcements.css">
-    <link rel="stylesheet" href="whatsapp-send.css?v=1">
     <script>(function(){const t=localStorage.getItem('eduflow-theme')||'dark';document.documentElement.setAttribute('data-theme',t);})()</script>
     <script src="access-control.js"></script>
 </head>
@@ -96,7 +95,6 @@
                     <button type="button" data-f="parents"><i class="fas fa-people-roof"></i> Parents</button>
                 </div>
                 <button type="button" class="an-new" id="an-new"><i class="fas fa-plus"></i><span>New announcement</span></button>
-                <button type="button" class="an-new an-wa" id="an-wa" data-wa-send="announcement" title="Send a message to parents on WhatsApp"><i class="fab fa-whatsapp"></i><span>Send via WhatsApp</span></button>
             </div>
             <p class="an-hint"><i class="fas fa-circle-info"></i> Announcements appear as notices in the Teacher and Parent portals. Result notices are sent automatically from <b>Examination → Send to Parents</b>.</p>
             <div class="an-list" id="an-list"></div>
@@ -175,7 +173,6 @@
 
     <div class="am-toast" id="am-toast" hidden></div>
     <script src="shared-data.js"></script>
-    <script src="whatsapp-send.js?v=1"></script>
     <script src="announce-badge.js"></script>
     <script src="announcements.js"></script>
     <script src="announcements-notices.js"></script>
