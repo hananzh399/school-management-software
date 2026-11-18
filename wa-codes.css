@@ -1,0 +1,47 @@
+/* Settings > WhatsApp > "Codes" popup. Self-contained: works in both dark and light theme. */
+.wa-codes-bar{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:6px}
+.wa-codes-bar label{margin:0}
+.wa-codes-btn{padding:6px 12px;font-size:.85rem;white-space:nowrap}
+
+.wa-codes-lock{overflow:hidden}
+.wa-codes-overlay{
+  --wc-bg:#1e2327;--wc-text:#e8eaed;--wc-muted:#9aa0a6;--wc-line:rgba(255,255,255,.1);
+  --wc-chip:rgba(255,255,255,.07);--wc-accent:#25d366;--wc-accent-text:#06210f;
+  position:fixed;inset:0;z-index:10000;display:flex;align-items:center;justify-content:center;
+  padding:16px;background:rgba(0,0,0,.55);
+}
+.wa-codes-overlay[hidden]{display:none}
+[data-theme="light"] .wa-codes-overlay{
+  --wc-bg:#fff;--wc-text:#1f2328;--wc-muted:#656d76;--wc-line:rgba(0,0,0,.12);--wc-chip:rgba(0,0,0,.06);
+}
+.wa-codes-box{
+  width:100%;max-width:560px;max-height:calc(100vh - 32px);display:flex;flex-direction:column;
+  background:var(--wc-bg);color:var(--wc-text);border:1px solid var(--wc-line);border-radius:14px;
+  box-shadow:0 20px 60px rgba(0,0,0,.45);padding:18px 18px 14px;
+}
+.wa-codes-head{display:flex;align-items:center;justify-content:space-between}
+.wa-codes-head h3{margin:0;font-size:1.1rem}
+.wa-codes-x{background:none;border:0;color:var(--wc-muted);font-size:1.6rem;line-height:1;cursor:pointer;padding:0 4px}
+.wa-codes-x:hover{color:var(--wc-text)}
+.wa-codes-intro{margin:8px 0 12px;font-size:.85rem;color:var(--wc-muted)}
+.wa-codes-fmt{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px}
+.wa-codes-fmt-label{font-size:.8rem;color:var(--wc-muted)}
+.wa-codes-fmt-help{margin:4px 0 12px;font-size:.8rem}
+.wa-codes-list{overflow-y:auto;border:1px solid var(--wc-line);border-radius:10px}
+.wa-codes-row{display:grid;grid-template-columns:1.2fr 1.2fr auto;align-items:center;gap:10px;padding:9px 12px;border-bottom:1px solid var(--wc-line)}
+.wa-codes-row:last-child{border-bottom:0}
+.wa-codes-row-h{position:sticky;top:0;background:var(--wc-bg);font-size:.75rem;text-transform:uppercase;letter-spacing:.04em;color:var(--wc-muted);font-weight:600}
+.wa-codes-name{font-size:.9rem}
+.wa-codes-code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:.85rem;background:var(--wc-chip);padding:3px 8px;border-radius:6px;justify-self:start;word-break:break-all}
+.wa-codes-insert,.wa-codes-sample,.wa-codes-done{font:inherit;font-size:.85rem;border-radius:8px;cursor:pointer;padding:5px 12px}
+.wa-codes-insert,.wa-codes-sample{background:transparent;color:var(--wc-text);border:1px solid var(--wc-line)}
+.wa-codes-insert:hover,.wa-codes-sample:hover{border-color:var(--wc-accent)}
+.wa-codes-done{background:var(--wc-accent);color:var(--wc-accent-text);border:0;font-weight:600}
+.wa-codes-foot{display:flex;align-items:center;gap:8px;margin-top:12px}
+.wa-codes-status{flex:1;font-size:.8rem;color:var(--wc-muted);min-height:1em}
+@media (max-width:480px){
+  .wa-codes-row{grid-template-columns:1fr auto;}
+  .wa-codes-row-h span:nth-child(2){display:none}
+  .wa-codes-name{grid-column:1 / -1;font-weight:600}
+  .wa-codes-foot{flex-wrap:wrap}
+}
