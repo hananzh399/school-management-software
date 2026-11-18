@@ -501,6 +501,12 @@
 
           <div class="variables-panel">
             <div class="var-item wa-wide">
+              <label for="wa-limit">Daily sending limit (messages per day)</label>
+              <input type="number" id="wa-limit" class="var-input" min="10" max="1000" step="10" placeholder="Default">
+              <div class="var-hint">Protects your number from being banned. Messages over the limit are not lost: they wait in a queue and go out slowly, a few minutes apart, within working hours (8am–9pm). A newly linked number starts low and increases over its first week.</div>
+              <div class="var-hint" id="wa-queue-info"></div>
+            </div>
+            <div class="var-item wa-wide">
               <label for="wa-absent-tpl">Absent message</label>
               <textarea id="wa-absent-tpl" class="var-input" rows="3" maxlength="1000"></textarea>
               <div class="var-hint">Use: {student} {class} {date} {school}</div>

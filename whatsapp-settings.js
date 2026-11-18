@@ -59,8 +59,11 @@
     $('wa-code-wrap').style.display = code ? '' : 'none';
     if (code) $('wa-code').textContent = String(st.pairingCode).replace(/(.{4})(.{4})/, '$1-$2');
 
+    if (connected) renderQueue(st);
+
     if (connected && st.config && !cfgLoaded) {
       cfgLoaded = true;
+      $('wa-limit').value = st.config.dailyLimit || '';
       $('wa-enabled').checked = !!st.config.enabled;
       $('wa-absent').checked = st.config.notifyAbsent !== false;
       $('wa-voucher').checked = !!st.config.notifyVoucher;
@@ -70,6 +73,25 @@
       $('wa-reminder-tpl').value = st.config.reminderTemplate || '';
     }
     if (!connected) cfgLoaded = false;
+  }
+
+  const WAIT_WHY = {
+    cooldown: 'resting between batches', hourly_limit: 'hourly limit reached', daily_limit: "today's limit reached",
+    errors: 'paused after errors',
+  };
+
+  /** One line under the limit field: how much was sent, what is waiting and why, and when it will be done. */
+  function renderQueue(st) {
+    const el = $('wa-queue-info'); if (!el) return;
+    if (typeof st.sentToday !== 'number') { el.textContent = ''; return; }
+    let t = 'Today: ' + st.sentToday + ' of ' + st.dailyLimit + ' sent · this hour: ' + (st.sentThisHour || 0) + ' of ' + st.hourlyLimit;
+    if (st.warmupDay !== null && st.warmupDay !== undefined) t += ' · new number warm-up, day ' + (st.warmupDay + 1) + ' of 7 (limit rises daily)';
+    if (st.queued) {
+      t += ' · ' + st.queued + ' waiting in queue (about ' + (st.etaMinutes >= 90 ? Math.round(st.etaMinutes / 60) + ' hours' : st.etaMinutes + ' min') + ')';
+      const w = st.waiting;
+      if (w) t += ' — ' + (w === 'quiet_hours' ? 'will continue at ' + String(st.window || '').split('-')[0] : (WAIT_WHY[w] || w));
+    }
+    el.textContent = t;
   }
 
   async function poll() {
@@ -99,6 +121,7 @@
     try {
       await call('/config', { method: 'PUT', body: JSON.stringify({
         enabled: $('wa-enabled').checked, notifyAbsent: $('wa-absent').checked,
+        dailyLimit: parseInt($('wa-limit').value, 10) || 0,
         notifyVoucher: $('wa-voucher').checked, notifyReminder: $('wa-reminder').checked,
         absentTemplate: $('wa-absent-tpl').value,
         voucherTemplate: $('wa-voucher-tpl').value, reminderTemplate: $('wa-reminder-tpl').value,
