@@ -92,6 +92,95 @@ function togglePw() {
   }
 }
 
+
+/* ── LOGIN LOADER ──
+   Centre-screen overlay: 4 dots (white, green, white, green) that bob up/down
+   and keep swapping places while a login request is running. On success the
+   dots turn into the school / teacher / parent name; on failure into "Invalid user". */
+const LoginLoader = (function () {
+  let el, dotsWrap, textEl, dots = [], order = [0, 1, 2, 3], timer = null, step = 0, hideTimer = null;
+  const GAP = 32;
+
+  function build() {
+    if (el) return;
+    el = document.createElement("div");
+    el.className = "login-loader";
+    el.setAttribute("role", "status");
+    el.setAttribute("aria-live", "polite");
+    dotsWrap = document.createElement("div");
+    dotsWrap.className = "ll-dots";
+    ["w", "g", "w", "g"].forEach((c) => {
+      const d = document.createElement("span");
+      d.className = "ll-dot " + c;
+      d.appendChild(document.createElement("i"));
+      dotsWrap.appendChild(d);
+      dots.push(d);
+    });
+    textEl = document.createElement("div");
+    textEl.className = "ll-text";
+    el.appendChild(dotsWrap);
+    el.appendChild(textEl);
+    document.body.appendChild(el);
+  }
+
+  function place() {
+    // order[slot] = dot index sitting in that slot
+    order.forEach((dotIdx, slot) => {
+      dots[dotIdx].style.transform = "translateX(" + (slot * GAP) + "px)";
+    });
+  }
+
+  function swapStep() {
+    // alternate (0,1)+(2,3) then (1,2) so every dot keeps moving
+    const pairs = step % 2 === 0 ? [[0, 1], [2, 3]] : [[1, 2]];
+    pairs.forEach(([a, b]) => { const t = order[a]; order[a] = order[b]; order[b] = t; });
+    step++;
+    place();
+  }
+
+  function stop() { if (timer) { clearInterval(timer); timer = null; } }
+
+  function show() {
+    build();
+    clearTimeout(hideTimer);
+    stop();
+    order = [0, 1, 2, 3]; step = 0;
+    textEl.className = "ll-text";
+    textEl.textContent = "";
+    el.classList.remove("done");
+    place();
+    el.classList.add("open");
+    timer = setInterval(swapStep, 600);
+  }
+
+  function showText(text, cls) {
+    stop();
+    textEl.textContent = text;
+    textEl.className = "ll-text " + (cls || "");
+    el.classList.add("done");
+    requestAnimationFrame(() => textEl.classList.add("show"));
+  }
+
+  function hide() {
+    if (!el) return;
+    stop();
+    clearTimeout(hideTimer);
+    el.classList.remove("open", "done");
+    textEl.className = "ll-text";
+  }
+
+  return {
+    show: show,
+    hide: hide,
+    success: (name) => { if (el) showText(name || "Welcome!", ""); },
+    fail: (msg, hideAfter) => {
+      if (!el) return;
+      showText(msg || "Invalid user", "invalid");
+      hideTimer = setTimeout(hide, hideAfter || 1800);
+    },
+  };
+})();
+
 /* ── LOGIN FORM ──
    SECURITY: input is now validated through the shared SSValidate
    schema (input-validation.js) before it is ever sent to
@@ -157,6 +246,7 @@ async function handleLogin(e) {
   // passwords must be sent to auth exactly as typed (trimming or
   // restricting characters would silently reject valid passwords
   // that use punctuation/symbols/whitespace).
+  LoginLoader.show();
   const result = await SoftSchoolAuth.authenticate(values.phone, pass.value, remember);
 
   btn.textContent = origText;
@@ -164,6 +254,11 @@ async function handleLogin(e) {
   btn.style.opacity = "";
 
   if (!result.ok) {
+    if (result.reason === "invalid_login") {
+      LoginLoader.fail("Invalid user");
+    } else {
+      LoginLoader.hide();
+    }
     if (result.reason === "blocked") {
       showToast("Your school's access has been suspended. Please contact support.", "error");
     } else if (result.reason === "expired") {
@@ -203,9 +298,9 @@ async function handleLogin(e) {
   }
 
   SoftSchoolAuth.startSession(result);
-  showToast("Redirecting to your dashboard…", "success");
-  // was 900ms of pure waiting; the toast is still visible for the instant it takes to navigate
-  setTimeout(() => { window.location.href = "main.html"; }, 200);
+  const adminSchool = result.school || {};
+  LoginLoader.success(adminSchool.schoolName || adminSchool.name || adminSchool.school_name || adminSchool.username || "Welcome");
+  setTimeout(() => { window.location.href = "main.html"; }, 1300);
 }
 
 /* ── LOGIN LOCKOUT COUNTDOWN ──
@@ -1118,6 +1213,7 @@ function handleTeacherLoginIndex(e) {
   btn.disabled = true;
   btn.style.opacity = "0.8";
 
+  LoginLoader.show();
   setTimeout(async () => {
     btn.textContent = origText;
     btn.disabled = false;
@@ -1126,6 +1222,8 @@ function handleTeacherLoginIndex(e) {
     const result = await window.SoftSchoolTeacher.authenticateTeacher(idInput.value, passInput.value);
 
     if (!result.ok) {
+      if (result.reason === "error" && !result.message) LoginLoader.hide();
+      else LoginLoader.fail("Invalid user");
       passInput.classList.add("error");
       if (card) {
         card.classList.add("shake");
@@ -1142,8 +1240,8 @@ function handleTeacherLoginIndex(e) {
     }
 
     window.SoftSchoolTeacher.setSession(result.teacher.id);
-    showToast("Welcome back, " + result.teacher.name.split(" ")[0] + "!", "success");
-    setTimeout(() => { window.location.href = "teacher-portal.html"; }, 700);
+    LoginLoader.success(result.teacher.name);
+    setTimeout(() => { window.location.href = "teacher-portal.html"; }, 1300);
   }, 700);
 }
 
@@ -1317,10 +1415,14 @@ async function handleParentLogin(e) {
   }
 
   setBtnBusy(btn, true, "Signing in…");
+  LoginLoader.show();
   const result = await ParentAuth.login(phoneEl.value.trim(), passEl.value);
   setBtnBusy(btn, false);
 
   if (!result.ok) {
+    // 4xx from the server = wrong phone/password; network errors / 429 / 5xx just close the loader
+    if (result.status && result.status < 500 && result.status !== 429) LoginLoader.fail("Invalid user");
+    else LoginLoader.hide();
     passEl.classList.add("error");
     shakeLoginCard();
     showToast(result.message, "error");
@@ -1340,7 +1442,11 @@ async function handleParentLogin(e) {
     return;
   }
 
-  showToast("Welcome!", "success");
+  const parentObj = d.parent || {};
+  LoginLoader.success(
+    d.parentName || d.fatherName || d.name || parentObj.name || parentObj.fatherName ||
+    (d.school && (d.school.schoolName || d.school.name)) || "Welcome"
+  );
   // Parent portal pages live in the "parent-portal" folder next to this index.html.
   // new URL(...) resolves against the current page, so it builds the full path
   // (e.g. https://user.github.io/school-management-software/parent-portal/parent-portal-index.html)
@@ -1348,7 +1454,7 @@ async function handleParentLogin(e) {
   const PARENT_PORTAL_FOLDER = "parent-portal/";
   const targetFile = d.mustChangePassword ? "parent-portal-change-password.html" : "parent-portal-index.html";
   const target = new URL(PARENT_PORTAL_FOLDER + targetFile, window.location.href).href;
-  setTimeout(() => { window.location.href = target; }, 600);
+  setTimeout(() => { window.location.href = target; }, 1300);
 }
 
 /* ── GLOBAL ESCAPE KEY ── */

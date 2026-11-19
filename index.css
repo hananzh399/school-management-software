@@ -2534,3 +2534,37 @@ section[id], div[id] { scroll-margin-top: 96px; }
   color: var(--ink-soft);
   text-align: center;
 }
+
+/* ── LOGIN LOADER (4 swapping dots → name / "Invalid user") ── */
+:root { --loader-green: #1FAA59; }
+.login-loader {
+  position: fixed; inset: 0; z-index: 400;
+  display: none; align-items: center; justify-content: center; flex-direction: column;
+  background: rgba(11, 43, 40, 0.88);
+  backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+}
+.login-loader.open { display: flex; animation: fadeIn 0.2s ease both; }
+.ll-dots { position: relative; width: 120px; height: 60px; transition: opacity 0.25s ease, transform 0.25s ease; }
+.ll-dot {
+  position: absolute; top: 18px; left: 0; width: 24px; height: 24px;
+  transition: transform 0.55s cubic-bezier(.6,.05,.3,1);
+}
+.ll-dot i {
+  display: block; width: 100%; height: 100%; border-radius: 50%;
+  animation: llBob 0.9s ease-in-out infinite;
+}
+.ll-dot.w i { background: #fff; }
+.ll-dot.g i { background: var(--loader-green); }
+.ll-dot:nth-child(2) i { animation-delay: -0.22s; }
+.ll-dot:nth-child(3) i { animation-delay: -0.45s; }
+.ll-dot:nth-child(4) i { animation-delay: -0.67s; }
+@keyframes llBob { 0%,100% { transform: translateY(-14px); } 50% { transform: translateY(14px); } }
+.ll-text {
+  position: absolute; max-width: 86vw; text-align: center;
+  font: 700 clamp(1.4rem, 4.5vw, 2.2rem)/1.25 'Space Grotesk', 'Inter', sans-serif;
+  color: #fff; opacity: 0; transform: translateY(8px) scale(.96);
+  transition: opacity 0.35s ease, transform 0.35s ease; pointer-events: none;
+}
+.ll-text.show { opacity: 1; transform: none; }
+.ll-text.invalid { color: #ff8d7a; }
+.login-loader.done .ll-dots { opacity: 0; transform: scale(.7); }
