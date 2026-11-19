@@ -520,8 +520,8 @@
           <div class="variables-panel">
             <div class="var-item wa-wide">
               <label for="wa-limit">Daily sending limit (messages per day)</label>
-              <input type="number" id="wa-limit" class="var-input" min="10" max="1000" step="10" placeholder="Default">
-              <div class="var-hint">Protects your number from being banned. A single message is sent immediately. Bulk messages (or several in a row) wait in a queue and go out slowly, a few minutes apart, at any time of day. Messages over the limit are not lost: they stay in the queue until they can be sent. A newly linked number starts low and increases over its first week.</div>
+              <input type="number" id="wa-limit" class="var-input" min="10" max="1000" step="10" placeholder="No limit">
+              <div class="var-hint">Leave empty for no daily limit. A single message is sent immediately. Bulk messages (or several in a row) wait in a queue and go out slowly, with short rests between batches, at any time of day. Messages over your daily limit are not lost: they stay in the queue and go out the next day. Each parent number receives at most 4 messages a day.</div>
               <div class="var-hint" id="wa-queue-info"></div>
             </div>
             <div class="var-item wa-wide">

@@ -106,7 +106,6 @@
     } else if (st.config && !st.config.enabled) {
       html += `<div class="wsm-alert">WhatsApp automation is switched off. <a href="settings.html#whatsapp">Turn it on in Settings → WhatsApp</a>.</div>`;
     } else {
-      if (st.warmup) html += `<div class="wsm-note">This number is new, so WhatsApp allows only a few messages per day for now. The limit grows every day automatically.</div>`;
       if (st.quietNow) html += `<div class="wsm-note">It is night time (${esc(st.quietHours || '')}). Messages are queued and sent in the morning.</div>`;
     }
     return html;

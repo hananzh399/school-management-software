@@ -162,7 +162,7 @@
   }
 
   const WAIT_WHY = {
-    cooldown: 'resting between batches', busy: 'sending', hourly_limit: 'hourly limit reached', daily_limit: "today's limit reached",
+    cooldown: 'resting between batches', busy: 'sending', daily_limit: "today's limit reached",
     errors: 'paused after errors',
   };
 
@@ -170,8 +170,7 @@
   function renderQueue(st) {
     const el = $('wa-queue-info'); if (!el) return;
     if (typeof st.sentToday !== 'number') { el.textContent = ''; return; }
-    let t = 'Today: ' + st.sentToday + ' of ' + st.dailyLimit + ' sent · this hour: ' + (st.sentThisHour || 0) + ' of ' + st.hourlyLimit;
-    if (st.warmupDay !== null && st.warmupDay !== undefined) t += ' · new number warm-up, day ' + (st.warmupDay + 1) + ' of 7 (limit rises daily)';
+    let t = st.dailyLimit ? 'Today: ' + st.sentToday + ' of ' + st.dailyLimit + ' sent' : 'Today: ' + st.sentToday + ' sent (no daily limit set)';
     if (st.queued) {
       t += ' · ' + st.queued + ' waiting in queue (about ' + (st.etaMinutes >= 90 ? Math.round(st.etaMinutes / 60) + ' hours' : st.etaMinutes + ' min') + ')';
       const w = st.waiting;
