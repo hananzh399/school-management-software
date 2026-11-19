@@ -153,6 +153,9 @@ const SCHOOL_API_BASE_URL = "https://167-86-120-247.sslip.io/api/school";
         /* Keep the cached session fresh (locks/limits/plan may have changed). */
         const cached = getCurrentSchool() || {};
         setSession(Object.assign({}, cached, school));
+        /* Let the page react right away if something it shows depends on the fresh record
+           (e.g. Settings hides the WhatsApp tab the moment a ban arrives). */
+        try { window.dispatchEvent(new CustomEvent("softschool:session-updated", { detail: { school: school } })); } catch (e) {}
       })
       .catch(function () {
         /* Network error / offline / server restarting: this is NOT a reason to
@@ -221,6 +224,15 @@ const SCHOOL_API_BASE_URL = "https://167-86-120-247.sslip.io/api/school";
     return locks.indexOf(featureKey) !== -1;
   }
 
+  /* WhatsApp messaging can be BANNED by the super admin for one school or for a whole plan.
+     The backend resolves both cases into the single flag `whatsappBanned` on the school record
+     (login / status responses), so the browser only has to read that flag. Kept separate from
+     `locks` on purpose: a ban can't be dodged by a school's own lock override. The server enforces
+     the same rule on /api/whatsapp/*, so hiding the UI is only the visible half of the ban. */
+  function isWhatsAppBanned(school) {
+    return !!(school && school.whatsappBanned === true);
+  }
+
   function authenticateSchool(username, password) {
     const schools = getSchools();
     const uname = (username || "").trim().toLowerCase();
@@ -284,7 +296,7 @@ const SCHOOL_API_BASE_URL = "https://167-86-120-247.sslip.io/api/school";
     FEATURES: FEATURES,
     getSchools, saveSchools, getSession, setSession, clearSession, revalidateSession,
     addSchool, updateSchool, deleteSchool, getSchoolById,
-    isFeatureLocked, authenticateSchool, getCurrentSchool, studentCount,
+    isFeatureLocked, isWhatsAppBanned, authenticateSchool, getCurrentSchool, studentCount,
     getSchoolPrefix, nextStaffId
   };
 

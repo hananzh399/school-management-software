@@ -291,6 +291,7 @@ function normalizePlanFromServer(p) {
     staffLimit: p.staffLimit,
     defaultLocks,
     features: SSA.FEATURES.map(f => f.key).filter(k => defaultLocks.indexOf(k) === -1),
+    whatsappBanned: p.whatsappBanned === true,
     custom: true
   };
 }
@@ -301,7 +302,8 @@ function planToServerShape(plan) {
     price: plan.price,
     studentLimit: plan.studentLimit,
     staffLimit: plan.staffLimit,
-    locks: (plan.defaultLocks || []).join(",")
+    locks: (plan.defaultLocks || []).join(","),
+    whatsappBanned: !!plan.whatsappBanned
   };
 }
 /** Refreshes the local plan cache from the server. Call after any create/delete. */
@@ -326,6 +328,26 @@ function getPlan(id) {
 function planLocks(plan) {
   return plan.defaultLocks || [];
 }
+/* ── WHATSAPP BAN ──────────────────────────────────────────────
+   A school can't use WhatsApp messaging when EITHER its own flag OR its plan's flag is on.
+   (Kept separate from the feature locks so a school's own lock override can't dodge a plan ban.) */
+function waBanInfo(school) {
+  const bySchool = !!(school && school.whatsappBanned === true);
+  const plan = school ? allPlans()[school.planId] : null;
+  const byPlan = !!(plan && plan.whatsappBanned);
+  return { banned: bySchool || byPlan, bySchool, byPlan, planLabel: plan ? plan.label : "" };
+}
+function waBanBadge(title) {
+  return `<span class="sa-badge sa-badge-blocked" title="${SSValidate.escapeHtml(title || "WhatsApp messages are banned")}" style="margin-left:4px;"><i class="fab fa-whatsapp"></i> Banned</span>`;
+}
+/** Red when ON (= banned). */
+function paintBanSwitch(cb) {
+  if (!cb) return;
+  const paint = () => { cb.nextElementSibling.style.background = cb.checked ? "var(--red-600, #dc2626)" : "var(--ink-faint)"; };
+  paint();
+  if (!cb.dataset.banBound) { cb.dataset.banBound = "1"; cb.addEventListener("change", paint); }
+}
+
 function firstPlanId() {
   const list = planList();
   return list.length ? list[0].id : "";
@@ -421,7 +443,7 @@ function renderPlanCards() {
   wrap.innerHTML = plans.map(plan => `
     <div class="sa-plan-card ${plan.id === currentPlanId ? "selected" : ""}" data-plan="${plan.id}">
       <div class="plan-check"></div>
-      <div class="plan-name">${plan.label}</div>
+      <div class="plan-name">${plan.label}${plan.whatsappBanned ? waBanBadge("WhatsApp messages are banned for this plan") : ""}</div>
       <div class="plan-price">Rs ${Number(plan.price).toLocaleString()}<span>/year</span></div>
       <div class="sa-hint" style="margin-bottom:2px;">${plan.studentLimit} students or less</div>
       <div class="sa-hint" style="margin-bottom:2px;">${plan.staffLimit || 0} staff members or less</div>
@@ -846,7 +868,7 @@ function renderSchoolsTable(filterText) {
               </div>
             </td>
             <td><span class="sa-school-id">${SSValidate.escapeHtml(s.schoolId || "—")}</span></td>
-            <td><span class="sa-badge ${planBadgeClass(s.planId)}">${plan.label}</span></td>
+            <td><span class="sa-badge ${planBadgeClass(s.planId)}">${plan.label}</span>${(() => { const b = waBanInfo(s); return b.banned ? waBanBadge(b.bySchool && b.byPlan ? "WhatsApp banned for this school and its plan" : b.bySchool ? "WhatsApp banned for this school" : "WhatsApp banned by plan " + b.planLabel) : ""; })()}</td>
             <td>${usageCell(usageInfo(s.studentCount, s.studentLimit))}</td>
             <td>${usageCell(usageInfo(s.staffCount, s.staffLimit))}</td>
             <td>${fmtDate(s.registeredAt)}</td>
@@ -1037,6 +1059,20 @@ function openManageSchool(id) {
       </div>
     </div>
 
+    <div class="sa-limits-box" style="margin-top:18px;">
+      <h4><i class="fab fa-whatsapp"></i> WhatsApp messages — toggle ON to BAN for this school</h4>
+      <div class="sa-lock-list">
+        <div class="sa-lock-row">
+          <span class="name"><i class="fas fa-ban"></i>Ban WhatsApp messages for this school</span>
+          <label class="sa-switch">
+            <input type="checkbox" id="mgWhatsappBan" ${school.whatsappBanned === true ? "checked" : ""}>
+            <span class="slider"></span>
+          </label>
+        </div>
+      </div>
+      <p class="sa-hint">${waBanInfo(school).byPlan ? `<i class="fas fa-circle-info"></i> Its plan <strong>${SSValidate.escapeHtml(waBanInfo(school).planLabel)}</strong> already bans WhatsApp, so this school stays banned even with this switch OFF. ` : ""}A banned school doesn't see the WhatsApp tab in Settings, can't send WhatsApp messages, and its linked number is disconnected.</p>
+    </div>
+
     <div class="sa-form-row full" style="margin-top:18px;">
       <div>
         <label style="display:block;font-size:0.82rem;font-weight:600;color:var(--ink-soft);margin-bottom:8px;">Overall access</label>
@@ -1046,6 +1082,8 @@ function openManageSchool(id) {
       </div>
     </div>
   `;
+
+  paintBanSwitch(document.getElementById("mgWhatsappBan"));
 
   document.getElementById("mgLogoInput").addEventListener("change", async function (e) {
     const file = e.target.files[0];
@@ -1152,7 +1190,7 @@ document.getElementById("saveManageSchool").addEventListener("click", async func
     .filter(cb => cb.checked)
     .map(cb => cb.getAttribute("data-feature"));
 
-  const patch = { name, prefix, planId, studentLimit, staffLimit, locks };
+  const patch = { name, prefix, planId, studentLimit, staffLimit, locks, whatsappBanned: document.getElementById("mgWhatsappBan").checked };
   if (managingLogoData !== null) patch.logo = managingLogoData;
 
   const btn = this;
@@ -1208,6 +1246,7 @@ function renderPlanFeatureToggles() {
     paint();
     cb.addEventListener("change", paint);
   });
+  paintBanSwitch(document.getElementById("newPlanWhatsappBan"));
 }
 
 function renderExistingPlans() {
@@ -1228,7 +1267,7 @@ function renderExistingPlans() {
     return `
       <div class="sa-plan-row">
         <div class="info">
-          <b>${p.label}</b>
+          <b>${p.label}${p.whatsappBanned ? waBanBadge("WhatsApp messages are banned for this plan") : ""}</b>
           <small>Rs ${Number(p.price).toLocaleString()}/year · up to ${p.studentLimit} students · up to ${p.staffLimit || 0} staff · ${included}/${SSA.FEATURES.length} features</small>
         </div>
         <div class="row-actions">
@@ -1320,6 +1359,7 @@ document.getElementById("saveNewPlan").addEventListener("click", async function 
     staffLimit,
     features: chosen,
     defaultLocks,
+    whatsappBanned: document.getElementById("newPlanWhatsappBan").checked,
     custom: true
   };
 
@@ -1335,6 +1375,8 @@ document.getElementById("saveNewPlan").addEventListener("click", async function 
     document.getElementById("newPlanPrice").value = "";
     document.getElementById("newPlanLimit").value = "";
     document.getElementById("newPlanStaffLimit").value = "";
+    document.getElementById("newPlanWhatsappBan").checked = false;
+    paintBanSwitch(document.getElementById("newPlanWhatsappBan"));
     renderAll();
     saToast(`Plan "${plan.label}" created.`, "success");
   } catch (err) {
@@ -1386,7 +1428,7 @@ function renderManagePlansList() {
     return `
       <div class="sa-plan-row">
         <div class="info">
-          <b>${p.label}</b>
+          <b>${p.label}${p.whatsappBanned ? waBanBadge("WhatsApp messages are banned for this plan") : ""}</b>
           <small>Rs ${Number(p.price).toLocaleString()}/year · up to ${p.studentLimit} students · up to ${p.staffLimit || 0} staff · ${included}/${SSA.FEATURES.length} features</small>
         </div>
         <div class="row-actions">
@@ -1455,6 +1497,17 @@ function renderManagePlanEditForm(planId) {
     <div class="sa-limits-box">
       <h4><i class="fas fa-unlock"></i> Features included in this plan — toggle ON to include</h4>
       <div class="sa-lock-list" id="editPlanFeatureToggles"></div>
+      <h4 style="margin-top:18px;"><i class="fab fa-whatsapp"></i> WhatsApp messages — toggle ON to BAN</h4>
+      <div class="sa-lock-list">
+        <div class="sa-lock-row">
+          <span class="name"><i class="fas fa-ban"></i>Ban WhatsApp messages for every school on this plan</span>
+          <label class="sa-switch">
+            <input type="checkbox" id="editPlanWhatsappBan" ${plan.whatsappBanned ? "checked" : ""}>
+            <span class="slider"></span>
+          </label>
+        </div>
+      </div>
+      <p class="sa-hint">Applies live to all schools on this plan. Turning it OFF restores WhatsApp to every school that isn't individually banned.</p>
       <p class="sa-hint" style="color:var(--red-600);"><i class="fas fa-triangle-exclamation"></i> Saving applies the student limit, staff limit, and locked features here to <strong>every school currently on this plan</strong> right away, overriding any per-school customizations they had.</p>
     </div>`;
 
@@ -1473,6 +1526,8 @@ function renderManagePlanEditForm(planId) {
     const paint = () => { cb.nextElementSibling.style.background = cb.checked ? "var(--green-600)" : "var(--ink-faint)"; };
     cb.addEventListener("change", paint);
   });
+
+  paintBanSwitch(document.getElementById("editPlanWhatsappBan"));
 
   document.getElementById("managePlansFoot").innerHTML = `
     <button class="sa-btn-secondary" id="cancelEditPlan">Back</button>
@@ -1502,7 +1557,8 @@ function renderManagePlanEditForm(planId) {
       id: editingPlanId,
       label, price, studentLimit: limit,
       staffLimit,
-      defaultLocks
+      defaultLocks,
+      whatsappBanned: document.getElementById("editPlanWhatsappBan").checked
     };
 
     const affectedCount = cachedSchools.filter(s => s.planId === editingPlanId).length;

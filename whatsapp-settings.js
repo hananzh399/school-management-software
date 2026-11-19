@@ -5,10 +5,60 @@
   let timer = null;
   let cfgLoaded = false;
 
+  // ---- Super-admin ban ----------------------------------------------------------------
+  // The super admin can ban WhatsApp for one school or for a whole plan. A banned school does not
+  // see the WhatsApp tab in Settings at all (the server refuses /api/whatsapp/* for it too).
+  const SSA = () => window.SoftSchoolAdmin;
+  const isBanned = () => {
+    const a = SSA();
+    return !!(a && a.isWhatsAppBanned && a.getCurrentSchool && a.isWhatsAppBanned(a.getCurrentSchool()));
+  };
+
+  /** Hides (or restores) the WhatsApp tab button and panel. */
+  function applyBan(on) {
+    const btn = $('tab-btn-whatsapp'), panel = $('tab-whatsapp');
+    if (btn) btn.style.setProperty('display', on ? 'none' : '', on ? 'important' : '');
+    if (panel) {
+      panel.style.setProperty('display', on ? 'none' : '', on ? 'important' : '');
+      if (on) panel.classList.remove('active');
+    }
+    if (on) {
+      clearInterval(timer); timer = null;
+      // Was the person looking at the WhatsApp tab? Send them to the first visible tab instead.
+      if (btn && btn.classList.contains('active')) {
+        btn.classList.remove('active');
+        const first = Array.from(document.querySelectorAll('.tab-btn')).find((b) => b !== btn && b.style.display !== 'none');
+        if (first) first.click();
+      }
+    }
+  }
+
+  /** Remembers the ban in the cached session so other pages / the next load hide it immediately. */
+  function rememberBan(on) {
+    const a = SSA(); if (!a || !a.getCurrentSchool || !a.setSession) return;
+    const cur = a.getCurrentSchool();
+    if (cur && cur.whatsappBanned !== on) a.setSession(Object.assign({}, cur, { whatsappBanned: on }));
+  }
+
+  /** Refuse to open the tab while banned (covers the #whatsapp deep link and any stale button). */
+  const baseSwitchTab = window.switchTab;
+  if (typeof baseSwitchTab === 'function') {
+    window.switchTab = function (name, btn) {
+      if (name === 'whatsapp' && isBanned()) { applyBan(true); return; }
+      return baseSwitchTab.apply(this, arguments);
+    };
+  }
+
+  const refreshBan = () => applyBan(isBanned());
+  refreshBan();                                                   // this script sits at the end of <body>, so the tab already exists
+  document.addEventListener('DOMContentLoaded', refreshBan);      // ...and once more in case it was loaded early
+  window.addEventListener('softschool:session-updated', refreshBan);   // fresh school record arrived (ban added or lifted)
+
   async function call(path, opts = {}) {
     const res = await fetch(API + path, { headers: { 'Content-Type': 'application/json' }, ...opts });
     const ct = res.headers.get('content-type') || '';
     const data = ct.includes('json') ? await res.json().catch(() => ({})) : {};
+    if (res.status === 403 && data.code === 'whatsapp_banned') { rememberBan(true); applyBan(true); }
     if (!res.ok) throw new Error(data.error || ('Request failed (' + res.status + ')'));
     return data;
   }
@@ -60,6 +110,7 @@
   });
 
   function render(st) {
+    if (st && st.banned) { rememberBan(true); applyBan(true); return; }   // banned since this page loaded
     const rawState = st.state || 'disconnected';
     if (rawState === 'connected') lastConnectedAt = Date.now();
     const blip = rawState === 'connecting' && lastConnectedAt && (Date.now() - lastConnectedAt) < RECONNECT_GRACE_MS;
@@ -135,7 +186,7 @@
     }
   }
 
-  window.waOnOpen = function () { poll(); clearInterval(timer); timer = setInterval(poll, 2500); };
+  window.waOnOpen = function () { if (isBanned()) { applyBan(true); return; } poll(); clearInterval(timer); timer = setInterval(poll, 2500); };
   window.waOnClose = function () { clearInterval(timer); timer = null; };
 
   window.waConnect = async function (usePhone) {
