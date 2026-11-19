@@ -33,11 +33,13 @@
     }
   }
 
-  /** Remembers the ban in the cached session so other pages / the next load hide it immediately. */
+  /** Remembers the lock in the cached session so other pages / the next load hide it immediately. */
   function rememberBan(on) {
     const a = SSA(); if (!a || !a.getCurrentSchool || !a.setSession) return;
-    const cur = a.getCurrentSchool();
-    if (cur && cur.whatsappBanned !== on) a.setSession(Object.assign({}, cur, { whatsappBanned: on }));
+    const cur = a.getCurrentSchool(); if (!cur || !on || a.isWhatsAppBanned(cur)) return;
+    const locks = Array.isArray(cur.locks) ? cur.locks.slice() : String(cur.locks || '').split(',').map((x) => x.trim()).filter(Boolean);
+    locks.push('whatsapp');
+    a.setSession(Object.assign({}, cur, { locks: Array.isArray(cur.locks) ? locks : locks.join(',') }));
   }
 
   /** Refuse to open the tab while banned (covers the #whatsapp deep link and any stale button). */

@@ -21,12 +21,6 @@
     const res = await fetch(API + path, { headers: { 'Content-Type': 'application/json' }, ...(opts || {}) });
     const ct = res.headers.get('content-type') || '';
     const data = ct.includes('json') ? await res.json().catch(() => ({})) : {};
-    if (res.status === 403 && data.code === 'whatsapp_banned') {
-      try {
-        const adm = window.SoftSchoolAdmin, cur = adm && adm.getCurrentSchool();
-        if (cur) adm.setSession(Object.assign({}, cur, { whatsappBanned: true }));
-      } catch (e) { /* cache update is best-effort */ }
-    }
     if (!res.ok) throw new Error(data.error || (res.status === 403 ? 'Only the school admin can send WhatsApp messages.' : 'Request failed (' + res.status + ')'));
     return data;
   }

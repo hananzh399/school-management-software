@@ -59,7 +59,8 @@ const SCHOOL_API_BASE_URL = "https://167-86-120-247.sslip.io/api/school";
     { key: "attendance", label: "Attendance",         page: "attendance.html" },
     { key: "biometric",  label: "Biometric Attendance", page: null }, // sub-feature inside attendance.html
     { key: "finance",    label: "Fees & Finance",     page: "manage-finance.html" },
-    { key: "settings",   label: "Admin Settings",     page: "settings.html" }
+    { key: "settings",   label: "Admin Settings",     page: "settings.html" },
+    { key: "whatsapp",   label: "WhatsApp Messages",  page: null } // sub-feature inside settings.html (Settings > WhatsApp tab)
   ];
 
   /* Map a filename to the feature key that guards it */
@@ -224,13 +225,10 @@ const SCHOOL_API_BASE_URL = "https://167-86-120-247.sslip.io/api/school";
     return locks.indexOf(featureKey) !== -1;
   }
 
-  /* WhatsApp messaging can be BANNED by the super admin for one school or for a whole plan.
-     The backend resolves both cases into the single flag `whatsappBanned` on the school record
-     (login / status responses), so the browser only has to read that flag. Kept separate from
-     `locks` on purpose: a ban can't be dodged by a school's own lock override. The server enforces
-     the same rule on /api/whatsapp/*, so hiding the UI is only the visible half of the ban. */
+  /* WhatsApp messaging is a normal lockable feature (key "whatsapp"): locked => the Settings
+     WhatsApp tab is hidden and the server refuses /api/whatsapp/*. */
   function isWhatsAppBanned(school) {
-    return !!(school && school.whatsappBanned === true);
+    return isFeatureLocked(school, "whatsapp");
   }
 
   function authenticateSchool(username, password) {
