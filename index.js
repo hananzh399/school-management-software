@@ -94,12 +94,12 @@ function togglePw() {
 
 
 /* ── LOGIN LOADER ──
-   Centre-screen overlay: 4 dots (white, green, white, green) that bob up/down
-   and keep swapping places while a login request is running. On success the
-   dots turn into the school / teacher / parent name; on failure into "Invalid user". */
+   Centre-screen overlay: 4 dots (white, green, white, green) that bob up/down and swap places
+   in arcs while a login request runs. On success the dots become a "Welcome" + the school /
+   teacher / parent name; on failure they become "Invalid user". */
 const LoginLoader = (function () {
-  let el, dotsWrap, textEl, dots = [], order = [0, 1, 2, 3], timer = null, step = 0, hideTimer = null;
-  const GAP = 32;
+  let el, dotsWrap, caption, msg, eyebrow, main, dots = [], hops = [], order = [0, 1, 2, 3], timer = null, step = 0, hideTimer = null;
+  const GAP = 34;
 
   function build() {
     if (el) return;
@@ -107,33 +107,55 @@ const LoginLoader = (function () {
     el.className = "login-loader";
     el.setAttribute("role", "status");
     el.setAttribute("aria-live", "polite");
+    const stage = document.createElement("div");
+    stage.className = "ll-stage";
     dotsWrap = document.createElement("div");
     dotsWrap.className = "ll-dots";
-    ["w", "g", "w", "g"].forEach((c) => {
+    ["w", "g", "w", "g"].forEach((c, n) => {
       const d = document.createElement("span");
       d.className = "ll-dot " + c;
-      d.appendChild(document.createElement("i"));
+      d.style.setProperty("--d", (-n * 0.3) + "s");
+      const hop = document.createElement("b");
+      hop.appendChild(document.createElement("i"));
+      d.appendChild(hop);
       dotsWrap.appendChild(d);
-      dots.push(d);
+      dots.push(d); hops.push(hop);
     });
-    textEl = document.createElement("div");
-    textEl.className = "ll-text";
-    el.appendChild(dotsWrap);
-    el.appendChild(textEl);
+    caption = document.createElement("div");
+    caption.className = "ll-caption";
+    caption.textContent = "Signing you in";
+    msg = document.createElement("div");
+    msg.className = "ll-msg";
+    eyebrow = document.createElement("div"); eyebrow.className = "ll-eyebrow";
+    main = document.createElement("div"); main.className = "ll-main";
+    const line = document.createElement("div"); line.className = "ll-line";
+    msg.appendChild(eyebrow); msg.appendChild(main); msg.appendChild(line);
+    stage.appendChild(dotsWrap); stage.appendChild(caption); stage.appendChild(msg);
+    el.appendChild(stage);
     document.body.appendChild(el);
   }
 
   function place() {
-    // order[slot] = dot index sitting in that slot
     order.forEach((dotIdx, slot) => {
       dots[dotIdx].style.transform = "translateX(" + (slot * GAP) + "px)";
     });
   }
 
+  function hop(dotIdx, cls) {
+    const h = hops[dotIdx];
+    h.classList.remove("hop-up", "hop-down");
+    void h.offsetWidth; // restart animation
+    h.classList.add(cls);
+  }
+
   function swapStep() {
-    // alternate (0,1)+(2,3) then (1,2) so every dot keeps moving
+    // alternate (0,1)+(2,3) then (1,2); in each swap one dot arcs over, the other under
     const pairs = step % 2 === 0 ? [[0, 1], [2, 3]] : [[1, 2]];
-    pairs.forEach(([a, b]) => { const t = order[a]; order[a] = order[b]; order[b] = t; });
+    pairs.forEach(([a, b]) => {
+      const da = order[a], db = order[b];
+      order[a] = db; order[b] = da;
+      hop(da, "hop-up"); hop(db, "hop-down");
+    });
     step++;
     place();
   }
@@ -145,20 +167,20 @@ const LoginLoader = (function () {
     clearTimeout(hideTimer);
     stop();
     order = [0, 1, 2, 3]; step = 0;
-    textEl.className = "ll-text";
-    textEl.textContent = "";
+    msg.className = "ll-msg";
     el.classList.remove("done");
     place();
     el.classList.add("open");
-    timer = setInterval(swapStep, 600);
+    timer = setInterval(swapStep, 900);
   }
 
-  function showText(text, cls) {
+  function showMsg(eyebrowText, mainText, cls) {
     stop();
-    textEl.textContent = text;
-    textEl.className = "ll-text " + (cls || "");
+    eyebrow.textContent = eyebrowText;
+    main.textContent = mainText;
+    msg.className = "ll-msg " + (cls || "");
     el.classList.add("done");
-    requestAnimationFrame(() => textEl.classList.add("show"));
+    requestAnimationFrame(() => requestAnimationFrame(() => msg.classList.add("show")));
   }
 
   function hide() {
@@ -166,17 +188,17 @@ const LoginLoader = (function () {
     stop();
     clearTimeout(hideTimer);
     el.classList.remove("open", "done");
-    textEl.className = "ll-text";
+    msg.className = "ll-msg";
   }
 
   return {
     show: show,
     hide: hide,
-    success: (name) => { if (el) showText(name || "Welcome!", ""); },
-    fail: (msg, hideAfter) => {
+    success: (name) => { if (el) showMsg("Welcome", name || "Welcome", ""); },
+    fail: (text, hideAfter) => {
       if (!el) return;
-      showText(msg || "Invalid user", "invalid");
-      hideTimer = setTimeout(hide, hideAfter || 1800);
+      showMsg("Access denied", text || "Invalid user", "invalid");
+      hideTimer = setTimeout(hide, hideAfter || 2200);
     },
   };
 })();
@@ -300,7 +322,7 @@ async function handleLogin(e) {
   SoftSchoolAuth.startSession(result);
   const adminSchool = result.school || {};
   LoginLoader.success(adminSchool.schoolName || adminSchool.name || adminSchool.school_name || adminSchool.username || "Welcome");
-  setTimeout(() => { window.location.href = "main.html"; }, 1300);
+  setTimeout(() => { window.location.href = "main.html"; }, 1700);
 }
 
 /* ── LOGIN LOCKOUT COUNTDOWN ──
@@ -1241,7 +1263,7 @@ function handleTeacherLoginIndex(e) {
 
     window.SoftSchoolTeacher.setSession(result.teacher.id);
     LoginLoader.success(result.teacher.name);
-    setTimeout(() => { window.location.href = "teacher-portal.html"; }, 1300);
+    setTimeout(() => { window.location.href = "teacher-portal.html"; }, 1700);
   }, 700);
 }
 
@@ -1454,7 +1476,7 @@ async function handleParentLogin(e) {
   const PARENT_PORTAL_FOLDER = "parent-portal/";
   const targetFile = d.mustChangePassword ? "parent-portal-change-password.html" : "parent-portal-index.html";
   const target = new URL(PARENT_PORTAL_FOLDER + targetFile, window.location.href).href;
-  setTimeout(() => { window.location.href = target; }, 1300);
+  setTimeout(() => { window.location.href = target; }, 1700);
 }
 
 /* ── GLOBAL ESCAPE KEY ── */
