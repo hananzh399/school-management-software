@@ -810,7 +810,7 @@ function voGetRecordIssues(s) {
     }
 
     // Phones
-    [['phone1', 'Primary Phone'], ['phone2', 'Secondary Phone']].forEach(([k, label]) => {
+    [['phone1', 'Primary Phone'], ['phone2', 'WhatsApp Number']].forEach(([k, label]) => {
         if (val(k)) flag(k, label, voPhoneProblem(val(k)));
     });
 
@@ -2669,7 +2669,7 @@ if (certUploadInput) {
         previousSchool:    SSValidate.rules.name({ required: false, maxLength: 120, label: "Previous school" }),
         previousClass:     SSValidate.rules.text({ required: false, maxLength: 40, label: "Previous class" }),
         phone1:            SSValidate.rules.phone({ required: true, label: "Primary phone number" }),
-        phone2:            SSValidate.rules.phone({ required: false, label: "Secondary phone number" }),
+        phone2:            SSValidate.rules.phone({ required: true, label: "WhatsApp number" }),
         permanentAddress:  SSValidate.rules.address({ required: true, maxLength: 300, label: "Permanent address" }),
         mailingAddress:    SSValidate.rules.address({ required: true, maxLength: 300, label: "Mailing address" }),
         transportFee:      SSValidate.rules.money({ required: false, max: 10000000, label: "Transport fee" }),
@@ -3487,7 +3487,8 @@ if (certUploadInput) {
                 </div>
                 <div class="panel">
                     <div class="panel-title">Contact Information</div>
-                    <div class="field" style="margin-bottom:7px;"><span class="f-label">Phones:</span><span class="f-value">${esc(studentData.phone1)} / ${esc(studentData.phone2)}</span></div>
+                    <div class="field" style="margin-bottom:7px;"><span class="f-label">Phone:</span><span class="f-value">${esc(studentData.phone1)}</span></div>
+                    <div class="field" style="margin-bottom:7px;"><span class="f-label">WhatsApp:</span><span class="f-value">${esc(studentData.phone2)}</span></div>
                     <div class="field" style="margin-bottom:7px;"><span class="f-label">Permanent Address:</span><span class="f-value" style="font-size:9px;">${esc(studentData.permanentAddress)}</span></div>
                     <div class="field"><span class="f-label">Mailing Address:</span><span class="f-value" style="font-size:9px;">${esc(studentData.mailingAddress || 'Same as permanent')}</span></div>
                 </div>
@@ -3846,7 +3847,8 @@ if (certUploadInput) {
                 </div>
                 <div class="rec-panel">
                     <div class="rec-panel-title">Contact Information</div>
-                    <div class="rec-field" style="margin-bottom:7px;"><span class="rec-flabel">Phones:</span><span class="rec-fvalue">${safeVal(s.phone1)} / ${safeVal(s.phone2)}</span></div>
+                    <div class="rec-field" style="margin-bottom:7px;"><span class="rec-flabel">Phone:</span><span class="rec-fvalue">${safeVal(s.phone1)}</span></div>
+                    <div class="rec-field" style="margin-bottom:7px;"><span class="rec-flabel">WhatsApp:</span><span class="rec-fvalue">${safeVal(s.phone2)}</span></div>
                     <div class="rec-field"><span class="rec-flabel">Permanent Address:</span><span class="rec-fvalue" style="font-size:9px;">${safeVal(s.permanentAddress)}</span></div>
                 </div>
             </div>
@@ -6721,6 +6723,7 @@ ${pagesHtml}
                             ${kind === 'dropped' ? `<button class="btn-icon reactivate" onclick="reactivateStudent('${s.regNo}')" title="Reactivate Student">
                                 <i class="fas fa-user-check"></i>
                             </button>` : ''}
+                            <button class="btn-icon more-actions" type="button" onclick="toggleArchiveActionMenu(event, '${String(s.regNo || s.id || '').replace(/&/g,'&amp;').replace(/'/g,'&#39;').replace(/"/g,'&quot;')}', '${kind}')" title="More actions" aria-haspopup="true" aria-expanded="false"><i class="fas fa-ellipsis-vertical"></i></button>
                         </div>
                     </td>
                 </tr>`;
@@ -7144,6 +7147,128 @@ ${pagesHtml}
         menu.style.visibility = '';
     };
 
+    // ── ARCHIVE CENTER ROW ACTION MENU (three-dot menu, Graduated + Dropped Out) ──
+    // Same floating-menu pattern as the Manage Records menu above. Actions:
+    // Leaving Certificate, Character Certificate, Admission Form, Student Record.
+    let archActionMenuEl  = null;
+    let archActionMenuBtn = null;
+
+    function closeArchiveActionMenu() {
+        if (archActionMenuEl) archActionMenuEl.classList.remove('open');
+        if (archActionMenuBtn) {
+            archActionMenuBtn.classList.remove('menu-open');
+            archActionMenuBtn.setAttribute('aria-expanded', 'false');
+        }
+        archActionMenuBtn = null;
+    }
+
+    /** Find an archived student and give the certificates the right class + leaving date. */
+    function archiveStudentForCertificate(regNo, kind) {
+        const db = getDatabase();
+        const s = db.find(x => x.regNo === regNo) || db.find(x => x.id === regNo);
+        if (!s) return null;
+        const copy = Object.assign({}, s);
+        const archivedClass = kind === 'graduated' ? (s.graduatedClass || '') : '';
+        if (archivedClass) copy.class = archivedClass;
+        // The date the student actually left: an explicit leaving date, else the graduation / drop-out date.
+        copy.leavingDate = s.leavingDate || s.dateOfLeaving || s.leftDate ||
+            (kind === 'graduated' ? s.graduatedDate : s.droppedDate) || '';
+        return copy;
+    }
+
+    window.archiveGenerateCertificate = function(type, regNo, kind) {
+        const s = archiveStudentForCertificate(regNo, kind);
+        if (!s) {
+            showToast("Not Found", "Could not locate this student's record.", "danger");
+            return;
+        }
+        const name = s.name || s.fullName || '';
+        if (type === 'leaving') {
+            openModal('slc-modal');
+            const inp = document.getElementById('slc-search-input');
+            if (inp) inp.value = name;
+            slcFillFromStudent(s);
+        } else {
+            openModal('character-modal');
+            const inp = document.getElementById('char-search-input');
+            if (inp) inp.value = name;
+            charFillFromStudent(s);
+        }
+    };
+
+    function ensureArchiveActionMenu() {
+        if (archActionMenuEl) return archActionMenuEl;
+        const el = document.createElement('div');
+        el.id = 'archive-action-menu';
+        el.className = 'student-action-menu';
+        el.setAttribute('role', 'menu');
+        el.innerHTML = `
+            <button type="button" class="sam-item sam-leaving" role="menuitem" data-action="leaving"><i class="fas fa-graduation-cap"></i><span>Generate Leaving Certificate</span></button>
+            <button type="button" class="sam-item sam-character" role="menuitem" data-action="character"><i class="fas fa-award"></i><span>Generate Character Certificate</span></button>
+            <div class="sam-divider"></div>
+            <button type="button" class="sam-item sam-admission" role="menuitem" data-action="admission"><i class="fas fa-file-signature"></i><span>Print Admission Form</span></button>
+            <button type="button" class="sam-item sam-record" role="menuitem" data-action="record"><i class="fas fa-address-card"></i><span>Print Student Record</span></button>`;
+        el.addEventListener('click', function(e) {
+            const item = e.target.closest('.sam-item');
+            if (!item) return;
+            const regNo = el.dataset.regNo;
+            const kind  = el.dataset.kind;
+            const action = item.dataset.action;
+            closeArchiveActionMenu();
+            if (!regNo) return;
+            if (action === 'leaving' || action === 'character') {
+                window.archiveGenerateCertificate(action, regNo, kind);
+            } else if (action === 'admission') {
+                window.printAdmissionFormForStudent(regNo);
+            } else if (action === 'record') {
+                window.printStudentRecordForStudent(regNo);
+            }
+        });
+        document.body.appendChild(el);
+
+        document.addEventListener('click', function(e) {
+            if (!archActionMenuEl || !archActionMenuEl.classList.contains('open')) return;
+            if (e.target.closest('#archive-action-menu') || e.target.closest('.btn-icon.more-actions')) return;
+            closeArchiveActionMenu();
+        });
+        document.addEventListener('keydown', function(e) { if (e.key === 'Escape') closeArchiveActionMenu(); });
+        window.addEventListener('resize', closeArchiveActionMenu);
+        document.addEventListener('scroll', closeArchiveActionMenu, true);
+
+        archActionMenuEl = el;
+        return el;
+    }
+
+    window.toggleArchiveActionMenu = function(event, regNo, kind) {
+        event.stopPropagation();
+        const btn = event.currentTarget;
+        const menu = ensureArchiveActionMenu();
+        if (archActionMenuBtn === btn && menu.classList.contains('open')) {
+            closeArchiveActionMenu();
+            return;
+        }
+        closeArchiveActionMenu();
+        if (typeof closeStudentActionMenu === 'function') closeStudentActionMenu();
+        menu.dataset.regNo = regNo;
+        menu.dataset.kind  = kind;
+        archActionMenuBtn = btn;
+        btn.classList.add('menu-open');
+        btn.setAttribute('aria-expanded', 'true');
+
+        // Position: below the button, right-aligned; flip up / clamp if needed.
+        menu.style.visibility = 'hidden';
+        menu.classList.add('open');
+        const r  = btn.getBoundingClientRect();
+        const mw = menu.offsetWidth, mh = menu.offsetHeight;
+        let left = r.right - mw;
+        let top  = r.bottom + 6;
+        if (top + mh > window.innerHeight - 8) top = Math.max(8, r.top - mh - 6);
+        left = Math.min(Math.max(8, left), window.innerWidth - mw - 8);
+        menu.style.left = left + 'px';
+        menu.style.top  = top + 'px';
+        menu.style.visibility = '';
+    };
+
     // ── 10. FULL PROFILE VIEW ────────────────────────────────────────────────
 
     /**
@@ -7345,8 +7470,8 @@ ${pagesHtml}
                 <div class="detail-item"><label>Guardian CNIC</label><span>${safeVal(s.guardianCnic)}</span></div>
                 <div class="detail-item"><label>Father Name</label><span>${safeVal(s.fatherFullName)}</span></div>
                 <div class="detail-item"><label>Father CNIC</label><span>${safeVal(s.fatherCnic)}</span></div>
-                <div class="detail-item"><label>Contact 1</label><span>${safeVal(s.phone1)}</span></div>
-                <div class="detail-item"><label>Contact 2</label><span>${safeVal(s.phone2)}</span></div>
+                <div class="detail-item"><label>Phone</label><span>${safeVal(s.phone1)}</span></div>
+                <div class="detail-item"><label><i class="fab fa-whatsapp" style="color:#25d366;"></i> WhatsApp</label><span>${safeVal(s.phone2)}</span></div>
                 <div class="detail-item full-width-detail"><label>Permanent Address</label><span>${safeVal(s.permanentAddress)}</span></div>
             </div>
 
@@ -9215,7 +9340,7 @@ function _expBuildDirectory(students, mode) {
     const headers = [
         'Reg No', 'Sibling Group ID', 'Full Name', 'Father / Guardian', 'Guardian Role',
         'Guardian CNIC', 'Father Name', 'Father CNIC', 'Gender', 'Date of Birth', 'Age', 'Class', 'Section', 'Roll No',
-        'Admission Class', 'Admission Date', 'Phone 1', 'Phone 2', 'Permanent Address', 'Mailing Address',
+        'Admission Class', 'Admission Date', 'Phone 1', 'WhatsApp Number', 'Permanent Address', 'Mailing Address',
         'Student B-Form No.', 'Medical Issues',
         'Orphan Status', 'Previous School Attended', 'Previous Class',
         'Transport Mode', 'Transport Type', 'Transport Fee (PKR)',
@@ -9744,9 +9869,9 @@ const IMPORT_FIELD_GROUPS = [
     ]},
     { title: 'Contact & Address', icon: 'fa-phone-alt', fields: [
         { key: 'phone1', label: 'Primary Phone',
-          aliases: ['phone1', 'primaryphone', 'phone', 'mobile', 'mobileno', 'contactno', 'contact', 'phonenumber', 'mobilenumber', 'cell', 'cellno', 'whatsapp', 'contactnumber', 'mobile1', 'fathermobile', 'parentmobile', 'guardianmobile', 'guardianphone', 'fathercontact', 'parentcontact', 'guardiancontact', 'fatherphone'] },
-        { key: 'phone2', label: 'Secondary Phone',
-          aliases: ['phone2', 'secondaryphone', 'alternatephone', 'alternativephone', 'altphone', 'phonealt', 'mobile2', 'contact2', 'othercontact', 'emergencycontact'] },
+          aliases: ['phone1', 'primaryphone', 'phone', 'mobile', 'mobileno', 'contactno', 'contact', 'phonenumber', 'mobilenumber', 'cell', 'cellno', 'contactnumber', 'mobile1', 'fathermobile', 'parentmobile', 'guardianmobile', 'guardianphone', 'fathercontact', 'parentcontact', 'guardiancontact', 'fatherphone'] },
+        { key: 'phone2', label: 'WhatsApp Number',
+          aliases: ['phone2', 'whatsappnumber', 'whatsappno', 'whatsapp', 'whatsappphone', 'wa', 'secondaryphone', 'alternatephone', 'alternativephone', 'altphone', 'phonealt', 'mobile2', 'contact2', 'othercontact', 'emergencycontact'] },
         { key: 'permanentAddress', label: 'Permanent Address',
           aliases: ['permanentaddress', 'permanentadd', 'address', 'addresses', 'homeaddress', 'residentialaddress', 'residence', 'presentaddress', 'residentaddress', 'fulladdress', 'studentaddress', 'addressline1', 'address1', 'addr', 'homeadd', 'resadd'] },
         { key: 'mailingAddress', label: 'Mailing Address', hint: 'Copies Permanent Address if not matched',
@@ -10309,7 +10434,7 @@ const TEMPLATE_FIELDS = [
     { col: 'Admission Date', imp: true, exp: true, req: 'Optional',
       fmtImp: 'Day/Month/Year, e.g. 01/04/2024', fmtExp: 'Year-Month-Day, e.g. 2024-04-01', impNote: 'Empty → today’s date.', src: 'Date of admission', back: 'Yes' },
     { col: 'Phone 1', imp: true, exp: true, req: 'Recommended', fmt: 'Mobile number, e.g. 0300-1234567', impNote: 'Numbers Excel shortened (3001234567) get their leading 0 back.', src: 'Primary phone number', back: 'Yes' },
-    { col: 'Phone 2', imp: true, exp: true, req: 'Optional', fmt: 'Mobile number, e.g. 0312-1112233', impNote: 'Empty → left blank.', src: 'Secondary phone number', back: 'Yes' },
+    { col: 'WhatsApp Number', imp: true, exp: true, req: 'Required', fmt: 'Mobile number, e.g. 0312-1112233', impNote: 'Empty → the Phone 1 number is used as the WhatsApp number.', src: 'WhatsApp number', back: 'Yes' },
     { col: 'Permanent Address', imp: true, exp: true, req: 'Recommended', fmt: 'Text, up to 300 characters', impNote: 'The admission form requires it — empty values are listed in the data checks.', src: 'Permanent address', back: 'Yes' },
     { col: 'Mailing Address', imp: true, exp: true, req: 'Optional', fmt: 'Text, up to 300 characters', impNote: 'Empty → the Permanent Address is used.', src: 'Mailing address', back: 'Yes' },
     { col: 'Student B-Form No.', imp: true, exp: true, req: 'Recommended', fmt: '13 digits, written 17101-1234567-1', impNote: 'The admission form requires it — empty values are listed in the data checks.', src: 'Student’s B-Form / CNIC number', back: 'Yes' },
@@ -10361,7 +10486,7 @@ function _tplExamples(which, mode) {
         'Class': [cls1, cls2], 'Section': [sec, sec], 'Roll No': [1, 1],
         'Admission Class': [cls1, cls2],
         'Admission Date': [date(2024, 4, 1), date(2024, 4, 1)],
-        'Phone 1': ['0300-1234567', '0345-7654321'], 'Phone 2': ['', '0312-1112233'],
+        'Phone 1': ['0300-1234567', '0345-7654321'], 'WhatsApp Number': ['', '0312-1112233'],
         'Permanent Address': ['House 5, Street 2, Abbottabad', 'Mohalla Qazian, Abbottabad'],
         'Mailing Address': ['House 5, Street 2, Abbottabad', which === 'import' ? '' : 'Mohalla Qazian, Abbottabad'],
         'Student B-Form No.': ['17101-5555555-5', '17101-6666666-6'],
@@ -11567,8 +11692,8 @@ function _impCleanRow(rec) {
     set('guardianCnic', _impCnic(t('guardianCnic') || t('fatherCnic')));
     set('fatherFullName', t('fatherFullName'));
     set('fatherCnic', _impCnic(t('fatherCnic')));
-    /* Contact numbers: "0300-1234567 | 0311-7654321" → before the bar = primary, after the bar = secondary.
-       Only one number (no bar) → it is saved as BOTH the primary and the secondary contact number. */
+    /* Contact numbers: "0300-1234567 | 0311-7654321" → before the bar = primary, after the bar = WhatsApp.
+       Only one number (no bar) → it is saved as BOTH the primary and the WhatsApp number. */
     {
         const BAR = /\s*[|｜¦]\s*/;
         const c1 = t('phone1'), c2 = t('phone2');
