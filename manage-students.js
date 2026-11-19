@@ -1984,6 +1984,58 @@ if (certUploadInput) {
     }
 
     /**
+     * UPDATE RECORD — leaving a sibling group.
+     * If this student is in a sibling group and the edit changed the father's
+     * name / CNIC so that it no longer matches ANY other active member of the
+     * group, the student stops being a sibling:
+     *   - newData gets cleared sibling fields (so the saved record is no longer
+     *     a sibling), and its in-memory id goes back to its own regNo;
+     *   - the remaining members are rebuilt without them (a lone remaining
+     *     member is cleared too — one person is not a family).
+     * The backend repeats the same rule (SiblingLinkService.unlinkIfFatherChanged)
+     * so the other members are persisted; this keeps the screen correct at once.
+     * Returns true when the student was unlinked.
+     */
+    function unlinkSiblingOnFatherChange(db, oldRec, newData) {
+        if (!oldRec || !isActiveStudent(oldRec)) return false;
+        const groupId = oldRec.siblingGroupId ? String(oldRec.siblingGroupId) : '';
+        if (!groupId) return false;
+
+        const newName = newData.fatherFullName !== undefined ? newData.fatherFullName : oldRec.fatherFullName;
+        const newCnic = newData.fatherCnic     !== undefined ? newData.fatherCnic     : oldRec.fatherCnic;
+        const norm = v => normalizeForCompare(v).replace(/\s+/g, ' ');
+        const fatherChanged = norm(oldRec.fatherFullName) !== norm(newName)
+                           || fatherCnicDigits(oldRec.fatherCnic) !== fatherCnicDigits(newCnic);
+        if (!fatherChanged) return false;
+
+        const others = db.filter(s => s !== oldRec && isActiveStudent(s)
+            && s.siblingGroupId && String(s.siblingGroupId) === groupId);
+        const stillMatches = others.some(o => fatherDetailsMatch(o, { fatherFullName: newName, fatherCnic: newCnic }));
+        if (stillMatches) return false;
+
+        // This student leaves the family.
+        newData.isSibling      = false;
+        newData.siblingGroupId = null;
+        newData.siblingOf      = null;
+        newData.hasSiblings    = [];
+
+        const clear = m => {
+            m.isSibling = false; m.siblingGroupId = null; m.siblingOf = null; m.hasSiblings = [];
+            if (m.id === groupId) m.id = m.regNo;   // id was the shared group code
+        };
+        if (others.length === 1) {
+            clear(others[0]);
+        } else {
+            others.forEach(m => {
+                const rest = others.filter(x => x !== m);
+                m.hasSiblings = rest.map(x => ({ name: x.fullName, regNo: x.regNo }));
+                m.siblingOf   = buildSiblingOfString(rest.map(x => x.fullName));
+            });
+        }
+        return true;
+    }
+
+    /**
      * Backend is the single source of truth — no localStorage cache anymore.
      * getDatabase() simply reads the in-memory mirror (API_STUDENTS), which is
      * populated by syncWithBackend() on page load and kept current by every
@@ -2799,6 +2851,12 @@ if (certUploadInput) {
                  * was updated before the request, so a failed POST looked
                  * successful until the next refresh replaced it.
                  */
+                // Father details changed -> may no longer be a sibling (see
+                // unlinkSiblingOnFatherChange). No print-admission prompt is
+                // ever shown after an update, so drop any leftover one.
+                const leftSiblingGroup = unlinkSiblingOnFatherChange(db, db[index], studentData);
+                const staleAdmissionPrompt = document.getElementById('admission-print-dialog-overlay');
+                if (staleAdmissionPrompt) staleAdmissionPrompt.remove();
                 const candidate = Object.assign({}, db[index], studentData);
                 // BUGFIX — photo silently breaking after any edit to an
                 // existing student that already had one on file.
@@ -2861,9 +2919,11 @@ if (certUploadInput) {
                 // in the background; the table already reflects the save,
                 // and a toast tells you if it actually failed so nothing
                 // is silently lost.
-                db[index] = Object.assign({}, previousMedia, candidate, { id: db[index].id });
+                db[index] = Object.assign({}, previousMedia, candidate, { id: leftSiblingGroup ? db[index].regNo : db[index].id });
                 saveDatabase(db);
-                showToast("Updated", "Record updated successfully", "info");
+                showToast("Updated", leftSiblingGroup
+                    ? "Record updated. Father details changed, so this student is no longer a sibling."
+                    : "Record updated successfully", "info");
                 closeModal('student-modal');
 
                 apiSaveStudent(candidate).then(saved => {
@@ -3124,6 +3184,8 @@ if (certUploadInput) {
      * Shown right after a NEW student is successfully registered.
      */
     function showAdmissionPrintPrompt(studentData) {
+        // Only a NEW admission offers the print prompt — never after "Update Record".
+        if (editIdHidden && editIdHidden.value.trim()) return;
         const existing = document.getElementById('admission-print-dialog-overlay');
         if (existing) existing.remove();
 
