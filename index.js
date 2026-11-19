@@ -1597,7 +1597,24 @@ if (siteHeader) {
     }
   }
 
-  setTimeout(type, 900);
+  /* Start typing only once the splash screen has gone and the index page
+     is visible. If the splash is skipped/not present, start straight away. */
+  let started = false;
+  function startTyping() {
+    if (started) return;
+    started = true;
+    setTimeout(type, 350);
+  }
+  const splashActive =
+    !!document.getElementById("splash") &&
+    !document.documentElement.classList.contains("splash-skip") &&
+    !window.__splashDone;
+  if (splashActive) {
+    document.addEventListener("splash:done", startTyping, { once: true });
+    setTimeout(startTyping, 6000); // safety net
+  } else {
+    startTyping();
+  }
 })();
 
 /* ── MAGNETIC BUTTON EFFECT (subtle, non-touch only) ── */

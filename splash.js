@@ -24,6 +24,9 @@
     el.classList.add('splash-hide');
     // release the page (and its entrance animations) as the fade begins
     root.classList.remove('splash-on');
+    // tell the page the splash is gone (starts the hero typing animation)
+    window.__splashDone = true;
+    try { document.dispatchEvent(new Event('splash:done')); } catch (e) {}
     setTimeout(function () {
       if (el.parentNode) el.parentNode.removeChild(el);
     }, REMOVE_MS + 50);

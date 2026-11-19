@@ -222,6 +222,9 @@ html.splash-on body > :not(#splash) * { animation-play-state: paused !important;
     el.classList.add('splash-hide');
     // release the page (and its entrance animations) as the fade begins
     root.classList.remove('splash-on');
+    // tell the page the splash is gone (starts the hero typing animation)
+    window.__splashDone = true;
+    try { document.dispatchEvent(new Event('splash:done')); } catch (e) {}
     setTimeout(function () {
       if (el.parentNode) el.parentNode.removeChild(el);
     }, REMOVE_MS + 50);
@@ -798,7 +801,8 @@ html.splash-on body > :not(#splash) * { animation-play-state: paused !important;
       <p>An all-in-one school management platform helping administrators, teachers and parents stay connected.</p>
       <div class="footer-social">
         <a href="https://www.facebook.com/profile.php?id=61595730034756" target="_blank" rel="noopener" aria-label="Facebook"><i class="fab fa-facebook-f"></i></a>
-        <a href="#" aria-label="Instagram"><i class="fab fa-instagram"></i></a>
+        <a href="https://www.tiktok.com/@softschool01" target="_blank" rel="noopener" aria-label="TikTok"><i class="fab fa-tiktok"></i></a>
+        <a href="https://www.youtube.com/channel/UCroydiHPEmJDjipq2nZfHJQ" target="_blank" rel="noopener" aria-label="YouTube"><i class="fab fa-youtube"></i></a>
         <a href="https://wa.me/923105040365" target="_blank" aria-label="WhatsApp"><i class="fab fa-whatsapp"></i></a>
       </div>
     </div>
