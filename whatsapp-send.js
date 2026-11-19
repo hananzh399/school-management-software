@@ -159,7 +159,7 @@
             <input type="checkbox" data-reg="${esc(s.regNo)}" ${off ? 'disabled' : ''} ${S.selected.has(s.regNo) ? 'checked' : ''}>
             <span class="wsm-nm">${esc(s.name)}<small>${esc(s.regNo)}</small></span>
             <span class="wsm-cls wsm-ph">${esc(s.className)}${s.section ? '-' + esc(s.section) : ''}</span>
-            <span class="wsm-ph ${off ? 'none' : ''}">${off ? 'No number' : esc(s.phone)}</span>
+            <span class="wsm-ph ${off ? 'none' : ''}">${off ? 'No WhatsApp no.' : esc(s.phone)}</span>
             ${bal}
           </label>`;
       }).join('');
@@ -273,7 +273,8 @@
 
   function showResult(r) {
     const notes = [];
-    if (r.noPhone) notes.push(r.noPhone + ' without a phone number');
+    if (r.noPhone) notes.push(r.noPhone + ' without a WhatsApp number');
+    if (r.invalidNumber) notes.push(r.invalidNumber + ' with an invalid WhatsApp number');
     if (r.alreadySent) notes.push(r.alreadySent + ' already received this');
     const sk = r.skipped || {};
     if (sk.noRecords) notes.push(sk.noRecords + ' with no attendance records');

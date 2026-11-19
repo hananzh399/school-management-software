@@ -54,13 +54,24 @@ const rand = (a, b) => a + Math.floor(Math.random() * (b - a + 1));
 export const safeId = (id) => String(id || '').replace(/[^A-Za-z0-9_-]/g, '');
 
 /** "0300-1234567" | "+92 300 1234567" | "923001234567" -> "923001234567" (or null) */
-export function normalizePhone(raw, country = cfg.cc) {
+export function normalizePhone(raw, country = cfg.cc, strict = false) {
   let d = String(raw || '').replace(/[^\d]/g, '');
   if (!d) return null;
   if (d.startsWith('00')) d = d.slice(2);
   else if (d.startsWith('0')) d = country + d.slice(1);
   else if (!d.startsWith(country) && d.length <= 10) d = country + d;
-  return d.length >= 10 && d.length <= 15 ? d : null;
+  if (d.length < 10 || d.length > 15) return null;
+  return strict && looksFakeNumber(d, country) ? null : d;
+}
+
+/** Numbers nobody really owns: 11111, 0300-0000000, 03111111111, 03001234567 ... and non-mobile Pakistani numbers. */
+export function looksFakeNumber(d, country = cfg.cc) {
+  const n = d.startsWith(country) ? d.slice(country.length) : d;
+  if (country === '92' && d.startsWith('92') && !/^3\d{9}$/.test(n)) return true; // PK mobile = 3XX XXXXXXX
+  if (new Set(n).size <= 2) return true;                                        // 0000000000, 3111111111
+  const tail = n.slice(-7);
+  if (new Set(tail).size === 1) return true;                                    // 0300-1111111
+  return '01234567890123456789'.includes(tail) || '98765432109876543210'.includes(tail); // 0300-1234567
 }
 
 /** New numbers get small caps that grow with the age of the link (WhatsApp watches new accounts hardest). */
@@ -239,7 +250,7 @@ export class Session {
     const valid = [];
     const out = [];
     for (const it of items) {
-      const to = normalizePhone(it.to, country);
+      const to = normalizePhone(it.to, country, true);
       if (!to) { out.push({ to: it.to, accepted: false, reason: 'invalid number' }); continue; }
       const text = String(it.text || '').slice(0, 4000);
       if (!text.trim()) { out.push({ to, accepted: false, reason: 'empty message' }); continue; }
