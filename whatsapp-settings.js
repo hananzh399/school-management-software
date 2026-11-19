@@ -232,19 +232,6 @@
     catch (e) { say('wa-test-msg', e.message, true); }
   };
 
-  window.waBroadcast = async function () {
-    const text = $('wa-bc-text').value.trim();
-    if (!text) return say('wa-bc-msg', 'Write the message first.', true);
-    const cls = $('wa-bc-class').value.trim();
-    if (!confirm('Send this message to parents of ' + (cls ? 'class ' + cls : 'ALL students') + '?')) return;
-    try {
-      const r = await call('/broadcast', { method: 'POST', body: JSON.stringify({
-        text, className: cls, section: $('wa-bc-section').value.trim() }) });
-      if (r.gatewayOk === false) return say('wa-bc-msg', 'WhatsApp is not connected or the service is unreachable. Nothing was sent.', true);
-      say('wa-bc-msg', 'Queued ' + r.queued + ' messages' + (r.refused ? ', ' + r.refused + ' refused (' + (r.reason || 'limit') + ')' : '') + (r.studentsWithoutNumber ? ' (' + r.studentsWithoutNumber + ' students have no number)' : ''), !r.queued);
-    } catch (e) { say('wa-bc-msg', e.message, true); }
-  };
-
   window.waLogout = async function () {
     if (!confirm('Disconnect this WhatsApp number? Automatic messages will stop until you link again.')) return;
     try { await call('/logout', { method: 'POST', body: '{}' }); cfgLoaded = false; poll(); }

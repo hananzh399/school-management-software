@@ -1,6 +1,6 @@
-/* "Send to parents on WhatsApp" popup — Attendance report, Fee vouchers, Announcements.
-   Open it with  WhatsAppSend.open({kind:'attendance'|'fee'|'announcement', className?, section?, days?})
-   or put  data-wa-send="announcement"  on any button.
+/* "Send to parents on WhatsApp" popup — Attendance report, Fee vouchers.
+   Open it with  WhatsAppSend.open({kind:'attendance'|'fee', className?, section?, days?})
+   or put  data-wa-send="fee"  on any button.
    Everything is limited server-side (per-send cap, cooldown, daily quota); this popup only shows those limits. */
 (function () {
   const API = 'https://167-86-120-247.sslip.io/api/whatsapp';
@@ -9,8 +9,6 @@
                     sub: 'Each parent gets a personal summary of their child\u2019s attendance.' },
     fee:          { title: 'Send fee vouchers to parents',      icon: 'fa-file-invoice-dollar', path: '/send/fee',          go: 'Send vouchers',
                     sub: 'Each parent gets the fee details and balance of their child for the month.' },
-    announcement: { title: 'Send announcement to parents',      icon: 'fa-bullhorn',            path: '/send/announcement', go: 'Send announcement',
-                    sub: 'Type a message and choose which parents receive it.' },
   };
   const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const money = (n) => 'Rs ' + Math.round(Number(n) || 0).toLocaleString('en-US');
@@ -34,7 +32,7 @@
       alert('WhatsApp messaging is not available for your school. Please contact your administrator.');
       return;
     }
-    const kind = KINDS[opts.kind] ? opts.kind : 'announcement';
+    const kind = KINDS[opts.kind] ? opts.kind : 'attendance';
     close();
     const today = new Date();
     S = {
@@ -131,12 +129,6 @@
 
   function renderBody() {
     let html = safeStrip() + controls();
-    if (S.kind === 'announcement') {
-      html += `<div class="wsm-f"><label>Message</label>
-          <textarea id="wsm-text" dir="auto" maxlength="800" placeholder="e.g. School will remain closed on Monday due to rain."></textarea>
-          <p class="wsm-hint">Each parent gets <b>“Dear parent of {student} ({class}),”</b> added automatically so messages are personal. You can also use {student} and {class} yourself.</p>
-          <div class="wsm-prev" id="wsm-prev" dir="auto" hidden></div></div>`;
-    }
     html += `<div id="wsm-result"></div>
       <div class="wsm-tools">
         <input type="search" id="wsm-search" placeholder="Search parent / student…" autocomplete="off">
@@ -182,23 +174,10 @@
     if (count) { count.textContent = n + ' selected (max ' + S.max + ')'; count.classList.toggle('over', n > S.max); }
     const st = S.status || {};
     const ready = st.connected && (!st.config || st.config.enabled) && !(st.cooldownLeftSeconds > 0);
-    const txt = S.kind === 'announcement' ? (($('wsm-text') || {}).value || '').trim() : 'x';
     const go = $('wsm-go');
-    if (go) go.disabled = S.busy || !ready || n === 0 || n > S.max || !txt;
+    if (go) go.disabled = S.busy || !ready || n === 0 || n > S.max;
     const msg = $('wsm-msg');
     if (msg) msg.textContent = n > S.max ? 'Too many selected — send in smaller groups.' : '';
-    previewText();
-  }
-
-  function previewText() {
-    const box = $('wsm-prev'); if (!box) return;
-    const t = (($('wsm-text') || {}).value || '').trim();
-    const first = S.students.find((s) => S.selected.has(s.regNo));
-    if (!t || !first) { box.hidden = true; return; }
-    const cls = first.className + (first.section ? '-' + first.section : '');
-    const body = (t.includes('{student}') ? t : 'Dear parent of {student} ({class}),\n' + t) + '\n\n\u2014 your school';
-    box.hidden = false;
-    box.textContent = 'Preview for ' + first.name + ':\n\n' + body.replace(/\{student\}/g, first.name).replace(/\{class\}/g, cls);
   }
 
   // ───────────────────────── data ─────────────────────────
@@ -250,7 +229,7 @@
   function onInput(e) {
     const t = e.target;
     // text boxes react while typing; selects, checkboxes and the month picker only on "change" (they fire both events)
-    const typing = t.id === 'wsm-search' || t.id === 'wsm-text';
+    const typing = t.id === 'wsm-search';
     if (typing !== (e.type === 'input')) return;
     if (t.dataset && t.dataset.reg) {
       if (t.checked) { if (S.selected.size >= S.max) { t.checked = false; return showError('Only ' + S.max + ' parents can be messaged at one time.'); } S.selected.add(t.dataset.reg); }
@@ -264,7 +243,6 @@
       case 'wsm-month': if (t.value) { S.monthKey = t.value; loadStudents(true); } break;
       case 'wsm-unpaid': S.onlyUnpaid = t.checked; autoPick(); renderList(); break;
       case 'wsm-search': S.search = t.value; renderList(); break;
-      case 'wsm-text': updateFooter(); break;
       default: break;
     }
   }
@@ -278,7 +256,6 @@
     const body = { className: S.className, section: S.section, regNos: [...S.selected] };
     if (S.kind === 'attendance') body.days = S.days;
     if (S.kind === 'fee') { body.monthKey = S.monthKey; body.onlyUnpaid = S.onlyUnpaid; }
-    if (S.kind === 'announcement') body.text = ($('wsm-text').value || '').trim();
     S.busy = true; showError(''); updateFooter();
     $('wsm-go').querySelector('span').textContent = 'Sending…';
     try {
@@ -310,7 +287,7 @@
     box.innerHTML = `<div class="wsm-okbox"><b>${r.queued} message${r.queued > 1 ? 's' : ''} queued.</b> They are delivered one by one, about ${r.etaMinutes || 1} min in total.${night}${skipped}</div>`;
   }
 
-  // declarative buttons: <button data-wa-send="announcement">
+  // declarative buttons: <button data-wa-send="fee">
   document.addEventListener('click', (e) => {
     const t = e.target.closest('[data-wa-send]');
     if (t) { e.preventDefault(); open({ kind: t.getAttribute('data-wa-send') }); }
