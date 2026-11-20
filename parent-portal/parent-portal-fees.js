@@ -252,7 +252,7 @@
             <span class="fee-history-month">${escapeHtml(localMonth(fee.monthLabel))}</span>
             <span class="fee-history-challan">${escapeHtml(fee.challan)}</span>
           </div>
-          <span class="fee-status-badge status-${fee.status}">
+          <span class="fee-status-badge status-${SSX.esc(fee.status)}">
             <span>${escapeHtml(onScreen(statusLabel(fee.status)))}</span>
           </span>
         </div>

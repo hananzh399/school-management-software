@@ -111,7 +111,7 @@
     const cls = count === 1 ? 'single' : (count === 2 ? 'double' : 'triple');
     const grid = images.slice(0, 3).map((src, i) => `
       <div class="ann-image" data-index="${i}">
-        <img src="${src}" alt="${escapeHtml(tr('annImageAlt', 'Announcement image {n}').replace('{n}', i + 1))}" loading="lazy">
+        <img src="${SSX.url(src)}" alt="${escapeHtml(tr('annImageAlt', 'Announcement image {n}').replace('{n}', i + 1))}" loading="lazy">
       </div>
     `).join('');
     return `<div class="ann-image-grid ${cls}">${grid}</div>`;
@@ -122,7 +122,7 @@
     return `
       <div class="ann-video">
         <video preload="metadata" muted playsinline ${poster ? `poster="${poster}"` : ''}>
-          <source src="${video}" type="video/mp4">
+          <source src="${SSX.url(video)}" type="video/mp4">
         </video>
         <div class="ann-video-overlay">
           <span class="ann-video-play">${PLAY_ICON}</span>
@@ -152,7 +152,7 @@
     const catLabel = tr(CATEGORY_KEYS[cat], item.categoryLabel || cat.charAt(0).toUpperCase() + cat.slice(1));
 
     return `
-      <article class="ann-card cat-${cat}" data-category="${cat}">
+      <article class="ann-card cat-${SSX.esc(cat)}" data-category="${SSX.esc(cat)}">
         ${item.isNew ? `<span class="ann-new-dot" aria-label="${escapeHtml(tr('annNew', 'New'))}"></span>` : ''}
         <div class="ann-card-accent"></div>
         <div class="ann-card-body">

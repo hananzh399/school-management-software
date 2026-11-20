@@ -326,7 +326,7 @@
         row.className = 'result-row';
         row.innerHTML = `
           <span class="result-subject">${escapeHtml(onScreen(subjectLabel(subject.name)))}</span>
-          <span class="result-cell">${subject.total}</span>
+          <span class="result-cell">${SSX.esc(subject.total)}</span>
           <span class="result-cell result-cell-obtained">${absent ? escapeHtml(onScreen(tr('absentShort', 'Abs'))) : subject.obtained}</span>
           <span class="result-cell result-cell-percent">
             ${absent ? '—' : `<span class="result-percent-pill${percentRounded < 60 ? ' low' : ''}">${percentRounded}%</span>`}

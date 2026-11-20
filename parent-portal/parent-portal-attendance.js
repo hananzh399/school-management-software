@@ -132,7 +132,7 @@
       const label = statusLabel(status);
       const icon = statusIcon(status);
       statusEl.innerHTML = `
-        <span class="att-status-pill att-status-${status}">
+        <span class="att-status-pill att-status-${SSX.esc(status)}">
           ${icon}
           <span>${onScreen(label)}</span>
         </span>

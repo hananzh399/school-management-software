@@ -433,7 +433,7 @@
     } else {
       svg = '<svg viewBox="0 0 19 11" aria-hidden="true"><path d="M1.5 5.8 5.3 9.4 13 1.6"/><path d="M6 5.8 9.8 9.4 17.5 1.6"/></svg>';
     }
-    return '<span class="receipt receipt-' + key + '" role="img" aria-label="' + RECEIPT_LABEL[key] +
+    return '<span class="receipt receipt-' + SSX.esc(key) + '" role="img" aria-label="' + RECEIPT_LABEL[key] +
       '" title="' + RECEIPT_LABEL[key] + '">' + svg + '</span>';
   }
 
