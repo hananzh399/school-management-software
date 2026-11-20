@@ -25,7 +25,7 @@ function showReportsToast(message, type = 'info') {
     const icon = type === 'success' ? 'fa-circle-check' : (type === 'error' ? 'fa-circle-exclamation' : 'fa-circle-info');
     const toast = document.createElement('div');
     toast.className = `reports-toast reports-toast-${type}`;
-    toast.innerHTML = `<i class="fas ${icon}"></i><span>${message}</span>`;
+    toast.innerHTML = `<i class="fas ${icon}"></i><span>${SSX.esc(message)}</span>`;
     container.appendChild(toast);
     requestAnimationFrame(() => toast.classList.add('show'));
     setTimeout(() => {
@@ -1937,15 +1937,13 @@ function renderTransactions(feePayments, otherExpenses, staffBonus, studentFines
     tbody.innerHTML = shown.map(r => `
         <tr>
             <td>${r.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</td>
-            <td><span class="txn-type-badge ${r.type}">${r.typeLabel}</span></td>
+            <td><span class="txn-type-badge ${SSX.esc(r.type)}">${SSX.esc(r.typeLabel)}</span></td>
             <td class="txn-desc">${escapeHtml(r.desc)}</td>
-            <td class="txn-amount ${r.direction}">${r.direction === 'in' ? '+' : '−'} RS ${Math.round(r.amount).toLocaleString()}</td>
+            <td class="txn-amount ${SSX.esc(r.direction)}">${r.direction === 'in' ? '+' : '−'} RS ${Math.round(r.amount).toLocaleString()}</td>
         </tr>
     `).join('');
 }
 
 function escapeHtml(str) {
-    const div = document.createElement('div');
-    div.textContent = str == null ? '' : String(str);
-    return div.innerHTML;
+    return SSX.esc(str);
 }

@@ -80,8 +80,8 @@
         }
         box.innerHTML = list.map(function (a) {
             var cat = a.category === "event" || a.category === "holiday" ? a.category : "notice", al = audLabel(a), urgent = a.priority === "urgent";
-            return '<article class="an-card has-del cat-' + cat + (urgent ? " urgent" : "") + '" data-id="' + esc(a.id) + '">' +
-                '<div class="an-meta"><span class="an-chip ' + cat + '">' + cat.charAt(0).toUpperCase() + cat.slice(1) + "</span>" +
+            return '<article class="an-card has-del cat-' + SSX.esc(cat) + (urgent ? " urgent" : "") + '" data-id="' + esc(a.id) + '">' +
+                '<div class="an-meta"><span class="an-chip ' + SSX.esc(cat) + '">' + cat.charAt(0).toUpperCase() + cat.slice(1) + "</span>" +
                 (urgent ? '<span class="an-chip urgent"><i class="fas fa-triangle-exclamation"></i> Urgent</span>' : "") +
                 '<span class="an-chip aud"><i class="fas ' + al[0] + '"></i> ' + esc(al[1]) + "</span>" +
                 '<span class="an-when">' + esc(stamp(a.date)) + "</span></div>" +

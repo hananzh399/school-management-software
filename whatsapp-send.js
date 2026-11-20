@@ -285,7 +285,7 @@
     if (!box) return;
     if (!r.queued) { box.innerHTML = `<div class="wsm-note">Nothing was sent.${skipped}</div>`; return; }
     const night = r.quietNow ? ' It is night time, so sending starts in the morning.' : '';
-    box.innerHTML = `<div class="wsm-okbox"><b>${r.queued} message${r.queued > 1 ? 's' : ''} queued.</b> They are delivered one by one, about ${r.etaMinutes || 1} min in total.${night}${skipped}</div>`;
+    box.innerHTML = `<div class="wsm-okbox"><b>${SSX.esc(r.queued)} message${r.queued > 1 ? 's' : ''} queued.</b> They are delivered one by one, about ${r.etaMinutes || 1} min in total.${night}${skipped}</div>`;
   }
 
   // declarative buttons: <button data-wa-send="fee">

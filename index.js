@@ -74,7 +74,7 @@ function showToast(message, type = "success") {
   };
   const toast = document.createElement("div");
   toast.className = `toast toast-${type}`;
-  toast.innerHTML = `<i class="fas ${icons[type] || icons.info}"></i><span>${message}</span>`;
+  toast.innerHTML = `<i class="fas ${icons[type] || icons.info}"></i><span>${SSX.esc(message)}</span>`;
   container.appendChild(toast);
   setTimeout(() => toast.remove(), 3700);
 }

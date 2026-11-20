@@ -238,12 +238,12 @@
       const list = classStudents(), c = counts(list), marked = list.some((s) => att.saved[s.regNo]), pct = list.length ? (c.present / list.length) * 100 : 0;
       attCard = `<div class="card att-card"><div class="att-ring">${marked ? ring(pct, "var(--teal-500)") : `<div class="ring-empty"><i class="fas fa-bell"></i></div>`}</div>
         <div class="tx"><h2 style="margin-bottom:4px">Today · ${esc(label(inc[att.cls]))}</h2>
-        ${marked ? `<div class="mini-stats"><span class="g"><b>${c.present}</b> Present</span><span class="r"><b>${c.absent}</b> Absent</span><span class="a"><b>${c.leave}</b> Leave</span></div>` : `<p class="hint" style="margin:0">Attendance isn't marked yet.</p>`}
+        ${marked ? `<div class="mini-stats"><span class="g"><b>${SSX.esc(c.present)}</b> Present</span><span class="r"><b>${SSX.esc(c.absent)}</b> Absent</span><span class="a"><b>${SSX.esc(c.leave)}</b> Leave</span></div>` : `<p class="hint" style="margin:0">Attendance isn't marked yet.</p>`}
         <button class="link" data-go="attendance">${marked ? "View" : "Mark now"} <i class="fas fa-arrow-right"></i></button></div></div>`;
     }
     const strength = att.students && mine.length ? `<div class="card"><h2><i class="fas fa-users"></i> Class strength</h2>${mine.map((c) => { const n = studentsOf(c).length, mx = Math.max.apply(null, mine.map((x) => studentsOf(x).length).concat([1])); return `<div class="bar-row"><span>${esc(label(c))}</span><div class="bar"><i style="width:${(n / mx) * 100}%"></i></div><b>${n}</b></div>`; }).join("")}</div>` : "";
     const recent = tests.slice().sort((a, b) => b.created - a.created).slice(0, 2);
-    const testCard = `<div class="card"><h2><i class="fas fa-file-pen"></i> Tests & quizzes <button class="link r" data-go="quizzes">All</button></h2>${recent.length ? recent.map((t) => { const st = testStats(t); return `<div class="row" data-test="${t.id}" style="cursor:pointer"><div class="ic"><i class="fas fa-file-lines"></i></div><div class="tx"><b>${esc(t.title)}</b><span>${esc(t.cls)} · ${esc(t.subject)}</span></div>${st ? `<span class="pill teal">${Math.round(st.avg)}% avg</span>` : `<span class="pill amber">Marks pending</span>`}</div>`; }).join("") : `<p class="hint" style="margin:0 0 10px">Add your first paper test in a minute.</p><button class="btn ghost sm" style="margin:0" data-newtest="1"><i class="fas fa-plus"></i> New test</button>`}</div>`;
+    const testCard = `<div class="card"><h2><i class="fas fa-file-pen"></i> Tests & quizzes <button class="link r" data-go="quizzes">All</button></h2>${recent.length ? recent.map((t) => { const st = testStats(t); return `<div class="row" data-test="${SSX.esc(t.id)}" style="cursor:pointer"><div class="ic"><i class="fas fa-file-lines"></i></div><div class="tx"><b>${esc(t.title)}</b><span>${esc(t.cls)} · ${esc(t.subject)}</span></div>${st ? `<span class="pill teal">${Math.round(st.avg)}% avg</span>` : `<span class="pill amber">Marks pending</span>`}</div>`; }).join("") : `<p class="hint" style="margin:0 0 10px">Add your first paper test in a minute.</p><button class="btn ghost sm" style="margin:0" data-newtest="1"><i class="fas fa-plus"></i> New test</button>`}</div>`;
     const todos = store.get("todos", []);
     const todoCard = `<div class="card"><h2><i class="fas fa-list-check"></i> My to-do</h2>
       ${todos.map((t, i) => `<label class="todo ${t.done ? "done" : ""}"><input type="checkbox" data-todo="${i}" ${t.done ? "checked" : ""}><span>${esc(t.text)}</span><button data-deltodo="${i}" aria-label="Delete"><i class="fas fa-xmark"></i></button></label>`).join("")}
@@ -276,7 +276,7 @@
   function messagesCard() {
     const rows = threadList().map((th) => Object.assign({ th }, threadInfo(th))).filter((x) => x.unread || x.at).sort((a, b) => b.at - a.at).slice(0, 3), un = totalUnread();
     return `<div class="card msg-card"><h2><i class="fas fa-comments"></i> Messages ${un ? `<i class="cnt">${un}</i>` : ""}<button class="link r" data-go="inbox">Open</button></h2>
-      ${rows.length ? rows.map((x) => `<button class="thr sm" data-thread="${esc(x.th.key)}"><div class="thr-ic ${x.th.kind}"><i class="fas ${x.th.icon}"></i></div><div class="thr-tx"><b>${esc(x.th.title)}</b><span>${esc(x.last)}</span></div>${x.unread ? `<i class="cnt">${x.unread}</i>` : ""}</button>`).join("") : `<p class="hint" style="margin:0">No messages yet. Open Messages to write to the admin or to parents.</p>`}</div>`;
+      ${rows.length ? rows.map((x) => `<button class="thr sm" data-thread="${esc(x.th.key)}"><div class="thr-ic ${SSX.esc(x.th.kind)}"><i class="fas ${x.th.icon}"></i></div><div class="thr-tx"><b>${esc(x.th.title)}</b><span>${esc(x.last)}</span></div>${x.unread ? `<i class="cnt">${x.unread}</i>` : ""}</button>`).join("") : `<p class="hint" style="margin:0">No messages yet. Open Messages to write to the admin or to parents.</p>`}</div>`;
   }
 
   /* ── MY CLASSES (tap a class you are incharge of → its students) ── */
@@ -328,7 +328,7 @@
     const list = classStudents(), c = counts(list), marked = isMarkedToday(list), name = { present: "Present", absent: "Absent", leave: "Leave" };
     view.innerHTML = `
       ${inc.length > 1 ? `<div class="chips">${inc.map((x, i) => `<button class="chip ${i === att.cls ? "on" : ""}" data-cls="${i}">${esc(label(x))}</button>`).join("")}</div>` : ""}
-      <div class="sumbar"><div class="p"><b id="c-p">${c.present}</b>Present</div><div class="a"><b id="c-a">${c.absent}</b>Absent</div><div class="l"><b id="c-l">${c.leave}</b>Leave</div></div>
+      <div class="sumbar"><div class="p"><b id="c-p">${SSX.esc(c.present)}</b>Present</div><div class="a"><b id="c-a">${SSX.esc(c.absent)}</b>Absent</div><div class="l"><b id="c-l">${SSX.esc(c.leave)}</b>Leave</div></div>
       ${marked ? `<div class="att-note"><i class="fas fa-lock"></i> Today's attendance is saved and locked. If something is wrong, ask the admin to correct it.</div>` : ""}
       ${list.length ? `${unsaved(list).length ? `<div class="bulk"><button data-bulk="present"><i class="fas fa-check-double"></i> All Present</button><button data-bulk="absent">All Absent</button></div>` : ""}
       ${list.map((s, i) => att.saved[s.regNo]
@@ -418,7 +418,7 @@
     const list = tab === "upcoming" ? up : past;
     view.innerHTML = `<button class="btn" data-newtest="1" style="margin-bottom:12px"><i class="fas fa-plus"></i> Add test / paper</button>
       <div class="seg two" style="margin-bottom:12px"><button class="${tab === "upcoming" ? "on t" : ""}" data-qtab="upcoming">Upcoming · ${up.length}</button><button class="${tab === "past" ? "on t" : ""}" data-qtab="past">Past · ${past.length}</button></div>
-      ${list.length ? list.map((x) => { const st = testStats(x); return `<div class="class-card tcard" data-test="${x.id}"><div class="class-badge test"><i class="fas ${x.kind === "Quiz" ? "fa-bolt" : "fa-file-lines"}"></i></div>
+      ${list.length ? list.map((x) => { const st = testStats(x); return `<div class="class-card tcard" data-test="${SSX.esc(x.id)}"><div class="class-badge test"><i class="fas ${x.kind === "Quiz" ? "fa-bolt" : "fa-file-lines"}"></i></div>
         <div class="tx"><b>${esc(x.title)}</b><span>${esc(x.kind || "Test")} · ${esc(x.cls)} · ${esc(x.subject)}</span><span>${fmtDate(x.date)} · ${totalOf(x)} marks</span></div>
         ${isMarked(x) ? (st ? `<span class="pill teal">${Math.round(st.avg)}% avg</span>` : `<span class="pill teal">Done</span>`) : `<span class="pill amber">Marks pending</span>`}</div>`; }).join("")
         : empty(tab === "upcoming" ? "fa-file-pen" : "fa-clock-rotate-left", tab === "upcoming" ? "No upcoming tests" : "No past tests yet", tab === "upcoming" ? "Add a paper test or quiz with its subject, total marks and syllabus." : "Once you enter marks for a test it moves here.")}`;
@@ -433,11 +433,11 @@
       ${t.syllabus ? `<div class="card syl"><h2><i class="fas fa-book-open"></i> Syllabus</h2><p>${esc(t.syllabus).replace(/\n/g, "<br>")}</p></div>` : ""}
       ${st ? `<div class="stats s4"><div class="stat"><i class="fas fa-chart-line"></i><b>${Math.round(st.avg)}%</b><span>Average</span></div><div class="stat green"><i class="fas fa-trophy"></i><b>${Math.round(st.hi)}%</b><span>Highest</span></div><div class="stat red"><i class="fas fa-arrow-down"></i><b>${Math.round(st.lo)}%</b><span>Lowest</span></div><div class="stat amber"><i class="fas fa-circle-check"></i><b>${st.pass}/${st.n}</b><span>Passed</span></div></div>` : ""}
       <div class="tbl-head"><div class="section-title" style="margin:0">Students · ${stu.length}</div>
-        <button class="btn-mini" data-entermarks="${t.id}"><i class="fas fa-pen-to-square"></i> ${isMarked(t) ? "Edit marks" : "Enter marks"}</button></div>
+        <button class="btn-mini" data-entermarks="${SSX.esc(t.id)}"><i class="fas fa-pen-to-square"></i> ${isMarked(t) ? "Edit marks" : "Enter marks"}</button></div>
       ${stu.length ? `<div class="tbl-wrap"><table class="mt"><thead><tr><th>#</th><th>Student</th><th>Marks</th><th>%</th></tr></thead><tbody>${stu.map((s, i) => { const r = (t.results || {})[s.regNo], pct = r && !r.absent ? (r.score / (tot || 1)) * 100 : null;
-        return `<tr><td>${i + 1}</td><td><b>${esc(s.name)}</b><small>${esc(s.regNo)}</small></td><td>${r ? (r.absent ? `<span class="pill amber sm">Absent</span>` : `<b class="${pct >= (t.passPct || 40) ? "okc" : "badc"}">${r.score}</b> / ${tot}`) : `<span class="muted">—</span>`}</td><td>${pct == null ? "" : Math.round(pct) + "%"}</td></tr>`; }).join("")}</tbody></table></div>`
+        return `<tr><td>${i + 1}</td><td><b>${esc(s.name)}</b><small>${esc(s.regNo)}</small></td><td>${r ? (r.absent ? `<span class="pill amber sm">Absent</span>` : `<b class="${pct >= (t.passPct || 40) ? "okc" : "badc"}">${SSX.esc(r.score)}</b> / ${tot}`) : `<span class="muted">—</span>`}</td><td>${pct == null ? "" : Math.round(pct) + "%"}</td></tr>`; }).join("")}</tbody></table></div>`
         : empty("fa-user-graduate", "No students found", "No active students in " + esc(t.cls) + ".")}
-      <div class="bulk" style="margin-top:12px"><button data-csv="${t.id}"><i class="fas fa-file-csv"></i> Export</button><button data-deltest="${t.id}" style="color:var(--coral);background:var(--coral-100)"><i class="fas fa-trash"></i> Delete</button></div>`;
+      <div class="bulk" style="margin-top:12px"><button data-csv="${SSX.esc(t.id)}"><i class="fas fa-file-csv"></i> Export</button><button data-deltest="${SSX.esc(t.id)}" style="color:var(--coral);background:var(--coral-100)"><i class="fas fa-trash"></i> Delete</button></div>`;
   }
   /* Marks entry sheet: one compact row per student */
   function openMarks(t) {
@@ -552,7 +552,7 @@
     let html = "", last = "";
     list.forEach((m) => {
       const dl = dayLabel(m.at); if (dl !== last) { html += `<div class="day-sep"><span>${dl}</span></div>`; last = dl; }
-      if (chat.mark && chat.mark.key === th.key && chat.mark.clientId === m.clientId) html += `<div class="unread-sep"><span>${chat.mark.count} unread message${chat.mark.count === 1 ? "" : "s"}</span></div>`;
+      if (chat.mark && chat.mark.key === th.key && chat.mark.clientId === m.clientId) html += `<div class="unread-sep"><span>${SSX.esc(chat.mark.count)} unread message${chat.mark.count === 1 ? "" : "s"}</span></div>`;
       const me = m.senderType === "TEACHER", failed = m.status === "failed", tap = me && !failed;
       const tick = !me ? "" : failed ? ` <i class="fas fa-circle-exclamation"></i>` : ` <span class="receipt-slot">${receiptHTML(chatStatus(m))}</span>`;
       html += `<div class="bub ${me ? "me" : "them"} ${failed ? "failed" : ""} ${tap ? "tappable" : ""} ${chat.editing === m.clientId ? "is-editing" : ""}" ${failed ? `data-retry="${esc(m.clientId)}"` : ""} ${tap ? `data-cid="${esc(m.clientId)}"` : ""}>${me ? "" : `<small class="who">${esc(m.senderName || (m.senderType === "ADMIN" ? "Admin" : "Parent"))}</small>`}<p>${esc(m.body).replace(/\n/g, "<br>")}</p><span class="meta">${m.edited ? `<em class="edited">Edited</em>` : ""}${fmtClock(m.at)}${tick}${failed ? " · " + esc(m.error || "Not sent") + " · tap to retry" : ""}</span></div>`;
@@ -564,7 +564,7 @@
     if (!th) {
       chat.thread = null; view.classList.remove("chat-mode");
       const rows = threadList().map((t) => Object.assign({ th: t }, threadInfo(t)));
-      view.innerHTML = `<button class="btn" data-newparent="1" style="margin-bottom:10px;height:42px"><i class="fas fa-user-plus"></i> Message a parent</button><div class="thr-list">${rows.map((x) => `<button class="thr" data-thread="${esc(x.th.key)}"><div class="thr-ic ${x.th.kind}"><i class="fas ${x.th.icon}"></i></div><div class="thr-tx"><b>${esc(x.th.title)}</b><span>${esc(x.last)}</span></div><div class="thr-r"><small>${x.at ? fmtWhen(x.at) : ""}</small>${x.unread ? `<i class="cnt">${x.unread > 99 ? "99+" : x.unread}</i>` : ""}</div></button>`).join("")}</div>
+      view.innerHTML = `<button class="btn" data-newparent="1" style="margin-bottom:10px;height:42px"><i class="fas fa-user-plus"></i> Message a parent</button><div class="thr-list">${rows.map((x) => `<button class="thr" data-thread="${esc(x.th.key)}"><div class="thr-ic ${SSX.esc(x.th.kind)}"><i class="fas ${x.th.icon}"></i></div><div class="thr-tx"><b>${esc(x.th.title)}</b><span>${esc(x.last)}</span></div><div class="thr-r"><small>${x.at ? fmtWhen(x.at) : ""}</small>${x.unread ? `<i class="cnt">${x.unread > 99 ? "99+" : x.unread}</i>` : ""}</div></button>`).join("")}</div>
         ${allMyClasses().length ? "" : `<p class="hint" style="margin:10px 4px"><i class="fas fa-circle-info"></i> Parent channels appear here once the admin assigns you a class.</p>`}`;
       return;
     }
@@ -577,7 +577,7 @@
     }
     chat.editing = null; chat.savedDraft = "";
     { const un = th.kind === "chat" ? msgsOf(th).filter((m) => m.senderType !== "TEACHER" && !m.read) : []; chat.mark = un.length ? { key: th.key, clientId: un[0].clientId, count: un.length } : null; }
-    view.innerHTML = `<div class="chat-wrap"><div class="chat-head"><button class="back-ic" data-chatback="1" aria-label="Back"><i class="fas fa-arrow-left"></i></button><div class="thr-ic ${th.kind}"><i class="fas ${th.icon}"></i></div><div class="ch-t"><b>${esc(th.title)}</b><span>${esc(th.sub)}</span></div></div>
+    view.innerHTML = `<div class="chat-wrap"><div class="chat-head"><button class="back-ic" data-chatback="1" aria-label="Back"><i class="fas fa-arrow-left"></i></button><div class="thr-ic ${SSX.esc(th.kind)}"><i class="fas ${th.icon}"></i></div><div class="ch-t"><b>${esc(th.title)}</b><span>${esc(th.sub)}</span></div></div>
       <div class="chat-body" id="chat-body" data-key="${esc(th.key)}">${threadBodyHtml(th)}</div>
       ${th.kind === "chat" ? `<div class="editbar" id="chat-editbar" hidden><i class="fas fa-pen"></i><div class="eb"><b>Editing message</b><span id="chat-edit-text"></span></div><button class="eb-x" data-editcancel="1" aria-label="Cancel editing"><i class="fas fa-xmark"></i></button></div><div class="composer"><textarea id="chat-in" rows="1" maxlength="1000" placeholder="Message…">${esc(chat.draft[th.key] || "")}</textarea><button class="send" id="chat-send" aria-label="Send"><i class="fas fa-paper-plane"></i></button></div>` : `<div class="chat-note">Only the admin can post notices.</div>`}</div>`;
     const b = $("#chat-body"); if (b) b.scrollTop = th.kind === "chat" ? b.scrollHeight : 0;
@@ -621,7 +621,7 @@
     const svg = key === "sending" ? '<svg viewBox="0 0 12 12" aria-hidden="true"><circle cx="6" cy="6" r="4.8"/><path d="M6 3.4V6l1.8 1.1"/></svg>'
       : key === "sent" ? '<svg viewBox="0 0 14.5 11" aria-hidden="true"><path d="M1.5 5.8 5.3 9.4 13 1.6"/></svg>'
       : '<svg viewBox="0 0 19 11" aria-hidden="true"><path d="M1.5 5.8 5.3 9.4 13 1.6"/><path d="M6 5.8 9.8 9.4 17.5 1.6"/></svg>';
-    return `<span class="receipt receipt-${key}" role="img" aria-label="${RECEIPT_LABEL[key]}" title="${RECEIPT_LABEL[key]}">${svg}</span>`;
+    return `<span class="receipt receipt-${SSX.esc(key)}" role="img" aria-label="${RECEIPT_LABEL[key]}" title="${RECEIPT_LABEL[key]}">${svg}</span>`;
   }
   const READ_LOCK = "This message has been read, so it can't be edited or deleted.";
   const myMsg = (cid) => chat.items.find((x) => x.clientId === cid && x.senderType === "TEACHER");
@@ -752,13 +752,13 @@
       ${step(1, !!dz.cls, "Class", `<div class="chips wrap" style="margin:0">${mc.map((c) => `<button class="chip ${label(c) === dz.cls ? "on" : ""}" data-dcls="${esc(label(c))}">${esc(label(c))}</button>`).join("")}</div>`)}
       ${dz.cls ? step(2, !!dz.subject, "Subject", subs.length ? `<div class="chips wrap" style="margin:0">${subs.map((s) => `<button class="chip ${s === dz.subject ? "on" : ""}" data-dsub="${esc(s)}">${esc(s)}</button>`).join("")}</div>` : `<div class="field" style="margin:0"><input id="d-subj" maxlength="40" placeholder="Type the subject" value="${esc(dz.subject)}"></div>`) : ""}
       ${ready ? step(3, dz.files.length > 0, "Diary pictures", `
-        <div class="thumbs">${dz.files.map((f, i) => `<div class="th"><img src="${f.url}" alt=""><button data-drm="${i}" aria-label="Remove"><i class="fas fa-xmark"></i></button></div>`).join("")}
+        <div class="thumbs">${dz.files.map((f, i) => `<div class="th"><img src="${SSX.url(f.url)}" alt=""><button data-drm="${i}" aria-label="Remove"><i class="fas fa-xmark"></i></button></div>`).join("")}
           ${dz.files.length < 6 ? `<label class="th add"><input type="file" id="d-cam" accept="image/*" capture="environment" hidden><i class="fas fa-camera"></i><span>Camera</span></label><label class="th add"><input type="file" id="d-files" accept="image/*" multiple hidden><i class="fas fa-image"></i><span>Gallery</span></label>` : ""}</div>
         <div class="field" style="margin:12px 0 0"><label>Note for parents (optional)</label><textarea id="d-note" rows="2" maxlength="500" placeholder="e.g. Learn Q1–Q5 for tomorrow">${esc(dz.note)}</textarea></div>
         <button class="btn" id="d-send" style="margin-top:12px" ${dz.sending || !dz.files.length ? "disabled" : ""}>${dz.sending ? '<i class="fas fa-spinner fa-spin"></i> Sending…' : '<i class="fas fa-paper-plane"></i> Send to parents of ' + esc(dz.cls)}</button>`) : ""}
       <div class="section-title" style="margin-top:18px">Sent diary</div>
-      ${dz.list.length ? dz.list.map((d) => `<div class="card dentry"><div class="de-top"><div><b>${esc(d.subject)}</b><span>${esc(d.className)} · ${esc(d.date || "")}</span></div><button class="icon-btn dark sm" data-ddel="${d.id}" aria-label="Delete"><i class="fas fa-trash"></i></button></div>
-        ${d.note ? `<p>${esc(d.note)}</p>` : ""}<div class="thumbs sm">${Array.from({ length: d.imageCount || 0 }, (_, i) => `<img data-dimg="${d.id}:${i}" alt="" class="dimg">`).join("")}</div></div>`).join("")
+      ${dz.list.length ? dz.list.map((d) => `<div class="card dentry"><div class="de-top"><div><b>${esc(d.subject)}</b><span>${esc(d.className)} · ${esc(d.date || "")}</span></div><button class="icon-btn dark sm" data-ddel="${SSX.esc(d.id)}" aria-label="Delete"><i class="fas fa-trash"></i></button></div>
+        ${d.note ? `<p>${esc(d.note)}</p>` : ""}<div class="thumbs sm">${Array.from({ length: d.imageCount || 0 }, (_, i) => `<img data-dimg="${SSX.esc(d.id)}:${i}" alt="" class="dimg">`).join("")}</div></div>`).join("")
         : `<p class="hint" style="margin:0 4px">Nothing sent yet.</p>`}`;
     hydrateThumbs();
   }
@@ -858,7 +858,7 @@
     w.document.write("<p style='font-family:sans-serif'>Preparing…</p>");
     try {
       const f = (await snap("card-front")).toDataURL("image/png"), b = (await snap("card-back")).toDataURL("image/png");
-      w.document.open(); w.document.write(`<!doctype html><title>Teacher card — ${esc(staff.name)}</title><style>@page{size:A4;margin:12mm}body{margin:0;display:flex;gap:10mm;flex-wrap:wrap;justify-content:center}img{width:54mm;height:86mm;border:.2mm dashed #999;border-radius:3mm}</style><img src="${f}"><img src="${b}"><script>window.onload=function(){setTimeout(function(){window.print()},250)}<\/script>`); w.document.close();
+      w.document.open(); w.document.write(`<!doctype html><title>Teacher card — ${esc(staff.name)}</title><style>@page{size:A4;margin:12mm}body{margin:0;display:flex;gap:10mm;flex-wrap:wrap;justify-content:center}img{width:54mm;height:86mm;border:.2mm dashed #999;border-radius:3mm}</style><img src="${SSX.url(f)}"><img src="${SSX.url(b)}"><script>window.onload=function(){setTimeout(function(){window.print()},250)}<\/script>`); w.document.close();
     } catch (e) { w.close(); toast(e.message || "Could not prepare the card.", true); }
   }
   async function cardShare() {
@@ -916,7 +916,7 @@
     const tb = e.target.closest(".bub.tappable"); if (tb && tb.dataset.cid) return openMsgSheet(tb.dataset.cid);
     const rt = e.target.closest("[data-retry]"); if (rt) { const m = chat.items.find((x) => x.clientId === rt.dataset.retry); if (m) { m.status = "sending"; m.error = ""; saveChat(); inbox(); flushChat(); } return; }
     const tt = e.target.closest("[data-test]"); if (tt && !e.target.closest("button[data-go]")) { openTest = tt.dataset.test; quizView = "detail"; return go("quizzes"); }
-    const im = e.target.closest("img[data-dimg]"); if (im && im.src) { openSheet(`<div class="sheet-head"><div><b>Diary picture</b></div><button class="icon-btn dark" data-close="1" aria-label="Close"><i class="fas fa-xmark"></i></button></div><img src="${im.src}" alt="" class="fullimg">`, "tall"); return; }
+    const im = e.target.closest("img[data-dimg]"); if (im && im.src) { openSheet(`<div class="sheet-head"><div><b>Diary picture</b></div><button class="icon-btn dark" data-close="1" aria-label="Close"><i class="fas fa-xmark"></i></button></div><img src="${SSX.url(im.src)}" alt="" class="fullimg">`, "tall"); return; }
     const t = e.target.closest("button"); if (!t) return;
     const d = t.dataset;
     if (d.go) return go(d.go);

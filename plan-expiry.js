@@ -82,9 +82,9 @@
     }
     el.className = "ss-expiry-banner" + (expired ? " expired" : "");
     el.innerHTML = expired
-      ? '<i class="fas fa-triangle-exclamation"></i> Your ' + BRAND.name +
+      ? '<i class="fas fa-triangle-exclamation"></i> Your ' + SSX.esc(BRAND.name) +
         " annual plan expired on " + fmtDate(iso) + ". Please contact the administrator to renew."
-      : '<i class="fas fa-clock"></i> Your ' + BRAND.name + " annual plan expires on " +
+      : '<i class="fas fa-clock"></i> Your ' + SSX.esc(BRAND.name) + " annual plan expires on " +
         fmtDate(iso) + " — " + days + " day" + (days === 1 ? "" : "s") + " left. Please renew in time.";
   }
 
@@ -96,7 +96,7 @@
       overlay.className = "ss-expiry-overlay";
       overlay.innerHTML =
         '<div class="ss-expiry-card" id="ssExpiryCard">' +
-          '<img src="' + BRAND.logo + '" alt="' + BRAND.name + '">' +
+          '<img src="' + SSX.url(BRAND.logo) + '" alt="' + SSX.esc(BRAND.name) + '">' +
           '<h3 id="ssExpiryTitle"></h3>' +
           '<div class="ss-days" id="ssExpiryDays"></div>' +
           '<p id="ssExpiryText"></p>' +

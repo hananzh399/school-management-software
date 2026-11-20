@@ -196,7 +196,7 @@ function showToast(message, type = 'error', title) {
         <div class="toast-icon"><i class="fas ${icons[type] || icons.error}"></i></div>
         <div class="toast-body">
             <span class="toast-title">${title || titles[type] || 'Notice'}</span>
-            <span class="toast-message">${message}</span>
+            <span class="toast-message">${SSX.esc(message)}</span>
         </div>
         <button type="button" class="toast-close" aria-label="Dismiss"><i class="fas fa-xmark"></i></button>
     `;
@@ -241,7 +241,7 @@ async function staffApiRequest(method, url, body) {
     });
     if (!res.ok) {
         const text = await res.text().catch(() => '');
-        throw new Error(`${method} ${url} -> ${res.status} ${text}`);
+        throw new Error(`${SSX.esc(method)} ${url} -> ${SSX.esc(res.status)} ${text}`);
     }
     const contentType = res.headers.get('content-type') || '';
     return contentType.includes('application/json') ? res.json() : null;
@@ -822,8 +822,8 @@ function renderFormFields(category) {
     const createInput = (id, label, type='text', fullWidth=false, required=true, readonly=false) => {
         return `
             <div class="form-group ${fullWidth ? 'full-width' : ''}">
-                <label for="${id}">${label}</label>
-                <input type="${type}" id="${id}" name="${id}" ${required ? 'required' : ''} ${type === 'number' ? 'min="0"' : ''} ${readonly ? 'readonly' : ''}>
+                <label for="${SSX.esc(id)}">${label}</label>
+                <input type="${SSX.esc(type)}" id="${SSX.esc(id)}" name="${SSX.esc(id)}" ${required ? 'required' : ''} ${type === 'number' ? 'min="0"' : ''} ${readonly ? 'readonly' : ''}>
             </div>
         `;
     };
@@ -1118,7 +1118,7 @@ function buildSecurityHTML(staff) {
         </div>
 
         ${!s.isDone ? `
-        <button class="btn btn-deduct-month" onclick="deductSecurityMonth('${staff.id}')">
+        <button class="btn btn-deduct-month" onclick="deductSecurityMonth('${SSX.jsStr(staff.id)}')">
             <i class="fas fa-calendar-check"></i> Apply This Month's Deduction (${formatCurrency(s.monthly)})
         </button>` : `
         <div class="security-complete-notice">
@@ -1277,7 +1277,7 @@ let _pendingPhoto = '';
 function buildPhotoField(existing = '') {
     _pendingPhoto = existing || '';
     const inner = existing
-        ? `<img src="${existing}" alt="Staff photo">`
+        ? `<img src="${SSX.url(existing)}" alt="Staff photo">`
         : `<i class="fas fa-user"></i>`;
     return `
     <div class="form-group full-width photo-upload-group">
@@ -1299,7 +1299,7 @@ function wirePhotoField() {
         reader.onload = (ev) => {
             _pendingPhoto = ev.target.result;
             const prev = document.getElementById('f-photo-preview');
-            prev.innerHTML = `<img src="${_pendingPhoto}" alt="Staff photo">`;
+            prev.innerHTML = `<img src="${SSX.url(_pendingPhoto)}" alt="Staff photo">`;
         };
         reader.readAsDataURL(file);
     });
@@ -1359,7 +1359,7 @@ function buildInchargePicker(existing = '') {
                     <span class="incharge-select-label">Class</span>
                     <select id="f-incharge-cls-sel" onchange="onInchargeClassChange()">
                         <option value="">— Select Class —</option>
-                        ${classes.map(c => `<option value="${c.name.replace(/"/g,'&quot;')}">${c.name}</option>`).join('')}
+                        ${classes.map(c => `<option value="${SSX.esc(c.name)}">${SSX.esc(c.name)}</option>`).join('')}
                     </select>
                 </div>
                 <div>
@@ -1422,7 +1422,7 @@ function onInchargeClassChange() {
         secSel.disabled = true;
     } else {
         secSel.innerHTML = '<option value="">— Select Section —</option>' +
-            sections.map(s => `<option value="${s}">Section ${s}</option>`).join('');
+            sections.map(s => `<option value="${SSX.esc(s)}">Section ${SSX.esc(s)}</option>`).join('');
         secSel.disabled = false;
     }
 }
@@ -1483,8 +1483,8 @@ function renderFormFields(category) {
 
     const createInput = (id, label, type='text', fullWidth=false, required=true, readonly=false) => `
         <div class="form-group ${fullWidth ? 'full-width' : ''}">
-            <label for="${id}">${label}</label>
-            <input type="${type}" id="${id}" name="${id}" ${required ? 'required' : ''} ${type === 'number' ? 'min="0"' : ''} ${readonly ? 'readonly' : ''}>
+            <label for="${SSX.esc(id)}">${label}</label>
+            <input type="${SSX.esc(type)}" id="${SSX.esc(id)}" name="${SSX.esc(id)}" ${required ? 'required' : ''} ${type === 'number' ? 'min="0"' : ''} ${readonly ? 'readonly' : ''}>
         </div>`;
 
     // Photo first (both categories)
@@ -1569,7 +1569,7 @@ function openEditForm() {
     if (staff.photo) {
         _pendingPhoto = staff.photo;
         const prev = document.getElementById('f-photo-preview');
-        if (prev) prev.innerHTML = `<img src="${staff.photo}" alt="Staff photo">`;
+        if (prev) prev.innerHTML = `<img src="${SSX.url(staff.photo)}" alt="Staff photo">`;
     }
 
     // CNIC single input
@@ -1825,7 +1825,7 @@ function populateDirectory(category, filterText = '') {
 
         const initials = (s.name || '?').split(' ').map(p => p[0]).slice(0, 2).join('').toUpperCase();
         const avatarHTML = s.photo
-            ? `<img class="row-avatar" src="${s.photo}" alt="">`
+            ? `<img class="row-avatar" src="${SSX.url(s.photo)}" alt="">`
             : `<span class="row-avatar-fallback">${initials}</span>`;
 
         // SECURITY: escape every stored field before it lands in
@@ -1886,8 +1886,7 @@ function getSectionsFor(clsName) {
     return (cfg && Array.isArray(cfg.sections)) ? cfg.sections.filter(Boolean) : [];
 }
 function _esc(v) {
-    return String(v == null ? '' : v).replace(/&/g,'&amp;').replace(/</g,'&lt;')
-        .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    return SSX.esc(v);
 }
 function _fillSectionSelect(secSel, clsName, placeholder) {
     if (!secSel) return;
@@ -2038,7 +2037,7 @@ function wirePhotoField() {
         if (prev) prev.innerHTML = `<i class="fas fa-spinner fa-spin"></i>`;
         try {
             _pendingPhoto = await compressImageToTarget(file);
-            if (prev) prev.innerHTML = `<img src="${_pendingPhoto}" alt="Staff photo">`;
+            if (prev) prev.innerHTML = `<img src="${SSX.url(_pendingPhoto)}" alt="Staff photo">`;
         } catch (err) {
             input.value = '';
             if (prev) prev.innerHTML = '<i class="fas fa-user"></i>';
@@ -2512,8 +2511,8 @@ function renderFormFields(category) {
 
     const createInput = (id, label, type='text', fullWidth=false, required=true, readonly=false) => `
         <div class="form-group ${fullWidth ? 'full-width' : ''}">
-            <label for="${id}">${label}</label>
-            <input type="${type}" id="${id}" name="${id}" ${required ? 'required' : ''} ${type === 'number' ? 'min="0"' : ''} ${readonly ? 'readonly' : ''}>
+            <label for="${SSX.esc(id)}">${label}</label>
+            <input type="${SSX.esc(type)}" id="${SSX.esc(id)}" name="${SSX.esc(id)}" ${required ? 'required' : ''} ${type === 'number' ? 'min="0"' : ''} ${readonly ? 'readonly' : ''}>
         </div>`;
 
     let html = buildPhotoField('');
@@ -2621,7 +2620,7 @@ function openEditForm() {
     if (staff.photo) {
         _pendingPhoto = staff.photo;
         const prev = document.getElementById('f-photo-preview');
-        if (prev) prev.innerHTML = `<img src="${staff.photo}" alt="Staff photo">`;
+        if (prev) prev.innerHTML = `<img src="${SSX.url(staff.photo)}" alt="Staff photo">`;
     }
 
     // Agreement
@@ -2891,7 +2890,7 @@ function showProfileView(staffId, category) {
     const guardianLabel = (staff.guardianType || 'Father') + ' Name';
 
     const agreementHTML = (staff.agreement && staff.agreement.data)
-        ? `<button type="button" class="btn btn-view-agreement" onclick="openAgreementModal('${_esc(staff.id)}')">
+        ? `<button type="button" class="btn btn-view-agreement" onclick="openAgreementModal('${SSX.jsStr(staff.id)}')">
              <i class="fas fa-file-contract"></i> View Agreement</button>
            <span class="agreement-file-label">${_esc(staff.agreement.name || 'agreement')}</span>`
         : `<span class="agreement-none">No agreement uploaded.</span>`;
@@ -2965,9 +2964,9 @@ function openAgreementModal(staffId) {
         || /\.pdf$/i.test(staff.agreement.name || '');
 
     if (isPdf) {
-        body.innerHTML = `<iframe class="agreement-pdf-frame" id="agreement-pdf-frame" src="${staff.agreement.data}"></iframe>`;
+        body.innerHTML = `<iframe class="agreement-pdf-frame" id="agreement-pdf-frame" src="${SSX.url(staff.agreement.data)}"></iframe>`;
     } else {
-        body.innerHTML = `<img class="agreement-img-preview" id="agreement-img-preview" src="${staff.agreement.data}" alt="Staff agreement">`;
+        body.innerHTML = `<img class="agreement-img-preview" id="agreement-img-preview" src="${SSX.url(staff.agreement.data)}" alt="Staff agreement">`;
     }
 
     document.getElementById('agreement-modal').classList.remove('d-none');
@@ -3025,7 +3024,7 @@ function printAgreement() {
             <html><head><title>${_esc(name || 'Staff Agreement')}</title>
             <style>html,body{margin:0;height:100%;} iframe{border:0;width:100%;height:100%;}</style>
             </head><body>
-            <iframe src="${agreement.data}" onload="setTimeout(function(){window.focus();window.print();},300)"></iframe>
+            <iframe src="${SSX.url(agreement.data)}" onload="setTimeout(function(){window.focus();window.print();},300)"></iframe>
             </body></html>`);
     } else {
         printWin.document.write(`
@@ -3036,7 +3035,7 @@ function printAgreement() {
                 @media print { img{width:100%;height:auto;} }
             </style>
             </head><body>
-            <img src="${agreement.data}" onload="setTimeout(function(){window.focus();window.print();},300)">
+            <img src="${SSX.url(agreement.data)}" onload="setTimeout(function(){window.focus();window.print();},300)">
             </body></html>`);
     }
     printWin.document.close();
@@ -3332,21 +3331,21 @@ function refreshCertificatePreview() {
                 <p>This is to certify that <strong>${_esc(staff.name)}</strong>, ${guardianLine}has served as
                 an <strong>${_esc(position)}</strong> from <strong>${startDate}</strong> to <strong>${endDate}</strong>.</p>
 
-                ${isNT ? `<p>During ${p.poss} tenure with us, ${p.subj} carried out the duties of
+                ${isNT ? `<p>During ${SSX.esc(p.poss)} tenure with us, ${p.subj} carried out the duties of
                 <strong>${_esc(position)}</strong> with diligence and responsibility.</p>
 
-                <p>During ${p.poss} employment, we found ${p.obj} to be hardworking, dedicated, punctual, and
+                <p>During ${SSX.esc(p.poss)} employment, we found ${p.obj} to be hardworking, dedicated, punctual, and
                 highly professional. ${p.subj.charAt(0).toUpperCase() + p.subj.slice(1)} maintained good
                 professional relationships with colleagues, students, and parents.</p>`
-                : `<p>During ${p.poss} tenure with us, ${p.subj} taught <strong>${subjectsLine}</strong>
+                : `<p>During ${SSX.esc(p.poss)} tenure with us, ${p.subj} taught <strong>${subjectsLine}</strong>
                 to classes <strong>${classesLine}</strong>.</p>
 
-                <p>During ${p.poss} employment, we found ${p.obj} to be hardworking, dedicated, punctual, and
+                <p>During ${SSX.esc(p.poss)} employment, we found ${p.obj} to be hardworking, dedicated, punctual, and
                 highly professional. ${p.subj.charAt(0).toUpperCase() + p.subj.slice(1)} possesses excellent
                 classroom management skills and maintains strong professional relationships with students,
                 colleagues, and parents.</p>`}
 
-                <p>We appreciate ${p.poss} contributions to our institution and wish ${p.obj} all the best
+                <p>We appreciate ${SSX.esc(p.poss)} contributions to our institution and wish ${p.obj} all the best
                 and success in future endeavors.</p>
             </div>
 
@@ -4423,7 +4422,7 @@ window.printAllStaffIdCards = async function() {
     for (let i = 0; i < pairs.length; i += perPage) pages.push(pairs.slice(i, i + perPage));
 
     const cardImg = (src, label) => src
-        ? `<img class="sidc-print-card" src="${src}" alt="${label}">`
+        ? `<img class="sidc-print-card" src="${SSX.url(src)}" alt="${label}">`
         : `<div class="sidc-print-card sidc-print-card-missing">${label} unavailable</div>`;
 
     const pagesHtml = pages.map((group, pageIdx) => {

@@ -460,7 +460,7 @@ function appendClassCard(name, fee, fund, isNew = false, sections = []) {
       <div class="class-icon" style="background:${color}22; color:${color}"><i class="fas ${icon}"></i></div>
       <span class="class-badge ${isNew ? 'new-badge' : ''}">${isNew ? 'New' : 'Active'}</span>
     </div>
-    <input type="text" class="class-name-input" value="${name}" placeholder="Class name (e.g. Grade 3)">
+    <input type="text" class="class-name-input" value="${SSX.esc(name)}" placeholder="Class name (e.g. Grade 3)">
     <div class="fee-row">
       <div>
         <div class="fee-label">Monthly Tuition</div>
@@ -695,7 +695,7 @@ function appendTeacherCard(t = {}, isNew = true) {
   const bonus        = customBonus ? t.bonus        : vars.bonus;
 
   const linkedBadge = t.id
-    ? `<span class="teacher-badge" style="background:var(--blue-light);color:#1d4ed8;margin-left:6px;" title="Synced from Staff Management"><i class="fas fa-link"></i> ${t.id}</span>`
+    ? `<span class="teacher-badge" style="background:var(--blue-light);color:#1d4ed8;margin-left:6px;" title="Synced from Staff Management"><i class="fas fa-link"></i> ${SSX.esc(t.id)}</span>`
     : '';
 
   div.innerHTML = `
@@ -707,8 +707,8 @@ function appendTeacherCard(t = {}, isNew = true) {
       <span class="teacher-badge ${isNew ? 'new-badge' : ''}">${isNew ? 'New' : 'Active'}</span>
       ${linkedBadge}
     </div>
-    <input type="text" class="teacher-name-input" value="${t.name || ''}" placeholder="Teacher full name">
-    <input type="text" class="teacher-subject-input" value="${t.subject || ''}" placeholder="Subject / Role">
+    <input type="text" class="teacher-name-input" value="${SSX.esc(t.name || '')}" placeholder="Teacher full name">
+    <input type="text" class="teacher-subject-input" value="${SSX.esc(t.subject || '')}" placeholder="Subject / Role">
 
     <div class="pay-grid">
       <div>
@@ -1384,7 +1384,7 @@ function appendNonTeachingCard(t = {}, isNew = true) {
   const bonus        = customBonus ? t.bonus        : vars.bonus;
 
   const linkedBadge = t.id
-    ? `<span class="teacher-badge" style="background:var(--blue-light);color:#1d4ed8;margin-left:6px;" title="Synced from Staff Management"><i class="fas fa-link"></i> ${t.id}</span>`
+    ? `<span class="teacher-badge" style="background:var(--blue-light);color:#1d4ed8;margin-left:6px;" title="Synced from Staff Management"><i class="fas fa-link"></i> ${SSX.esc(t.id)}</span>`
     : '';
 
   div.innerHTML = `
@@ -1396,8 +1396,8 @@ function appendNonTeachingCard(t = {}, isNew = true) {
       <span class="teacher-badge ${isNew ? 'new-badge' : ''}">${isNew ? 'New' : 'Active'}</span>
       ${linkedBadge}
     </div>
-    <input type="text" class="teacher-name-input" value="${t.name || ''}" placeholder="Staff full name">
-    <input type="text" class="teacher-subject-input" value="${t.subject || ''}" placeholder="Role (e.g. Accountant, Driver)">
+    <input type="text" class="teacher-name-input" value="${SSX.esc(t.name || '')}" placeholder="Staff full name">
+    <input type="text" class="teacher-subject-input" value="${SSX.esc(t.subject || '')}" placeholder="Role (e.g. Accountant, Driver)">
 
     <div class="pay-grid">
       <div>

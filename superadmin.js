@@ -420,12 +420,12 @@ function renderPlanCards() {
   if (!allPlans()[currentPlanId]) currentPlanId = plans[0].id;
 
   wrap.innerHTML = plans.map(plan => `
-    <div class="sa-plan-card ${plan.id === currentPlanId ? "selected" : ""}" data-plan="${plan.id}">
+    <div class="sa-plan-card ${plan.id === currentPlanId ? "selected" : ""}" data-plan="${SSX.esc(plan.id)}">
       <div class="plan-check"></div>
       <div class="plan-name">${plan.label}</div>
       <div class="plan-price">Rs ${Number(plan.price).toLocaleString()}<span>/year</span></div>
-      <div class="sa-hint" style="margin-bottom:2px;">${plan.studentLimit} students or less</div>
-      <div class="sa-hint" style="margin-bottom:2px;">${plan.staffLimit || 0} staff members or less</div>
+      <div class="sa-hint" style="margin-bottom:2px;">${SSX.esc(plan.studentLimit)} students or less</div>
+      <div class="sa-hint" style="margin-bottom:2px;">${SSX.esc(plan.staffLimit || 0)} staff members or less</div>
       ${planFeatureList(plan.id)}
     </div>
   `).join("");
@@ -441,7 +441,7 @@ function renderPlanCards() {
 function renderExtraLockOptions() {
   const sel = document.getElementById("newSchoolExtraLock");
   sel.innerHTML = '<option value="">None</option>' +
-    SSA.FEATURES.map(f => `<option value="${f.key}">${f.label}</option>`).join("");
+    SSA.FEATURES.map(f => `<option value="${SSX.esc(f.key)}">${f.label}</option>`).join("");
 }
 
 /* ══════════════ SHARE & PRINT PLANS ══════════════ */
@@ -518,10 +518,10 @@ function printPlans(only) {
   area.innerHTML = `
     <div class="pr-head">
       <div class="pr-brand">
-        <img class="pr-logo" src="${SOFT_SCHOOL_BRAND.logo}" alt="${SOFT_SCHOOL_BRAND.name}">
+        <img class="pr-logo" src="${SSX.url(SOFT_SCHOOL_BRAND.logo)}" alt="${SSX.esc(SOFT_SCHOOL_BRAND.name)}">
         <div class="pr-brand-text">
-          <div class="pr-brand-name">${SOFT_SCHOOL_BRAND.name}</div>
-          <div class="pr-brand-tag">${SOFT_SCHOOL_BRAND.tagline}</div>
+          <div class="pr-brand-name">${SSX.esc(SOFT_SCHOOL_BRAND.name)}</div>
+          <div class="pr-brand-tag">${SSX.esc(SOFT_SCHOOL_BRAND.tagline)}</div>
         </div>
       </div>
       <h1>Plans &amp; Pricing — Annual</h1>
@@ -535,7 +535,7 @@ function printPlans(only) {
           <h3>${p.label}</h3>
           <div class="pr-price">Rs ${Number(p.price).toLocaleString()}<span> / year</span></div>
           <div class="pr-validity">Valid for 1 year from registration date</div>
-          <div style="font-size:0.82rem;color:#44615D;">Up to ${p.studentLimit} students</div>
+          <div style="font-size:0.82rem;color:#44615D;">Up to ${SSX.esc(p.studentLimit)} students</div>
           <ul>
             ${included.map(l => `<li>&#10003; ${l}</li>`).join("")}
             ${excluded.map(l => `<li style="color:#8AA29E;">&#10007; ${l}</li>`).join("")}
@@ -543,7 +543,7 @@ function printPlans(only) {
         </div>`;
       }).join("")}
     </div>
-    <div class="pr-foot"><img src="${SOFT_SCHOOL_BRAND.logo}" alt=""> ${SOFT_SCHOOL_BRAND.name} — ${SOFT_SCHOOL_BRAND.tagline} · All plans are annual (1 year)</div>
+    <div class="pr-foot"><img src="${SSX.url(SOFT_SCHOOL_BRAND.logo)}" alt=""> ${SSX.esc(SOFT_SCHOOL_BRAND.name)} — ${SSX.esc(SOFT_SCHOOL_BRAND.tagline)} · All plans are annual (1 year)</div>
   `;
 
   window.print();
@@ -761,7 +761,7 @@ function usageCell(info) {
     : "";
   return `
     <div class="sa-usage-cell">
-      <div class="sa-usage-nums">${info.count} / ${info.limit || "—"} ${icon}</div>
+      <div class="sa-usage-nums">${SSX.esc(info.count)} / ${info.limit || "—"} ${icon}</div>
       <div class="sa-usage-bar"><div class="sa-usage-fill ${cls}" style="width:${info.limit ? info.pct : 0}%;"></div></div>
     </div>`;
 }
@@ -789,10 +789,10 @@ function renderLimitAlerts() {
       </div>
       <div class="sa-limit-banner-list">
         ${flagged.map(item => `
-          <div class="sa-limit-chip ${item.info.state === "full" ? "danger" : "warn"}" data-id="${item.school.id}">
+          <div class="sa-limit-chip ${item.info.state === "full" ? "danger" : "warn"}" data-id="${SSX.esc(item.school.id)}">
             <i class="fas ${item.type === "student" ? "fa-user-graduate" : "fa-chalkboard-teacher"}"></i>
-            <b>${item.school.name}</b>
-            <span>${item.info.count}/${item.info.limit} ${item.type === "student" ? "students" : "staff"}${item.info.state === "full" ? " — full" : ""}</span>
+            <b>${SSX.esc(item.school.name)}</b>
+            <span>${SSX.esc(item.info.count)}/${item.info.limit} ${item.type === "student" ? "students" : "staff"}${item.info.state === "full" ? " — full" : ""}</span>
           </div>
         `).join("")}
       </div>
@@ -808,7 +808,7 @@ function planBadgeClass(planId) { return allPlans()[planId] ? "sa-badge-basic" :
 
 function schoolLogoCell(school) {
   if (school.logo) {
-    return `<img class="sa-school-logo" src="${school.logo}" alt="">`;
+    return `<img class="sa-school-logo" src="${SSX.url(school.logo)}" alt="">`;
   }
   const initial = (school.name || "?").trim().charAt(0).toUpperCase();
   return `<div class="sa-school-logo placeholder">${initial}</div>`;
@@ -839,7 +839,7 @@ function renderSchoolsTable(filterText) {
         ${schools.map(s => {
           const plan = getPlan(s.planId);
           return `
-          <tr data-id="${s.id}">
+          <tr data-id="${SSX.esc(s.id)}">
             <td>
               <div class="sa-school-cell">
                 ${schoolLogoCell(s)}
@@ -893,7 +893,7 @@ async function renderAll() {
     tableWrap.innerHTML = `
       <div class="sa-empty" style="color:var(--red-600)">
         <i class="fas fa-exclamation-triangle"></i>
-        Backend connection error: ${error.message}
+        Backend connection error: ${SSX.esc(error.message)}
       </div>`;
   }
 }
@@ -930,13 +930,13 @@ function openManageSchool(id) {
   const isBlocked = school.status === "blocked";
   const plans = planList();
   const planOptions = plans.length
-    ? plans.map(p => `<option value="${p.id}" ${p.id === school.planId ? "selected" : ""}>${p.label} — Rs ${Number(p.price).toLocaleString()}/year</option>`).join("")
+    ? plans.map(p => `<option value="${SSX.esc(p.id)}" ${p.id === school.planId ? "selected" : ""}>${p.label} — Rs ${Number(p.price).toLocaleString()}/year</option>`).join("")
     : `<option value="">No plans created yet</option>`;
   const orphanPlan = school.planId && !allPlans()[school.planId];
   const studentUsage = usageInfo(school.studentCount, school.studentLimit);
   const staffUsage = usageInfo(school.staffCount, school.staffLimit);
   const usageHint = (info, noun) => info.state === "ok"
-    ? `<p class="sa-hint">${info.count} ${noun} currently in use.</p>`
+    ? `<p class="sa-hint">${SSX.esc(info.count)} ${noun} currently in use.</p>`
     : `<p class="sa-hint"><span class="sa-usage-alert-inline ${info.state === "full" ? "danger" : "warn"}"><i class="fas fa-triangle-exclamation"></i> ${info.state === "full" ? `Limit reached — ${info.count}/${info.limit} ${noun}` : `${info.count}/${info.limit} ${noun} used, nearing the limit`}</span></p>`;
 
   document.getElementById("manageSchoolBody").innerHTML = `
@@ -949,13 +949,13 @@ function openManageSchool(id) {
     <div class="sa-form-row full sa-field-group">
       <div>
         <label>School name</label>
-        <input type="text" id="mgName" value="${school.name.replace(/"/g, "&quot;")}">
+        <input type="text" id="mgName" value="${SSX.esc(school.name)}">
       </div>
     </div>
     <div class="sa-form-row full sa-field-group">
       <div>
         <label>Registration prefix <span style="font-size:0.76rem;font-weight:400;color:var(--ink-faint);">(2–4 letters · used in student IDs)</span></label>
-        <input type="text" id="mgPrefix" value="${(school.prefix || "").replace(/"/g, "&quot;")}" maxlength="4" placeholder="Auto from name" style="text-transform:uppercase;letter-spacing:0.08em;">
+        <input type="text" id="mgPrefix" value="${SSX.esc(school.prefix || "")}" maxlength="4" placeholder="Auto from name" style="text-transform:uppercase;letter-spacing:0.08em;">
         <p class="sa-hint">Student IDs look like <strong>${school.prefix || "HRK"}_77001</strong>. Leave blank to auto-derive from school name initials.</p>
       </div>
     </div>
@@ -964,7 +964,7 @@ function openManageSchool(id) {
       <div class="sa-field-group">
         <label>School logo</label>
         <div class="sa-logo-upload">
-          <img id="mgLogoPreview" class="sa-logo-preview" src="${school.logo || "logo-icon.png"}" alt="">
+          <img id="mgLogoPreview" class="sa-logo-preview" src="${SSX.url(school.logo || "logo-icon.png")}" alt="">
           <label class="btn-choose" for="mgLogoInput"><i class="fas fa-upload"></i> Change logo</label>
           <input type="file" id="mgLogoInput" accept="image/*">
           <button type="button" class="sa-btn-secondary" id="mgLogoRemove" style="padding:8px 14px;font-size:0.82rem;">Remove</button>
@@ -981,7 +981,7 @@ function openManageSchool(id) {
       </div>
       <div class="sa-field-group">
         <label>Student limit</label>
-        <input type="number" id="mgStudentLimit" value="${school.studentLimit}">
+        <input type="number" id="mgStudentLimit" value="${SSX.esc(school.studentLimit)}">
         ${usageHint(studentUsage, "students")}
       </div>
     </div>
@@ -989,7 +989,7 @@ function openManageSchool(id) {
     <div class="sa-form-row">
       <div class="sa-field-group">
         <label>Staff limit</label>
-        <input type="number" id="mgStaffLimit" min="1" value="${school.staffLimit || 0}">
+        <input type="number" id="mgStaffLimit" min="1" value="${SSX.esc(school.staffLimit || 0)}">
         ${usageHint(staffUsage, "staff")}
       </div>
     </div>
@@ -1010,14 +1010,14 @@ function openManageSchool(id) {
       <div class="sa-cred-item">
         <label>School ID</label>
         <div class="sa-cred-value">
-          <span id="mgCredSchoolId">${(school.schoolId || "—").replace(/"/g, "&quot;")}</span>
+          <span id="mgCredSchoolId">${SSX.esc(school.schoolId || "—")}</span>
           <button type="button" class="sa-cred-copy-btn" id="mgCopySchoolId" title="Copy School ID"><i class="fas fa-copy"></i></button>
         </div>
       </div>
       <div class="sa-cred-item">
         <label>Security code</label>
         <div class="sa-cred-code-box">
-          <span class="sa-cred-code" id="mgCredCode">${(school.password || "—").replace(/"/g, "&quot;")}</span>
+          <span class="sa-cred-code" id="mgCredCode">${SSX.esc(school.password || "—")}</span>
           <button type="button" class="sa-cred-copy-btn" id="mgCopyCode" title="Copy security code"><i class="fas fa-copy"></i></button>
         </div>
       </div>
@@ -1031,7 +1031,7 @@ function openManageSchool(id) {
           <div class="sa-lock-row">
             <span class="name"><i class="fas ${featureIcon(f.key)}"></i>${f.label}</span>
             <label class="sa-switch">
-              <input type="checkbox" class="mgLockToggle" data-feature="${f.key}" ${schoolLocks.includes(f.key) ? "checked" : ""}>
+              <input type="checkbox" class="mgLockToggle" data-feature="${SSX.esc(f.key)}" ${schoolLocks.includes(f.key) ? "checked" : ""}>
               <span class="slider"></span>
             </label>
           </div>
@@ -1201,7 +1201,7 @@ function renderPlanFeatureToggles() {
     <div class="sa-lock-row">
       <span class="name"><i class="fas ${featureIcon(f.key)}"></i>${f.label}</span>
       <label class="sa-switch">
-        <input type="checkbox" class="planFeatureToggle" data-feature="${f.key}" checked>
+        <input type="checkbox" class="planFeatureToggle" data-feature="${SSX.esc(f.key)}" checked>
         <span class="slider" style="background:var(--green-600);"></span>
       </label>
     </div>`).join("");
@@ -1231,13 +1231,13 @@ function renderExistingPlans() {
       <div class="sa-plan-row">
         <div class="info">
           <b>${p.label}</b>
-          <small>Rs ${Number(p.price).toLocaleString()}/year · up to ${p.studentLimit} students · up to ${p.staffLimit || 0} staff · ${included}/${SSA.FEATURES.length} features</small>
+          <small>Rs ${Number(p.price).toLocaleString()}/year · up to ${SSX.esc(p.studentLimit)} students · up to ${SSX.esc(p.staffLimit || 0)} staff · ${included}/${SSA.FEATURES.length} features</small>
         </div>
         <div class="row-actions">
-          <button class="icon-btn wa" data-share="${p.id}" title="Share on WhatsApp"><i class="fab fa-whatsapp"></i></button>
-          <button class="icon-btn" data-copy="${p.id}" title="Copy plan details"><i class="fas fa-copy"></i></button>
-          <button class="icon-btn" data-print="${p.id}" title="Print this plan"><i class="fas fa-print"></i></button>
-          <button class="icon-btn danger" data-plan="${p.id}" title="Delete plan"><i class="fas fa-trash"></i></button>
+          <button class="icon-btn wa" data-share="${SSX.esc(p.id)}" title="Share on WhatsApp"><i class="fab fa-whatsapp"></i></button>
+          <button class="icon-btn" data-copy="${SSX.esc(p.id)}" title="Copy plan details"><i class="fas fa-copy"></i></button>
+          <button class="icon-btn" data-print="${SSX.esc(p.id)}" title="Print this plan"><i class="fas fa-print"></i></button>
+          <button class="icon-btn danger" data-plan="${SSX.esc(p.id)}" title="Delete plan"><i class="fas fa-trash"></i></button>
         </div>
       </div>`;
   }).join("");
@@ -1389,11 +1389,11 @@ function renderManagePlansList() {
       <div class="sa-plan-row">
         <div class="info">
           <b>${p.label}</b>
-          <small>Rs ${Number(p.price).toLocaleString()}/year · up to ${p.studentLimit} students · up to ${p.staffLimit || 0} staff · ${included}/${SSA.FEATURES.length} features</small>
+          <small>Rs ${Number(p.price).toLocaleString()}/year · up to ${SSX.esc(p.studentLimit)} students · up to ${SSX.esc(p.staffLimit || 0)} staff · ${included}/${SSA.FEATURES.length} features</small>
         </div>
         <div class="row-actions">
-          <button class="icon-btn" data-edit="${p.id}" title="Edit plan"><i class="fas fa-pen"></i></button>
-          <button class="icon-btn danger" data-delete="${p.id}" title="Delete plan"><i class="fas fa-trash"></i></button>
+          <button class="icon-btn" data-edit="${SSX.esc(p.id)}" title="Edit plan"><i class="fas fa-pen"></i></button>
+          <button class="icon-btn danger" data-delete="${SSX.esc(p.id)}" title="Delete plan"><i class="fas fa-trash"></i></button>
         </div>
       </div>`;
   }).join("");
@@ -1435,23 +1435,23 @@ function renderManagePlanEditForm(planId) {
     <div class="sa-form-row full sa-field-group">
       <div>
         <label>Plan name</label>
-        <input type="text" id="editPlanName" value="${plan.label.replace(/"/g, "&quot;")}">
+        <input type="text" id="editPlanName" value="${SSX.esc(plan.label)}">
       </div>
     </div>
     <div class="sa-form-row">
       <div class="sa-field-group">
         <label>Amount (Rs / year — annual plan)</label>
-        <input type="number" id="editPlanPrice" min="0" value="${plan.price}">
+        <input type="number" id="editPlanPrice" min="0" value="${SSX.esc(plan.price)}">
       </div>
       <div class="sa-field-group">
         <label>Student limit</label>
-        <input type="number" id="editPlanLimit" min="1" value="${plan.studentLimit}">
+        <input type="number" id="editPlanLimit" min="1" value="${SSX.esc(plan.studentLimit)}">
       </div>
     </div>
     <div class="sa-form-row">
       <div class="sa-field-group">
         <label>Staff limit</label>
-        <input type="number" id="editPlanStaffLimit" min="1" value="${plan.staffLimit || 0}">
+        <input type="number" id="editPlanStaffLimit" min="1" value="${SSX.esc(plan.staffLimit || 0)}">
       </div>
     </div>
     <div class="sa-limits-box">
@@ -1466,7 +1466,7 @@ function renderManagePlanEditForm(planId) {
     <div class="sa-lock-row">
       <span class="name"><i class="fas ${featureIcon(f.key)}"></i>${f.label}</span>
       <label class="sa-switch">
-        <input type="checkbox" class="editPlanFeatureToggle" data-feature="${f.key}" ${isOn ? "checked" : ""}>
+        <input type="checkbox" class="editPlanFeatureToggle" data-feature="${SSX.esc(f.key)}" ${isOn ? "checked" : ""}>
         <span class="slider" style="background:${isOn ? "var(--green-600)" : "var(--ink-faint)"};"></span>
       </label>
     </div>`;
@@ -1597,14 +1597,14 @@ function checkExpiries(force) {
       These schools are within one month of their annual plan expiry. Renew them to keep their access running.
     </p>
     ${list.map(({ school, info }) => `
-      <div class="sa-expiry-row ${info.state}">
+      <div class="sa-expiry-row ${SSX.esc(info.state)}">
         <div class="info">
-          <b>${school.name}</b>
+          <b>${SSX.esc(school.name)}</b>
           <small>${school.schoolId || "—"} · ${getPlan(school.planId).label} · expires ${fmtDate(school.expiryDate)}</small>
         </div>
         <div class="right">
-          <span class="sa-badge ${info.cls}">${info.label}</span>
-          <button class="sa-mini-btn" data-renew="${school.id}"><i class="fas fa-rotate"></i> Renew 1 year</button>
+          <span class="sa-badge ${SSX.esc(info.cls)}">${info.label}</span>
+          <button class="sa-mini-btn" data-renew="${SSX.esc(school.id)}"><i class="fas fa-rotate"></i> Renew 1 year</button>
         </div>
       </div>`).join("")}
   `;

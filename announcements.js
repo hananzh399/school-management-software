@@ -109,7 +109,7 @@
         box.innerHTML = list.map(function (t) {
             var mine = t.lastSender === "ADMIN", pinned = state.pins.indexOf(t.key) >= 0;
             return '<button class="am-th ' + (state.active && state.active.key === t.key ? "on " : "") + (t.unread ? "unread " : "") + (pinned ? "pinned" : "") + '" data-key="' + esc(t.key) + '">' +
-                '<div class="am-av ' + t.type + '">' + initial(t.type === "teacher" ? t.staffName : t.studentName) + "</div>" +
+                '<div class="am-av ' + SSX.esc(t.type) + '">' + initial(t.type === "teacher" ? t.staffName : t.studentName) + "</div>" +
                 '<div class="am-tx"><div class="l1"><b>' + esc(threadTitle(t)) + "</b><small>" + when(t.lastAt) + "</small></div>" +
                 '<span class="id ' + (t.type === "parent" ? "parent-id" : "") + '">' + esc(threadSub(t)) + "</span>" +
                 '<div class="l2"><span>' + (mine ? "You: " : "") + esc(t.lastBody) + "</span>" + (t.unread ? '<i class="am-cnt">' + (t.unread > 99 ? "99+" : t.unread) + "</i>" : "") + "</div></div>" +
@@ -186,7 +186,7 @@
         var sub = d.type === "teacher" ? "Teacher · ID " + d.staffId : guardianLine(d) + " · " + d.regNo + (d.className ? " · " + d.className : "");
         c.innerHTML =
             '<div class="am-head"><button class="am-back" id="am-back" aria-label="Back"><i class="fas fa-arrow-left"></i></button>' +
-            '<div class="am-av ' + d.type + '">' + initial(d.type === "teacher" ? d.name : d.studentName) + "</div>" +
+            '<div class="am-av ' + SSX.esc(d.type) + '">' + initial(d.type === "teacher" ? d.name : d.studentName) + "</div>" +
             '<div class="meta"><b>' + esc(title) + "</b><span>" + esc(sub) + '</span></div><span class="am-live' + (state.online ? "" : " off") + '" id="am-live">' + (state.online ? "Live" : "Offline") + "</span></div>" +
             '<div class="am-bodywrap"><div class="am-body" id="am-body"></div><button class="am-down" id="am-down" hidden><i class="fas fa-arrow-down"></i><span></span></button></div>' +
             '<div class="am-editbar" id="am-editbar" hidden><i class="fas fa-pen"></i><div class="eb"><b>Editing message</b><span id="am-edit-text"></span></div><button type="button" id="am-edit-cancel" aria-label="Cancel editing"><i class="fas fa-xmark"></i></button></div>' +
@@ -203,7 +203,7 @@
         if (key === "sending") svg = '<svg viewBox="0 0 12 12" aria-hidden="true"><circle cx="6" cy="6" r="4.8"/><path d="M6 3.4V6l1.8 1.1"/></svg>';
         else if (key === "sent") svg = '<svg viewBox="0 0 14.5 11" aria-hidden="true"><path d="M1.5 5.8 5.3 9.4 13 1.6"/></svg>';
         else svg = '<svg viewBox="0 0 19 11" aria-hidden="true"><path d="M1.5 5.8 5.3 9.4 13 1.6"/><path d="M6 5.8 9.8 9.4 17.5 1.6"/></svg>';
-        return '<span class="receipt receipt-' + key + '" role="img" aria-label="' + RECEIPT_LABEL[key] + '" title="' + RECEIPT_LABEL[key] + '">' + svg + "</span>";
+        return '<span class="receipt receipt-' + SSX.esc(key) + '" role="img" aria-label="' + RECEIPT_LABEL[key] + '" title="' + RECEIPT_LABEL[key] + '">' + svg + "</span>";
     }
     /** Status of one of the admin's own messages. A message is "read" once the teacher / parent opened the chat. */
     function statusOf(m) {
@@ -225,13 +225,13 @@
         var html = "", last = "";
         state.msgs.forEach(function (m) {
             var dl = dayLabel(m.createdAt); if (dl !== last) { html += '<div class="am-day">' + dl + "</div>"; last = dl; }
-            if (state.mark && m.id && m.id === state.mark.id) html += '<div class="am-unread"><span>' + state.mark.count + (state.mark.count === 1 ? " unread message" : " unread messages") + "</span></div>";
+            if (state.mark && m.id && m.id === state.mark.id) html += '<div class="am-unread"><span>' + SSX.esc(state.mark.count) + (state.mark.count === 1 ? " unread message" : " unread messages") + "</span></div>";
             var me = m.senderType === "ADMIN", tap = me && !!m.id;
             var who = me ? "" : '<span class="who">' + esc(m.senderType === "PARENT" ? (m.guardianName || "Parent") + " (parent)" : (m.senderName || "Teacher")) + "</span>";
             var grp = m.broadcastId ? '<span class="grp"><i class="fas fa-users"></i> Group message</span>' : "";
-            var menu = !me && m.id ? '<button class="am-mm" data-mid="' + m.id + '" aria-label="Message options"><i class="fas fa-chevron-down"></i></button>' : "";
+            var menu = !me && m.id ? '<button class="am-mm" data-mid="' + SSX.esc(m.id) + '" aria-label="Message options"><i class="fas fa-chevron-down"></i></button>' : "";
             var meta = '<span class="t">' + (m.editedAt ? '<em class="am-edited">Edited</em>' : "") + clock(m.createdAt) + (me ? ' <span class="receipt-slot">' + receiptHTML(statusOf(m)) + "</span>" : "") + "</span>";
-            html += '<div class="am-b ' + (me ? "me" : "them") + (m.pending ? " sending" : "") + (tap ? " tappable" : "") + (state.editing === m.id && me ? " is-editing" : "") + '" data-mid="' + (m.id || "") + '"' +
+            html += '<div class="am-b ' + (me ? "me" : "them") + (m.pending ? " sending" : "") + (tap ? " tappable" : "") + (state.editing === m.id && me ? " is-editing" : "") + '" data-mid="' + (SSX.esc(m.id || "")) + '"' +
                 (tap ? ' tabindex="0" role="button" aria-label="Your message. Press for details."' : "") + ">" + menu + who + grp + "<p>" + esc(m.body) + "</p>" + meta + "</div>";
         });
         body.innerHTML = html;
@@ -461,7 +461,7 @@
         if (!state.dir) { box.innerHTML = '<div class="am-empty">Loading…</div>'; return; }
         var rows = pickRows(), shown = rows.slice(0, 200);
         box.innerHTML = shown.length ? shown.map(function (r) {
-            return '<button type="button" class="am-th ' + (c.sel[r.id] ? "sel" : "") + '" data-id="' + esc(r.id) + '"><span class="am-chk"><i class="fas fa-check"></i></span><div class="am-av ' + r.type + '">' + initial(r.name) + '</div><div class="am-tx"><b>' + esc(r.name) + '</b><span class="id ' + (r.type === "parent" ? "parent-id" : "") + '">' + esc(r.sub) + "</span></div></button>";
+            return '<button type="button" class="am-th ' + (c.sel[r.id] ? "sel" : "") + '" data-id="' + esc(r.id) + '"><span class="am-chk"><i class="fas fa-check"></i></span><div class="am-av ' + SSX.esc(r.type) + '">' + initial(r.name) + '</div><div class="am-tx"><b>' + esc(r.name) + '</b><span class="id ' + (r.type === "parent" ? "parent-id" : "") + '">' + esc(r.sub) + "</span></div></button>";
         }).join("") : '<div class="am-empty"><b>No match</b></div>';
         $("#pick-n").textContent = Object.keys(c.sel).length + " selected";
     }

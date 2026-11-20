@@ -93,7 +93,7 @@
   function buildDayChips(boxId, days, kind) {
     const box = $(boxId); if (!box || box.childElementCount) return;
     box.innerHTML = days.map((d) =>
-      '<label class="wa-chip"><input type="checkbox" data-rem="' + kind + '" value="' + d + '"> ' + d + (d === 1 ? ' day' : ' days') + '</label>').join('');
+      '<label class="wa-chip"><input type="checkbox" data-rem="' + SSX.esc(kind) + '" value="' + d + '"> ' + d + (d === 1 ? ' day' : ' days') + '</label>').join('');
   }
   const pickedDays = (kind) =>
     Array.from(document.querySelectorAll('input[data-rem="' + kind + '"]:checked')).map((i) => i.value).join(',');

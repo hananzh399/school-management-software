@@ -639,7 +639,7 @@ function renderClasses() {
         const card = document.createElement("div");
         card.className = "class-card" + (alreadySaved ? " class-card--saved" : "");
         card.innerHTML = `
-            <div class="class-name">${cls.name}${alreadySaved ? ' <span class="class-saved-badge"><i class="fas fa-check-circle"></i> Saved Today</span>' : ''}</div>
+            <div class="class-name">${SSX.esc(cls.name)}${alreadySaved ? ' <span class="class-saved-badge"><i class="fas fa-check-circle"></i> Saved Today</span>' : ''}</div>
             <div class="class-meta">Sections: ${cls.sections.join(", ")}</div>
             <div class="class-count"><i class="fas fa-users"></i> ${count} students</div>
         `;
@@ -763,32 +763,32 @@ function renderTable() {
             const statusClass = entry.status === "present" ? "done-present" : entry.status === "absent" ? "done-absent" : "done-leave";
             tr.innerHTML = `
                 <td>${idx + 1}</td>
-                <td><span class="id-badge">${s.regNo}</span></td>
-                <td>${s.name}${entry.reason ? `<span class="done-reason">(${entry.reason})</span>` : ""}</td>
-                <td>${s.section}</td>
-                <td>${s.guardian}</td>
+                <td><span class="id-badge">${SSX.esc(s.regNo)}</span></td>
+                <td>${SSX.esc(s.name)}${entry.reason ? `<span class="done-reason">(${SSX.esc(entry.reason)})</span>` : ""}</td>
+                <td>${SSX.esc(s.section)}</td>
+                <td>${SSX.esc(s.guardian)}</td>
                 <td>
                     <div class="done-cell">
                         <span class="done-badge ${statusClass}"><i class="fas fa-check-circle"></i> Done · ${statusLabel}</span>
-                        <button class="edit-btn" data-edit-id="${s.regNo}"><i class="fas fa-pen"></i> Edit</button>
+                        <button class="edit-btn" data-edit-id="${SSX.esc(s.regNo)}"><i class="fas fa-pen"></i> Edit</button>
                     </div>
                 </td>
             `;
         } else {
             tr.innerHTML = `
                 <td>${idx + 1}</td>
-                <td><span class="id-badge">${s.regNo}</span></td>
+                <td><span class="id-badge">${SSX.esc(s.regNo)}</span></td>
                 <td>
-                    ${s.name}
+                    ${SSX.esc(s.name)}
                     ${entry.status === "leave" ? renderLeaveReason(s.regNo, entry.reason, "student") : ""}
                 </td>
-                <td>${s.section}</td>
-                <td>${s.guardian}</td>
+                <td>${SSX.esc(s.section)}</td>
+                <td>${SSX.esc(s.guardian)}</td>
                 <td>
                     <div class="status-cell">
-                        <button class="status-btn present ${entry.status==='present'?'active':''}" data-id="${s.regNo}" data-status="present"><i class="fas fa-check"></i><span>Present</span></button>
-                        <button class="status-btn absent  ${entry.status==='absent' ?'active':''}" data-id="${s.regNo}" data-status="absent"><i class="fas fa-times"></i><span>Absent</span></button>
-                        <button class="status-btn leave   ${entry.status==='leave'  ?'active':''}" data-id="${s.regNo}" data-status="leave"><i class="fas fa-clock"></i><span>Leave</span></button>
+                        <button class="status-btn present ${entry.status==='present'?'active':''}" data-id="${SSX.esc(s.regNo)}" data-status="present"><i class="fas fa-check"></i><span>Present</span></button>
+                        <button class="status-btn absent  ${entry.status==='absent' ?'active':''}" data-id="${SSX.esc(s.regNo)}" data-status="absent"><i class="fas fa-times"></i><span>Absent</span></button>
+                        <button class="status-btn leave   ${entry.status==='leave'  ?'active':''}" data-id="${SSX.esc(s.regNo)}" data-status="leave"><i class="fas fa-clock"></i><span>Leave</span></button>
                     </div>
                 </td>
             `;
@@ -825,7 +825,7 @@ function renderTable() {
 function renderLeaveReason(id, value, kind) {
     return `<div class="leave-reason">
         <label>Reason</label>
-        <input data-id="${id}" data-kind="${kind}" type="text" placeholder="e.g. Sick Leave, Personal" value="${value || ""}" />
+        <input data-id="${SSX.esc(id)}" data-kind="${SSX.esc(kind)}" type="text" placeholder="e.g. Sick Leave, Personal" value="${value || ""}" />
     </div>`;
 }
  
@@ -1037,21 +1037,21 @@ function renderStaff() {
 
             tr.innerHTML = `
                 <td>${idx + 1}</td>
-                <td><span class="id-badge">${s.id}</span></td>
+                <td><span class="id-badge">${SSX.esc(s.id)}</span></td>
                 <td>
-                    ${s.name}
-                    ${entry.reason ? `<span class="done-reason">(${entry.reason})</span>` : ""} 
+                    ${SSX.esc(s.name)}
+                    ${entry.reason ? `<span class="done-reason">(${SSX.esc(entry.reason)})</span>` : ""} 
                     ${timeLabel}
                 </td>
-                <td>${s.role}</td>
-                <td>${s.department}</td>
+                <td>${SSX.esc(s.role)}</td>
+                <td>${SSX.esc(s.department)}</td>
                 <td>
                     <div class="done-cell">
                         ${isFromDB ? 
                             `<span class="done-badge done-present" title="Recorded by biometric device or ID-card scanner"><i class="fas fa-fingerprint"></i> ${entry.checkOut ? "Checked Out" : "Checked In"}</span>` : 
                             `<span class="done-badge ${statusClass}"><i class="fas fa-check-circle"></i> Done · ${statusLabel}</span>`
                         }
-                        <button class="edit-btn" data-edit-staff="${s.id}"><i class="fas fa-pen"></i> Edit</button>
+                        <button class="edit-btn" data-edit-staff="${SSX.esc(s.id)}"><i class="fas fa-pen"></i> Edit</button>
                     </div>
                 </td>
             `;
@@ -1060,22 +1060,22 @@ function renderStaff() {
             // The "Absent" button will be active/highlighted by default because status is "absent"
             tr.innerHTML = `
                 <td>${idx + 1}</td>
-                <td><span class="id-badge">${s.id}</span></td>
+                <td><span class="id-badge">${SSX.esc(s.id)}</span></td>
                 <td>
-                    ${s.name}${timeLabel}
+                    ${SSX.esc(s.name)}${timeLabel}
                     ${entry.status === "leave" ? renderLeaveReason(s.id, entry.reason, "staff") : ""}
                 </td>
-                <td>${s.role}</td>
-                <td>${s.department}</td>
+                <td>${SSX.esc(s.role)}</td>
+                <td>${SSX.esc(s.department)}</td>
                 <td>
                     <div class="status-cell">
-                        <button class="status-btn present ${entry.status === 'present' ? 'active' : ''}" data-sid="${s.id}" data-status="present">
+                        <button class="status-btn present ${entry.status === 'present' ? 'active' : ''}" data-sid="${SSX.esc(s.id)}" data-status="present">
                             <i class="fas fa-check"></i><span>Present</span>
                         </button>
-                        <button class="status-btn absent ${entry.status === 'absent' ? 'active' : ''}" data-sid="${s.id}" data-status="absent">
+                        <button class="status-btn absent ${entry.status === 'absent' ? 'active' : ''}" data-sid="${SSX.esc(s.id)}" data-status="absent">
                             <i class="fas fa-times"></i><span>Absent</span>
                         </button>
-                        <button class="status-btn leave ${entry.status === 'leave' ? 'active' : ''}" data-sid="${s.id}" data-status="leave">
+                        <button class="status-btn leave ${entry.status === 'leave' ? 'active' : ''}" data-sid="${SSX.esc(s.id)}" data-status="leave">
                             <i class="fas fa-clock"></i><span>Leave</span>
                         </button>
                     </div>
@@ -1157,7 +1157,7 @@ function initView() {
             const dateStr = new Date().toLocaleDateString(undefined,{weekday:'long',year:'numeric',month:'long',day:'numeric'});
             const w = window.open("", "_blank", "width=1000,height=800");
             if (!w) { toast("Pop-up blocked — please allow pop-ups to print."); return; }
-            w.document.write(`<!doctype html><html><head><title>${title}</title>
+            w.document.write(`<!doctype html><html><head><title>${SSX.esc(title)}</title>
                 <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
                 <style>
                     body{font-family:Inter,Arial,sans-serif;padding:24px;color:#0f172a;}
@@ -1180,7 +1180,7 @@ function initView() {
                     @page{ size:A4; margin:14mm; }
                     @media print { button{display:none;} body{padding:0;} }
                 </style></head><body>
-                <h1>${title}</h1>
+                <h1>${SSX.esc(title)}</h1>
                 <div class="sub">${_reportEscapeHtml(_reportSchoolInfo().name)} &middot; ${dateStr}</div>
                 ${kpis}${table}
                 <script>window.onload=()=>{setTimeout(()=>window.print(),250);};<\/script>
@@ -1212,7 +1212,7 @@ function initView() {
                     toast("Report copied to clipboard");
                 } else {
                     const w = window.open("", "_blank");
-                    w.document.write("<pre>"+text.replace(/</g,"&lt;")+"</pre>");
+                    w.document.write("<pre>"+SSX.esc(text)+"</pre>");
                     w.document.close();
                 }
             } catch (err) {
@@ -1274,7 +1274,7 @@ function renderView() {
         tr.innerHTML = `
             <td>${idx+1}</td>
             <td><span class="id-badge">${row.p[idKey]}</span></td>
-            <td>${row.p.name}</td>
+            <td>${SSX.esc(row.p.name)}</td>
             <td>${isStaff ? "—" : escapeHtml(row.p.guardian || "—")}</td>
             <td style="text-align:center"><span class="badge badge-present">${row.pr}</span></td>
             <td style="text-align:center"><span class="badge badge-absent">${row.ab}</span></td>
@@ -1559,9 +1559,9 @@ function renderMonthly() {
     let bodyHtml = "<tbody>";
     students.forEach(s => {
         let p = 0, a = 0, l = 0;
-        let rowHtml = `<tr class="clickable-row" data-regno="${s.regNo}" title="Double-click to view full attendance record">
-            <td class="col-id"><span class="id-badge">${s.regNo}</span></td>
-            <td class="col-name">${s.name}</td>
+        let rowHtml = `<tr class="clickable-row" data-regno="${SSX.esc(s.regNo)}" title="Double-click to view full attendance record">
+            <td class="col-id"><span class="id-badge">${SSX.esc(s.regNo)}</span></td>
+            <td class="col-name">${SSX.esc(s.name)}</td>
             <td class="col-guardian">${escapeHtml(s.guardian || "—")}</td>`;
 
         if (period === "year") {
@@ -1953,16 +1953,16 @@ function _performanceParagraph(ratingCls, pct, scopeName) {
     const period = scopeName || "this period";
     switch (ratingCls) {
         case "excellent":
-            return `Attendance for ${period} has been <strong>excellent</strong> at ${pct}%. Consistent presence reflects strong discipline, engagement and a positive academic attitude. Keep up this outstanding commitment.`;
+            return `Attendance for ${SSX.esc(period)} has been <strong>excellent</strong> at ${pct}%. Consistent presence reflects strong discipline, engagement and a positive academic attitude. Keep up this outstanding commitment.`;
         case "good":
-            return `Attendance for ${period} has been <strong>good</strong> at ${pct}%. Engagement is steady and reliable; a small reduction in absences would push this into the excellent range.`;
+            return `Attendance for ${SSX.esc(period)} has been <strong>good</strong> at ${pct}%. Engagement is steady and reliable; a small reduction in absences would push this into the excellent range.`;
         case "moderate":
         case "average":
-            return `Attendance for ${period} has been <strong>moderate</strong> at ${pct}%. There is clear room for improvement — irregular attendance can begin to affect academic progress and continuity of learning.`;
+            return `Attendance for ${SSX.esc(period)} has been <strong>moderate</strong> at ${pct}%. There is clear room for improvement — irregular attendance can begin to affect academic progress and continuity of learning.`;
         case "poor":
         case "bad":
         default:
-            return `Attendance for ${period} has been <strong>poor</strong> at ${pct}%. This level of absence is a serious concern and is likely to impact academic performance. Immediate corrective action and closer monitoring are recommended.`;
+            return `Attendance for ${SSX.esc(period)} has been <strong>poor</strong> at ${pct}%. This level of absence is a serious concern and is likely to impact academic performance. Immediate corrective action and closer monitoring are recommended.`;
     }
 }
 
@@ -2131,15 +2131,15 @@ function _performanceParagraph(ratingCls, pct, scopeName) {
                 </div>
                 <div class="report-stat report-stat--present">
                     <span class="report-stat__label">Total Presence</span>
-                    <span class="report-stat__value">${d.present}</span>
+                    <span class="report-stat__value">${SSX.esc(d.present)}</span>
                 </div>
                 <div class="report-stat report-stat--absent">
                     <span class="report-stat__label">Total Absence</span>
-                    <span class="report-stat__value">${d.absent}</span>
+                    <span class="report-stat__value">${SSX.esc(d.absent)}</span>
                 </div>
                 <div class="report-stat report-stat--leave">
                     <span class="report-stat__label">Total Leaves</span>
-                    <span class="report-stat__value">${d.leave}</span>
+                    <span class="report-stat__value">${SSX.esc(d.leave)}</span>
                 </div>
                 <div class="report-stat report-stat--pct">
                     <span class="report-stat__label">Attendance %</span>
@@ -2152,7 +2152,7 @@ function _performanceParagraph(ratingCls, pct, scopeName) {
                 ${reasonsHtml}
             </div>
 
-            <div class="report-rating report-rating--${d.rating.cls}">
+            <div class="report-rating report-rating--${SSX.esc(d.rating.cls)}">
                 Overall Performance: <strong>${d.rating.label}</strong>
             </div>
 
@@ -2381,15 +2381,15 @@ function _performanceParagraph(ratingCls, pct, scopeName) {
                 </div>
                 <div class="report-stat report-stat--present">
                     <span class="report-stat__label">Total Present</span>
-                    <span class="report-stat__value">${d.present}</span>
+                    <span class="report-stat__value">${SSX.esc(d.present)}</span>
                 </div>
                 <div class="report-stat report-stat--absent">
                     <span class="report-stat__label">Total Absent</span>
-                    <span class="report-stat__value">${d.absent}</span>
+                    <span class="report-stat__value">${SSX.esc(d.absent)}</span>
                 </div>
                 <div class="report-stat report-stat--leave">
                     <span class="report-stat__label">Total Leave</span>
-                    <span class="report-stat__value">${d.leave}</span>
+                    <span class="report-stat__value">${SSX.esc(d.leave)}</span>
                 </div>
                 <div class="report-stat report-stat--pct">
                     <span class="report-stat__label">Attendance %</span>
@@ -2402,7 +2402,7 @@ function _performanceParagraph(ratingCls, pct, scopeName) {
                 ${reasonsHtml}
             </div>
 
-            <div class="report-rating report-rating--${d.rating.cls}">
+            <div class="report-rating report-rating--${SSX.esc(d.rating.cls)}">
                 Overall Class Performance: <strong>${d.rating.label}</strong>
             </div>
 
@@ -2693,7 +2693,7 @@ document.addEventListener("DOMContentLoaded", () => {
             try {
                 if (navigator.share) { await navigator.share({ title, text }); toast("Shared"); }
                 else if (navigator.clipboard) { await navigator.clipboard.writeText(text); toast("Report copied to clipboard"); }
-                else { const w = window.open(""); w.document.write("<pre>"+text.replace(/</g,"&lt;")+"</pre>"); }
+                else { const w = window.open(""); w.document.write("<pre>"+SSX.esc(text)+"</pre>"); }
             } catch(e) {
                 if (e && e.name === "AbortError") return;
                 try { await navigator.clipboard.writeText(text); toast("Report copied"); } catch(_) { toast("Unable to share"); }
@@ -2927,13 +2927,13 @@ document.addEventListener("DOMContentLoaded", () => {
             <h4>Attendance Summary</h4>
             <div class="report-stats">
                 <div class="report-stat"><span class="report-stat__label">Total Markable</span><span class="report-stat__value">${d.totalMarks}</span></div>
-                <div class="report-stat report-stat--present"><span class="report-stat__label">Total Present</span><span class="report-stat__value">${d.present}</span></div>
-                <div class="report-stat report-stat--absent"><span class="report-stat__label">Total Absent</span><span class="report-stat__value">${d.absent}</span></div>
-                <div class="report-stat report-stat--leave"><span class="report-stat__label">Total Leave</span><span class="report-stat__value">${d.leave}</span></div>
+                <div class="report-stat report-stat--present"><span class="report-stat__label">Total Present</span><span class="report-stat__value">${SSX.esc(d.present)}</span></div>
+                <div class="report-stat report-stat--absent"><span class="report-stat__label">Total Absent</span><span class="report-stat__value">${SSX.esc(d.absent)}</span></div>
+                <div class="report-stat report-stat--leave"><span class="report-stat__label">Total Leave</span><span class="report-stat__value">${SSX.esc(d.leave)}</span></div>
                 <div class="report-stat report-stat--pct"><span class="report-stat__label">Attendance %</span><span class="report-stat__value">${d.attendancePct}%</span></div>
             </div>
             <div class="report-section"><h4>Top 5 Leave Reasons</h4>${reasonsHtml}</div>
-            <div class="report-rating report-rating--${d.rating.cls}">Overall Staff Performance: <strong>${d.rating.label}</strong></div>
+            <div class="report-rating report-rating--${SSX.esc(d.rating.cls)}">Overall Staff Performance: <strong>${d.rating.label}</strong></div>
             <div class="report-paragraph">${paragraph}</div>
             <div class="report-signature">
                 <div class="report-signature__block"><div class="report-signature__line"></div>HR / Administrator</div>
@@ -3046,13 +3046,13 @@ document.addEventListener("DOMContentLoaded", () => {
             <h4>Attendance Summary</h4>
             <div class="report-stats">
                 <div class="report-stat"><span class="report-stat__label">Total Markable Days</span><span class="report-stat__value">${d.totalMarkable}</span></div>
-                <div class="report-stat report-stat--present"><span class="report-stat__label">Total Presence</span><span class="report-stat__value">${d.present}</span></div>
-                <div class="report-stat report-stat--absent"><span class="report-stat__label">Total Absence</span><span class="report-stat__value">${d.absent}</span></div>
-                <div class="report-stat report-stat--leave"><span class="report-stat__label">Total Leaves</span><span class="report-stat__value">${d.leave}</span></div>
+                <div class="report-stat report-stat--present"><span class="report-stat__label">Total Presence</span><span class="report-stat__value">${SSX.esc(d.present)}</span></div>
+                <div class="report-stat report-stat--absent"><span class="report-stat__label">Total Absence</span><span class="report-stat__value">${SSX.esc(d.absent)}</span></div>
+                <div class="report-stat report-stat--leave"><span class="report-stat__label">Total Leaves</span><span class="report-stat__value">${SSX.esc(d.leave)}</span></div>
                 <div class="report-stat report-stat--pct"><span class="report-stat__label">Attendance %</span><span class="report-stat__value">${d.attendancePct}%</span></div>
             </div>
             <div class="report-section"><h4>Top 2 Leave Reasons</h4>${reasonsHtml}</div>
-            <div class="report-rating report-rating--${d.rating.cls}">Overall Performance: <strong>${d.rating.label}</strong></div>
+            <div class="report-rating report-rating--${SSX.esc(d.rating.cls)}">Overall Performance: <strong>${d.rating.label}</strong></div>
             <div class="report-paragraph">${paragraph}</div>
             <div class="report-signature">
                 <div class="report-signature__block"><div class="report-signature__line"></div>HR / Administrator</div>

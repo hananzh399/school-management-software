@@ -139,7 +139,7 @@ async function fetchStaffFromServer() {
             STAFF_CACHE = [];
             return [];
         }
-        if (!res.ok) throw new Error(`GET staff -> ${res.status}`);
+        if (!res.ok) throw new Error(`GET staff -> ${SSX.esc(res.status)}`);
         const staff = await res.json();
         const list = Array.isArray(staff) ? staff : (Array.isArray(staff && staff.staff) ? staff.staff : []);
         STAFF_CACHE = list.filter(s => !s || !s.role || /teach/i.test(s.role));
@@ -181,7 +181,7 @@ async function fetchClassConfigsFromServer() {
         const schoolId = getCurrentSchoolId();
         if (!schoolId) return null; // demo / no school session — nothing to fetch
         const res = await fetch(`${SETTINGS_API_BASE}/${encodeURIComponent(schoolId)}`);
-        if (!res.ok) throw new Error(`GET settings -> ${res.status}`);
+        if (!res.ok) throw new Error(`GET settings -> ${SSX.esc(res.status)}`);
         const settings = await res.json();
         CLASS_CONFIGS_CACHE = _classConfigsApiToLocal(settings && settings.classes);
         SCHOOL_INFO_CACHE = (settings && typeof settings === 'object') ? settings : {};
@@ -1464,7 +1464,7 @@ document.addEventListener('DOMContentLoaded', () => {
         row.innerHTML = `
             <div class="form-input-group">
                 <label>Description</label>
-                <input type="text" class="other-fee-desc" placeholder="e.g. Lab Fee" value="${data.description || ''}">
+                <input type="text" class="other-fee-desc" placeholder="e.g. Lab Fee" value="${SSX.esc(data.description || '')}">
             </div>
             <div class="form-input-group">
                 <label>Amount</label>
@@ -1531,7 +1531,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const configs  = getClassConfigs();
         classSelect.innerHTML =
             '<option value="">Select Class</option>' +
-            configs.map(c => `<option value="${c.name}">${c.name}</option>`).join('');
+            configs.map(c => `<option value="${SSX.esc(c.name)}">${SSX.esc(c.name)}</option>`).join('');
         if (previous && configs.some(c => c.name === previous)) {
             classSelect.value = previous;
         }
@@ -2226,7 +2226,7 @@ if (certUploadInput) {
         });
         if (!res.ok) {
             const text = await res.text().catch(() => '');
-            throw new Error(`${method} ${url} -> ${res.status} ${text}`);
+            throw new Error(`${SSX.esc(method)} ${url} -> ${SSX.esc(res.status)} ${text}`);
         }
         const contentType = res.headers.get('content-type') || '';
         return contentType.includes('application/json') ? res.json() : null;
@@ -3506,11 +3506,11 @@ if (certUploadInput) {
                     </div>
                     <div class="field">
                         <span class="f-label">Admission Date:</span>
-                        <span class="f-value">${admissionDate}</span>
+                        <span class="f-value">${SSX.esc(admissionDate)}</span>
                     </div>
                     <div class="field">
                         <span class="f-label">DOB / Age:</span>
-                        <span class="f-value">${dateOfBirth} | ${esc(studentData.age)}</span>
+                        <span class="f-value">${SSX.esc(dateOfBirth)} | ${esc(studentData.age)}</span>
                     </div>
                     <div class="field">
                         <span class="f-label">Orphan Status:</span>
@@ -3522,7 +3522,7 @@ if (certUploadInput) {
                     </div>
                 </div>
                 <div class="photo-box">
-                    ${photoSrc ? `<img src="${photoSrc}" style="width:100%; height:100%; object-fit:cover;">` : '<div style="font-size:8px;">AFFIX PHOTO</div>'}
+                    ${photoSrc ? `<img src="${SSX.url(photoSrc)}" style="width:100%; height:100%; object-fit:cover;">` : '<div style="font-size:8px;">AFFIX PHOTO</div>'}
                 </div>
             </div>
         </section>
@@ -3857,7 +3857,7 @@ if (certUploadInput) {
 
         <div class="rec-title-wrap">
             <div class="rec-avatar">
-                ${photoSrc ? `<img src="${photoSrc}">` : '<span>NO<br>PHOTO</span>'}
+                ${photoSrc ? `<img src="${SSX.url(photoSrc)}">` : '<span>NO<br>PHOTO</span>'}
             </div>
             <div>
                 <div class="rec-title-name">${esc(s.fullName)}</div>
@@ -4400,8 +4400,8 @@ if (certUploadInput) {
                 const count    = db.filter(s => s.studentClass === c.name).length;
                 const sections = (Array.isArray(c.sections) && c.sections.length) ? c.sections.join(', ') : 'No sections configured';
                 html += `
-                    <div class="msc-class-card" onclick="updOpenClass('${c.name}')">
-                        <div class="class-name">${c.name}</div>
+                    <div class="msc-class-card" onclick="updOpenClass('${SSX.jsStr(c.name)}')">
+                        <div class="class-name">${SSX.esc(c.name)}</div>
                         <div class="class-meta">Sections: ${sections}</div>
                         <div class="class-count"><i class="fas fa-users"></i> ${count} students</div>
                     </div>
@@ -4428,7 +4428,7 @@ if (certUploadInput) {
         let html = `
             <div class="msc-incharge-header" style="grid-column:1/-1;">
                 <i class="fas fa-chalkboard-teacher"></i>
-                <span>Class Incharge: <strong>${allTeacher || 'Not Assigned'}</strong></span>
+                <span>Class Incharge: <strong>${SSX.esc(allTeacher || 'Not Assigned')}</strong></span>
             </div>
             <div class="msc-class-card msc-class-card--all" onclick="updOpenSection('ALL')">
                 <div class="class-name"><i class="fas fa-layer-group"></i> All Sections</div>
@@ -4446,9 +4446,9 @@ if (certUploadInput) {
                 const cnt = classStu.filter(s => s.section === sec).length;
                 const t   = getClassTeacher(updActiveClass, sec);
                 html += `
-                    <div class="msc-class-card" onclick="updOpenSection('${sec}')">
-                        <div class="class-name">Section ${sec}</div>
-                        <div class="class-meta">${t ? 'Incharge: ' + t : 'No incharge assigned'}</div>
+                    <div class="msc-class-card" onclick="updOpenSection('${SSX.jsStr(sec)}')">
+                        <div class="class-name">Section ${SSX.esc(sec)}</div>
+                        <div class="class-meta">${t ? 'Incharge: ' + SSX.esc(t) : 'No incharge assigned'}</div>
                         <div class="class-count"><i class="fas fa-users"></i> ${cnt} students</div>
                     </div>
                 `;
@@ -4596,7 +4596,7 @@ if (certUploadInput) {
             : '';
         // Promote mode defaults to "everyone listed is selected" every time.
         const checkboxCell = promoteMode
-            ? `<td><input type="checkbox" class="promote-checkbox" data-regno="${s.regNo}" checked style="width:18px;height:18px;"></td>`
+            ? `<td><input type="checkbox" class="promote-checkbox" data-regno="${SSX.esc(s.regNo)}" checked style="width:18px;height:18px;"></td>`
             : '';
         const statusCell = promoteMode
             ? `<td>${s.promoted
@@ -4630,9 +4630,9 @@ if (certUploadInput) {
                 ${statusCell}
                 <td>
                     <div class="action-btn-group">
-                        <button class="btn-icon view" onclick="viewFullProfile('${safeRegNoAttr}')" title="View Profile"><i class="fas fa-eye"></i></button>
-                        <button class="btn-icon edit" onclick="editStudentInfo('${safeRegNoAttr}')" title="Edit Record"><i class="fas fa-user-edit"></i></button>
-                        <button class="btn-icon delete" onclick="deleteRecord('${safeRegNoAttr}')" title="Delete"><i class="fas fa-trash-alt"></i></button>
+                        <button class="btn-icon view" onclick="viewFullProfile('${SSX.jsStr(s.regNo || '')}')" title="View Profile"><i class="fas fa-eye"></i></button>
+                        <button class="btn-icon edit" onclick="editStudentInfo('${SSX.jsStr(s.regNo || '')}')" title="Edit Record"><i class="fas fa-user-edit"></i></button>
+                        <button class="btn-icon delete" onclick="deleteRecord('${SSX.jsStr(s.regNo || '')}')" title="Delete"><i class="fas fa-trash-alt"></i></button>
                     </div>
                 </td>
             </tr>`;
@@ -4762,9 +4762,9 @@ if (certUploadInput) {
                 const count    = db.filter(s => s.studentClass === c.name).length;
                 const sections = (Array.isArray(c.sections) && c.sections.length) ? c.sections.join(', ') : 'No sections configured';
                 html += `
-                    <div class="msc-class-card" onclick="voOpenClass('${c.name}')">
-                        <button type="button" class="msc-print-btn" onclick="event.stopPropagation(); printStudentListReport('${c.name}', null);" title="Print ${c.name} student list"><i class="fas fa-print"></i></button>
-                        <div class="class-name">${c.name}</div>
+                    <div class="msc-class-card" onclick="voOpenClass('${SSX.jsStr(c.name)}')">
+                        <button type="button" class="msc-print-btn" onclick="event.stopPropagation(); printStudentListReport('${SSX.jsStr(c.name)}', null);" title="Print ${SSX.esc(c.name)} student list"><i class="fas fa-print"></i></button>
+                        <div class="class-name">${SSX.esc(c.name)}</div>
                         <div class="class-meta">Sections: ${sections}</div>
                         <div class="class-count"><i class="fas fa-users"></i> ${count} students</div>
                     </div>
@@ -4791,10 +4791,10 @@ if (certUploadInput) {
         let html = `
             <div class="msc-incharge-header" style="grid-column:1/-1;">
                 <i class="fas fa-chalkboard-teacher"></i>
-                <span>Class Incharge: <strong>${allTeacher || 'Not Assigned'}</strong></span>
+                <span>Class Incharge: <strong>${SSX.esc(allTeacher || 'Not Assigned')}</strong></span>
             </div>
             <div class="msc-class-card msc-class-card--all" onclick="voOpenSection('ALL')">
-                <button type="button" class="msc-print-btn" onclick="event.stopPropagation(); printStudentListReport('${voActiveClass}', 'ALL');" title="Print ${voActiveClass} — all sections student list"><i class="fas fa-print"></i></button>
+                <button type="button" class="msc-print-btn" onclick="event.stopPropagation(); printStudentListReport('${SSX.jsStr(voActiveClass)}', 'ALL');" title="Print ${SSX.esc(voActiveClass)} — all sections student list"><i class="fas fa-print"></i></button>
                 <div class="class-name"><i class="fas fa-layer-group"></i> All Sections</div>
                 <div class="class-meta">All ${classStudents.length} students</div>
                 <div class="class-count"><i class="fas fa-users"></i> ${classStudents.length} students</div>
@@ -4810,10 +4810,10 @@ if (certUploadInput) {
                 const cnt = classStudents.filter(s => s.section === sec).length;
                 const t   = getClassTeacher(voActiveClass, sec);
                 html += `
-                    <div class="msc-class-card" onclick="voOpenSection('${sec}')">
-                        <button type="button" class="msc-print-btn" onclick="event.stopPropagation(); printStudentListReport('${voActiveClass}', '${sec}');" title="Print ${voActiveClass} — Section ${sec} student list"><i class="fas fa-print"></i></button>
-                        <div class="class-name">Section ${sec}</div>
-                        <div class="class-meta">${t ? 'Incharge: ' + t : 'No incharge assigned'}</div>
+                    <div class="msc-class-card" onclick="voOpenSection('${SSX.jsStr(sec)}')">
+                        <button type="button" class="msc-print-btn" onclick="event.stopPropagation(); printStudentListReport('${SSX.jsStr(voActiveClass)}', '${SSX.jsStr(sec)}');" title="Print ${SSX.esc(voActiveClass)} — Section ${sec} student list"><i class="fas fa-print"></i></button>
+                        <div class="class-name">Section ${SSX.esc(sec)}</div>
+                        <div class="class-meta">${t ? 'Incharge: ' + SSX.esc(t) : 'No incharge assigned'}</div>
                         <div class="class-count"><i class="fas fa-users"></i> ${cnt} students</div>
                     </div>
                 `;
@@ -4930,8 +4930,8 @@ if (certUploadInput) {
                 ${voStatusCell}
                 <td style="text-align:center;">
                     <div class="action-btn-group">
-                        <button class="btn-icon view" onclick="viewFullProfile('${safeRegNoAttr}')" title="View Profile"><i class="fas fa-eye"></i></button>
-                        <button class="btn-icon more-actions" type="button" onclick="toggleStudentActionMenu(event, '${safeRegNoAttr}')" title="More actions" aria-haspopup="true" aria-expanded="false"><i class="fas fa-ellipsis-vertical"></i></button>
+                        <button class="btn-icon view" onclick="viewFullProfile('${SSX.jsStr(s.regNo || '')}')" title="View Profile"><i class="fas fa-eye"></i></button>
+                        <button class="btn-icon more-actions" type="button" onclick="toggleStudentActionMenu(event, '${SSX.jsStr(s.regNo || '')}')" title="More actions" aria-haspopup="true" aria-expanded="false"><i class="fas fa-ellipsis-vertical"></i></button>
                     </div>
                 </td>
             </tr>`;
@@ -5722,7 +5722,7 @@ if (certUploadInput) {
         for (let i = 0; i < pairs.length; i += perPage) pages.push(pairs.slice(i, i + perPage));
 
         const cardImg = (src, label) => src
-            ? `<img class="idc-print-card" src="${src}" alt="${label}">`
+            ? `<img class="idc-print-card" src="${SSX.url(src)}" alt="${label}">`
             : `<div class="idc-print-card idc-print-card-missing">${label} unavailable</div>`;
 
         const pagesHtml = pages.map((group, pageIdx) => {
@@ -6772,20 +6772,20 @@ ${pagesHtml}
                 <tr>
                     <td class="msc-sr-cell">${idx + 1}</td>
                     <td><span class="hrk-id-badge">${displayId}</span></td>
-                    <td><strong>${s.fullName || '—'}</strong></td>
-                    <td>${s.guardianName || '—'}</td>
+                    <td><strong>${SSX.esc(s.fullName || '—')}</strong></td>
+                    <td>${SSX.esc(s.guardianName || '—')}</td>
                     <td><span class="class-chip">${cls}</span></td>
                     <td><span class="class-chip">${sec}</span></td>
                     <td>${dateVal}</td>
                     <td style="text-align:center;">
                         <div class="action-btn-group">
-                            <button class="btn-icon view" onclick="viewFullProfile('${s.regNo}')" title="View Profile">
+                            <button class="btn-icon view" onclick="viewFullProfile('${SSX.jsStr(s.regNo)}')" title="View Profile">
                                 <i class="fas fa-eye"></i>
                             </button>
-                            ${kind === 'dropped' ? `<button class="btn-icon reactivate" onclick="reactivateStudent('${s.regNo}')" title="Reactivate Student">
+                            ${kind === 'dropped' ? `<button class="btn-icon reactivate" onclick="reactivateStudent('${SSX.jsStr(s.regNo)}')" title="Reactivate Student">
                                 <i class="fas fa-user-check"></i>
                             </button>` : ''}
-                            <button class="btn-icon more-actions" type="button" onclick="toggleArchiveActionMenu(event, '${String(s.regNo || s.id || '').replace(/&/g,'&amp;').replace(/'/g,'&#39;').replace(/"/g,'&quot;')}', '${kind}')" title="More actions" aria-haspopup="true" aria-expanded="false"><i class="fas fa-ellipsis-vertical"></i></button>
+                            <button class="btn-icon more-actions" type="button" onclick="toggleArchiveActionMenu(event, '${SSX.jsStr(String(s.regNo || s.id || '').replace(/&/g,'&amp;').replace(/'/g,'&#39;').replace(/"/g,'&quot;'))}', '${SSX.jsStr(kind)}')" title="More actions" aria-haspopup="true" aria-expanded="false"><i class="fas fa-ellipsis-vertical"></i></button>
                         </div>
                     </td>
                 </tr>`;
@@ -6945,7 +6945,7 @@ ${pagesHtml}
     if (editSiblingBadge) {
         if (student.isSibling && student.siblingOf) {
             editSiblingBadge.style.display = 'inline-flex';
-            editSiblingBadge.innerHTML = `<i class="fas fa-user-friends"></i> Sibling of ${student.siblingOf}`;
+            editSiblingBadge.innerHTML = `<i class="fas fa-user-friends"></i> Sibling of ${SSX.esc(student.siblingOf)}`;
         } else {
             editSiblingBadge.style.display = 'none';
             editSiblingBadge.innerHTML = '';
@@ -7348,7 +7348,7 @@ ${pagesHtml}
         const siblingIdRow = (s.isSibling && s.siblingGroupId)
             ? `<div class="detail-item">
                    <label>Sibling Group ID</label>
-                   <span class="hrk-id-badge" style="font-size:0.85rem;background:#d97706;">${s.siblingGroupId}</span>
+                   <span class="hrk-id-badge" style="font-size:0.85rem;background:#d97706;">${SSX.esc(s.siblingGroupId)}</span>
                </div>`
             : '';
 
@@ -7357,7 +7357,7 @@ ${pagesHtml}
             ? `<div class="detail-item full-width-detail">
                    <label>Sibling Status</label>
                    <span class="sibling-tag" style="font-size:0.9rem;padding:5px 12px;">
-                       <i class="fas fa-user-friends"></i> Sibling of ${s.siblingOf}
+                       <i class="fas fa-user-friends"></i> Sibling of ${SSX.esc(s.siblingOf)}
                    </span>
                </div>`
             : '';
@@ -7368,8 +7368,8 @@ ${pagesHtml}
                 `<div class="detail-item full-width-detail">
                     <label>Has Sibling</label>
                     <span class="sibling-tag sibling-tag--has">
-                        <i class="fas fa-user-friends"></i> ${sib.name}
-                        <span style="margin-left:8px;opacity:0.75;font-size:0.78rem;">(Reg: ${sib.regNo})</span>
+                        <i class="fas fa-user-friends"></i> ${SSX.esc(sib.name)}
+                        <span style="margin-left:8px;opacity:0.75;font-size:0.78rem;">(Reg: ${SSX.esc(sib.regNo)})</span>
                     </span>
                 </div>`
               ).join('')
@@ -7404,11 +7404,11 @@ ${pagesHtml}
             bformActionBtn = `
                 <div class="profile-section-title"><i class="fas fa-id-card"></i> B-Form / School Certificate (from Admission Form)</div>
                 <div style="padding:18px 25px;display:flex;flex-wrap:wrap;gap:10px;align-items:center;">
-                    <button type="button" class="btn-primary-submit" onclick="viewCertificate('${certRegNo}')"
+                    <button type="button" class="btn-primary-submit" onclick="viewCertificate('${SSX.jsStr(certRegNo)}')"
                         style="display:inline-flex;align-items:center;gap:8px;padding:10px 18px;border-radius:8px;border:none;cursor:pointer;">
                         <i class="fas fa-eye"></i> View B-Form
                     </button>
-                    <button type="button" onclick="downloadCertificate('${certRegNo}')"
+                    <button type="button" onclick="downloadCertificate('${SSX.jsStr(certRegNo)}')"
                         class="btn-secondary" style="display:inline-flex;align-items:center;gap:8px;padding:10px 18px;border-radius:8px;border:none;cursor:pointer;">
                         <i class="fas fa-download"></i> Download B-Form
                     </button>
@@ -7418,8 +7418,8 @@ ${pagesHtml}
                 certViewer = `
                     <div class="profile-section-title"><i class="fas fa-certificate"></i> School Certificate / B-Form</div>
                     <div style="padding:20px 25px;">
-                        <img src="${bformPreviewSrc}" alt="Certificate" class="cert-preview-img"
-                             onclick="viewCertificate('${certRegNo}')" title="Click to view full page">
+                        <img src="${SSX.url(bformPreviewSrc)}" alt="Certificate" class="cert-preview-img"
+                             onclick="viewCertificate('${SSX.jsStr(certRegNo)}')" title="Click to view full page">
                         <p style="font-size:0.75rem;color:var(--text-muted);margin-top:8px;">
                             <i class="fas fa-search-plus"></i> Click to open full size
                         </p>
@@ -7428,7 +7428,7 @@ ${pagesHtml}
                 certViewer = `
                     <div class="profile-section-title"><i class="fas fa-certificate"></i> School Certificate / B-Form</div>
                     <div style="padding:20px 25px;">
-                        <div class="cert-pdf-card" onclick="viewCertificate('${certRegNo}')" title="Click to view full page">
+                        <div class="cert-pdf-card" onclick="viewCertificate('${SSX.jsStr(certRegNo)}')" title="Click to view full page">
                             <i class="fas fa-file-pdf"></i>
                             <div>
                                 <strong>PDF Document Attached</strong>
@@ -7456,9 +7456,9 @@ ${pagesHtml}
             const amt  = parseFloat(f.amount   || 0);
             const disc = parseFloat(f.discount || 0);
             if (amt <= 0 && disc <= 0) return;
-            otherFeesRows += `<div class="detail-item"><label>${f.description || 'Other Fee'}</label><span>Rs. ${parseFloat(f.amount||0).toFixed(0)}</span></div>`;
+            otherFeesRows += `<div class="detail-item"><label>${SSX.esc(f.description || 'Other Fee')}</label><span>Rs. ${parseFloat(f.amount||0).toFixed(0)}</span></div>`;
             if (parseFloat(f.discount||0) > 0) {
-                otherFeesRows += `<div class="detail-item discount-item"><label><i class="fas fa-tag" style="color:#d97706;margin-right:4px;"></i>${f.description || 'Other Fee'} Discount</label><span style="color:#d97706;">− Rs. ${parseFloat(f.discount).toFixed(0)}</span></div>`;
+                otherFeesRows += `<div class="detail-item discount-item"><label><i class="fas fa-tag" style="color:#d97706;margin-right:4px;"></i>${SSX.esc(f.description || 'Other Fee')} Discount</label><span style="color:#d97706;">− Rs. ${parseFloat(f.discount).toFixed(0)}</span></div>`;
             }
         });
 
@@ -7485,15 +7485,15 @@ ${pagesHtml}
             <div class="profile-card-header">
                 <div class="profile-header-decor"></div>
                 <div class="profile-avatar-ring">
-                    <img src="${resolveStoredFileSrc(s.photo, s.regNo || s.id, getCurrentSchoolId(), 'photo')}" class="profile-main-img"
+                    <img src="${SSX.url(resolveStoredFileSrc(s.photo, s.regNo || s.id, getCurrentSchoolId(), 'photo'))}" class="profile-main-img"
                          onclick="openPhotoViewer(this)" title="Click to view full-size photo"
-                         onerror="this.src='https://ui-avatars.com/api/?name=${encodeURIComponent(s.fullName)}&background=3b82f6&color=fff&bold=true'">
+                         onerror="this.src='https://ui-avatars.com/api/?name=${SSX.jsStr(encodeURIComponent(s.fullName))}&background=3b82f6&color=fff&bold=true'">
                 </div>
-                <h2 class="profile-name-title">${s.fullName}</h2>
-                ${(s.isSibling && s.siblingOf) ? `<div class="sibling-tag" style="margin:2px 0 8px;"><i class="fas fa-user-friends"></i> Sibling of ${s.siblingOf}</div>` : ''}
+                <h2 class="profile-name-title">${SSX.esc(s.fullName)}</h2>
+                ${(s.isSibling && s.siblingOf) ? `<div class="sibling-tag" style="margin:2px 0 8px;"><i class="fas fa-user-friends"></i> Sibling of ${SSX.esc(s.siblingOf)}</div>` : ''}
                 <div class="profile-header-badges">
                     <span class="hrk-id-badge">${s.regNo || s.id}</span>
-                    ${s.studentClass ? `<span class="profile-class-badge"><i class="fas fa-graduation-cap"></i> ${s.studentClass}${s.section ? ' – ' + s.section : ''}</span>` : ''}
+                    ${s.studentClass ? `<span class="profile-class-badge"><i class="fas fa-graduation-cap"></i> ${SSX.esc(s.studentClass)}${s.section ? ' – ' + s.section : ''}</span>` : ''}
                 </div>
             </div>
 
@@ -7875,7 +7875,7 @@ ${pagesHtml}
             const w = window.open('', '_blank');
             if (w) {
                 w.document.write('<pre style="font-family:monospace;padding:20px;white-space:pre-wrap;">'
-                    + text.replace(/[<>&]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;'}[c])) + '</pre>');
+                    + SSX.esc(text) + '</pre>');
                 w.document.close();
             } else {
                 showToast('Pop-up Blocked', 'Please allow pop-ups to view the student profile, or try sharing again.', 'warning');
@@ -8327,8 +8327,8 @@ function slcSearchStudents() {
         const item = document.createElement('div');
         item.className = 'slc-dropdown-item';
         item.innerHTML = `
-            <div class="slc-di-name"><i class="fas fa-user-graduate"></i> ${sName}</div>
-            <div class="slc-di-meta">ID: ${sId} &nbsp;|&nbsp; Class: ${sClass} &nbsp;|&nbsp; Guardian: ${sGuardian}</div>`;
+            <div class="slc-di-name"><i class="fas fa-user-graduate"></i> ${SSX.esc(sName)}</div>
+            <div class="slc-di-meta">ID: ${SSX.esc(sId)} &nbsp;|&nbsp; Class: ${SSX.esc(sClass)} &nbsp;|&nbsp; Guardian: ${SSX.esc(sGuardian)}</div>`;
         item.addEventListener('click', () => {
             input.value = sName;
             dropdown.classList.remove('open');
@@ -8466,15 +8466,15 @@ function slcApplyClassStatus() {
     } else if (chosen && mode === 'enrolled') {
         classSentence = `At the time of leaving, the student was enrolled in <strong>${c}</strong>. `;
     } else {
-        classSentence = `At the time of leaving, the student was enrolled in <strong>Class ${studentClass}</strong>. `;
+        classSentence = `At the time of leaving, the student was enrolled in <strong>Class ${SSX.esc(studentClass)}</strong>. `;
     }
 
     const recordEl = document.getElementById('slc-record-para');
     if (recordEl) {
         recordEl.innerHTML =
-            `For official record, <strong>${studentName}</strong> (Student ID <strong>${regNo}</strong>), ` +
-            `son/daughter of <strong>${fatherName}</strong>, was born on <strong>${dob}</strong> and ` +
-            `was admitted to this institution on <strong>${admissionDate}</strong>. ` +
+            `For official record, <strong>${SSX.esc(studentName)}</strong> (Student ID <strong>${SSX.esc(regNo)}</strong>), ` +
+            `son/daughter of <strong>${SSX.esc(fatherName)}</strong>, was born on <strong>${SSX.esc(dob)}</strong> and ` +
+            `was admitted to this institution on <strong>${SSX.esc(admissionDate)}</strong>. ` +
             classSentence +
             `The school administration wishes him/her continued success in all future academic and personal endeavours.`;
     }
@@ -8682,8 +8682,8 @@ function charSearchStudents() {
         const item = document.createElement('div');
         item.className = 'slc-dropdown-item';
         item.innerHTML = `
-            <div class="slc-di-name"><i class="fas fa-user-graduate"></i> ${sName}</div>
-            <div class="slc-di-meta">ID: ${sId} &nbsp;|&nbsp; Class: ${sClass} &nbsp;|&nbsp; Guardian: ${sGuardian}</div>`;
+            <div class="slc-di-name"><i class="fas fa-user-graduate"></i> ${SSX.esc(sName)}</div>
+            <div class="slc-di-meta">ID: ${SSX.esc(sId)} &nbsp;|&nbsp; Class: ${SSX.esc(sClass)} &nbsp;|&nbsp; Guardian: ${SSX.esc(sGuardian)}</div>`;
         item.addEventListener('click', () => {
             input.value = sName;
             dropdown.classList.remove('open');
@@ -8742,7 +8742,7 @@ function charManualGenerate() {
 function charBuildParagraph(studentName, guardianLabel, fatherName, fromDisplay, toDisplay, pronouns, conduct, classClause) {
     const { sub, poss, obj } = pronouns; // sub: He/She, poss: His/Her, obj: him/her
 
-    const opening = `It is to certify that <strong>${studentName}</strong> ${guardianLabel} <strong>${fatherName}</strong> ` +
+    const opening = `It is to certify that <strong>${SSX.esc(studentName)}</strong> ${guardianLabel} <strong>${SSX.esc(fatherName)}</strong> ` +
         `who has studied in this institution from <strong>${fromDisplay}</strong> to <strong>${toDisplay}</strong>${classClause || ''}, `;
 
     const templates = {
@@ -9151,21 +9151,21 @@ function _buildPhotoGalleryHTML(students) {
         const bformSrc  = storedStudentFileSrc(s, 'bform');
 
         const photoBlock = photoSrc
-            ? `<img src="${photoSrc}" alt="Photo of ${name}" style="width:110px;height:120px;object-fit:cover;border-radius:6px;border:2px solid #3b82f6;">`
+            ? `<img src="${SSX.url(photoSrc)}" alt="Photo of ${SSX.esc(name)}" style="width:110px;height:120px;object-fit:cover;border-radius:6px;border:2px solid #3b82f6;">`
             : `<div style="width:110px;height:120px;background:#e2e8f0;border-radius:6px;display:flex;align-items:center;justify-content:center;color:#94a3b8;font-size:12px;border:2px dashed #cbd5e1;">No Photo</div>`;
 
         const bformBlock = bformSrc
             ? (bformSrc.startsWith('data:image') || !/\.pdf(?:$|[?#])/i.test(s.certData || '')
-                ? `<img src="${bformSrc}" alt="B-Form" style="max-width:180px;max-height:130px;object-fit:contain;border-radius:4px;border:1px solid #e2e8f0;">`
-                : `<a href="${bformSrc}" style="display:inline-block;padding:6px 12px;background:#3b82f6;color:#fff;border-radius:4px;text-decoration:none;font-size:11px;" download="${regNo}_bform.pdf">📄 Download B-Form PDF</a>`)
+                ? `<img src="${SSX.url(bformSrc)}" alt="B-Form" style="max-width:180px;max-height:130px;object-fit:contain;border-radius:4px;border:1px solid #e2e8f0;">`
+                : `<a href="${SSX.url(bformSrc)}" style="display:inline-block;padding:6px 12px;background:#3b82f6;color:#fff;border-radius:4px;text-decoration:none;font-size:11px;" download="${SSX.esc(regNo)}_bform.pdf">📄 Download B-Form PDF</a>`)
             : `<span style="color:#94a3b8;font-size:11px;font-style:italic;">Not uploaded</span>`;
 
         return `
         <div style="display:flex;gap:16px;align-items:flex-start;padding:16px;background:#fff;border-radius:10px;box-shadow:0 1px 4px rgba(0,0,0,0.1);margin-bottom:12px;border-left:4px solid #3b82f6;">
             <div style="flex-shrink:0;">${photoBlock}</div>
             <div style="flex:1;min-width:0;">
-                <div style="font-size:15px;font-weight:700;color:#1e293b;margin-bottom:4px;">${name}</div>
-                <div style="font-size:12px;color:#64748b;margin-bottom:8px;">ID: <b>${regNo}</b> &nbsp;|&nbsp; Class: <b>${cls}</b></div>
+                <div style="font-size:15px;font-weight:700;color:#1e293b;margin-bottom:4px;">${SSX.esc(name)}</div>
+                <div style="font-size:12px;color:#64748b;margin-bottom:8px;">ID: <b>${SSX.esc(regNo)}</b> &nbsp;|&nbsp; Class: <b>${cls}</b></div>
                 <div style="font-size:11px;font-weight:600;color:#374151;margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px;">B-Form / Certificate</div>
                 ${bformBlock}
             </div>
@@ -9848,7 +9848,7 @@ async function runExport() {
         showDataIOStatus('Export failed: ' + _impEsc(result.error), 'error');
         return;
     }
-    let msg = `✓ Export successful! <strong>${result.count} student record(s)</strong> (${scope}) saved to <em>${_impEsc(result.file)}</em>.`;
+    let msg = `✓ Export successful! <strong>${SSX.esc(result.count)} student record(s)</strong> (${scope}) saved to <em>${_impEsc(result.file)}</em>.`;
     if (_EXP.fmt === 'xlsx') {
         msg += ' It includes the directory, discount breakdown, class summary, fee overview and photo index.';
         if (_EXP.gallery) {
@@ -11174,15 +11174,15 @@ function renderImportAll() {
         <div class="imp-group">
             <div class="form-section-label"><i class="fas ${g.icon}"></i> ${_impEsc(g.title)}</div>
             ${g.fields.map(f => `
-            <div class="imp-row" data-key="${f.key}">
+            <div class="imp-row" data-key="${SSX.esc(f.key)}">
                 <div class="imp-left">
                     <span class="imp-label">${_impEsc(f.label)}${f.required ? '<span class="imp-req" title="Required">*</span>' : ''}</span>
-                    <span class="imp-hint" id="imp-hint-${f.key}">${f.hint ? _impEsc(f.hint) : ''}</span>
+                    <span class="imp-hint" id="imp-hint-${SSX.esc(f.key)}">${f.hint ? _impEsc(f.hint) : ''}</span>
                 </div>
                 <i class="fas fa-arrow-right-long imp-arrow"></i>
                 <div class="imp-right">
-                    <select class="imp-select" data-key="${f.key}" onchange="onImportMappingChange(this)">${_impHeaderOptions(st.mapping[f.key])}</select>
-                    <div class="imp-sample" id="imp-sample-${f.key}"></div>
+                    <select class="imp-select" data-key="${SSX.esc(f.key)}" onchange="onImportMappingChange(this)">${_impHeaderOptions(st.mapping[f.key])}</select>
+                    <div class="imp-sample" id="imp-sample-${SSX.esc(f.key)}"></div>
                 </div>
             </div>`).join('')}
         </div>`).join('');
@@ -11274,9 +11274,9 @@ function renderImportClassPanel() {
             const m0 = _impMatchClass(d.raw);
             const secNote = matched && m0.section && m0.value === cur ? ` <em class="imp-sec-hint">+ section ${_impEsc(m0.section)}</em>` : '';
             return `<div class="imp-classmap-row${cur === IMP_SKIP ? ' is-skip' : matched ? ' is-ok' : ' is-new'}">
-                <div class="imp-cm-left"><strong>${_impEsc(d.raw)}</strong><span>${d.count} student${d.count === 1 ? '' : 's'}${secNote}</span></div>
+                <div class="imp-cm-left"><strong>${_impEsc(d.raw)}</strong><span>${SSX.esc(d.count)} student${d.count === 1 ? '' : 's'}${secNote}</span></div>
                 <i class="fas fa-arrow-right-long imp-arrow"></i>
-                <select class="imp-select" onchange="setImportClassTarget('${_impEsc(d.norm)}', this.value)">
+                <select class="imp-select" onchange="setImportClassTarget('${SSX.jsStr(d.norm)}', this.value)">
                     ${configs.map(c => `<option value="${_impEsc(c.name)}"${cur === c.name ? ' selected' : ''}>${_impEsc(c.name)}</option>`).join('')}
                     <option value="${IMP_KEEP}"${cur === IMP_KEEP ? ' selected' : ''}>Keep as “${_impEsc(d.raw)}” (not in Settings)</option>
                     <option value="${IMP_SKIP}"${cur === IMP_SKIP ? ' selected' : ''}>Don’t import these students</option>
@@ -12141,7 +12141,7 @@ function refreshImport() {
         const range = pc.rolls.length ? `${Math.min(...pc.rolls)} – ${Math.max(...pc.rolls)}` : '—';
         return `<tr>
             <td><strong>${_impEsc(pc.cls)}</strong>${pc.known ? '' : ' <span class="imp-tag-warn" title="This class is not set up in Settings">not in Settings</span>'}</td>
-            <td class="imp-num">${pc.count}</td>
+            <td class="imp-num">${SSX.esc(pc.count)}</td>
             <td>${secs}</td>
             <td class="imp-num">${range}</td>
             <td class="imp-num">${pc.existing}</td>
@@ -12162,7 +12162,7 @@ function refreshImport() {
     const checks = plan.issueGroups.length
         ? plan.issueGroups.slice(0, 6).map(g => `
             <div class="imp-check"><i class="fas fa-triangle-exclamation"></i>
-                <div><strong>${g.count} student${g.count === 1 ? '' : 's'}</strong> — ${_impEsc(g.label)} ${_impEsc(g.problem)}${g.examples.length ? ` (e.g. “${g.examples.map(_impEsc).join('”, “')}”)` : ''}
+                <div><strong>${SSX.esc(g.count)} student${g.count === 1 ? '' : 's'}</strong> — ${_impEsc(g.label)} ${_impEsc(g.problem)}${g.examples.length ? ` (e.g. “${g.examples.map(_impEsc).join('”, “')}”)` : ''}
                 <span class="imp-check-rows">Row${g.rows.length > 1 ? 's' : ''} ${g.rows.join(', ')}${g.count > g.rows.length ? '…' : ''}</span></div>
             </div>`).join('') +
           (plan.issueGroups.length > 6 ? `<div class="imp-check-more">+ ${plan.issueGroups.length - 6} more kinds of problems — see the report.</div>` : '')

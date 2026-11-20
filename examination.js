@@ -30,7 +30,7 @@
     const isNum = m => String(m).trim() !== "" && m != null && isFinite(m);
     const natural = (a, b) => String(a).localeCompare(String(b), undefined, { numeric: true });
     const empty = (icon, t, s) => '<div class="ex-empty"><i class="fas fa-' + icon + '"></i><b>' + t + "</b>" + (s || "") + "</div>";
-    const link = (href, text) => '<a class="ex-link" href="' + href + '">' + text + "</a>";
+    const link = (href, text) => '<a class="ex-link" href="' + SSX.url(href) + '">' + text + "</a>";
 
     /* ───────── constants ───────── */
     const KEY = "ex_data_v2";
@@ -358,7 +358,7 @@
             '<section class="ex-two">' +
             '<div class="ex-panel"><h3><i class="fas fa-file-lines"></i> Recent Papers <span class="ex-spacer">' + link("#results", "All results") + "</span></h3>" + (recent.length ?
                 '<div class="ex-tablewrap"><table class="ex-table"><thead><tr><th>Paper</th><th>Class</th><th>Marks</th><th>Results</th><th></th></tr></thead><tbody>' +
-                recent.map(p => { const s = paperStatus(p); return "<tr><td><b>" + esc(p.title) + "</b></td><td>" + esc(clsLabel(p.cls, p.section)) + "</td><td>" + p.total + '</td><td><a href="#results/' + p.id + '"><span class="ex-chip ' + s.cls + '">' + s.label + "</span></a></td><td>" + (s.key === "published" ? '<a class="ex-link" href="#parents/' + p.id + '">Send <i class="fas fa-arrow-right"></i></a>' : "") + "</td></tr>"; }).join("") + "</tbody></table></div>"
+                recent.map(p => { const s = paperStatus(p); return "<tr><td><b>" + esc(p.title) + "</b></td><td>" + esc(clsLabel(p.cls, p.section)) + "</td><td>" + SSX.esc(p.total) + '</td><td><a href="#results/' + SSX.esc(p.id) + '"><span class="ex-chip ' + SSX.esc(s.cls) + '">' + s.label + "</span></a></td><td>" + (s.key === "published" ? '<a class="ex-link" href="#parents/' + SSX.esc(p.id) + '">Send <i class="fas fa-arrow-right"></i></a>' : "") + "</td></tr>"; }).join("") + "</tbody></table></div>"
                 : empty("file-circle-plus", "No papers yet", "Create one in " + link("#paper", "Paper Generation") + ".")) + "</div>" +
             '<div class="ex-panel"><h3><i class="fas fa-calendar-days"></i> Upcoming Papers <span class="ex-spacer">' + link("#datesheet", "Date sheet") + "</span></h3>" + (up.length ?
                 '<div class="ex-tablewrap"><table class="ex-table"><thead><tr><th>Date</th><th>Class</th><th>Subject</th><th>Time</th></tr></thead><tbody>' +
@@ -518,8 +518,8 @@
     function savedList() {
         const b = $("#pg-saved"); if (!b) return;
         b.innerHTML = db.papers.length ? '<div class="ex-tablewrap"><table class="ex-table"><thead><tr><th>Title</th><th>Class</th><th>Subject</th><th>Marks</th><th>Saved</th><th></th></tr></thead><tbody>' +
-            db.papers.map(p => "<tr><td><b>" + esc(p.title) + "</b>" + (P && P.id === p.id ? ' <span class="ex-chip info">editing</span>' : "") + "</td><td>" + esc(clsLabel(p.cls, p.section)) + "</td><td>" + esc(p.subj) + "</td><td>" + p.total + "</td><td>" + new Date(p.at).toLocaleDateString("en-GB") +
-                '</td><td class="ex-rowact"><button class="ex-btn sm ghost" data-open="' + p.id + '"><i class="fas fa-pen"></i> Edit</button><button class="ex-icon-btn" data-dup="' + p.id + '" title="Duplicate"><i class="fas fa-copy"></i></button><button class="ex-icon-btn" data-prn="' + p.id + '" title="Print"><i class="fas fa-print"></i></button><button class="ex-icon-btn del" data-del="' + p.id + '" title="Delete"><i class="fas fa-trash"></i></button></td></tr>').join("") + "</tbody></table></div>"
+            db.papers.map(p => "<tr><td><b>" + esc(p.title) + "</b>" + (P && P.id === p.id ? ' <span class="ex-chip info">editing</span>' : "") + "</td><td>" + esc(clsLabel(p.cls, p.section)) + "</td><td>" + esc(p.subj) + "</td><td>" + SSX.esc(p.total) + "</td><td>" + new Date(p.at).toLocaleDateString("en-GB") +
+                '</td><td class="ex-rowact"><button class="ex-btn sm ghost" data-open="' + SSX.esc(p.id) + '"><i class="fas fa-pen"></i> Edit</button><button class="ex-icon-btn" data-dup="' + SSX.esc(p.id) + '" title="Duplicate"><i class="fas fa-copy"></i></button><button class="ex-icon-btn" data-prn="' + SSX.esc(p.id) + '" title="Print"><i class="fas fa-print"></i></button><button class="ex-icon-btn del" data-del="' + SSX.esc(p.id) + '" title="Delete"><i class="fas fa-trash"></i></button></td></tr>').join("") + "</tbody></table></div>"
             : empty("folder-open", "No saved papers yet", "Press Save to keep a paper here and use it in Result Upload.");
         const get = id => db.papers.find(q => q.id === id);
         const toP = (p, copy) => ({ id: copy ? null : p.id, term: p.term, cls: p.cls, section: p.section || "", subj: copy ? p.subj : p.subj, date: p.date, mins: p.mins, title: copy ? "" : (p.title === defTitle(p) ? "" : p.title), instr: p.instr, sections: JSON.parse(JSON.stringify(p.sections)) });
@@ -547,9 +547,9 @@
             '<div class="ex-panel"><div class="ex-grid" style="max-width:560px">' + field("Show papers of", '<select id="ru-f">' + opts(classNames(), fl, "All classes") + "</select>") + "</div></div>" +
             (list.length ? '<div class="ex-papers">' + list.map(p => {
                 const s = paperStatus(p), pct = s.of ? Math.round(s.done / s.of * 100) : 0;
-                return '<a class="ex-pcard" href="#results/' + p.id + '"><div class="ex-pcard-top"><span class="ex-chip ' + s.cls + '">' + s.label + '</span><small>' + esc(p.term) + "</small></div><h4>" + esc(p.title) + "</h4>" +
-                    '<div class="ex-pcard-meta"><span><i class="fas fa-users-rectangle"></i> ' + esc(clsLabel(p.cls, p.section)) + '</span><span><i class="fas fa-book"></i> ' + esc(p.subj) + '</span><span><i class="fas fa-star-half-stroke"></i> ' + p.total + ' marks</span></div>' +
-                    '<div class="ex-prog"><i style="width:' + pct + '%"></i></div><div class="ex-pcard-foot"><span>' + s.done + " of " + s.of + " students entered</span><b>" + (s.key === "none" ? "Upload marks" : s.key === "published" ? "View" : "Continue") + ' <i class="fas fa-arrow-right"></i></b></div></a>';
+                return '<a class="ex-pcard" href="#results/' + SSX.esc(p.id) + '"><div class="ex-pcard-top"><span class="ex-chip ' + SSX.esc(s.cls) + '">' + s.label + '</span><small>' + esc(p.term) + "</small></div><h4>" + esc(p.title) + "</h4>" +
+                    '<div class="ex-pcard-meta"><span><i class="fas fa-users-rectangle"></i> ' + esc(clsLabel(p.cls, p.section)) + '</span><span><i class="fas fa-book"></i> ' + esc(p.subj) + '</span><span><i class="fas fa-star-half-stroke"></i> ' + SSX.esc(p.total) + ' marks</span></div>' +
+                    '<div class="ex-prog"><i style="width:' + pct + '%"></i></div><div class="ex-pcard-foot"><span>' + SSX.esc(s.done) + " of " + s.of + " students entered</span><b>" + (s.key === "none" ? "Upload marks" : s.key === "published" ? "View" : "Continue") + ' <i class="fas fa-arrow-right"></i></b></div></a>';
             }).join("") + "</div>" : '<div class="ex-panel">' + empty("file-circle-plus", db.papers.length ? "No papers for this class" : "No papers generated yet", "Results are uploaded against a paper. Create one in " + link("#paper", "Paper Generation") + " and save it.") + "</div>");
         const f = $("#ru-f"); if (f) f.addEventListener("change", () => { db.prefs.rfilter = f.value; save(); vResults(); });
         bindReload();
@@ -577,7 +577,7 @@
             (locked ? '<button class="ex-btn ghost" id="ru-unpub"><i class="fas fa-lock-open"></i> Unpublish</button><button class="ex-btn" id="ru-parents"><i class="fas fa-people-roof"></i> Send to parents</button>' : '<button class="ex-btn ghost" id="ru-draft"><i class="fas fa-floppy-disk"></i> Save Draft</button><button class="ex-btn" id="ru-pub"><i class="fas fa-paper-plane"></i> Publish</button>')) +
             dataBanner() +
             '<div class="ex-panel"><div class="ex-grid">' + field("Paper", '<input value="' + esc(paper.subj) + '" disabled>') + field("Class", '<input value="' + esc(clsLabel(paper.cls, paper.section)) + '" disabled>') +
-            field("Maximum marks", '<input type="number" id="ru-total" min="1" value="' + RS.total + '"' + (locked ? " disabled" : "") + ">") + field("Status", '<div class="ex-statusbox"><span class="ex-chip ' + (locked ? "ok" : RS.status === "draft" ? "warn" : "info") + '">' + (locked ? "Published" : RS.status === "draft" ? "Draft" : "Not saved") + "</span></div>") + "</div>" +
+            field("Maximum marks", '<input type="number" id="ru-total" min="1" value="' + SSX.esc(RS.total) + '"' + (locked ? " disabled" : "") + ">") + field("Status", '<div class="ex-statusbox"><span class="ex-chip ' + (locked ? "ok" : RS.status === "draft" ? "warn" : "info") + '">' + (locked ? "Published" : RS.status === "draft" ? "Draft" : "Not saved") + "</span></div>") + "</div>" +
             (locked ? '<p class="ex-note"><b>Published.</b> These results are final. Unpublish to edit.</p>' :
                 '<div class="ex-seg" style="margin-top:14px"><button data-tab="manual" class="' + (RS.tab === "manual" ? "on" : "") + '"><i class="fas fa-keyboard"></i> Enter Manually</button><button data-tab="upload" class="' + (RS.tab === "upload" ? "on" : "") + '"><i class="fas fa-file-csv"></i> Import CSV</button></div>' +
                 '<div id="ru-drop-wrap"' + (RS.tab === "upload" ? "" : " hidden") + '><div class="ex-drop" id="ru-drop"><i class="fas fa-cloud-arrow-up"></i><b>Drop a CSV file here or click to browse</b><small>Columns: roll_no (or reg_no), name, marks · use A or AB for absent · only students of this class are accepted</small><input type="file" id="ru-file" accept=".csv,text/csv" hidden></div></div>') + "</div>" +
@@ -615,8 +615,8 @@
     function refreshRow(tr) {
         const c = calc(RS.marks[tr.dataset.r]);
         tr.querySelector('[data-c="pct"]').textContent = c.pct;
-        tr.querySelector('[data-c="grade"]').innerHTML = c.grade ? "<b>" + c.grade + "</b>" : "";
-        tr.querySelector('[data-c="res"]').innerHTML = c.res === "—" ? "—" : '<span class="ex-chip ' + c.cls + '">' + c.res + "</span>";
+        tr.querySelector('[data-c="grade"]').innerHTML = c.grade ? "<b>" + SSX.esc(c.grade) + "</b>" : "";
+        tr.querySelector('[data-c="res"]').innerHTML = c.res === "—" ? "—" : '<span class="ex-chip ' + SSX.esc(c.cls) + '">' + c.res + "</span>";
         tr.querySelector("input").classList.toggle("err", c.res === "Invalid");
     }
     function sum(ro) {
@@ -687,9 +687,9 @@
     }
     function printSheet(ro) {
         const p = RS.paper;
-        printDoc("Marks — " + p.title, '<div class="doc">' + docHead("Marks Sheet — " + esc(p.term)) + '<div class="meta"><span>Subject: ' + esc(p.subj) + "</span><span>Class: " + esc(clsLabel(p.cls, p.section)) + "</span><span>Max Marks: " + RS.total + "</span><span>Date: " + fmt(p.date) + "</span></div>" +
+        printDoc("Marks — " + p.title, '<div class="doc">' + docHead("Marks Sheet — " + esc(p.term)) + '<div class="meta"><span>Subject: ' + esc(p.subj) + "</span><span>Class: " + esc(clsLabel(p.cls, p.section)) + "</span><span>Max Marks: " + SSX.esc(RS.total) + "</span><span>Date: " + fmt(p.date) + "</span></div>" +
             '<table style="margin-top:12px"><thead><tr><th class="c">#</th><th>Roll No</th><th>Student</th><th>Father / Guardian</th><th class="c">Marks</th><th class="c">%</th><th class="c">Grade</th></tr></thead><tbody>' +
-            ro.map((s, i) => { const m = RS.marks[s.reg], c = calc(m); return '<tr><td class="c">' + (i + 1) + "</td><td>" + esc(s.roll || "") + "</td><td>" + esc(s.name) + "</td><td>" + esc(s.father) + '</td><td class="c">' + (m == null || m === "" ? "" : esc(isAbs(m) ? "Abs" : m)) + '</td><td class="c">' + c.pct + '</td><td class="c">' + c.grade + "</td></tr>"; }).join("") +
+            ro.map((s, i) => { const m = RS.marks[s.reg], c = calc(m); return '<tr><td class="c">' + (i + 1) + "</td><td>" + esc(s.roll || "") + "</td><td>" + esc(s.name) + "</td><td>" + esc(s.father) + '</td><td class="c">' + (m == null || m === "" ? "" : esc(isAbs(m) ? "Abs" : m)) + '</td><td class="c">' + SSX.esc(c.pct) + '</td><td class="c">' + SSX.esc(c.grade) + "</td></tr>"; }).join("") +
             '</tbody></table><div style="display:flex;justify-content:space-between;margin-top:46px;font-weight:700;font-size:12.5px"><span style="border-top:1px solid #111;padding-top:3px;min-width:140px;text-align:center">Subject Teacher</span><span style="border-top:1px solid #111;padding-top:3px;min-width:140px;text-align:center">Principal</span></div></div>');
     }
 
@@ -708,7 +708,7 @@
             const list = cur();
             $("#ds-body").innerHTML = list.length ? '<div class="ex-tablewrap"><table class="ex-table"><thead><tr><th>Date</th><th>Day</th><th>Class</th><th>Subject</th><th>Time</th><th>Room</th><th>Term</th><th></th></tr></thead><tbody>' +
                 list.map(d => "<tr><td><b>" + fmt(d.date) + "</b></td><td>" + dow(d.date) + "</td><td>" + esc(d.cls) + "</td><td>" + esc(d.subject) + (clash(d) ? ' <span class="ex-chip warn">2 papers same day</span>' : "") + "</td><td>" + t12(d.start) + " – " + t12(d.end) + "</td><td>" + esc(d.room || "—") + "</td><td>" + esc(d.term) +
-                    '</td><td class="ex-rowact"><button class="ex-icon-btn" data-e="' + d.id + '" title="Edit"><i class="fas fa-pen"></i></button><button class="ex-icon-btn del" data-d="' + d.id + '" title="Delete"><i class="fas fa-trash"></i></button></td></tr>').join("") + "</tbody></table></div>"
+                    '</td><td class="ex-rowact"><button class="ex-icon-btn" data-e="' + SSX.esc(d.id) + '" title="Edit"><i class="fas fa-pen"></i></button><button class="ex-icon-btn del" data-d="' + SSX.esc(d.id) + '" title="Delete"><i class="fas fa-trash"></i></button></td></tr>').join("") + "</tbody></table></div>"
                 : empty("calendar-plus", "No papers scheduled", "Press Add Paper to build the date sheet.");
             $$("[data-e]").forEach(b => b.addEventListener("click", () => dsForm(db.datesheet.find(x => x.id === b.dataset.e))));
             $$("[data-d]").forEach(b => b.addEventListener("click", () => confirmBox("Remove this paper?", "It will be removed from the date sheet.", "Remove", () => { db.datesheet = db.datesheet.filter(x => x.id !== b.dataset.d); save(); pend("DELETE", "/datesheet/" + b.dataset.d); vDate(); })));
@@ -775,8 +775,8 @@
         return '<div class="doc-rc pg-break">' + docHead("Result Card — " + esc(db.prefs.term) + " " + new Date().getFullYear()) +
             "<dl><dt>Name</dt><dd>" + esc(s.name) + "</dd><dt>Roll No</dt><dd>" + esc(s.roll || "—") + "</dd><dt>Father</dt><dd>" + esc(s.father || "—") + "</dd><dt>Reg No</dt><dd>" + esc(s.reg) + "</dd><dt>Class</dt><dd>" + esc(clsLabel(s.cls, s.section)) + "</dd><dt>Position</dt><dd>" + (pos ? pos + " of " + count : "—") + "</dd></dl>" +
             '<table><thead><tr><th>Subject</th><th>Total</th><th>Obtained</th><th>%</th><th>Grade</th></tr></thead><tbody>' +
-            d.subs.map(x => "<tr><td>" + esc(x.s) + "</td><td>" + x.total + "</td><td>" + (x.abs ? "Abs" : x.m) + "</td><td>" + (x.abs ? "—" : x.pct.toFixed(1)) + "</td><td>" + (x.abs ? "—" : x.g) + "</td></tr>").join("") +
-            '</tbody></table><div class="sum"><span>Total: ' + d.got + " / " + d.out + "</span><span>Percentage: " + d.pct.toFixed(1) + "%</span><span>Grade: " + d.g.grade + "</span><span>Result: " + (d.failed ? "FAIL" : "PASS") + "</span></div><div>Remarks: <b>" + esc(d.g.remark) + '</b></div><div class="sig"><span>Class Teacher</span><span>Parent</span><span>Principal</span></div></div>';
+            d.subs.map(x => "<tr><td>" + esc(x.s) + "</td><td>" + SSX.esc(x.total) + "</td><td>" + (x.abs ? "Abs" : x.m) + "</td><td>" + (x.abs ? "—" : x.pct.toFixed(1)) + "</td><td>" + (x.abs ? "—" : x.g) + "</td></tr>").join("") +
+            '</tbody></table><div class="sum"><span>Total: ' + d.got + " / " + d.out + "</span><span>Percentage: " + d.pct.toFixed(1) + "%</span><span>Grade: " + SSX.esc(d.g.grade) + "</span><span>Result: " + (d.failed ? "FAIL" : "PASS") + "</span></div><div>Remarks: <b>" + esc(d.g.remark) + '</b></div><div class="sig"><span>Class Teacher</span><span>Parent</span><span>Principal</span></div></div>';
     }
     function rankMap(ro, data) {
         const scored = ro.map(s => { const d = cardOf(s, data); return { reg: s.reg, pct: d.pct, has: d.out > 0 }; }).filter(x => x.has).sort((a, b) => b.pct - a.pct);
@@ -1030,11 +1030,11 @@
         const p = x.p, t = x.t, pct = t.marked ? Math.round(t.sent / t.marked * 100) : 0;
         const chip = { draft: '<span class="ex-chip warn">Draft</span>', loading: '<span class="ex-chip">Checking…</span>', error: '<span class="ex-chip bad">Status unavailable</span>', empty: '<span class="ex-chip">No marks</span>',
             done: '<span class="ex-chip ok"><i class="fas fa-check"></i> All sent</span>', held: '<span class="ex-chip bad">Held back</span>',
-            todo: t.sent ? '<span class="ex-chip warn">' + t.todo + " left to send</span>" : '<span class="ex-chip info">Ready to send</span>' }[x.st];
+            todo: t.sent ? '<span class="ex-chip warn">' + SSX.esc(t.todo) + " left to send</span>" : '<span class="ex-chip info">Ready to send</span>' }[x.st];
         const foot = x.st === "draft" ? "Publish the results first" : x.st === "loading" ? "Checking parent status…" : x.st === "error" ? "Open to retry" : t.sent + " of " + t.marked + " sent" + (t.held ? " · " + t.held + " held back" : "");
         const cta = x.st === "todo" ? "Review &amp; send" : x.st === "draft" ? "Open" : "View";
-        return '<a class="ex-pcard" href="#parents/' + p.id + '"><div class="ex-pcard-top">' + chip + "<small>" + esc(p.term) + "</small></div><h4>" + esc(p.title) + "</h4>" +
-            '<div class="ex-pcard-meta"><span><i class="fas fa-users-rectangle"></i> ' + esc(clsLabel(p.cls, p.section)) + '</span><span><i class="fas fa-book"></i> ' + esc(p.subj) + '</span><span><i class="fas fa-star-half-stroke"></i> ' + x.r.total + " marks</span></div>" +
+        return '<a class="ex-pcard" href="#parents/' + SSX.esc(p.id) + '"><div class="ex-pcard-top">' + chip + "<small>" + esc(p.term) + "</small></div><h4>" + esc(p.title) + "</h4>" +
+            '<div class="ex-pcard-meta"><span><i class="fas fa-users-rectangle"></i> ' + esc(clsLabel(p.cls, p.section)) + '</span><span><i class="fas fa-book"></i> ' + esc(p.subj) + '</span><span><i class="fas fa-star-half-stroke"></i> ' + SSX.esc(x.r.total) + " marks</span></div>" +
             '<div class="ex-prog"><i style="width:' + pct + '%"></i></div><div class="ex-pcard-foot"><span>' + foot + "</span><b>" + cta + ' <i class="fas fa-arrow-right"></i></b></div></a>';
     }
 
@@ -1046,10 +1046,10 @@
         if (PS.pid !== id) { PS.pid = id; PS.sel = null; }
         const sessList = sessionOptions(); if (sessList.indexOf(sess) < 0) sessList.push(sess);
         const tile = (ic, label, val) => '<div class="ex-ctx-i"><i class="fas fa-' + ic + '"></i><div><small>' + label + "</small>" + val + "</div></div>";
-        ROOT().innerHTML = head("paper-plane", esc(p.title), "Check the details below, choose the students and send.", '<a class="ex-btn ghost" href="#results/' + id + '"><i class="fas fa-table-list"></i> Marks sheet</a>', "#parents") + dataBanner() +
+        ROOT().innerHTML = head("paper-plane", esc(p.title), "Check the details below, choose the students and send.", '<a class="ex-btn ghost" href="#results/' + SSX.esc(id) + '"><i class="fas fa-table-list"></i> Marks sheet</a>', "#parents") + dataBanner() +
             '<div class="ex-panel"><h3><i class="fas fa-circle-info"></i> Result details <small>filled in from the paper</small><span class="ex-spacer"><span class="ex-chip ' + (pub ? "ok" : "warn") + '">' + (pub ? "Published" : "Draft") + "</span></span></h3><div class=\"ex-ctx\">" +
             tile("users-rectangle", "Class", "<b>" + esc(p.cls) + "</b>") + tile("layer-group", "Section", "<b>" + esc(p.section || "All sections") + "</b>") + tile("clipboard-list", "Term", "<b>" + esc(p.term) + "</b>") +
-            tile("book", "Subject", "<b>" + esc(p.subj) + "</b>") + tile("star-half-stroke", "Maximum marks", "<b>" + r.total + "</b>") +
+            tile("book", "Subject", "<b>" + esc(p.subj) + "</b>") + tile("star-half-stroke", "Maximum marks", "<b>" + SSX.esc(r.total) + "</b>") +
             tile("calendar", "Session", '<select id="ps-sess" aria-label="Session">' + opts(sessList.sort(), sess) + "</select>") + '</div></div><div id="ps-body"></div>';
         bindReload();
         $("#ps-sess").addEventListener("change", e => { db.prefs.psess = e.target.value; PS.sel = null; save(); vSendPaper(id); });
@@ -1066,7 +1066,7 @@
         Object.keys(PS.sel).forEach(k => { if (!by[k] || !pickable(by[k])) delete PS.sel[k]; });
         const chosen = rows.filter(x => PS.sel[x.s.reg]), pk = rows.filter(pickable);
         box.innerHTML =
-            (!pub ? '<div class="ex-alert warn"><i class="fas fa-lock"></i><div><b>These results are still a draft</b><span>Publish them in Result Upload first — only published results can be sent to parents.</span></div><a class="ex-btn sm" href="#results/' + p.id + '">Open marks sheet</a></div>' : "") +
+            (!pub ? '<div class="ex-alert warn"><i class="fas fa-lock"></i><div><b>These results are still a draft</b><span>Publish them in Result Upload first — only published results can be sent to parents.</span></div><a class="ex-btn sm" href="#results/' + SSX.esc(p.id) + '">Open marks sheet</a></div>' : "") +
             (e.err ? '<div class="ex-alert warn"><i class="fas fa-triangle-exclamation"></i><div><b>Could not check what parents can already see</b><span>' + esc(e.err) + '</span></div><button class="ex-btn sm" id="ps-retry">Retry</button></div>' : "") +
             '<section class="quick-stats-strip">' + stat("icon-students", "user-graduate", loaded ? t.marked : "…", "With marks") + stat("icon-present-students", "circle-check", loaded ? t.sent : "…", "Sent to parents") +
             stat("icon-staff", "hourglass-half", loaded ? t.todo : "…", "Ready to send") + stat("icon-present-staff", "hand", loaded ? t.held : "…", "Held back") + "</section>" +
@@ -1074,7 +1074,7 @@
             (rows.length ? '<div class="ex-psbar"><div class="ex-pssel">Select: <button type="button" data-sel="ready">Ready to send</button>' + (t.held ? '<button type="button" data-sel="held">Held back</button>' : "") + '<button type="button" data-sel="all">All</button><button type="button" data-sel="none">None</button></div>' +
                 '<div class="ex-psact"><button class="ex-btn" id="ps-send"' + (can && chosen.length ? "" : " disabled") + '><i class="fas fa-paper-plane"></i> Send to ' + chosen.length + " parent" + (chosen.length === 1 ? "" : "s") + "</button>" +
                 '<button class="ex-btn ghost" id="ps-hold"' + (can && chosen.length ? "" : " disabled") + '><i class="fas fa-hand"></i> Hold back</button>' +
-                (t.sent + t.changed ? '<button class="ex-btn ghost" id="ps-wd"' + (can ? "" : " disabled") + '><i class="fas fa-rotate-left"></i> Withdraw sent (' + (t.sent + t.changed) + ")</button>" : "") + "</div></div>" +
+                (t.sent + t.changed ? '<button class="ex-btn ghost" id="ps-wd"' + (can ? "" : " disabled") + '><i class="fas fa-rotate-left"></i> Withdraw sent (' + (SSX.esc(t.sent) + SSX.esc(t.changed)) + ")</button>" : "") + "</div></div>" +
                 '<div class="ex-tablewrap"><table class="ex-table ps"><thead><tr><th class="ps-chk"><input type="checkbox" id="ps-all" aria-label="Select all"' + (can && pk.length ? "" : " disabled") + '></th><th>Roll No</th><th>Student</th><th>Father / Guardian</th><th>Marks</th><th>Grade</th><th>Parent can see</th><th></th></tr></thead><tbody>' +
                 rows.map(x => psRowHtml(x, can, loaded, r.total)).join("") + "</tbody></table></div>"
                 : empty("user-slash", "No students in " + esc(clsLabel(p.cls, p.section)), "Add students in Student Management.")) + "</div>";

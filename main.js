@@ -396,7 +396,7 @@ async function _dashboardGet(path, fallback, { timeoutMs = 20000, retries = 1 } 
         try {
             const response = await _dashboardGetOnce(url, timeoutMs);
             if (!response.ok) {
-                console.warn(`[Dashboard] ${path} -> HTTP ${response.status} (attempt ${attempt + 1}/${retries + 1})`);
+                console.warn(`[Dashboard] ${path} -> HTTP ${SSX.esc(response.status)} (attempt ${attempt + 1}/${retries + 1})`);
                 if (attempt < retries) {
                     await new Promise(r => setTimeout(r, 800));
                     continue;

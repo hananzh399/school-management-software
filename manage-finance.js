@@ -1541,7 +1541,7 @@ function populateFineClassDropdown() {
     let classes = [...new Set(students.map(s => s.studentClass || s.className).filter(Boolean))];
     if (classes.length === 0) classes = getAllClassNames();
     classSel.innerHTML = '<option value="">-- Select Class --</option>' +
-        classes.map(c => `<option value="${escapeForAttr(c)}">${escapeHtml(c)}</option>`).join('');
+        classes.map(c => `<option value="${SSX.esc(c)}">${escapeHtml(c)}</option>`).join('');
     classSel.value = '';
 }
 
@@ -1572,7 +1572,7 @@ function onFineClassChange() {
         populateFineStudentDropdown(cls, null);
     } else {
         secSel.innerHTML = '<option value="">-- Select Section --</option>' +
-            sections.map(sec => `<option value="${escapeForAttr(sec)}">${escapeHtml(sec)}</option>`).join('');
+            sections.map(sec => `<option value="${SSX.esc(sec)}">${escapeHtml(sec)}</option>`).join('');
         secSel.disabled = false;
     }
 }
@@ -1754,7 +1754,7 @@ function populateFrMonthFilter() {
     if (!sel) return;
     const opts = getFineRecordsMonthOptions();
     const keep = opts.some(o => o.key === selectedFineRecordsMonthKey) ? selectedFineRecordsMonthKey : opts[0].key;
-    sel.innerHTML = opts.map(o => `<option value="${o.key}">${o.label}</option>`).join('');
+    sel.innerHTML = opts.map(o => `<option value="${SSX.esc(o.key)}">${o.label}</option>`).join('');
     sel.value = keep;
     selectedFineRecordsMonthKey = keep;
 }
@@ -1928,12 +1928,12 @@ function renderStudentFinesRows(fines) {
         const isPaid = isFinePaid(f);
 
         return `
-             <tr class="salary-row-clickable" onclick="showFineDetails('${f.regNo}', '${monthKey}')">
-                <td><span class="hrk-id-badge">${f.regNo}</span></td>
-                <td><strong>${f.studentName}</strong></td>
-                <td>${f.studentClass}</td>
-                <td><span class="class-chip" style="background: rgba(139, 92, 246, 0.1); color: #8b5cf6;">${f.section || 'N/A'}</span></td>
-                <td>${f.guardianName || '-'}</td>
+             <tr class="salary-row-clickable" onclick="showFineDetails('${SSX.jsStr(f.regNo)}', '${SSX.jsStr(monthKey)}')">
+                <td><span class="hrk-id-badge">${SSX.esc(f.regNo)}</span></td>
+                <td><strong>${SSX.esc(f.studentName)}</strong></td>
+                <td>${SSX.esc(f.studentClass)}</td>
+                <td><span class="class-chip" style="background: rgba(139, 92, 246, 0.1); color: #8b5cf6;">${SSX.esc(f.section || 'N/A')}</span></td>
+                <td>${SSX.esc(f.guardianName || '-')}</td>
                 <td>
                     <div style="color:${isPaid ? 'var(--text-primary)' : '#dc2626'}; font-weight:800; font-size:1.05rem;">RS ${f.fineAmount.toLocaleString()}</div>
                     <div style="color:var(--text-secondary); line-height: 1.2;">${smartReason}</div>
@@ -2050,7 +2050,7 @@ function populateFrClassFilter() {
     if (classes.length === 0) classes = getAllClassNames();
     const current = classSel.value;
     classSel.innerHTML = '<option value="">-- All Classes --</option>' +
-        classes.map(c => `<option value="${escapeForAttr(c)}">${escapeHtml(c)}</option>`).join('');
+        classes.map(c => `<option value="${SSX.esc(c)}">${escapeHtml(c)}</option>`).join('');
     classSel.value = current || '';
     onFrStudentFilterChange(true);
 }
@@ -2063,7 +2063,7 @@ function onFrStudentFilterChange(skipRender) {
         const sections = [...new Set(students.map(s => s.section).filter(Boolean))];
         const current = secSel.value;
         secSel.innerHTML = '<option value="">-- All Sections --</option>' +
-            sections.map(sec => `<option value="${escapeForAttr(sec)}">${escapeHtml(sec)}</option>`).join('');
+            sections.map(sec => `<option value="${SSX.esc(sec)}">${escapeHtml(sec)}</option>`).join('');
         secSel.value = sections.includes(current) ? current : '';
     }
     if (!skipRender) filterStudentFinesTable();
@@ -2105,9 +2105,9 @@ function staffMatchesQuery(s, q) {
 
 function staffSubLine(s, category) {
     if (category === 'Teaching') {
-        return `<b>ID:</b> ${s.id} &nbsp;&bull;&nbsp; <b>Class:</b> ${s.classes || '-'} &nbsp;&bull;&nbsp; <b>Subject:</b> ${s.subjects || '-'}`;
+        return `<b>ID:</b> ${SSX.esc(s.id)} &nbsp;&bull;&nbsp; <b>Class:</b> ${SSX.esc(s.classes || '-')} &nbsp;&bull;&nbsp; <b>Subject:</b> ${SSX.esc(s.subjects || '-')}`;
     }
-    return `<b>ID:</b> ${s.id} &nbsp;&bull;&nbsp; <b>Job:</b> ${s.job || 'Staff'}`;
+    return `<b>ID:</b> ${SSX.esc(s.id)} &nbsp;&bull;&nbsp; <b>Job:</b> ${SSX.esc(s.job || 'Staff')}`;
 }
 
 function filterStaffFineList() {
@@ -2130,9 +2130,9 @@ function renderStaffMembersList(category, query) {
     container.innerHTML = members.map(s => {
         const active = (String(s.id) === String(selectedStaffId)) ? 'selected' : '';
         return `
-        <div class="staff-member-item ${active}" id="staff-item-${s.id}" onclick="selectStaffMember('${s.id}')">
+        <div class="staff-member-item ${active}" id="staff-item-${SSX.esc(s.id)}" onclick="selectStaffMember('${SSX.jsStr(s.id)}')">
             <div class="staff-member-info">
-                <span class="staff-member-name">${s.name}</span>
+                <span class="staff-member-name">${SSX.esc(s.name)}</span>
                 <span class="staff-member-role">${staffSubLine(s, category)}</span>
             </div>
             <div class="staff-member-check"><i class="fas fa-check"></i></div>
@@ -2250,10 +2250,10 @@ function renderStaffFinesTable() {
     }
     tbody.innerHTML = fines.map(f => `
         <tr>
-            <td>${f.name}</td>
-            <td>${f.role}</td>
+            <td>${SSX.esc(f.name)}</td>
+            <td>${SSX.esc(f.role)}</td>
             <td>RS ${Number(f.amount).toLocaleString()}</td>
-            <td>${f.cause}</td>
+            <td>${SSX.esc(f.cause)}</td>
         </tr>
     `).join('');
 }
@@ -2476,7 +2476,7 @@ function renderExpensesTable() {
         <tr>
             <td>${e.date || '—'}</td>
             <td><span style="font-size:0.85rem;color:var(--text-secondary);">${e.time || '—'}</span></td>
-            <td>${e.description}</td>
+            <td>${SSX.esc(e.description)}</td>
             <td>RS ${Number(e.amount).toLocaleString()}</td>
         </tr>
     `).join('');
@@ -2594,20 +2594,16 @@ const VOUCHER_SETTINGS = new Proxy({}, {
 // HTML attribute value (e.g. onclick="fn('${escapeForAttr(name)}')").
 // Escapes backslashes, single quotes, and HTML-significant chars.
 function escapeForAttr(str) {
-    return String(str)
-        .replace(/\\/g, '\\\\')
-        .replace(/'/g, "\\'")
-        .replace(/"/g, '&quot;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;');
+    // SECURITY: output goes inside a JS string inside an inline handler, e.g.
+    //   onclick="fn('${escapeForAttr(name)}')"
+    // The browser HTML-decodes the attribute BEFORE the JS runs, so entity escaping
+    // (&#39; &quot;) is not enough — a value like &#39;);alert(1);// would break out.
+    // SSX.jsStr hex-escapes every quote, backslash, <, >, & and control character.
+    return SSX.jsStr(str);
 }
 
 function escapeHtml(str) {
-    return String(str)
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;');
+    return SSX.esc(str);
 }
 
 
@@ -3119,7 +3115,7 @@ function renderClassCardGrid() {
     // generation status dot is kept on top, since that's Finance-specific.
     const billableAll = getRealStudents().filter(isStudentBillable);
     const classCardHTML = (name, label, sectionsText, count, badge, onclickName) => {
-        const safeName = onclickName.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+        const safeName = SSX.jsStr(onclickName);
         return `<div class="class-card" onclick="selectClassForFees('${safeName}')">
                     ${badge}
                     <div class="class-name">${escapeHtml(label)}</div>
@@ -4393,12 +4389,12 @@ function buildVoucherHTML(s) {
         }
     } else {
         rowsHTML = `
-            ${f.tuitionFee > 0 ? `<tr><td>Tuition Fee</td><td>${f.monthLabel}</td><td>Rs. ${f.tuitionFee.toLocaleString()}</td></tr>` : ''}
-            ${f.transportFee > 0 ? `<tr><td>Transportation Fee</td><td>${f.monthLabel}</td><td>Rs. ${f.transportFee.toLocaleString()}</td></tr>` : ''}
+            ${f.tuitionFee > 0 ? `<tr><td>Tuition Fee</td><td>${SSX.esc(f.monthLabel)}</td><td>Rs. ${f.tuitionFee.toLocaleString()}</td></tr>` : ''}
+            ${f.transportFee > 0 ? `<tr><td>Transportation Fee</td><td>${SSX.esc(f.monthLabel)}</td><td>Rs. ${f.transportFee.toLocaleString()}</td></tr>` : ''}
             ${f.otherFee > 0 ? `<tr><td>Other Charges</td><td>-</td><td>Rs. ${f.otherFee.toLocaleString()}</td></tr>` : ''}
         `;
     }
-    rowsHTML += `${f.fineAmount > 0 ? `<tr style="color:#dc2626;"><td><strong>Fine / Penalty</strong></td><td>${f.fineReason || 'Disciplinary'}</td><td>Rs. ${f.fineAmount.toLocaleString()}</td></tr>` : ''}`;
+    rowsHTML += `${f.fineAmount > 0 ? `<tr style="color:#dc2626;"><td><strong>Fine / Penalty</strong></td><td>${SSX.esc(f.fineReason || 'Disciplinary')}</td><td>Rs. ${f.fineAmount.toLocaleString()}</td></tr>` : ''}`;
 
     // 2. Build Specific Discounts Section
     if (f.activeDiscounts.length > 0) {
@@ -4450,16 +4446,16 @@ function buildVoucherHTML(s) {
             <div class="voucher-meta-row">
                 <div><span>Challan No.</span><strong>${challanNo}</strong></div>
                 <div><span>Issue Date</span><strong>${dateStr}</strong></div>
-                <div><span>Due Date</span><strong>${f.dueDateStr}</strong></div>
+                <div><span>Due Date</span><strong>${SSX.esc(f.dueDateStr)}</strong></div>
             </div>
 
             <div class="voucher-divider"></div>
 
             <div class="voucher-student-grid">
-                <div><span>Student ID</span><strong>${f.regNo}</strong></div>
-                <div><span>Student Name</span><strong>${s.fullName}</strong></div>
-                <div><span>Class</span><strong>${s.studentClass || '-'}</strong></div>
-                <div><span>Guardian</span><strong>${s.guardianName || '-'}</strong></div>
+                <div><span>Student ID</span><strong>${SSX.esc(f.regNo)}</strong></div>
+                <div><span>Student Name</span><strong>${SSX.esc(s.fullName)}</strong></div>
+                <div><span>Class</span><strong>${SSX.esc(s.studentClass || '-')}</strong></div>
+                <div><span>Guardian</span><strong>${SSX.esc(s.guardianName || '-')}</strong></div>
             </div>
 
             <table class="voucher-fee-table">
@@ -4471,7 +4467,7 @@ function buildVoucherHTML(s) {
                 </tbody>
                 <tfoot>
                     <tr class="voucher-total-row voucher-total-ontime">
-                        <td colspan="2"><i class="fas fa-wallet"></i> NET PAYABLE (on or before ${f.dueDateStr})</td>
+                        <td colspan="2"><i class="fas fa-wallet"></i> NET PAYABLE (on or before ${SSX.esc(f.dueDateStr)})</td>
                         <td>Rs. ${f.voucherTotal.toLocaleString()}</td>
                     </tr>
                     ${f.lateFineEnabled ? `
@@ -4551,7 +4547,7 @@ buildVoucherHTML = function(s) {
     let html = originalBuildVoucherHTML(s);
     
     if (f.monthlyFineTotal > 0) {
-        const fineRow = `<tr><td>Disciplinary Fines</td><td>${f.fineDetails}</td><td>Rs. ${f.monthlyFineTotal.toLocaleString()}</td></tr>`;
+        const fineRow = `<tr><td>Disciplinary Fines</td><td>${SSX.esc(f.fineDetails)}</td><td>Rs. ${f.monthlyFineTotal.toLocaleString()}</td></tr>`;
         // BUGFIX — "Student Copy is missing the fine line, School Copy has
         // it": a printed voucher is actually TWO stacked copies ("School
         // Copy" + "Student Copy"), each with its own <tbody>...</tbody>.
@@ -4813,11 +4809,11 @@ function _feeRowHtml(s, res, monthKey, isAllView) {
                 </button>`;
         } else {
             actionsHtml = `
-                <button class="btn-tiny" onclick="viewVoucher('${finance.regNo}', '${escapeForAttr(finance.studentName)}', ${isPaid})">
+                <button class="btn-tiny" onclick="viewVoucher('${SSX.jsStr(finance.regNo)}', '${escapeForAttr(finance.studentName)}', ${SSX.jsArg(isPaid)})">
                     <i class="fas fa-eye"></i> View Voucher
                 </button>
                 ${!isPaid ? `
-                    <button class="btn-tiny btn-add-fees" onclick="openAddFeesModal('${finance.regNo}', '${escapeForAttr(finance.studentName)}')">
+                    <button class="btn-tiny btn-add-fees" onclick="openAddFeesModal('${SSX.jsStr(finance.regNo)}', '${escapeForAttr(finance.studentName)}')">
                         <i class="fas fa-money-bill-wave"></i> Pay Bill
                     </button>
                 ` : ''}`;
@@ -4826,7 +4822,7 @@ function _feeRowHtml(s, res, monthKey, isAllView) {
         const rowStatus = !voucherRec ? 'notgenerated' : (isPaid ? 'paid' : (finance.paidAmount > 0 ? 'partial' : 'pending'));
         return `
             <tr data-fee-status="${rowStatus}">
-                <td><span class="hrk-id-badge">${finance.regNo}</span></td>
+                <td><span class="hrk-id-badge">${SSX.esc(finance.regNo)}</span></td>
                 <td class="fee-name-cell">
                     <div class="fee-name-line">
                         <strong title="${escapeHtml(finance.studentName)}">${escapeHtml(finance.studentName)}</strong>
@@ -5363,7 +5359,7 @@ function renderAddFeesModal(student) {
     const headerEl = document.getElementById('afm-pay-header');
     if (headerEl) {
         headerEl.innerHTML = `
-            <div class="afm-pay-header-name">${student.fullName || 'Student'}</div>
+            <div class="afm-pay-header-name">${SSX.esc(student.fullName || 'Student')}</div>
             <div class="afm-pay-header-stats">
                 <div><span>Monthly Total</span><strong>Rs. ${f.voucherTotal.toLocaleString()}</strong></div>
                 ${f.isPastDue ? `<div><span>Late Fee (overdue)</span><strong style="color:#dc2626;${waivingNow ? 'text-decoration:line-through;opacity:.6;' : ''}">Rs. ${f.lateFeeSurcharge.toLocaleString()}</strong></div>` : ''}
@@ -5636,7 +5632,7 @@ function _frBuildRecord(student, months, maps) {
 
 function _frSummaryCards(items) {
     return items.map(i => `
-        <div class="fr-sum-card ${i.cls || ''}">
+        <div class="fr-sum-card ${SSX.esc(i.cls || '')}">
             <span class="fr-sum-label">${escapeHtml(i.label)}</span>
             <span class="fr-sum-value">${escapeHtml(String(i.value))}</span>
         </div>`).join('');
@@ -6059,7 +6055,7 @@ function showFeeSuccessToast(message) {
         toast.className = 'fee-success-toast';
         document.body.appendChild(toast);
     }
-    toast.innerHTML = `<i class="fas fa-check-circle"></i> ${message}`;
+    toast.innerHTML = `<i class="fas fa-check-circle"></i> ${SSX.esc(message)}`;
     toast.classList.add('toast-visible');
     setTimeout(() => toast.classList.remove('toast-visible'), 3200);
 }
@@ -6085,8 +6081,8 @@ function renderPaymentHistory(student) {
                 <div class="af-history-icon"><i class="fas ${icon}"></i></div>
                 <div class="af-history-details">
                     <strong>Rs. ${p.amount.toLocaleString()}</strong>
-                    <span>${p.feeType} &bull; ${p.method} &bull; ${date}</span>
-                    ${p.notes ? `<span class="af-history-note">${p.notes}</span>` : ''}
+                    <span>${SSX.esc(p.feeType)} &bull; ${SSX.esc(p.method)} &bull; ${date}</span>
+                    ${p.notes ? `<span class="af-history-note">${SSX.esc(p.notes)}</span>` : ''}
                 </div>
                 <div class="af-history-month">${p.monthLabel || p.monthKey}</div>
             </div>`;
@@ -6258,13 +6254,13 @@ function renderTeachingSalaries(filterText = '') {
             ? `<span style="color:#ef4444;font-weight:600;">− RS ${absenceFine.toLocaleString()}</span><span style="font-size:10px;color:var(--text-secondary);display:block;">${absentDays}d absent</span>`
             : `<span style="color:var(--text-secondary);font-size:12px;">None</span>`;
         return `
-            <tr class="salary-row-clickable" onclick="showSalaryBreakdown('${t.id}', 'Teaching')" title="Click to view salary breakdown">
-                <td class="teacher-id-cell">${t.id}</td>
+            <tr class="salary-row-clickable" onclick="showSalaryBreakdown('${SSX.jsStr(t.id)}', 'Teaching')" title="Click to view salary breakdown">
+                <td class="teacher-id-cell">${SSX.esc(t.id)}</td>
                 <td>
-                    <div style="font-weight:600;">${t.name}</div>
+                    <div style="font-weight:600;">${SSX.esc(t.name)}</div>
                     <div style="font-size:11px; color:var(--text-secondary);">${t.classes ? 'Class ' + t.classes : ''}</div>
                 </td>
-                <td>${t.subjects || 'Teacher'}</td>
+                <td>${SSX.esc(t.subjects || 'Teacher')}</td>
                 <td><strong>RS ${basicSalary.toLocaleString()}</strong></td>
                 <td>${fineLabel}</td>
                 <td><strong style="color:#eab308;">RS ${advance.toLocaleString()}</strong></td>
@@ -6318,13 +6314,13 @@ function renderNonTeachingSalaries(filterText = '') {
             ? `<span style="color:#ef4444;font-weight:600;">− RS ${absenceFine.toLocaleString()}</span><span style="font-size:10px;color:var(--text-secondary);display:block;">${absentDays}d absent</span>`
             : `<span style="color:var(--text-secondary);font-size:12px;">None</span>`;
         return `
-            <tr class="salary-row-clickable" onclick="showSalaryBreakdown('${w.id}', 'Non-Teaching')" title="Click to view salary breakdown">
-                <td class="teacher-id-cell">${w.id}</td>
+            <tr class="salary-row-clickable" onclick="showSalaryBreakdown('${SSX.jsStr(w.id)}', 'Non-Teaching')" title="Click to view salary breakdown">
+                <td class="teacher-id-cell">${SSX.esc(w.id)}</td>
                 <td>
-                    <div style="font-weight:600;">${w.name}</div>
-                    <div style="font-size:11px; color:var(--text-secondary);">${w.email || ''}</div>
+                    <div style="font-weight:600;">${SSX.esc(w.name)}</div>
+                    <div style="font-size:11px; color:var(--text-secondary);">${SSX.esc(w.email || '')}</div>
                 </td>
-                <td>${w.job || 'Worker'}</td>
+                <td>${SSX.esc(w.job || 'Worker')}</td>
                 <td><strong>RS ${(Number(w.salary) || 0).toLocaleString()}</strong></td>
                 <td>${fineLabel}</td>
                 <td><strong style="color:#eab308;">RS ${advance.toLocaleString()}</strong></td>
@@ -7141,11 +7137,11 @@ async function showFineDetails(regNo, monthKey) {
         document.getElementById('full-fine-banner').innerHTML = `
             <div class="portfolio-student-info">
                 <label style="color: #10b981; font-weight: 800; font-size: 0.75rem; letter-spacing: 2px; text-transform: uppercase;">Financial Integrity Portfolio</label>
-                <h1>${summary.studentName}</h1>
+                <h1>${SSX.esc(summary.studentName)}</h1>
                 <div class="portfolio-meta">
-                    <span><i class="fas fa-user-shield"></i> Guardian: <b>${summary.guardianName}</b></span>
-                    <span><i class="fas fa-fingerprint"></i> ID: <b>${summary.regNo}</b></span>
-                    <span><i class="fas fa-layer-group"></i> <b>${summary.studentClass} - ${summary.section}</b></span>
+                    <span><i class="fas fa-user-shield"></i> Guardian: <b>${SSX.esc(summary.guardianName)}</b></span>
+                    <span><i class="fas fa-fingerprint"></i> ID: <b>${SSX.esc(summary.regNo)}</b></span>
+                    <span><i class="fas fa-layer-group"></i> <b>${SSX.esc(summary.studentClass)} - ${SSX.esc(summary.section)}</b></span>
                 </div>
             </div>
             <div class="portfolio-stats">
@@ -7183,12 +7179,12 @@ function renderFineRows(data) {
         const isPaid = isFinePaid(d);
         return `
         <tr>
-            <td><span class="tx-id">#FT-${d.id}</span></td>
+            <td><span class="tx-id">#FT-${SSX.esc(d.id)}</span></td>
             <td>
-                <div style="font-weight: 600;">${d.applyDate}</div>
-                <div style="font-size: 0.7rem; color: var(--text-muted);">${d.applyTime}</div>
+                <div style="font-weight: 600;">${SSX.esc(d.applyDate)}</div>
+                <div style="font-size: 0.7rem; color: var(--text-muted);">${SSX.esc(d.applyTime)}</div>
             </td>
-            <td><div style="font-weight: 600; font-size: 0.9rem;">${d.reason}</div></td>
+            <td><div style="font-weight: 600; font-size: 0.9rem;">${SSX.esc(d.reason)}</div></td>
             <td><b style="font-size: 1.1rem; color: ${isPaid ? 'var(--text-primary)' : '#ef4444'};">Rs. ${d.amount.toLocaleString()}</b></td>
             <td>
                 <span class="fee-status-badge ${isPaid ? 'fee-paid' : 'fee-overdue'}">
@@ -7197,12 +7193,12 @@ function renderFineRows(data) {
             </td>
             <td>
                 ${isPaid ? `
-                    <div style="font-weight: 600; color: #10b981;">${d.payDate}</div>
-                    <div style="font-size: 0.7rem; color: var(--text-muted);">${d.payTime}</div>
+                    <div style="font-weight: 600; color: #10b981;">${SSX.esc(d.payDate)}</div>
+                    <div style="font-size: 0.7rem; color: var(--text-muted);">${SSX.esc(d.payTime)}</div>
                 ` : '<span style="opacity:0.2">—</span>'}
             </td>
             <td class="text-center">
-                <button class="btn-settle" ${isPaid ? 'disabled' : ''} onclick="processIndividualPay(${d.id})">
+                <button class="btn-settle" ${isPaid ? 'disabled' : ''} onclick="processIndividualPay(${SSX.jsArg(d.id)})">
                     ${isPaid ? 'Completed' : 'Pay Now'}
                 </button>
             </td>
@@ -7901,7 +7897,7 @@ function _classVoucherBadgeHTML(className) {
     const title = status.state === 'done'
         ? `All ${status.total} vouchers generated this month`
         : `${status.generated}/${status.total} vouchers generated this month`;
-    return `<span class="class-status-badge ${cls}" title="${escapeForAttr(title)}"><i class="fas ${icon}"></i></span>`;
+    return `<span class="class-status-badge ${cls}" title="${SSX.esc(title)}"><i class="fas ${icon}"></i></span>`;
 }
 
 // ---------------------------------------------------------------------------
@@ -8290,8 +8286,8 @@ function buildFamilyVoucherHTML(studentsGroup) {
             }
         } else {
             rowsHTML = `
-                ${f.tuitionFee > 0 ? `<tr><td>Tuition Fee</td><td>${f.monthLabel}</td><td>Rs. ${f.tuitionFee.toLocaleString()}</td></tr>` : ''}
-                ${f.transportFee > 0 ? `<tr><td>Transportation Fee</td><td>${f.monthLabel}</td><td>Rs. ${f.transportFee.toLocaleString()}</td></tr>` : ''}
+                ${f.tuitionFee > 0 ? `<tr><td>Tuition Fee</td><td>${SSX.esc(f.monthLabel)}</td><td>Rs. ${f.tuitionFee.toLocaleString()}</td></tr>` : ''}
+                ${f.transportFee > 0 ? `<tr><td>Transportation Fee</td><td>${SSX.esc(f.monthLabel)}</td><td>Rs. ${f.transportFee.toLocaleString()}</td></tr>` : ''}
                 ${f.otherFee > 0 ? `<tr><td>Other Charges</td><td>-</td><td>Rs. ${f.otherFee.toLocaleString()}</td></tr>` : ''}
             `;
         }
@@ -8322,7 +8318,7 @@ function buildFamilyVoucherHTML(studentsGroup) {
                         <span>${escapeHtml(f.regNo)} &middot; Class ${escapeHtml(s.studentClass || '-')}</span>
                     </div>
                     <div class="voucher-child-subtotal">Rs. ${f.voucherTotal.toLocaleString()}</div>
-                    <button type="button" class="voucher-child-edit-btn no-print" title="Edit ${escapeForAttr(childName)}'s voucher"
+                    <button type="button" class="voucher-child-edit-btn no-print" title="Edit ${SSX.esc(childName)}'s voucher"
                         onclick="editFamilyVoucherChild('${escapeForAttr(childId)}','${escapeForAttr(childName)}')">
                         <i class="fas fa-pen"></i>
                     </button>
@@ -8630,8 +8626,8 @@ window.printStudentVoucher = printStudentVoucher;
    ============================================================ */
 
 /* ── Helpers ─────────────────────────────────────────────── */
-function _escHtml(s) { return typeof escapeHtml === 'function' ? escapeHtml(s) : String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
-function _escAttr(s) { return typeof escapeForAttr === 'function' ? escapeForAttr(s) : String(s).replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/"/g,'&quot;'); }
+function _escHtml(s) { return SSX.esc(s); }
+function _escAttr(s) { return SSX.jsStr(s); }
 // Fee Defaulters resolves "the current month" through getCurrentFeeMonthKey(),
 // the same stored billing month the rest of Manage Finance uses. It changes
 // only when an admin presses "Move to Next Month" (any date) — never because
@@ -9018,8 +9014,8 @@ function showCustomFeeSummaryList() {
             <td><span style="color:#16a34a; font-weight:700;">${paidCount} Paid</span></td>
             <td><span style="color:#ef4444; font-weight:700;">${pendingCount} Pending</span></td>
             <td class="fee-actions-cell">
-                <button class="btn-tiny btn-primary" onclick="showCustomFeeDetail('${fee.id}')"><i class="fas fa-list-ul"></i> View Roster</button>
-                <button class="btn-tiny" style="background:rgba(239,68,68,0.12);color:#dc2626;" onclick="deleteCustomFee('${fee.id}')"><i class="fas fa-trash"></i> Delete</button>
+                <button class="btn-tiny btn-primary" onclick="showCustomFeeDetail('${SSX.jsStr(fee.id)}')"><i class="fas fa-list-ul"></i> View Roster</button>
+                <button class="btn-tiny" style="background:rgba(239,68,68,0.12);color:#dc2626;" onclick="deleteCustomFee('${SSX.jsStr(fee.id)}')"><i class="fas fa-trash"></i> Delete</button>
             </td>
         </tr>`;
     }).join('');
@@ -9057,12 +9053,12 @@ function _populateCfrDetailFilters(records) {
     const sections = Array.from(new Set(records.map(r => r.section).filter(s => s && s !== '-'))).sort();
 
     let classHtml = '<option value="">All Classes</option>';
-    classes.forEach(c => { classHtml += `<option value="${_escAttr(c)}">${_escHtml(c)}</option>`; });
+    classes.forEach(c => { classHtml += `<option value="${SSX.esc(c)}">${_escHtml(c)}</option>`; });
     classSel.innerHTML = classHtml;
 
     if (secSel) {
         let secHtml = '<option value="">All Sections</option>';
-        sections.forEach(s => { secHtml += `<option value="${_escAttr(s)}">Section ${_escHtml(s)}</option>`; });
+        sections.forEach(s => { secHtml += `<option value="${SSX.esc(s)}">Section ${_escHtml(s)}</option>`; });
         secSel.innerHTML = secHtml;
     }
 }
@@ -9270,14 +9266,14 @@ function _populateFdMonthDropdown() {
     const opts = [];
     const sessionKeys = getSessionMonthKeysUpTo(_monthKey());
     if (sessionKeys) {
-        sessionKeys.forEach(key => opts.push(`<option value="${key}">${feeMonthDisplayLabel(key)}</option>`));
+        sessionKeys.forEach(key => opts.push(`<option value="${SSX.esc(key)}">${feeMonthDisplayLabel(key)}</option>`));
     } else {
         const [curYear, curMonth] = _monthKey().split('-').map(Number);
         for (let i = 0; i < 12; i++) {
             const d = new Date(curYear, (curMonth - 1) - i, 1);
             const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
             const lbl = feeMonthDisplayLabel(key);
-            opts.push(`<option value="${key}">${lbl}</option>`);
+            opts.push(`<option value="${SSX.esc(key)}">${lbl}</option>`);
         }
     }
     sel.innerHTML = opts.join('');
@@ -10115,10 +10111,10 @@ function filterSalaryBonusList(panelId) {
     container.innerHTML = members.map(s => {
         const active = (String(s.id) === String(selectedId)) ? 'selected' : '';
         return `
-        <div class="staff-member-item ${active}" id="sbp-bonus-item-${panelId}-${s.id}"
-             onclick="_selectSalaryBonusStaff('${panelId}','${s.id}')">
+        <div class="staff-member-item ${active}" id="sbp-bonus-item-${panelId}-${SSX.esc(s.id)}"
+             onclick="_selectSalaryBonusStaff('${panelId}','${SSX.jsStr(s.id)}')">
             <div class="staff-member-info">
-                <span class="staff-member-name">${s.name}</span>
+                <span class="staff-member-name">${SSX.esc(s.name)}</span>
                 <span class="staff-member-role">${staffSubLine(s, category)}</span>
             </div>
             <div class="staff-member-check"><i class="fas fa-check"></i></div>

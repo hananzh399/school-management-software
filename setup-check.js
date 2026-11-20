@@ -61,7 +61,7 @@
         var ctl = typeof AbortController === 'function' ? new AbortController() : null;
         var timer = ctl ? setTimeout(function () { ctl.abort(); }, 8000) : null;
         return fetch(url, { headers: headers, signal: ctl ? ctl.signal : undefined }).then(function (r) {
-            if (!r.ok) throw new Error(path + ' -> HTTP ' + r.status);
+            if (!r.ok) throw new Error(path + ' -> HTTP ' + SSX.esc(r.status));
             return r.json();
         }).then(function (d) { if (timer) clearTimeout(timer); return d; },
                 function (e) { if (timer) clearTimeout(timer); throw e; });

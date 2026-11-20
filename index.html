@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <!-- APP MODE: inside the Android app (Capacitor) only the login screen is shown, never the landing page.
        To ALSO do this for phone browsers (screen <= 640px), set MOBILE_BROWSER_TOO = true. -->
+  <script src="xss-safe.js"></script>
   <script>(function(){try{var MOBILE_BROWSER_TOO=false;var C=window.Capacitor,app=false;
     if(C){app=typeof C.isNativePlatform==='function'?C.isNativePlatform():(typeof C.getPlatform==='function'&&C.getPlatform()!=='web');}
     if(!app&&location.hostname==='localhost'&&/;\s*wv\)/.test(navigator.userAgent))app=true;
