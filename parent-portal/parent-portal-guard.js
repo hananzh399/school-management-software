@@ -5,7 +5,7 @@
 // the signed token and returns 401 without it, so a visitor who skips this script still gets no data.
 (function () {
   'use strict';
-  var API = 'https://167-86-120-247.sslip.io/api/parent';   // same server as the login page
+  var API = 'https://thesoftschool.com/api/parent';   // same server as the login page
   var LOGIN = '../index.html';                               // the login page (site root)
   var page = (location.pathname.split('/').pop() || '').toLowerCase();
   var onlyNeedsToken = page === 'parent-portal-change-password.html'; // a first-time session may only change its password

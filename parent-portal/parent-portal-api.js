@@ -4,7 +4,7 @@
   'use strict';
   // Override this before loading the file when the backend URL changes:
   // window.PARENT_PORTAL_API_BASE = 'https://your-host/api/parent';
-  var API = (global.PARENT_PORTAL_API_BASE || 'https://167-86-120-247.sslip.io/api/parent').replace(/\/+$/, '');
+  var API = (global.PARENT_PORTAL_API_BASE || 'https://thesoftschool.com/api/parent').replace(/\/+$/, '');
   var LOGIN = '../index.html';
   var MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
