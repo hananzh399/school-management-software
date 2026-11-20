@@ -2618,3 +2618,54 @@ section[id], div[id] { scroll-margin-top: 96px; }
   .ll-dot i, .ll-dot::after, .ll-dot b { animation: none !important; }
   .ll-dot { transition-duration: .01s; }
 }
+
+
+/* ══════════════════════════════════════════════════════════
+   APP MODE (Android app): after the splash, only the login
+   screen is shown, full screen. The landing page never shows.
+   ══════════════════════════════════════════════════════════ */
+html.app-mode,
+html.app-mode body { background: var(--white, #fff); overflow: hidden; }
+
+/* hide the whole landing page (header, hero, sections, footer, other modals) */
+html.app-mode body > :not(#splash):not(#loginModal):not(#registerModal):not(#forgotPasswordModal):not(.toast-container):not(script):not(style):not(link):not(noscript) {
+  display: none !important;
+}
+
+/* login is always on screen, covering everything */
+html.app-mode #loginModal { display: flex !important; }
+html.app-mode .modal-overlay {
+  background: var(--white, #fff);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  padding: 0;
+  align-items: stretch;
+  overflow: hidden;
+}
+html.app-mode .modal-overlay .login-modal-box {
+  width: 100%;
+  max-width: 100%;
+  height: 100%;
+  max-height: none;
+  margin: 0;
+  border-radius: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  background: transparent;
+  box-shadow: none;
+}
+html.app-mode .modal-overlay .login-modal-box .login-card {
+  box-sizing: border-box;
+  min-height: 100%;
+  max-width: 100%;
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: calc(1.5rem + env(safe-area-inset-top, 0px)) 1.5rem calc(1.5rem + env(safe-area-inset-bottom, 0px));
+}
+/* the login screen has nothing to close back to */
+html.app-mode #loginModal > .login-modal-box > .modal-close { display: none !important; }

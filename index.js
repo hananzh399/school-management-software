@@ -1783,3 +1783,14 @@ if (siteHeader) {
     });
   });
 })();
+
+/* ── APP MODE (Android app): keep the login screen open at all times ──
+   The CSS (html.app-mode) hides the landing page and makes the login
+   modal full screen. Here we just mark the login modal as open so the
+   rest of the login code behaves normally. The splash screen still
+   plays first and fades out over it. */
+(function () {
+  if (!document.documentElement.classList.contains("app-mode")) return;
+  const modal = document.getElementById("loginModal");
+  if (modal) modal.classList.add("open");
+})();

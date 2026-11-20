@@ -2,7 +2,14 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <!-- APP MODE: inside the Android app (Capacitor) only the login screen is shown, never the landing page.
+       To ALSO do this for phone browsers (screen <= 640px), set MOBILE_BROWSER_TOO = true. -->
+  <script>(function(){try{var MOBILE_BROWSER_TOO=false;var C=window.Capacitor,app=false;
+    if(C){app=typeof C.isNativePlatform==='function'?C.isNativePlatform():(typeof C.getPlatform==='function'&&C.getPlatform()!=='web');}
+    if(!app&&location.hostname==='localhost'&&/;\s*wv\)/.test(navigator.userAgent))app=true;
+    if(!app&&MOBILE_BROWSER_TOO&&window.matchMedia&&matchMedia('(max-width: 640px)').matches)app=true;
+    if(app)document.documentElement.classList.add('app-mode');}catch(e){}})();</script>
   <title>Soft School | School Management Software</title>
     <link rel="icon" type="image/png" href="logo-icon.png">
   <meta name="description" content="Soft School is a school management platform for student records, staff management, fees and finance, and attendance — built for administrators, teachers, students, and parents.">
