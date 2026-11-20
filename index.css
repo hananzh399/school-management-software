@@ -2669,3 +2669,42 @@ html.app-mode .modal-overlay .login-modal-box .login-card {
 }
 /* the login screen has nothing to close back to */
 html.app-mode #loginModal > .login-modal-box > .modal-close { display: none !important; }
+
+/* APP MODE: no "Remember Me" switch (the app always remembers the user) */
+html.app-mode .remember-row { display: none !important; }
+
+/* APP MODE: while the app opens the saved account, show the splash green
+   instead of flashing the login screen */
+html.app-routing,
+html.app-routing body { background: #0B2B28 !important; }
+html.app-routing body > :not(#splash):not(#autoLoginOverlay):not(script):not(style):not(link):not(noscript) {
+  visibility: hidden !important;
+}
+html.app-mode #autoLoginOverlay { background: #0B2B28 !important; color: #fff !important; }
+
+/* ── DOWNLOAD ANDROID APP BUTTON ── */
+.btn-download-app {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 24px;
+  background: var(--white);
+  border: none;
+  color: var(--teal-900);
+  border-radius: var(--radius-sm);
+  font-weight: 700;
+  font-size: 0.95rem;
+  font-family: inherit;
+  text-decoration: none;
+  cursor: pointer;
+  transition: all 0.28s cubic-bezier(0.34,1.56,0.64,1);
+}
+.btn-download-app i { font-size: 1.15rem; color: #3DDC84; }
+.btn-download-app:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 12px 28px -8px rgba(0,0,0,0.3);
+}
+.btn-download-app:active { transform: translateY(0); box-shadow: none; }
+@media (max-width: 480px) {
+  .btn-download-app { width: 100%; justify-content: center; }
+}

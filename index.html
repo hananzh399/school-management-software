@@ -19,6 +19,7 @@
 <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet" media="print" onload="this.media='all'"><noscript><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet"></noscript>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet" media="print" onload="this.media='all'"><noscript><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet"></noscript>
   <script>try{var r=document.referrer;if(r){var u=new URL(r);if(u.origin===location.origin&&u.pathname!==location.pathname)document.documentElement.classList.add("splash-skip");}if(sessionStorage.getItem("softschool_splash_seen"))document.documentElement.classList.add("splash-skip");}catch(e){}</script>
+  <script src="native-ui.js"></script>
   <link rel="preload" as="image" href="splash/book-left.webp" type="image/webp">
   <link rel="preload" as="image" href="splash/book-right.webp" type="image/webp">
   <link rel="preload" as="image" href="splash/cap.webp" type="image/webp">
@@ -331,6 +332,9 @@ html.splash-on body > :not(#splash) * { animation-play-state: paused !important;
       <button class="btn-login-hero btn-ripple" onclick="openLogin()">
         <i class="fas fa-lock"></i> Login
       </button>
+      <a href="https://YOURUSERNAME.github.io/myapp-download/" class="btn-download-app btn-ripple" id="downloadAppBtn">
+        <i class="fab fa-android"></i> Download Android App
+      </a>
     </div>
     <div class="hero-stats">
       <div class="stat-item">
