@@ -242,7 +242,7 @@ function _getSchoolId() {
     return '';
 }
 
-const REPORTS_BACKEND_ORIGIN = 'https://167-86-120-247.sslip.io';
+const REPORTS_BACKEND_ORIGIN = 'https://thesoftschool.com';
 
 // MEDIA TOKEN — photos stored as files (photos/uuid.jpg) are shown through
 // GET /api/students/{regNo}/photo. An <img> cannot send the login header, so

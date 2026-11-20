@@ -72,7 +72,7 @@ const CLASS_COLORS = ['#1a9e6e','#3b82f6','#8b5cf6','#f59e0b','#ef4444','#06b6d4
 // Spring Boot app / behind the same reverse proxy as the API. Point this
 // at an absolute URL (e.g. 'https://softschool-production.up.railway.app/api/settings') if the
 // frontend and backend are hosted separately.
-const SETTINGS_API_BASE = 'https://167-86-120-247.sslip.io/api/settings';
+const SETTINGS_API_BASE = 'https://thesoftschool.com/api/settings';
 
 // Last-known settings row fetched from the backend (the single source of truth).
 let _serverSettings = null;
@@ -324,7 +324,7 @@ window.addEventListener('hashchange', openTabFromHash);
 // ═══════════════════════════════════════════════
 //  TEACHER LOGIN  (default password + reset)
 // ═══════════════════════════════════════════════
-const STAFF_API_BASE = 'https://167-86-120-247.sslip.io/api/staff';
+const STAFF_API_BASE = 'https://thesoftschool.com/api/staff';
 
 function _flash(id, msg, ms = 3000) {
   const el = document.getElementById(id);
@@ -944,7 +944,7 @@ function _sanitizeStaffBuckets() {
 // save time and rewrites the old name to the new one on every matching
 // student record in the backend (the single source of truth — same
 // pattern manage-students.js uses, no localStorage involved).
-const STUDENTS_API_BASE = 'https://167-86-120-247.sslip.io/api/students';
+const STUDENTS_API_BASE = 'https://thesoftschool.com/api/students';
 
 /**
  * Compare each class card's/section chip's CURRENT value against the

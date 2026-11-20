@@ -120,7 +120,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (headerNameEl) headerNameEl.textContent = getSchoolIdentity().name;
 });
 
-const API_BASE = "https://167-86-120-247.sslip.io/api/finance";
+const API_BASE = "https://thesoftschool.com/api/finance";
 
 // ---------------------------------------------------------------------------
 // SCHOOL SCOPING — every finance record (student fee ledgers, fines, salary
@@ -218,7 +218,7 @@ async function apiRequest(endpoint, method = "GET", body = null) {
    Every helper degrades to the old behaviour when no session is set or the
    sessions request fails, so Finance never breaks because of this link.
    ============================================================================ */
-const SESSIONS_API_BASE = "https://167-86-120-247.sslip.io/api/sessions";
+const SESSIONS_API_BASE = "https://thesoftschool.com/api/sessions";
 const SESSIONS_PAGE_URL = "sessions.html";
 let _sessionsCache = [];          // every session of this school
 let _currentSessionCache = null;  // the one flagged currentSession, or null
@@ -528,17 +528,17 @@ function isMonthlyFeePaid(finance) {
    _staffCache, fetched from the backend exactly like every other entity
    on this page.
    ============================================================================ */
-const STUDENTS_API_BASE = "https://167-86-120-247.sslip.io/api/students";
+const STUDENTS_API_BASE = "https://thesoftschool.com/api/students";
 // PERFORMANCE FIX — the first load used to call STUDENTS_API_BASE, which
 // returns full Student entities including the base64 photo/certData
 // LONGTEXT columns. This page never renders a student photo in any of its
 // lists, so those blobs were pure download cost sitting on the critical
 // path of the page's first paint. The LIST endpoint returns every field
 // this page reads, minus those two columns.
-const STUDENTS_LIST_API_BASE = "https://167-86-120-247.sslip.io/api/students/list";
-const STUDENTS_SYNC_API_BASE = "https://167-86-120-247.sslip.io/api/students/sync";
-const SETTINGS_API_BASE = "https://167-86-120-247.sslip.io/api/settings";
-const STAFF_API_BASE    = "https://167-86-120-247.sslip.io/api/staff";
+const STUDENTS_LIST_API_BASE = "https://thesoftschool.com/api/students/list";
+const STUDENTS_SYNC_API_BASE = "https://thesoftschool.com/api/students/sync";
+const SETTINGS_API_BASE = "https://thesoftschool.com/api/settings";
+const STAFF_API_BASE    = "https://thesoftschool.com/api/staff";
 
 const ENDPOINTS = {
     customFees:    '/custom-fees',

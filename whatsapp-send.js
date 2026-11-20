@@ -3,7 +3,7 @@
    or put  data-wa-send="fee"  on any button.
    Everything is limited server-side (per-send cap, cooldown, daily quota); this popup only shows those limits. */
 (function () {
-  const API = 'https://167-86-120-247.sslip.io/api/whatsapp';
+  const API = 'https://thesoftschool.com/api/whatsapp';
   const KINDS = {
     attendance:   { title: 'Send attendance report to parents', icon: 'fa-clipboard-check',     path: '/send/attendance',   go: 'Send report',
                     sub: 'Each parent gets a personal summary of their child\u2019s attendance.' },

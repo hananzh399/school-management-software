@@ -7,7 +7,7 @@
  * Result notices ("your child's result is available") are created automatically by Examination → Send to Parents. */
 (function () {
     "use strict";
-    var API = "https://167-86-120-247.sslip.io/api";
+    var API = "https://thesoftschool.com/api";
     var $ = function (s) { return document.querySelector(s); };
     var $$ = function (s) { return Array.prototype.slice.call(document.querySelectorAll(s)); };
     var esc = function (v) { return String(v == null ? "" : v).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); };

@@ -15,7 +15,7 @@
    ============================================================ */
 (function () {
   "use strict";
-  const API = "https://167-86-120-247.sslip.io/api/school";
+  const API = "https://thesoftschool.com/api/school";
   const KEY = "softschool_teacher";
   let pending = null;
 

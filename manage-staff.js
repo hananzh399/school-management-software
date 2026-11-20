@@ -217,7 +217,7 @@ function showToast(message, type = 'error', title) {
 // by schoolId exactly like StudentController does for students (see
 // manage-students.js's identical apiRequest/toApiPayload/syncWithBackend).
 // ============================================================================
-const STAFF_API_BASE = 'https://167-86-120-247.sslip.io/api/staff';
+const STAFF_API_BASE = 'https://thesoftschool.com/api/staff';
 
 /**
  * The logged-in school's real School ID (School.schoolId, e.g. "SS_77_1") —
@@ -1168,7 +1168,7 @@ function deductSecurityMonth(staffId) {
 // Fetched once on page load (and refreshed whenever syncStaffWithBackend()
 // runs) into this in-memory cache; getSettingsClasses() below just reads it.
 // ============================================================================
-const SETTINGS_API_BASE = 'https://167-86-120-247.sslip.io/api/settings';
+const SETTINGS_API_BASE = 'https://thesoftschool.com/api/settings';
 let CLASS_CONFIGS_CACHE = [];
 
 // The school's contact details (address/phone) live on the same

@@ -34,7 +34,7 @@
 
     var ORIGIN = (typeof window.SOFTSCHOOL_API_ORIGIN === 'string' && window.SOFTSCHOOL_API_ORIGIN.trim())
         ? window.SOFTSCHOOL_API_ORIGIN.trim().replace(/\/+$/, '')
-        : 'https://167-86-120-247.sslip.io';
+        : 'https://thesoftschool.com';
     var OK_TTL_MS = 5 * 60 * 1000;   // short on purpose: sessions/classes can be deleted at any time
 
     var IS_DASHBOARD = !!document.querySelector('main.main-content .quick-stats-strip') || /(^|\/)main\.html$/.test(location.pathname);

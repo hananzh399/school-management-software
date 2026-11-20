@@ -58,7 +58,7 @@
     const school = getSchool();
     const API_ORIGIN = (typeof window.SOFTSCHOOL_API_ORIGIN === "string" && window.SOFTSCHOOL_API_ORIGIN.trim())
         ? window.SOFTSCHOOL_API_ORIGIN.trim().replace(/\/+$/, "")
-        : (window.location.port === "8080" ? "" : "https://167-86-120-247.sslip.io");
+        : (window.location.port === "8080" ? "" : "https://thesoftschool.com");
 
     /* ───────── live data (real classes / students / subjects) ───────── */
     const LIVE = { students: [], classes: [], subjects: [], loading: true, error: "" };

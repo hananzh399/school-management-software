@@ -2,7 +2,7 @@
  * Messaging-app layout · edit / delete · message everyone or specific teachers / parents · push notifications. */
 (function () {
     "use strict";
-    var API = "https://167-86-120-247.sslip.io/api";
+    var API = "https://thesoftschool.com/api";
     var POLL_MS = 4000;
     var MAX_LEN = 1000;
     var QUICK = [

@@ -1,7 +1,7 @@
 /* Teacher Portal — Home · Classes · Attendance · Tests · Notices · Profile (+ ID card) */
 (function () {
   "use strict";
-  const API = "https://167-86-120-247.sslip.io/api";
+  const API = "https://thesoftschool.com/api";
   const auth = window.SoftSchoolTeacher;
   const session = auth && auth.getSession();
   if (!session || !session.token) { location.replace("index.html"); return; }

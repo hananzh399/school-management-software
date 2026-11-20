@@ -2,7 +2,7 @@
  * plus an in-app popup card (inside the page, not a browser notification) when a new message arrives. */
 (function () {
     "use strict";
-    var API = "https://167-86-120-247.sslip.io/api";
+    var API = "https://thesoftschool.com/api";
     var badge = document.getElementById("nav-ann-badge");
     if (!badge) return;
     var css = document.createElement("style");

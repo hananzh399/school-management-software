@@ -7,10 +7,10 @@
 
 // Matches StudentController / StaffController / SchoolSettingsController / AttendanceController.
 // Matches StudentController / StaffController / SchoolSettingsController / AttendanceController.
-const STUDENTS_API_BASE   = 'https://167-86-120-247.sslip.io/api/students';
-const STAFF_API_BASE      = 'https://167-86-120-247.sslip.io/api/staff';
-const SETTINGS_API_BASE   = 'https://167-86-120-247.sslip.io/api/settings';
-const ATTENDANCE_API_BASE = 'https://167-86-120-247.sslip.io/api/attendance';
+const STUDENTS_API_BASE   = 'https://thesoftschool.com/api/students';
+const STAFF_API_BASE      = 'https://thesoftschool.com/api/staff';
+const SETTINGS_API_BASE   = 'https://thesoftschool.com/api/settings';
+const ATTENDANCE_API_BASE = 'https://thesoftschool.com/api/attendance';
 
 const LEAVE_REASONS = ["Sick Leave","Personal","Family Event","Medical Appointment","Travel","Other"];
 
@@ -3966,7 +3966,7 @@ function normalizeBiometricPath(raw) {
         const previewEl  = document.getElementById('biometric-path-preview');
         const statusEl   = document.getElementById('biometric-status');
 
-        const BACKEND_URL = 'https://167-86-120-247.sslip.io/api/biometric/link';
+        const BACKEND_URL = 'https://thesoftschool.com/api/biometric/link';
 
         // Configurable demo video URL (also settable from settings page)
         const DEMO_URL = 'https://www.youtube.com/watch?v=YQm7g7lWQ4E';
@@ -4405,7 +4405,7 @@ function normalizeBiometricPath(raw) {
    ============================================================================ */
 (function () {
     "use strict";
-    const PARENT_ADMIN_API = "https://167-86-120-247.sslip.io/api/parent-admin";
+    const PARENT_ADMIN_API = "https://thesoftschool.com/api/parent-admin";
     const DAY = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
     const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
     const esc = v => String(v == null ? "" : v).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));

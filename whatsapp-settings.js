@@ -1,6 +1,6 @@
 /* Settings > WhatsApp tab. Talks to /api/whatsapp/* on the backend (school comes from the signed session). */
 (function () {
-  const API = 'https://167-86-120-247.sslip.io/api/whatsapp';
+  const API = 'https://thesoftschool.com/api/whatsapp';
   const $ = (id) => document.getElementById(id);
   let timer = null;
   let cfgLoaded = false;
