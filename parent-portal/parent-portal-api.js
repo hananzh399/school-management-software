@@ -9,7 +9,11 @@
   var MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
   function token() { try { return sessionStorage.getItem('softschool_parent_token'); } catch (e) { return null; } }
-  function logout() { try { sessionStorage.clear(); } catch (e) { /* ignore */ } location.replace(LOGIN); }
+  function logout() {
+    try { if (window.SchoolPush) window.SchoolPush.logout(); } catch (e) { /* never block logout */ }   // removes this phone from push BEFORE the session is wiped
+    try { sessionStorage.clear(); } catch (e) { /* ignore */ }
+    location.replace(LOGIN);
+  }
   function pad(n) { return n < 10 ? '0' + n : '' + n; }
 
   // Identical GET requests that are already in flight share ONE network call (several scripts on a page
