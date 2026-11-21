@@ -261,7 +261,11 @@ async function handleLogin(e) {
   btn.style.opacity = "0.8";
 
   const rememberBox = document.getElementById("rememberAdmin");
-  const remember = !!(rememberBox && rememberBox.checked);
+  // In the Android app the user stays signed in until they log out (like parent / teacher),
+  // so "Remember Me" is always on there. In a normal browser it still follows the checkbox.
+  let isNativeApp = false;
+  try { isNativeApp = !!(window.Capacitor && typeof window.Capacitor.isNativePlatform === "function" && window.Capacitor.isNativePlatform()); } catch (e) {}
+  const remember = isNativeApp || !!(rememberBox && rememberBox.checked);
 
   // Note: the password is intentionally NOT run through the
   // canonicalizing/allow-list string validator beyond a length cap —
@@ -1465,9 +1469,12 @@ async function handleParentLogin(e) {
   }
 
   const parentObj = d.parent || {};
+  // The guardian name lives on each child record (children[].guardianName), the same place
+  // the parent portal greeting reads it from. Use it before falling back to the school name.
+  const childGuardian = ((d.children || []).map((c) => (c && (c.guardianName || c.fatherName)) ? String(c.guardianName || c.fatherName).trim() : "").find(Boolean)) || "";
   LoginLoader.success(
-    d.parentName || d.fatherName || d.name || parentObj.name || parentObj.fatherName ||
-    (d.school && (d.school.schoolName || d.school.name)) || "Welcome"
+    d.parentName || d.guardianName || d.fatherName || d.name || parentObj.name || parentObj.guardianName || parentObj.fatherName ||
+    childGuardian || "Welcome"
   );
   // Parent portal pages live in the "parent-portal" folder next to this index.html.
   // new URL(...) resolves against the current page, so it builds the full path
