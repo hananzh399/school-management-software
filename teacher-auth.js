@@ -58,7 +58,10 @@
     const s = getSession();
     if (s) localStorage.setItem(KEY, JSON.stringify(Object.assign(s, patch)));
   }
-  function clearSession() { localStorage.removeItem(KEY); }
+  function clearSession() {
+    try { if (window.SchoolPush) window.SchoolPush.logout(); } catch (e) { /* never block logout */ }   // removes this phone from push BEFORE the session is wiped
+    localStorage.removeItem(KEY);
+  }
 
   window.SoftSchoolTeacher = { authenticateTeacher, setSession, getSession, updateSession, clearSession };
 })();

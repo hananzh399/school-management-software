@@ -114,6 +114,7 @@ const SCHOOL_API_BASE_URL = "https://thesoftschool.com/api/school";
     }
   }
   function clearSession() {
+    try { if (window.SchoolPush) window.SchoolPush.logout(); } catch (e) { /* never block logout */ }   // removes this phone from push BEFORE the token is wiped
     localStorage.removeItem(SESSION_KEY);
     sessionStorage.removeItem("softschool_api_token");
   }
