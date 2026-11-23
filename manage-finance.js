@@ -2593,6 +2593,41 @@ function getVoucherSettings() {
 const VOUCHER_SETTINGS = new Proxy({}, {
     get(_, prop) { return getVoucherSettings()[prop]; }
 });
+
+// FEATURE — Repeat-fine notice on vouchers. Shown only when the school has
+// Late Fee AND "Repeat Fine" enabled in Settings. Display only: it reads the
+// settings and changes no fee calculation.
+function buildRepeatFineNoteHTML(breakdowns) {
+    const vs = getVoucherSettings();
+    if (!vs.lateFineEnabled || !vs.lateFineRepeat) return '';
+    const list = (Array.isArray(breakdowns) ? breakdowns : [breakdowns]).filter(Boolean);
+    // Hidden once the late fine has been waived (lateFineEnabled is false then).
+    if (!list.length || !list.some(f => f.lateFineEnabled)) return '';
+
+    const fixed = Number(vs.lateFineFixedAmount) || 0;
+    const pct   = Number(vs.lateFinePercent) || 0;
+    if (fixed <= 0 && pct <= 0) return '';
+    const amountText = fixed > 0
+        ? `Rs. ${fixed.toLocaleString()}`
+        : `${pct}% of the voucher amount`;
+
+    const n = vs.lateFineIntervalDays;
+    const everyText = n === 1 ? 'each day' : `every ${n} days`;
+    const d = vs.dueDayOfMonth;
+    const ord = (d % 100 >= 11 && d % 100 <= 13) ? 'th' : ({1:'st',2:'nd',3:'rd'}[d % 10] || 'th');
+    const graceText = vs.graceDays > 0 ? ` (plus ${vs.graceDays} grace day${vs.graceDays === 1 ? '' : 's'})` : '';
+
+    return `
+            <div class="voucher-fine-notice">
+                <div class="voucher-fine-notice-title"><i class="fas fa-exclamation-circle"></i> Late Payment Fine Notice</div>
+                <div class="voucher-fine-notice-body">
+                    The deadline for the fees is the <strong>${d}${ord}</strong> of the month${graceText}.
+                    If the fee is not submitted within the due date, a fine of
+                    <strong>${escapeHtml(amountText)}</strong> will be applied and will be added
+                    <strong>${everyText}</strong> until the fee is paid or the month ends.
+                </div>
+            </div>`;
+}
 // ============================================================================
 
 // Escape a string so it can be safely embedded inside a single-quoted
@@ -4495,6 +4530,7 @@ function buildVoucherHTML(s) {
                     </tr>` : ''}
                 </tfoot>
             </table>
+            ${buildRepeatFineNoteHTML([f])}
 
             <div class="voucher-footer">
                 <div class="voucher-note"><i class="fas fa-info-circle"></i> ${s.voucherNote ? escapeHtml(s.voucherNote) : 'Please clear dues by the due date to avoid late fees.'}</div>
@@ -8392,6 +8428,7 @@ function buildFamilyVoucherHTML(studentsGroup) {
                     </tr>` : ''}
                 </tfoot>
             </table>
+            ${buildRepeatFineNoteHTML(breakdowns.map(b => b.f))}
 
             <div class="voucher-footer">
                 <div class="voucher-note"><i class="fas fa-info-circle"></i> This voucher combines fees for all children of the above guardian. Please clear dues by the due date to avoid late fees.</div>

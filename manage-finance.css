@@ -1455,6 +1455,35 @@
     max-width: 60%;
 }
 
+/* Repeat-fine notice (shown only when "Repeat Fine" is enabled in Settings) */
+.voucher-fine-notice {
+    margin: 8px 0 10px;
+    padding: 7px 10px;
+    border: 1px solid #fecaca;
+    border-left: 4px solid #dc2626;
+    border-radius: 6px;
+    background: #fef2f2;
+    color: #7f1d1d;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+    break-inside: avoid;
+    page-break-inside: avoid;
+}
+.voucher-fine-notice-title {
+    font-size: 0.72rem;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: #b91c1c;
+    margin-bottom: 3px;
+}
+.voucher-fine-notice-title i { margin-right: 5px; }
+.voucher-fine-notice-body {
+    font-size: 0.7rem;
+    line-height: 1.45;
+    color: #7f1d1d;
+}
+
 .voucher-signature {
     display: flex;
     flex-direction: column;
