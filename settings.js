@@ -277,9 +277,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     syncLateFeePrefix();
     updateLateFeePreview();
   });
-  ['latefee-deadline-day', 'latefee-amount', 'latefee-grace'].forEach(id => {
+  ['latefee-deadline-day', 'latefee-amount', 'latefee-grace', 'latefee-interval'].forEach(id => {
     document.getElementById(id).addEventListener('input', updateLateFeePreview);
   });
+  document.getElementById('latefee-repeat-enabled').addEventListener('change', updateLateFeePreview);
 });
 
 // ═══════════════════════════════════════════════
@@ -584,6 +585,8 @@ function loadLateFee() {
     type:        s.lateFeeType        ?? DEFAULT_LATEFEE.type,
     amount:      s.lateFeeAmount      ?? DEFAULT_LATEFEE.amount,
     grace:       s.lateFeeGrace       ?? DEFAULT_LATEFEE.grace,
+    repeat:      s.lateFeeRepeatEnabled === true,
+    interval:    s.lateFeeIntervalDays ?? 1,
   };
 
   document.getElementById('latefee-enabled').checked    = saved.enabled;
@@ -591,6 +594,8 @@ function loadLateFee() {
   document.getElementById('latefee-type').value         = saved.type;
   document.getElementById('latefee-amount').value       = saved.amount;
   document.getElementById('latefee-grace').value        = saved.grace;
+  document.getElementById('latefee-repeat-enabled').checked = saved.repeat;
+  document.getElementById('latefee-interval').value     = saved.interval;
 
   applyLateFeeToggle(saved.enabled);
   syncLateFeePrefix();
@@ -623,8 +628,13 @@ function updateLateFeePreview() {
     ? `${amount}% of that month's tuition fee`
     : `Rs ${amount.toLocaleString()}`;
 
+  const repeat   = document.getElementById('latefee-repeat-enabled').checked;
+  const interval = Math.max(1, parseInt(document.getElementById('latefee-interval').value, 10) || 1);
+  document.getElementById('latefee-interval-item').style.display = repeat ? '' : 'none';
+
   document.getElementById('latefee-preview-text').textContent =
-    `Fees paid after day ${cutoff} of the month will be fined ${amountText}.`;
+    `Fees paid after day ${cutoff} of the month will be fined ${amountText}.` +
+    (repeat ? ` The same fine is added again every ${interval} day(s) on top of the old fine until next month or until fees are paid.` : '');
 }
 
 // ═══════════════════════════════════════════════
@@ -1099,6 +1109,8 @@ async function saveAll() {
     type:        document.getElementById('latefee-type').value,
     amount:      parseFloat(document.getElementById('latefee-amount').value) || 0,
     grace:       parseInt(document.getElementById('latefee-grace').value, 10) || 0,
+    repeat:      document.getElementById('latefee-repeat-enabled').checked,
+    interval:    Math.max(1, parseInt(document.getElementById('latefee-interval').value, 10) || 1),
   };
 
   // — School Info —
@@ -1165,6 +1177,8 @@ async function saveAll() {
     lateFeeType:        lateFee.type,
     lateFeeAmount:      lateFee.amount,
     lateFeeGrace:       lateFee.grace,
+    lateFeeRepeatEnabled: lateFee.repeat,
+    lateFeeIntervalDays:  lateFee.interval,
 
     payPenaltyType:  vars.penaltyType,
     payPenaltyValue: vars.penaltyValue,

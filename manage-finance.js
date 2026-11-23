@@ -766,6 +766,8 @@ async function refreshLatefeeConfigCache() {
         type: settings.lateFeeType,
         amount: settings.lateFeeAmount,
         grace: settings.lateFeeGrace,
+        repeatEnabled: settings.lateFeeRepeatEnabled,
+        intervalDays: settings.lateFeeIntervalDays,
     };
 }
 async function _fetchSchoolSettings() {
@@ -2580,6 +2582,9 @@ function getVoucherSettings() {
         lateFineEnabled:    enabled,
         lateFineFixedAmount: (enabled && lateFineType === 'fixed')   ? lateFineVal : 0,
         lateFinePercent:     (enabled && lateFineType === 'percent') ? lateFineVal : 0,
+        // Repeating late fine: same fine added again every `lateFineIntervalDays`.
+        lateFineRepeat:       enabled && cfg.repeatEnabled === true,
+        lateFineIntervalDays: Math.max(1, parseInt(cfg.intervalDays, 10) || 1),
     };
 }
 
@@ -4134,7 +4139,7 @@ function computeFeeBreakdown(s) {
     const vs = getVoucherSettings();
     // BUGFIX — a bill with nothing to pay (100% discount, or total 0) can
     // never be late, so it never carries a late fine.
-    const lateFeeSurcharge = (vs.lateFineEnabled && voucherTotal > 0)
+    const lateFeeBase = (vs.lateFineEnabled && voucherTotal > 0)
         ? (vs.lateFineFixedAmount > 0 ? vs.lateFineFixedAmount : Math.round(voucherTotal * (vs.lateFinePercent / 100)))
         : 0;
 
@@ -4151,6 +4156,19 @@ function computeFeeBreakdown(s) {
     // on time all the way to 23:59:59. Comparing against 00:00 of that day
     // started charging the fine a whole day early.
     const graceEndOfDay = new Date(feeYear, feeMonth, vs.expiryDayOfMonth, 23, 59, 59, 999);
+
+    // FEATURE — repeating late fine. First fine applies the day after the
+    // deadline (+grace); then the same fine is added again every N days
+    // (50, 100, 150 ...). It stops growing when the due month ends.
+    // With repeat OFF this is exactly the old single fine (count = 1).
+    let lateFineCount = 1;
+    if (lateFeeBase > 0 && vs.lateFineRepeat) {
+        const monthEnd = new Date(feeYear, feeMonth + 1, 0, 23, 59, 59, 999);
+        const effNow = Math.min(today.getTime(), monthEnd.getTime());
+        const daysLate = Math.floor((effNow - graceEndOfDay.getTime()) / 86400000) + 1;
+        if (daysLate >= 1) lateFineCount = 1 + Math.floor((daysLate - 1) / vs.lateFineIntervalDays);
+    }
+    const lateFeeSurcharge = lateFeeBase * lateFineCount;
 
     // Overdue is decided ONLY by comparing today with this voucher's own grace
     // expiry date above. There is no separate "30 days after generation"
