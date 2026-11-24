@@ -19,8 +19,8 @@
 
    Leave both empty to show a "coming soon" placeholder.
    ══════════════════════════════════════════════════════ */
-const DEMO_VIDEO_ID = ""; // YouTube video ID (not used)
-const DEMO_VIDEO_FB_URL = "https://www.facebook.com/share/v/1C7qTHkZvw/"; // Facebook video URL
+const DEMO_VIDEO_ID = "mTzF4O9ev_c"; // YouTube video ID
+const DEMO_VIDEO_FB_URL = ""; // Facebook video URL
 const DEMO_VIDEO_SRC = ""; // Direct video URL  e.g. 'https://example.com/demo.mp4'
 
 /* ── SHOW A TOAST IF REDIRECTED HERE AFTER A BLOCK ── */
@@ -504,7 +504,7 @@ function buildVideoContent() {
         in <code style="background:rgba(255,255,255,0.15);padding:2px 6px;border-radius:4px;font-size:0.82rem;">login.js</code>
         to embed your YouTube video here.
       </p>
-      <a href="https://wa.me/923105040365?text=Hello%20Soft%20School,%20I%20want%20to%20book%20a%20live%20demo!"
+      <a href="https://wa.me/923416714049?text=Hello%20Soft%20School,%20I%20want%20to%20book%20a%20live%20demo!"
          target="_blank" rel="noopener noreferrer"
          style="margin-top:1.2rem;display:inline-flex;align-items:center;gap:8px;padding:12px 22px;background:var(--amber-500);color:var(--teal-900);border-radius:10px;font-weight:700;font-size:0.9rem;text-decoration:none;transition:all 0.25s;"
          onmouseover="this.style.background='#C97A1B';this.style.color='#fff';"
@@ -745,7 +745,9 @@ const SoftSchoolAuth = (function () {
       token: remembered.token,
     });
     if (!result.ok) {
-      clearRememberMe();
+      /* FIX: only discard the token when the server really rejected it.
+         Network errors / 429 / 5xx are temporary - keep the token. */
+      if (["invalid_login", "blocked", "expired"].indexOf(result.reason) !== -1) clearRememberMe();
       return result;
     }
     if (result.school && result.school.rememberToken) {
@@ -805,7 +807,36 @@ window.SoftSchoolAuth = SoftSchoolAuth;
       return; // leave the overlay up until the browser navigates away
     }
 
+    if (result && ["network", "error", "locked"].indexOf(result.reason) !== -1 &&
+        SoftSchoolAuth.currentSession() && SoftSchoolAuth.getRememberMe()) {
+      window.location.href = "main.html"; // temporary failure: use cached session
+      return;
+    }
     overlay.remove();
+  });
+})();
+
+/* ── PERSISTENT TEACHER / PARENT LOGIN (auto-restore on app open) ── */
+(function () {
+  const KEY = "softschool_portal_login";
+  window.__savePortalLogin = function (o) {
+    try { localStorage.setItem(KEY, JSON.stringify(o)); } catch (e) {}
+  };
+  window.__clearPortalLogin = function () { try { localStorage.removeItem(KEY); } catch (e) {} };
+  document.addEventListener("DOMContentLoaded", () => {
+    if (localStorage.getItem("softschool_remember")) return; // admin flow handles itself
+    let o = null;
+    try { o = JSON.parse(localStorage.getItem(KEY)); } catch (e) {}
+    if (!o) return;
+    try {
+      if (o.role === "teacher" && window.SoftSchoolTeacher) {
+        window.SoftSchoolTeacher.setSession(o.teacherId);
+        window.location.href = "teacher-portal.html";
+      } else if (o.role === "parent") {
+        Object.keys(o.ss || {}).forEach((k) => sessionStorage.setItem(k, o.ss[k]));
+        window.location.href = o.target;
+      }
+    } catch (e) {}
   });
 })();
 
@@ -1266,6 +1297,7 @@ function handleTeacherLoginIndex(e) {
     }
 
     window.SoftSchoolTeacher.setSession(result.teacher.id);
+    window.__savePortalLogin({ role: "teacher", teacherId: result.teacher.id });
     LoginLoader.success(result.teacher.name);
     setTimeout(() => { window.location.href = "teacher-portal.html"; }, 1700);
   }, 700);
@@ -1483,6 +1515,11 @@ async function handleParentLogin(e) {
   const PARENT_PORTAL_FOLDER = "parent-portal/";
   const targetFile = d.mustChangePassword ? "parent-portal-change-password.html" : "parent-portal-index.html";
   const target = new URL(PARENT_PORTAL_FOLDER + targetFile, window.location.href).href;
+  const ss = {};
+  ["softschool_parent_token", "softschool_parent_school", "studentsList"].forEach((k) => {
+    const v = sessionStorage.getItem(k); if (v !== null) ss[k] = v;
+  });
+  window.__savePortalLogin({ role: "parent", target, ss });
   setTimeout(() => { window.location.href = target; }, 1700);
 }
 
