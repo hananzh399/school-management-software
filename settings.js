@@ -1121,7 +1121,7 @@ async function saveAll() {
   // sent to the backend and rendered on every page via `.school-name`
   // etc. Rejects invalid input with a toast instead of saving it.
   const schoolInfoCheck = SSValidate.validate(schoolInfo, {
-    name:      SSValidate.rules.name({ required: true, maxLength: 120, label: "School name" }),
+    name:      SSValidate.rules.name({ required: false, maxLength: 120, label: "School name" }),
     address:   SSValidate.rules.address({ required: false, maxLength: 300, label: "School address" }),
     phone:     SSValidate.rules.phone({ required: false, label: "School phone" }),
     phoneAlt:  SSValidate.rules.phone({ required: false, label: "Alternate phone" }),
