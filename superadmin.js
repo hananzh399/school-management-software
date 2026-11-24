@@ -572,6 +572,104 @@ document.getElementById("btnPrintAllPlans").addEventListener("click", () => prin
    generation logic.
    ═════════════════════════════════════════════════════════ */
 
+/* ── DEPLOYMENT & PRICING BOX (shared by Add School + Manage School) ──
+   • "Offline app" ON  → shows "Database supported" + Offline app price
+                         (+ Database price once Database is ticked).
+   • "Offline app" OFF → shows "WhatsApp automation" (+ its price once ticked).
+   • "Price charged to this school" is always shown.
+   `pfx` keeps element ids unique per modal ("new" or "mg"). */
+function deploymentBoxHtml(pfx, s) {
+  s = s || {};
+  const off = !!s.offlineApp, db = !!s.databaseSupported, wa = !!s.whatsappAutomation;
+  const n = v => (Number(v) > 0 ? SSX.esc(Number(v)) : "");
+  const row = (id, icon, label, checked) => `
+    <div class="sa-lock-row">
+      <span class="name"><i class="${icon}"></i>${label}</span>
+      <label class="sa-switch"><input type="checkbox" id="${pfx}${id}" ${checked ? "checked" : ""}><span class="slider"></span></label>
+    </div>`;
+  const price = (id, label, val) => `
+    <div class="sa-field-group">
+      <label>${label}</label>
+      <input type="number" id="${pfx}${id}" min="0" placeholder="Rs" value="${n(val)}">
+    </div>`;
+  return `
+    <div class="sa-limits-box sa-deploy-box">
+      <h4><i class="fas fa-tags"></i> App type &amp; pricing</h4>
+      <div class="sa-lock-list">
+        ${row("Offline", "fas fa-plug-circle-xmark", "Offline app", off)}
+      </div>
+
+      <div id="${pfx}OfflineSection" ${off ? "" : "hidden"}>
+        <div class="sa-lock-list">
+          ${row("Database", "fas fa-database", "Database supported", db)}
+        </div>
+        <div class="sa-form-row">
+          ${price("OfflinePrice", "Offline app price (Rs)", s.offlinePrice)}
+          <div id="${pfx}DatabasePriceWrap" ${db ? "" : "hidden"}>${price("DatabasePrice", "Database price (Rs)", s.databasePrice)}</div>
+        </div>
+      </div>
+
+      <div id="${pfx}OnlineSection" ${off ? "hidden" : ""}>
+        <div class="sa-lock-list">
+          ${row("Whatsapp", "fab fa-whatsapp", "WhatsApp automation", wa)}
+        </div>
+        <div class="sa-form-row">
+          <div id="${pfx}WhatsappPriceWrap" ${wa ? "" : "hidden"}>${price("WhatsappPrice", "WhatsApp automation price (Rs)", s.whatsappPrice)}</div>
+        </div>
+      </div>
+
+      <div class="sa-form-row">
+        ${price("Price", "Price charged to this school (Rs)", s.price)}
+      </div>
+      <p class="sa-hint">Offline schools are marked with an <b>Offline</b> tag in the schools list.</p>
+    </div>`;
+}
+
+function wireDeploymentBox(pfx) {
+  const $ = id => document.getElementById(pfx + id);
+  const sync = () => {
+    const off = $("Offline").checked;
+    $("OfflineSection").hidden = !off;
+    $("OnlineSection").hidden = off;
+    $("DatabasePriceWrap").hidden = !(off && $("Database").checked);
+    $("WhatsappPriceWrap").hidden = off || !$("Whatsapp").checked;
+  };
+  ["Offline", "Database", "Whatsapp"].forEach(id => $(id).addEventListener("change", sync));
+  sync();
+}
+
+/** Reads the box back into the API fields. Returns { error } on bad input. */
+function readDeploymentBox(pfx) {
+  const $ = id => document.getElementById(pfx + id);
+  const money = id => {
+    const raw = ($(id).value || "").trim();
+    if (raw === "") return 0;
+    const v = Number(raw);
+    if (!Number.isFinite(v) || v < 0 || v > 100000000) return NaN;
+    return Math.round(v);
+  };
+  const offlineApp = $("Offline").checked;
+  const databaseSupported = offlineApp && $("Database").checked;
+  const whatsappAutomation = !offlineApp && $("Whatsapp").checked;
+  const out = {
+    offlineApp, databaseSupported, whatsappAutomation,
+    price: money("Price"),
+    offlinePrice: offlineApp ? money("OfflinePrice") : 0,
+    databasePrice: databaseSupported ? money("DatabasePrice") : 0,
+    whatsappPrice: whatsappAutomation ? money("WhatsappPrice") : 0,
+  };
+  if ([out.price, out.offlinePrice, out.databasePrice, out.whatsappPrice].some(Number.isNaN)) {
+    return { error: "Prices must be valid positive numbers." };
+  }
+  return out;
+}
+
+/** What this school is charged: its own price if set, else its plan price. */
+function schoolPriceValue(s) {
+  const own = Number(s.price) || 0;
+  return own > 0 ? own : (Number(getPlan(s.planId).price) || 0);
+}
+
 /* ── ADD SCHOOL MODAL ─────────────────────────────────────── */
 let newSchoolLogoData = "";
 
@@ -588,6 +686,9 @@ async function openAddSchoolModal() {
   }
   document.getElementById("newSchoolName").value = "";
   document.getElementById("newSchoolPrefix").value = "";
+  document.getElementById("newSchoolCity").value = "";
+  document.getElementById("newSchoolDeployment").innerHTML = deploymentBoxHtml("new", {});
+  wireDeploymentBox("new");
   document.getElementById("newSchoolStudentLimit").value = "";
   document.getElementById("newSchoolStaffLimit").value = "";
   newSchoolLogoData = "";
@@ -651,6 +752,9 @@ document.getElementById("saveNewSchool").addEventListener("click", async functio
     studentLimit: SSValidate.rules.integer({ required: false, min: 1, max: 100000, label: "Student limit" }),
     staffLimit: SSValidate.rules.integer({ required: false, min: 1, max: 10000, label: "Staff limit" }),
   };
+  const deployment = readDeploymentBox("new");
+  if (deployment.error) { saToast(deployment.error, "error"); return; }
+  const city = document.getElementById("newSchoolCity").value.trim().replace(/[<>]/g, "").slice(0, 80);
   const { ok, values, errors } = SSValidate.validate(
     {
       name: nameField.value,
@@ -680,7 +784,8 @@ document.getElementById("saveNewSchool").addEventListener("click", async functio
   btn.disabled = true;
   try {
     const created = await apiCreateSchool({
-      name, prefix,
+      name, prefix, city,
+      ...deployment,
       planId: currentPlanId,
       studentLimit: customLimit || plan.studentLimit,
       staffLimit: customStaffLimit || plan.staffLimit,
@@ -821,7 +926,8 @@ function renderSchoolsTable(filterText) {
     const q = filterText.toLowerCase();
     schools = schools.filter(s =>
       s.name.toLowerCase().includes(q) ||
-      (s.schoolId || "").toLowerCase().includes(q)
+      (s.schoolId || "").toLowerCase().includes(q) ||
+      (s.city || "").toLowerCase().includes(q)
     );
   }
   if (!schools.length) {
@@ -843,11 +949,17 @@ function renderSchoolsTable(filterText) {
             <td>
               <div class="sa-school-cell">
                 ${schoolLogoCell(s)}
-                <div><div class="sa-school-name">${SSValidate.escapeHtml(s.name)}</div></div>
+                <div class="sa-school-text">
+                  <div class="sa-school-name">${SSValidate.escapeHtml(s.name)}${s.offlineApp ? ' <span class="sa-badge sa-badge-offline" title="Offline app' + (s.databaseSupported ? ' + database' : '') + '"><i class="fas fa-plug-circle-xmark"></i> Offline</span>' : ""}</div>
+                  ${s.city ? `<div class="sa-school-city"><i class="fas fa-location-dot"></i> ${SSValidate.escapeHtml(s.city)}</div>` : ""}
+                </div>
               </div>
             </td>
             <td><span class="sa-school-id">${SSValidate.escapeHtml(s.schoolId || "—")}</span></td>
-            <td><span class="sa-badge ${planBadgeClass(s.planId)}">${plan.label}</span></td>
+            <td>
+              <span class="sa-badge ${planBadgeClass(s.planId)}">${plan.label}</span>
+              <div class="sa-price-sub">Rs ${schoolPriceValue(s).toLocaleString()}</div>
+            </td>
             <td>${usageCell(usageInfo(s.studentCount, s.studentLimit))}</td>
             <td>${usageCell(usageInfo(s.staffCount, s.staffLimit))}</td>
             <td>${fmtDate(s.registeredAt)}</td>
@@ -872,8 +984,7 @@ function renderStats() {
   document.getElementById("statBlocked").textContent = schools.filter(s => s.status === "blocked").length;
   const revenue = schools.reduce((sum, s) => {
     if (s.status === "blocked") return sum;
-    const plan = getPlan(s.planId);
-    return sum + (Number(plan.price) || 0);
+    return sum + schoolPriceValue(s);
   }, 0);
   document.getElementById("statRevenue").textContent = "Rs " + revenue.toLocaleString();
 }
@@ -954,6 +1065,12 @@ function openManageSchool(id) {
     </div>
     <div class="sa-form-row full sa-field-group">
       <div>
+        <label>City</label>
+        <input type="text" id="mgCity" value="${SSX.esc(school.city || "")}" maxlength="80" placeholder="e.g. Attock">
+      </div>
+    </div>
+    <div class="sa-form-row full sa-field-group">
+      <div>
         <label>Registration prefix <span style="font-size:0.76rem;font-weight:400;color:var(--ink-faint);">(2–4 letters · used in student IDs)</span></label>
         <input type="text" id="mgPrefix" value="${SSX.esc(school.prefix || "")}" maxlength="4" placeholder="Auto from name" style="text-transform:uppercase;letter-spacing:0.08em;">
         <p class="sa-hint">Student IDs look like <strong>${school.prefix || "HRK"}_77001</strong>. Leave blank to auto-derive from school name initials.</p>
@@ -993,6 +1110,8 @@ function openManageSchool(id) {
         ${usageHint(staffUsage, "staff")}
       </div>
     </div>
+
+    ${deploymentBoxHtml("mg", school)}
 
     <div class="sa-validity-box ${expiryInfo(school).state}">
       <h4><i class="fas fa-calendar-check"></i> Annual plan validity</h4>
@@ -1049,6 +1168,7 @@ function openManageSchool(id) {
     </div>
   `;
 
+  wireDeploymentBox("mg");
   document.getElementById("mgLogoInput").addEventListener("change", async function (e) {
     const file = e.target.files[0];
     if (!file) return;
@@ -1145,6 +1265,9 @@ document.getElementById("saveManageSchool").addEventListener("click", async func
   );
   if (!ok) { saToast(errors.name || errors.studentLimit || errors.staffLimit, "error"); return; }
   if (!planId) { saToast("Create a plan first, then assign it to this school.", "error"); return; }
+  const deployment = readDeploymentBox("mg");
+  if (deployment.error) { saToast(deployment.error, "error"); return; }
+  const city = document.getElementById("mgCity").value.trim().replace(/[<>]/g, "").slice(0, 80);
 
   const name = values.name;
   const studentLimit = values.studentLimit || getPlan(planId).studentLimit;
@@ -1154,7 +1277,7 @@ document.getElementById("saveManageSchool").addEventListener("click", async func
     .filter(cb => cb.checked)
     .map(cb => cb.getAttribute("data-feature"));
 
-  const patch = { name, prefix, planId, studentLimit, staffLimit, locks };
+  const patch = { name, prefix, city, planId, studentLimit, staffLimit, locks, ...deployment };
   if (managingLogoData !== null) patch.logo = managingLogoData;
 
   const btn = this;

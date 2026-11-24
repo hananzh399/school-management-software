@@ -541,3 +541,16 @@ table.sa-table { width: 100%; border-collapse: collapse; }
   background: rgba(31,138,90,0.16); color: var(--green-600); border: 1px solid rgba(31,138,90,0.35);
   border-radius: 999px; padding: 2px 9px; font-size: 0.7rem; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase;
 }
+
+/* ── ADDED: city, offline indicator, per-school price, deployment box ── */
+/* Keeps every table row a single compact line: name+city and plan+price
+   are stacked inside their own cells (36px, same height as the logo). */
+.sa-school-text { min-width: 0; line-height: 1.25; }
+.sa-school-name { white-space: nowrap; }
+.sa-school-city { font-size: 0.74rem; color: var(--ink-faint); white-space: nowrap; margin-top: 2px; }
+.sa-school-city i { font-size: 0.68rem; margin-right: 2px; }
+.sa-price-sub { font-size: 0.74rem; color: var(--ink-faint); margin-top: 3px; white-space: nowrap; }
+.sa-badge-offline { background: #FFF1DC; color: #B45F06; padding: 2px 8px; font-size: 0.68rem; margin-left: 6px; vertical-align: 1px; white-space: nowrap; }
+.sa-badge-offline i { font-size: 0.62rem; margin-right: 2px; }
+.sa-deploy-box { margin-top: 18px; }
+.sa-deploy-box [hidden] { display: none !important; }
