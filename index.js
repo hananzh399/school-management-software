@@ -287,6 +287,8 @@ async function handleLogin(e) {
     }
     if (result.reason === "blocked") {
       showToast("Your school's access has been suspended. Please contact support.", "error");
+    } else if (result.reason === "offline_only") {
+      showToast("This school works offline only. Please use the Soft School Android app.", "error");
     } else if (result.reason === "expired") {
       showToast("Your school's plan has expired. Please contact support to renew.", "error");
     } else if (result.reason === "network") {
@@ -612,6 +614,7 @@ const SoftSchoolAuth = (function () {
       if (res.status === 401) reason = "invalid_login";
       else if (res.status === 403 && message === "blocked") reason = "blocked";
       else if (res.status === 403 && message === "expired") reason = "expired";
+      else if (res.status === 403 && message === "offline_only") reason = "offline_only";
       else if (res.status === 409) reason = "conflict";
       // 429 = too many failed login attempts in a row — the account is
       // locked out for a cooldown period (see SchoolAuthController).
@@ -747,7 +750,7 @@ const SoftSchoolAuth = (function () {
     if (!result.ok) {
       /* FIX: only discard the token when the server really rejected it.
          Network errors / 429 / 5xx are temporary - keep the token. */
-      if (["invalid_login", "blocked", "expired"].indexOf(result.reason) !== -1) clearRememberMe();
+      if (["invalid_login", "blocked", "expired", "offline_only"].indexOf(result.reason) !== -1) clearRememberMe();
       return result;
     }
     if (result.school && result.school.rememberToken) {
