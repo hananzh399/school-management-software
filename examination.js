@@ -35,8 +35,8 @@
     /* ───────── constants ───────── */
     const KEY = "ex_data_v2";
     const TERMS = ["Monthly Test", "First Term", "Mid Term", "Final Term"];
-    const QTYPES = ["MCQs", "True / False", "Fill in the Blanks", "Short Questions", "Long Questions"];
-    const DEF_MARKS = { "MCQs": 1, "True / False": 1, "Fill in the Blanks": 1, "Short Questions": 2, "Long Questions": 5 };
+    const QTYPES = ["MCQs", "True / False", "Fill in the Blanks", "Short Questions", "Long Questions", "Picture / Activity"];
+    const DEF_MARKS = { "MCQs": 1, "True / False": 1, "Fill in the Blanks": 1, "Short Questions": 2, "Long Questions": 5, "Picture / Activity": 5 };
     const SUBJECT_HINTS = ["English", "Urdu", "Mathematics", "Science", "Islamiyat", "Social Studies", "Computer", "Pak Studies", "General Knowledge"];
     const DEF_SCALE = [
         { min: 90, grade: "A+", remark: "Outstanding", pass: true }, { min: 80, grade: "A", remark: "Excellent", pass: true },
@@ -211,11 +211,12 @@
         clearTimeout(toast.t); toast.t = setTimeout(() => { t.hidden = true; }, 3000);
     }
     function openModal(html, bind) {
+        $("#ex-sheet").classList.remove("ex-wide");
         $("#ex-sheet").innerHTML = html; $("#ex-modal").hidden = false;
         $$("[data-close]", $("#ex-sheet")).forEach(b => b.addEventListener("click", closeModal));
         if (bind) bind($("#ex-sheet"));
     }
-    function closeModal() { $("#ex-modal").hidden = true; }
+    function closeModal() { $("#ex-modal").hidden = true; $("#ex-sheet").classList.remove("ex-wide"); }
     function confirmBox(title, msg, okText, onOk) {
         openModal("<h3>" + title + "</h3><p class='ex-modal-p'>" + msg + "</p><div class='row'><button class='ex-btn ghost' data-close>Cancel</button><button class='ex-btn danger' id='cf-ok'>" + okText + "</button></div>",
             s => $("#cf-ok", s).addEventListener("click", () => { closeModal(); onOk(); }));
@@ -291,6 +292,8 @@
 .doc .pg-break{break-after:page;page-break-after:always}
 .doc .pg-break:last-child{break-after:auto;page-break-after:auto}
 .doc .ph{color:#888}
+.doc .qimg{clear:both;margin-top:6px;text-align:center}
+.doc .qimg img{max-width:100%;height:auto}
 `;
     (function injectDocCss() { const st = document.createElement("style"); st.id = "ex-doc-css"; st.textContent = DOC_CSS; document.head.appendChild(st); })();
 
@@ -389,18 +392,20 @@
     const defTitle = p => (p.subj || "Paper") + " — " + p.term + " (" + clsLabel(p.cls, p.section) + ")";
 
     function paperHtml(p) {
-        const L = "ABCDEFGH";
+        const L = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
         let h = docHead(esc(p.term) + " Examination " + (p.date ? p.date.slice(0, 4) : new Date().getFullYear())) +
             '<div class="meta"><span>Subject: ' + esc(p.subj || "—") + "</span><span>Class: " + esc(clsLabel(p.cls, p.section) || "—") + "</span><span>Time: " + (+p.mins || 0) + " mins</span><span>Max Marks: " + paperTotal(p) + "</span></div>" +
             '<div class="stu"><span>Name:</span><span style="flex:.55">Roll No:</span><span style="flex:.55">Date: ' + fmt(p.date) + "</span></div>" +
             (p.instr.trim() ? '<div class="note">' + esc(p.instr) + "</div>" : "");
         let any = false;
+        let actNo = 0;   // picture/activity sections number straight on (1, 2, 3 …) instead of restarting
         p.sections.forEach((sec, i) => {
             const qs = filled(sec); if (!qs.length) return; any = true;
+            const act = sec.type === "Picture / Activity", startNo = act ? ++actNo : 1; if (act) actNo += qs.length - 1;
             const att = effAttempt(sec), mk = +sec.marks || 0;
-            h += '<div class="secthead"><span>Section ' + L[i] + " — " + esc(sec.type) + " (" + (att >= qs.length ? "Attempt all" : "Attempt any " + att + " of " + qs.length) + ")</span><span>" + att + " × " + mk + " = " + att * mk + '</span></div><ol class="qs">';
+            h += '<div class="secthead"><span>Section ' + L[i] + " — " + esc(sec.type) + " (" + (att >= qs.length ? "Attempt all" : "Attempt any " + att + " of " + qs.length) + ")</span><span>" + att + " × " + mk + " = " + att * mk + '</span></div><ol class="qs"' + (act ? ' start="' + startNo + '"' : "") + ">";
             qs.forEach(q => {
-                h += '<li><span class="qt">' + esc(q.text.trim()) + "</span>" + (sec.type !== "MCQs" ? '<span class="mk">[' + mk + "]</span>" : "");
+                h += '<li><span class="qt">' + esc(q.text.trim()) + "</span>" + (sec.type !== "MCQs" ? '<span class="mk">[' + mk + "]</span>" : "") + (safeImg(q.img) ? '<div class="qimg"><img src="' + safeImg(q.img) + '" alt=""></div>' : "");
                 if (sec.type === "MCQs") { const o = q.opts.map(x => x.trim()).filter(Boolean); if (o.length) h += '<div class="opts">' + o.map((x, k) => "<span>(" + "abcdefgh"[k] + ") " + esc(x) + "</span>").join("") + "</div>"; }
                 if (sec.type === "True / False") h += '<div class="opts"><span>True / False</span></div>';
                 h += "</li>";
@@ -419,7 +424,7 @@
         freshRoot();   // new node => no duplicate listeners when the view is re-rendered
         const root = ROOT();
         root.innerHTML = head("file-pen", "Paper <span>Generation</span>", "Set up the paper, write your questions inside each section, then print.",
-            '<button class="ex-btn ghost" id="pg-reset"><i class="fas fa-file-circle-plus"></i> New</button><button class="ex-btn ghost" id="pg-save"><i class="fas fa-floppy-disk"></i> Save</button><button class="ex-btn" id="pg-print"><i class="fas fa-print"></i> Print</button>') +
+            '<button class="ex-btn ghost" id="pg-import" title="Scan a printed paper (PDF) into sections, marks and pictures"><i class="fas fa-file-import"></i> Import PDF</button><input type="file" id="pg-pdf" accept="application/pdf,.pdf" hidden><button class="ex-btn ghost" id="pg-reset"><i class="fas fa-file-circle-plus"></i> New</button><button class="ex-btn ghost" id="pg-save"><i class="fas fa-floppy-disk"></i> Save</button><button class="ex-btn" id="pg-print"><i class="fas fa-print"></i> Print</button>') +
             dataBanner() + subjectList() +
             '<div class="ex-split"><div class="ex-col-left">' +
             '<div class="ex-panel"><h3><span class="ex-step">1</span> Paper Setup</h3><div class="ex-grid">' +
@@ -459,9 +464,12 @@
             const b = e.target.closest("button"); if (!b) return;
             if (b.dataset.rmsec != null) { if (P.sections.length <= 1) return toast("A paper needs at least one section.", 1); P.sections.splice(+b.dataset.rmsec, 1); secs(); preview(); keep(); }
             else if (b.dataset.addq != null) { const sec = P.sections[+b.dataset.addq]; sec.questions.push(blankQ(sec.type)); secs(); const ta = $$('[data-s="' + b.dataset.addq + '"][data-f="text"]').pop(); if (ta) ta.focus(); keep(); }
+            else if (b.dataset.rmimg != null) { const [s, q] = b.dataset.rmimg.split("."); P.sections[+s].questions[+q].img = ""; secs(); preview(); keep(); }
             else if (b.dataset.rmq != null) { const [s, q] = b.dataset.rmq.split("."); const sec = P.sections[+s]; sec.questions.splice(+q, 1); if (!sec.questions.length) sec.questions.push(blankQ(sec.type)); secs(); preview(); keep(); }
         });
-        $("#pg-addsec").addEventListener("click", () => { if (P.sections.length >= 8) return toast("Maximum 8 sections.", 1); P.sections.push(mkSection("Short Questions")); secs(); preview(); keep(); });
+        $("#pg-import").addEventListener("click", () => $("#pg-pdf").click());
+        $("#pg-pdf").addEventListener("change", e => { const f = e.target.files && e.target.files[0]; e.target.value = ""; if (f) importPdf(f); });
+        $("#pg-addsec").addEventListener("click", () => { if (P.sections.length >= 26) return toast("Maximum 26 sections.", 1); P.sections.push(mkSection("Short Questions")); secs(); preview(); keep(); });
         $("#pg-reset").addEventListener("click", () => {
             const go = () => { P = newPaper(); db.draft = null; save(); vPaper(); window.scrollTo(0, 0); };
             paperQs(P) ? confirmBox("Start a new paper?", "The questions you have typed in the current paper will be cleared. Saved papers are not affected.", "Clear &amp; start new", go) : go();
@@ -498,7 +506,7 @@
     }
     function secs() {
         const box = $("#pg-secs"); if (!box) return;
-        const L = "ABCDEFGH";
+        const L = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
         box.innerHTML = P.sections.map((s, i) => {
             const n = filled(s).length;
             return '<div class="pg-sec"><div class="pg-sec-head"><span class="pg-badge">' + L[i] + "</span>" +
@@ -508,6 +516,7 @@
                 '<button class="ex-icon-btn del" type="button" data-rmsec="' + i + '" title="Remove section"><i class="fas fa-trash"></i></button></div>' +
                 '<div class="pg-qs">' + s.questions.map((q, k) =>
                     '<div class="pg-q"><span class="n">' + (k + 1) + '</span><div class="body"><textarea rows="2" data-s="' + i + '" data-q="' + k + '" data-f="text" placeholder="' + (s.type === "Fill in the Blanks" ? "Type the sentence — use ______ for the blank" : s.type === "True / False" ? "Type the statement" : "Type the question…") + '">' + esc(q.text) + "</textarea>" +
+                    (safeImg(q.img) ? '<div class="pg-img"><img src="' + safeImg(q.img) + '" alt=""><button class="ex-btn sm ghost" type="button" data-rmimg="' + i + "." + k + '"><i class="fas fa-image"></i> Remove picture</button></div>' : "") +
                     (s.type === "MCQs" ? '<div class="pg-opts">' + [0, 1, 2, 3].map(o => '<label><i>' + "abcd"[o] + '</i><input data-s="' + i + '" data-q="' + k + '" data-f="opt' + o + '" value="' + esc(q.opts[o] || "") + '" placeholder="Option ' + "ABCD"[o] + '"></label>').join("") + "</div>" : "") +
                     '</div><button class="ex-icon-btn del" type="button" data-rmq="' + i + "." + k + '" title="Remove question"><i class="fas fa-xmark"></i></button></div>').join("") + "</div>" +
                 '<div class="pg-sec-foot"><button class="ex-btn sm ghost" type="button" data-addq="' + i + '"><i class="fas fa-plus"></i> Add question</button><span class="pg-foot-n" data-foot="' + i + '">' + footTxt(s) + "</span></div></div>";
@@ -533,6 +542,313 @@
             });
         }));
     }
+
+    /* ============================================================
+       PDF IMPORT — layout detection
+       Pure functions on a grayscale page buffer (no DOM), tuned for printed school
+       papers where every question starts with a small grey number tab on the left
+       and its total marks in a circle on the right ("1) Tick the first letter … (5)").
+       Finding those two landmarks by shape is far more reliable than OCR-ing the
+       whole page: pictures, dotted tracing letters and answer grids never confuse it.
+       ============================================================ */
+    const ImpCore = (function () {
+        const grayOf = (rgba, n) => { const g = new Uint8Array(n); for (let i = 0, j = 0; i < n; i++, j += 4) g[i] = (rgba[j] * 77 + rgba[j + 1] * 150 + rgba[j + 2] * 29) >> 8; return g; };
+
+        /* the grey question-number tabs down the left margin */
+        function findPills(g, W, H) {
+            const x0 = Math.floor(.036 * W), x1 = Math.ceil(.085 * W), n = x1 - x0, out = [];
+            let s = -1;
+            for (let y = 0; y <= H; y++) {
+                let f = 0;
+                if (y < H) { let c = 0; for (let x = x0, o = y * W; x < x1; x++) { const v = g[o + x]; if (v > 170 && v < 238) c++; } f = c / n; }
+                if (f > .45) { if (s < 0) s = y; }
+                else if (s >= 0) { const h = y - s; if (h >= .012 * H && h <= .035 * H) out.push({ y0: s, y1: y - 1 }); s = -1; }
+            }
+            return out;
+        }
+
+        /* the circle holding the question's marks: a square-ish connected ring on the same row */
+        function findRing(g, W, H, p) {
+            const h = p.y1 - p.y0 + 1, cy = (p.y0 + p.y1) >> 1;
+            const bx0 = Math.floor(.80 * W), bx1 = Math.floor(.985 * W), by0 = Math.max(0, cy - Math.floor(h * 1.2)), by1 = Math.min(H, cy + Math.floor(h * 1.2));
+            const bw = bx1 - bx0, bh = by1 - by0, seen = new Uint8Array(bw * bh);
+            let best = null;
+            for (let y = 0; y < bh; y++) for (let x = 0; x < bw; x++) {
+                const i = y * bw + x;
+                if (seen[i] || g[(by0 + y) * W + bx0 + x] >= 140) continue;
+                let minX = x, maxX = x, minY = y, maxY = y; const st = [i]; seen[i] = 1;
+                while (st.length) {
+                    const k = st.pop(), ky = (k / bw) | 0, kx = k - ky * bw;
+                    if (kx < minX) minX = kx; if (kx > maxX) maxX = kx; if (ky < minY) minY = ky; if (ky > maxY) maxY = ky;
+                    for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+                        const nx = kx + dx, ny = ky + dy; if (nx < 0 || ny < 0 || nx >= bw || ny >= bh) continue;
+                        const j = ny * bw + nx; if (!seen[j] && g[(by0 + ny) * W + bx0 + nx] < 140) { seen[j] = 1; st.push(j); }
+                    }
+                }
+                const w = maxX - minX + 1, hh = maxY - minY + 1;
+                if (w >= .9 * h && w <= 1.8 * h && hh >= .9 * h && hh <= 1.8 * h && w / hh >= .8 && w / hh <= 1.25 && Math.abs(by0 + minY + hh / 2 - cy) < h)
+                    best = { x: bx0 + minX, y: by0 + minY, w: w, h: hh };
+            }
+            return best;
+        }
+
+        /* a stand-alone heading printed just above a number tab that has no text of its own (e.g. "Oral") */
+        function findHeading(g, W, H, p) {
+            const h = p.y1 - p.y0 + 1, top = Math.max(0, p.y0 - Math.floor(h * 1.8)), bot = p.y0 - 8, x0 = Math.floor(.1 * W), x1 = Math.floor(.9 * W);
+            let run = null, last = null, gap = 0;
+            for (let y = top; y < bot; y++) {
+                let c = 0; for (let x = x0, o = y * W; x < x1; x++) if (g[o + x] < 130) c++;
+                if (c > 3) { if (!run) run = { y0: y, y1: y }; else run.y1 = y; gap = 0; }
+                else if (run && ++gap > 6) { last = run; run = null; gap = 0; }
+            }
+            if (run) last = run;
+            if (!last) return null;
+            const hh = last.y1 - last.y0 + 1; if (hh < .008 * H || hh > .04 * H) return null;
+            let minX = x1, maxX = x0;
+            for (let y = last.y0; y <= last.y1; y++) for (let x = x0, o = y * W; x < x1; x++) if (g[o + x] < 130) { if (x < minX) minX = x; if (x > maxX) maxX = x; }
+            return { x0: minX, x1: maxX, y0: last.y0, y1: last.y1 };
+        }
+
+        /* bounding box of the ink inside a region; null when the region is blank */
+        function contentBox(g, W, x0, y0, x1, y1) {
+            let minX = x1, maxX = x0, minY = y1, maxY = y0, ink = 0;
+            for (let y = y0; y < y1; y++) for (let x = x0, o = y * W; x < x1; x++) if (g[o + x] < 205) { ink++; if (x < minX) minX = x; if (x > maxX) maxX = x; if (y < minY) minY = y; if (y > maxY) maxY = y; }
+            return ink < 250 ? null : { x0: minX, y0: minY, x1: maxX + 1, y1: maxY + 1 };
+        }
+
+        /* "Paper English   Class : Playgroup / Paper: 1st Term Exam / Time: 1:30 Hours / Max. Marks … 50" */
+        function parseHeader(txt) {
+            const t = String(txt || "").replace(/[|_\\]/g, " "), out = {};
+            let m = t.match(/Paper\s+([A-Za-z][A-Za-z .&-]{1,24}?)\s*(?:\)|Class)/i) || t.match(/Paper\s+([A-Za-z][A-Za-z-]{2,20})/i);
+            if (m && !/^(class|name|time)$/i.test(m[1].trim())) out.subj = m[1].trim();
+            m = t.match(/Class\s*[:;.\-]?\s*([^\n]+)/i);
+            if (m) { const c = m[1].replace(/[^A-Za-z0-9 \-]+/g, " ").replace(/\s+/g, " ").trim(); if (c) out.cls = c; }
+            m = t.match(/Paper\s*[:;]\s*([^\n]+)/i);
+            if (m) {
+                const s = m[1];
+                out.term = /\b(?:[1Il]st|first)\b/i.test(s) ? "First Term" : /\bmid\b/i.test(s) ? "Mid Term" : /\b(?:final|2nd|3rd|annual)\b/i.test(s) ? "Final Term" : /\b(?:month|test|weekly)/i.test(s) ? "Monthly Test" : "";
+            }
+            m = t.match(/Time\s*[:;.]?\s*(\d{1,3})(?:\s*[:.]\s*(\d{2}))?\s*(hours?|hrs?|minutes?|mins?)?/i);
+            if (m) {
+                const a = +m[1], b = m[2] ? +m[2] : 0, unit = (m[3] || "").toLowerCase();
+                out.mins = /^min/.test(unit) ? a : (m[2] || a <= 6) ? a * 60 + b : a;
+            }
+            const mm = t.split("\n").find(l => /Max\.?\s*Marks/i.test(l));
+            if (mm) { const n = (mm.match(/\d+/g) || []).map(Number).filter(v => v >= 5 && v <= 500); if (n.length) out.total = n[n.length - 1]; }
+            return out;
+        }
+        return { grayOf, findPills, findRing, findHeading, contentBox, parseHeader };
+    })();
+
+    /* ============================================================
+       PDF IMPORT — render pages (pdf.js), read text (Tesseract.js), review, load into the paper
+       ============================================================ */
+    const IMP_LIBS = {
+        pdf: ["https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js", "https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"],
+        ocr: ["https://cdnjs.cloudflare.com/ajax/libs/tesseract.js/5.1.1/tesseract.min.js", "https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js"]
+    };
+    const IMP_PAGE_W = 1870, IMP_IMG_W = 1000, IMP_MAX_PAGES = 30;
+    const loadScript = url => new Promise((res, rej) => { const s = document.createElement("script"); s.src = url; s.async = true; s.onload = res; s.onerror = () => { s.remove(); rej(new Error("could not load " + url)); }; document.head.appendChild(s); });
+    async function loadFirst(urls, ready) {
+        if (ready()) return null;
+        let err;
+        for (const u of urls) { try { await loadScript(u); if (ready()) return u; } catch (e) { err = e; } }
+        throw err || new Error("scanner files could not be loaded");
+    }
+    async function impEnsureLibs() {
+        const u = await loadFirst(IMP_LIBS.pdf, () => window.pdfjsLib);
+        if (u || !window.pdfjsLib.GlobalWorkerOptions.workerSrc) {
+            const wu = (u || IMP_LIBS.pdf[0]).replace("pdf.min.js", "pdf.worker.min.js");
+            try { const code = await (await fetch(wu)).text(); window.pdfjsLib.GlobalWorkerOptions.workerSrc = URL.createObjectURL(new Blob([code], { type: "text/javascript" })); }
+            catch (e) { window.pdfjsLib.GlobalWorkerOptions.workerSrc = wu; }
+        }
+        await loadFirst(IMP_LIBS.ocr, () => window.Tesseract);
+    }
+
+    const impCanvas = (w, h) => { const c = document.createElement("canvas"); c.width = Math.max(1, Math.round(w)); c.height = Math.max(1, Math.round(h)); const x = c.getContext("2d"); x.fillStyle = "#fff"; x.fillRect(0, 0, c.width, c.height); return c; };
+    function impCrop(src, x, y, w, h, scale, pad) {
+        scale = scale || 1; pad = pad || 0;
+        const c = impCanvas(w * scale + pad * 2, h * scale + pad * 2);
+        c.getContext("2d").drawImage(src, x, y, w, h, pad, pad, w * scale, h * scale);
+        return c;
+    }
+    async function impRender(pdf, n) {
+        const pg = await pdf.getPage(n), v1 = pg.getViewport({ scale: 1 }), vp = pg.getViewport({ scale: IMP_PAGE_W / v1.width });
+        const cv = impCanvas(vp.width, vp.height), cx = cv.getContext("2d", { willReadFrequently: true });
+        await pg.render({ canvasContext: cx, viewport: vp }).promise;
+        const id = cx.getImageData(0, 0, cv.width, cv.height);
+        return { cv, W: cv.width, H: cv.height, g: ImpCore.grayOf(id.data, cv.width * cv.height) };
+    }
+    async function impOcr(worker, cv, psm, digits) {
+        await worker.setParameters({ tessedit_pageseg_mode: String(psm), tessedit_char_whitelist: digits ? "0123456789" : "" });
+        const r = await worker.recognize(cv);
+        return { text: String(r.data.text || "").trim(), conf: r.data.confidence || 0 };
+    }
+    const impClean = s => String(s || "").replace(/\s+/g, " ").replace(/^[\s_|~=\\\/\-—.]+/, "").replace(/[\s_|~=\\\/\-—]+$/, "").replace(/\bto([A-Z])\b/g, "to $1").replace(/\s+([.,?!])/g, "$1").trim();
+
+    /* reads the digits inside the marks circle: the ring itself is masked out so it is never mistaken for a "0" or "1" */
+    async function impReadMark(worker, pg, ring) {
+        const c = impCrop(pg.cv, ring.x, ring.y, ring.w, ring.h, 2, 24), cx = c.getContext("2d"), cxm = c.width / 2, cym = c.height / 2, r = ring.w * 2 * .37;
+        const m = impCanvas(c.width, c.height), mx = m.getContext("2d");
+        mx.save(); mx.beginPath(); mx.arc(cxm, cym, r, 0, Math.PI * 2); mx.clip(); mx.drawImage(c, 0, 0); mx.restore();
+        const t = await impOcr(worker, m, 8, true), n = parseInt(t.text.replace(/\D/g, ""), 10);
+        return isFinite(n) && n > 0 && n <= 200 ? n : null;
+    }
+
+    function impStitch(segs) {
+        if (!segs.length) return "";
+        const w = Math.max.apply(null, segs.map(c => c.width)), h = segs.reduce((a, c) => a + c.height, 0) + 12 * (segs.length - 1);
+        const all = impCanvas(w, h), x = all.getContext("2d"); let y = 0;
+        segs.forEach(c => { x.drawImage(c, 0, y); y += c.height + 12; });
+        const k = Math.min(1, IMP_IMG_W / w), out = k < 1 ? impCanvas(w * k, h * k) : all;
+        if (k < 1) { const ox = out.getContext("2d"); ox.imageSmoothingQuality = "high"; ox.drawImage(all, 0, 0, out.width, out.height); }
+        return out.toDataURL("image/jpeg", .68);
+    }
+
+    async function impScan(pdf, worker, say, job) {
+        const R = { header: {}, questions: [], warnings: [] }, N = Math.min(pdf.numPages, IMP_MAX_PAGES);
+        if (pdf.numPages > N) R.warnings.push("Only the first " + N + " pages were read.");
+        const seg = (pg, y0, y1) => {     // the ink between two rows, trimmed, as its own canvas (or null when blank)
+            if (y1 - y0 < 12) return null;
+            const x0 = Math.floor(.02 * pg.W), x1 = Math.floor(.98 * pg.W), b = ImpCore.contentBox(pg.g, pg.W, x0, Math.floor(y0), x1, Math.floor(y1));
+            if (!b) return null;
+            const px = 14, bx = Math.max(x0, b.x0 - px), by = Math.max(0, b.y0 - px), bw = Math.min(x1, b.x1 + px) - bx, bh = Math.min(pg.H, b.y1 + px) - by;
+            return impCrop(pg.cv, bx, by, bw, bh);
+        };
+        for (let pn = 1; pn <= N; pn++) {
+            if (job.cancelled) return R;
+            const base = 8 + (pn - 1) / N * 84, span = 84 / N;
+            say("Reading page " + pn + " of " + N + "…", base);
+            const pg = await impRender(pdf, pn), W = pg.W, H = pg.H, pills = ImpCore.findPills(pg.g, W, H);
+            if (pn === 1 && pills.length) {
+                const t = await impOcr(worker, impCrop(pg.cv, .03 * W, .02 * H, .94 * W, pills[0].y0 - 8 - .02 * H, 1, 10), 6);
+                R.header = ImpCore.parseHeader(t.text); R.header.raw = t.text;
+            }
+            if (!pills.length) {          // no question tabs on this page: continuation of the last question, or the whole page as a picture
+                const c = seg(pg, .012 * H, .985 * H), last = R.questions[R.questions.length - 1];
+                if (c && last && !last.pageItem) last.segs.push(c);
+                else if (c) R.questions.push({ text: "Page " + pn, marks: 0, segs: [c], flags: ["No question numbers found — page kept as a picture"], pageItem: true });
+                continue;
+            }
+            const items = [];
+            for (let k = 0; k < pills.length; k++) {
+                if (job.cancelled) return R;
+                say("Page " + pn + ": reading question " + (k + 1) + " of " + pills.length + "…", base + span * (k + 1) / (pills.length + 1));
+                const p = pills[k], h = p.y1 - p.y0 + 1, cy = (p.y0 + p.y1) / 2, ring = ImpCore.findRing(pg.g, W, H, p), flags = [];
+                const right = ring ? ring.x - 14 : .82 * W, x0 = .088 * W;
+                const t = await impOcr(worker, impCrop(pg.cv, x0, cy - h * .8, right - x0, h * 1.6, 1, 16), 7);
+                let text = impClean(t.text), top = Math.min(p.y0, ring ? ring.y : p.y0), conf = t.conf;
+                if ((text.match(/[A-Za-z]/g) || []).length < 4) {      // number tab with no sentence: look for a heading above it ("Oral")
+                    text = "";
+                    const hd = ImpCore.findHeading(pg.g, W, H, p);
+                    if (hd) {
+                        const ht = await impOcr(worker, impCrop(pg.cv, hd.x0 - 8, hd.y0 - 8, hd.x1 - hd.x0 + 16, hd.y1 - hd.y0 + 16, 1, 16), 7), w = impClean(ht.text).replace(/[^A-Za-z ]/g, "").trim();
+                        if (w.length >= 3) { text = w; top = Math.min(top, hd.y0); conf = ht.conf; }
+                    }
+                }
+                if (!text) { text = "Question " + (R.questions.length + items.length + 1); flags.push("Text not readable — please type it"); }
+                else if (conf < 60) flags.push("Check the wording");
+                let marks = ring ? await impReadMark(worker, pg, ring) : null;
+                if (marks == null) flags.push("Check the marks");
+                items.push({ text, marks, top, start: Math.max(p.y1, ring ? ring.y + ring.h : 0) + 6, flags, segs: [] });
+            }
+            const last = R.questions[R.questions.length - 1];
+            if (pn > 1 && last) { const c = seg(pg, .012 * H, items[0].top - 6); if (c) last.segs.push(c); }   // a question that continues from the previous page
+            items.forEach((it, k) => {
+                const end = k + 1 < items.length ? items[k + 1].top - 6 : .985 * H, c = seg(pg, it.start, end);
+                if (c) it.segs.push(c);
+                R.questions.push(it);
+            });
+            pg.cv.width = pg.cv.height = 1;   // free the big canvas
+        }
+        const Q = R.questions, miss = Q.filter(q => q.marks == null), T = R.header.total;
+        if (miss.length === 1 && T) { const s = Q.reduce((a, q) => a + (q.marks || 0), 0); if (T - s > 0) { miss[0].marks = T - s; miss[0].flags = miss[0].flags.filter(f => f !== "Check the marks"); miss[0].flags.push("Marks worked out from the paper total"); } }
+        Q.forEach(q => { if (q.marks == null) q.marks = 0; q.img = impStitch(q.segs); delete q.segs; });
+        return R;
+    }
+
+    const normCls = s => String(s || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+    function matchClass(name) {
+        const n = normCls(name); if (!n) return "";
+        const list = classNames();
+        return list.find(c => normCls(c) === n) || list.find(c => { const m = normCls(c); return m.length > 2 && (m.indexOf(n) >= 0 || n.indexOf(m) >= 0); }) || "";
+    }
+    function matchSubject(name) {
+        const n = String(name || "").trim(); if (!n) return "";
+        return allSubjects().find(s => s.toLowerCase() === n.toLowerCase()) || n.charAt(0).toUpperCase() + n.slice(1);
+    }
+
+    function impReview(R, fname) {
+        const H = R.header, L = R.questions, cls = matchClass(H.cls), term = TERMS.indexOf(H.term) >= 0 ? H.term : db.prefs.term;
+        const sumOf = () => L.reduce((a, q) => a + (+q.marks || 0), 0);
+        const rows = () => L.length ? L.map((q, i) => '<div class="imp-q" data-i="' + i + '"><span class="imp-no">' + (i + 1) + '</span><div class="imp-body">' +
+            '<input class="imp-t" data-k="text" value="' + esc(q.text) + '" aria-label="Question text">' +
+            '<div class="imp-meta"><label>Marks <input type="number" min="0" data-k="marks" value="' + (+q.marks || 0) + '"></label>' + q.flags.map(f => '<span class="ex-chip warn">' + esc(f) + "</span>").join("") + "</div>" +
+            (q.img ? '<img class="imp-th" src="' + esc(q.img) + '" alt="Picture for question ' + (i + 1) + '">' : '<span class="imp-noimg">No picture</span>') +
+            '</div><button class="ex-icon-btn del" type="button" data-del="' + i + '" title="Remove"><i class="fas fa-xmark"></i></button></div>').join("")
+            : empty("file-circle-question", "No questions found", "Nothing in this PDF looked like a numbered question.");
+        const html = "<h3>Check the imported paper <button class='ex-icon-btn' data-close><i class='fas fa-xmark'></i></button></h3>" +
+            "<p class='ex-modal-p'>Read from <b>" + esc(fname) + "</b>. Fix anything the scanner got wrong, then import. Each question keeps its pictures exactly as printed.</p>" +
+            '<div class="ex-grid">' + field("Subject", '<input id="imp-subj" list="ex-subjects" value="' + esc(matchSubject(H.subj)) + '">') +
+            field("Class", classNames().length ? '<select id="imp-cls">' + opts(classNames(), cls, "— choose —") + "</select>" : '<input id="imp-cls" value="' + esc(H.cls || "") + '">') +
+            field("Exam / Term", '<select id="imp-term">' + opts(TERMS, term) + "</select>") + field("Duration (mins)", '<input id="imp-mins" type="number" min="5" value="' + (H.mins || 90) + '">') + "</div>" +
+            '<div class="imp-sum"><span id="imp-sum"></span></div>' +
+            (R.warnings.length ? '<div class="ex-alert warn"><i class="fas fa-triangle-exclamation"></i><div><b>' + R.warnings.map(esc).join("<br>") + "</b></div></div>" : "") +
+            '<div class="imp-list" id="imp-list">' + rows() + "</div>" +
+            "<div class='row'><button class='ex-btn ghost' data-close>Cancel</button><button class='ex-btn' id='imp-ok'><i class='fas fa-file-import'></i> Import</button></div>";
+        openModal(html, s => {
+            s.classList.add("ex-wide");
+            const draw = () => {
+                $("#imp-list", s).innerHTML = rows();
+                const t = sumOf(), ok = H.total ? t === H.total : true;
+                $("#imp-sum", s).innerHTML = '<span class="ex-chip ' + (ok ? "ok" : "warn") + '">Marks add up to ' + t + (H.total ? " · paper header says " + H.total + (ok ? " ✓" : " — check the marks") : "") + "</span>";
+                $("#imp-ok", s).innerHTML = "<i class='fas fa-file-import'></i> Import " + L.length + " question" + (L.length === 1 ? "" : "s");
+                $("#imp-ok", s).disabled = !L.length;
+            };
+            draw();
+            s.addEventListener("input", e => {
+                const t = e.target, row = t.closest && t.closest(".imp-q"); if (!row || !t.dataset.k) return;
+                const q = L[+row.dataset.i]; if (t.dataset.k === "marks") q.marks = Math.max(0, +t.value || 0); else q.text = t.value;
+                const sm = sumOf(), ok = H.total ? sm === H.total : true;
+                $("#imp-sum", s).innerHTML = '<span class="ex-chip ' + (ok ? "ok" : "warn") + '">Marks add up to ' + sm + (H.total ? " · paper header says " + H.total + (ok ? " ✓" : " — check the marks") : "") + "</span>";
+            });
+            s.addEventListener("click", e => { const b = e.target.closest("[data-del]"); if (b) { L.splice(+b.dataset.del, 1); draw(); } });
+            $("#imp-ok", s).addEventListener("click", () => {
+                const go = () => {
+                    closeModal();
+                    const np = newPaper();
+                    np.subj = $("#imp-subj", s).value.trim(); np.cls = $("#imp-cls", s).value || np.cls; np.term = $("#imp-term", s).value; np.mins = +$("#imp-mins", s).value || 90; np.instr = "";
+                    np.sections = L.map(q => ({ type: "Picture / Activity", attempt: 0, marks: +q.marks || 0, touched: true, questions: [{ text: q.text.trim() || "Question", opts: [], img: q.img || "" }] }));
+                    P = np; keep(); vPaper(); window.scrollTo(0, 0);
+                    toast("Imported " + L.length + " questions — review the preview, then Save.");
+                };
+                if (P && paperQs(P)) confirmBox("Replace the current paper?", "The questions in the editor will be replaced by the imported ones. Saved papers are not affected.", "Replace", go); else go();
+            });
+        });
+    }
+
+    async function importPdf(file) {
+        if (!/\.pdf$/i.test(file.name) && file.type !== "application/pdf") return toast("Please choose a PDF file.", 1);
+        if (file.size > 25 * 1024 * 1024) return toast("That PDF is larger than 25 MB.", 1);
+        const job = { cancelled: false }; let worker = null;
+        const say = (t, pct) => { const m = $("#imp-msg"), b = $("#imp-bar i"); if (m) m.textContent = t; if (b && pct != null) b.style.width = Math.round(pct) + "%"; };
+        openModal("<h3>Reading PDF…</h3><div class='imp-prog'><i class='fas fa-spinner fa-spin'></i><p id='imp-msg' class='ex-modal-p'>Starting…</p><div class='imp-bar' id='imp-bar'><i></i></div></div><div class='row'><button class='ex-btn ghost' id='imp-cancel'>Cancel</button></div>",
+            s => $("#imp-cancel", s).addEventListener("click", () => { job.cancelled = true; closeModal(); }));
+        try {
+            say("Loading the scanner (first time only)…", 3);
+            await impEnsureLibs();
+            const pdf = await window.pdfjsLib.getDocument({ data: new Uint8Array(await file.arrayBuffer()) }).promise;
+            say("Preparing text recognition…", 6);
+            worker = await window.Tesseract.createWorker("eng");
+            const R = await impScan(pdf, worker, say, job);
+            if (job.cancelled) return;
+            say("Done", 100); impReview(R, file.name);
+        } catch (e) {
+            console.error(e);
+            if (!job.cancelled) { closeModal(); toast("Could not read this PDF" + (e && e.name === "PasswordException" ? " (it is password protected)" : "") + ". Check your internet connection and try again.", 1); }
+        } finally { if (worker) { try { await worker.terminate(); } catch (e) { /* ignore */ } } }
+    }
+    const safeImg = s => /^data:image\/(jpeg|png);base64,[A-Za-z0-9+\/=]+$/.test(s || "") ? s : "";
 
     /* ============================================================
        RESULT UPLOAD — only generated papers, only the real students
