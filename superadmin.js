@@ -1949,6 +1949,98 @@ fbById("fbTabs").addEventListener("click", (e) => {
 });
 window.addEventListener("hashchange", routeSuperAdminView);
 
+/* ══════════════ ANDROID APP VERSION (forced update) ══════════════
+   Saved on the server (AppVersionController). The Android app reads it when it opens. */
+(function () {
+  const panel = document.getElementById("appVersionPanel");
+  const input = document.getElementById("appVersionInput");
+  const toggle = document.getElementById("appForceToggle");
+  const info = document.getElementById("appVersionCurrent");
+  let saved = { version: "", forceUpdate: false };
+  function paint() {
+    input.value = saved.version || "";
+    toggle.checked = !!saved.forceUpdate;
+    info.textContent = saved.version
+      ? "Current saved version: " + saved.version + " — forced update is " + (saved.forceUpdate ? "ON" : "OFF") + "."
+      : "No version saved yet.";
+  }
+  async function load() {
+    info.textContent = "Loading…";
+    try { saved = await apiRequest("/app-version"); paint(); }
+    catch (err) { if (!/session expired/i.test(err.message)) info.textContent = "Could not load: " + err.message; }
+  }
+  document.getElementById("btnOpenAppVersion").addEventListener("click", () => { panel.hidden = false; load(); panel.scrollIntoView({ behavior: "smooth", block: "start" }); });
+  document.getElementById("appVersionClose").addEventListener("click", () => { panel.hidden = true; });
+  document.getElementById("appVersionSave").addEventListener("click", async function () {
+    const version = input.value.trim();
+    const force = toggle.checked;
+    if (!/^[0-9]+(\.[0-9]+){0,3}$/.test(version) && (version || force)) { saToast("Enter the version like 1.0.8", "error"); return; }
+    const changed = version !== (saved.version || "");
+    if (force && changed && !confirm("Forced update is ON and the version changed. Every app with an older version will be blocked until it updates. Continue?")) return;
+    this.disabled = true;
+    try {
+      saved = await apiRequest("/app-version", { method: "PUT", body: JSON.stringify({ version, forceUpdate: force }) });
+      paint();
+      saToast(force ? "Saved — older apps must update." : "Saved.", "success");
+    } catch (err) { saToast("Couldn't save: " + err.message, "error"); }
+    finally { this.disabled = false; }
+  });
+})();
+
+/* ══════════════ EVENT IMAGE ══════════════
+   One picture shown to everyone after the splash screen (EventImageController). Kept at good quality:
+   files up to 3 MB are sent exactly as chosen; bigger ones are only scaled down to 2400 px with JPEG quality 0.95. */
+(function () {
+  const panel = document.getElementById("eventImagePanel");
+  const input = document.getElementById("eventImageInput");
+  const cur = document.getElementById("eventImageCurrent");
+  const fileLbl = document.getElementById("eventImageFile");
+  let chosen = null;
+
+  function readFile(f) { return new Promise((ok, bad) => { const r = new FileReader(); r.onload = () => ok(r.result); r.onerror = () => bad(new Error("Couldn't read the file.")); r.readAsDataURL(f); }); }
+  async function prepare(f) {
+    if (f.size <= 3 * 1024 * 1024) return readFile(f);
+    const src = await readFile(f);
+    const img = await new Promise((ok, bad) => { const i = new Image(); i.onload = () => ok(i); i.onerror = () => bad(new Error("That file isn't a valid image.")); i.src = src; });
+    const k = Math.min(1, 2400 / Math.max(img.naturalWidth, img.naturalHeight));
+    const c = document.createElement("canvas");
+    c.width = Math.round(img.naturalWidth * k); c.height = Math.round(img.naturalHeight * k);
+    const x = c.getContext("2d"); x.fillStyle = "#fff"; x.fillRect(0, 0, c.width, c.height); x.drawImage(img, 0, 0, c.width, c.height);
+    return c.toDataURL("image/jpeg", 0.95);
+  }
+  async function load() {
+    cur.innerHTML = '<span class="sa-hint">Loading…</span>';
+    try {
+      const s = await apiRequest("/app-event");
+      cur.innerHTML = s.active
+        ? '<div class="sa-hint" style="margin-bottom:6px;">Currently showing:</div><img alt="" src="https://thesoftschool.com/api/app/event/image?v=' + encodeURIComponent(s.id) + '" style="max-width:260px;max-height:200px;border-radius:12px;border:1px solid var(--border);object-fit:contain;background:#fff;">'
+        : '<span class="sa-hint">No event image is set — nothing is shown.</span>';
+    } catch (err) { if (!/session expired/i.test(err.message)) cur.innerHTML = '<span class="sa-hint">Could not load: ' + SSX.esc(err.message) + '</span>'; }
+  }
+  document.getElementById("btnOpenEventImage").addEventListener("click", () => { panel.hidden = false; load(); panel.scrollIntoView({ behavior: "smooth", block: "start" }); });
+  document.getElementById("eventImageClose").addEventListener("click", () => { panel.hidden = true; });
+  input.addEventListener("change", () => { chosen = input.files[0] || null; fileLbl.textContent = chosen ? chosen.name : "JPG, PNG or WebP, up to 6 MB"; });
+  document.getElementById("eventImageSave").addEventListener("click", async function () {
+    if (!chosen) { saToast("Choose an image first.", "error"); return; }
+    this.disabled = true;
+    try {
+      const data = await prepare(chosen);
+      await apiRequest("/app-event", { method: "PUT", body: JSON.stringify({ image: data }) });
+      chosen = null; input.value = ""; fileLbl.textContent = "JPG, PNG or WebP, up to 6 MB";
+      saToast("Event image is now live for everyone.", "success");
+      load();
+    } catch (err) { saToast("Couldn't upload: " + err.message, "error"); }
+    finally { this.disabled = false; }
+  });
+  document.getElementById("eventImageDelete").addEventListener("click", async function () {
+    if (!confirm("Delete the event image? It will stop showing on the website and in the Android app.")) return;
+    this.disabled = true;
+    try { await apiRequest("/app-event", { method: "DELETE" }); saToast("Event image deleted.", "success"); load(); }
+    catch (err) { saToast("Couldn't delete: " + err.message, "error"); }
+    finally { this.disabled = false; }
+  });
+})();
+
 /* ── BOOT (runs last so all consts are initialized) ──
    Gated behind admin auth: if there's no valid session token yet, show
    the login form instead of loading any data. initSuperAdminApp() is

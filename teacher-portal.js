@@ -41,17 +41,44 @@
   renderBrand();
 
   /* ── API helper (sends the teacher's school-scoped token) ── */
+  /* HYBRID school: what was read from the server is kept on the phone and used when there is no internet;
+     what the teacher saves offline waits in a queue and is uploaded when the internet is back.
+     Other schools (online) work exactly as before. */
+  const HYB = !!school.hybrid;
+  class NetErr extends TypeError {}
+  const net = { ok: true };
+  const pill = document.createElement("div"); pill.id = "net-pill"; pill.className = "net-pill"; pill.hidden = true;
+  $(".appbar-text").appendChild(pill);
+  function pendingCount() { return attPending.length + pendingPut.length + pendingDel.length + chat.items.filter((m) => m.senderType === "TEACHER" && m.status === "sending").length + dz.queue.length; }
+  function updatePill() {
+    if (!HYB) return;
+    const n = pendingCount(), off = !net.ok || navigator.onLine === false;
+    pill.hidden = !(off || n); pill.className = "net-pill" + (off ? " off" : "");
+    pill.textContent = off ? "Offline" + (n ? " · " + n + " waiting to upload" : "") : "Uploading " + n + "…";
+  }
+  function markNet(ok) { net.ok = ok; try { updatePill(); } catch (e) { /* not ready yet */ } }
   async function api(path, opts) {
-    const res = await fetch(API + path, Object.assign({}, opts, {
-      headers: Object.assign({ "Content-Type": "application/json", Authorization: "Bearer " + session.token }, (opts && opts.headers) || {})
-    }));
+    const isGet = !opts || !opts.method || opts.method === "GET";
+    let res;
+    try {
+      res = await fetch(API + path, Object.assign({}, opts, {
+        headers: Object.assign({ "Content-Type": "application/json", Authorization: "Bearer " + session.token }, (opts && opts.headers) || {})
+      }));
+    } catch (e) {
+      markNet(false);
+      if (HYB && isGet) { const c = store.get("c:" + path, undefined); if (c !== undefined) return c; }
+      throw new NetErr("No internet connection.");
+    }
+    markNet(true);
     if (res.status === 401) { auth.clearSession(); toast("Session expired. Please sign in again.", true); setTimeout(() => location.replace("index.html"), 900); throw new Error("401"); }
     if (!res.ok) {
       const text = await res.text().catch(() => "");
       let msg = text; try { msg = JSON.parse(text).error || text; } catch (e) { /* plain text */ }
       throw new Error(msg || "HTTP " + res.status);
     }
-    return res.json().catch(() => ({}));
+    const data = await res.json().catch(() => ({}));
+    if (HYB && isGet) store.set("c:" + path, data);
+    return data;
   }
   let toastTimer;
   function toast(msg, err) {
@@ -63,7 +90,7 @@
      Sources, in order: the teacher-login response (school object) → the admin session on this same
      browser → GET /api/settings/{schoolId}. Never signs the teacher out if one of them fails. */
   async function softGet(path) {
-    try { const r = await fetch(API + path, { headers: { Authorization: "Bearer " + session.token } }); return r.ok ? await r.json() : null; } catch (e) { return null; }
+    try { const r = await fetch(API + path, { headers: { Authorization: "Bearer " + session.token } }); if (!r.ok) return null; const d = await r.json(); if (HYB) store.set("c:" + path, d); return d; } catch (e) { return HYB ? store.get("c:" + path, null) : null; }
   }
   async function loadSchoolInfo() {
     const next = Object.assign({}, school);
@@ -690,9 +717,41 @@
   }
 
   /* ── DIARY: class → subject → pictures → sent to the class's parents ── */
-  const dz = { cls: "", subject: "", note: "", files: [], sending: false, list: store.get("diary", []), loaded: false, blobs: {} };
+  const dz = { cls: "", subject: "", note: "", files: [], sending: false, list: store.get("diary", []), loaded: false, blobs: {}, queue: [] };
+  /* hybrid: a diary written without internet is kept (pictures included) in the phone's own database until it can be sent */
+  const idb = {
+    open() { return new Promise((res, rej) => { const r = indexedDB.open("tp_q_" + schoolId + "_" + (staff.staffId || "t"), 1); r.onupgradeneeded = () => r.result.createObjectStore("diary", { keyPath: "id" }); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); }); },
+    async all() { const d = await this.open(); return new Promise((res, rej) => { const q = d.transaction("diary").objectStore("diary").getAll(); q.onsuccess = () => res(q.result || []); q.onerror = () => rej(q.error); }); },
+    async put(v) { const d = await this.open(); return new Promise((res, rej) => { const t = d.transaction("diary", "readwrite"); t.objectStore("diary").put(v); t.oncomplete = () => res(); t.onerror = () => rej(t.error); }); },
+    async del(id) { const d = await this.open(); return new Promise((res, rej) => { const t = d.transaction("diary", "readwrite"); t.objectStore("diary").delete(id); t.oncomplete = () => res(); t.onerror = () => rej(t.error); }); }
+  };
+  const queueMeta = (r) => ({ id: r.id, cls: r.cls, subject: r.subject, date: r.date });
+  let diaryFlushing = false;
+  async function flushDiary() {
+    if (!HYB || diaryFlushing) return; diaryFlushing = true;
+    try {
+      const recs = await idb.all(); dz.queue = recs.map(queueMeta);
+      for (const r of recs) {
+        try {
+          const fd = new FormData();
+          fd.append("schoolId", schoolId); fd.append("className", r.cls); fd.append("subject", r.subject); fd.append("note", r.note || ""); fd.append("date", r.date);
+          r.blobs.forEach((b, i) => fd.append("images", b, "diary" + (i + 1) + ".jpg"));
+          await apiForm("/diary", fd);
+          await idb.del(r.id); dz.queue = dz.queue.filter((x) => x.id !== r.id);
+        } catch (e) {
+          if (e instanceof TypeError || e.message === "401" || /^HTTP 5/.test(e.message || "")) break;      // no internet / server down: try again later
+          await idb.del(r.id); dz.queue = dz.queue.filter((x) => x.id !== r.id); toast("A saved diary was refused: " + (e.message || "error"), true);   // refused for good
+        }
+      }
+      if (!dz.queue.length) await loadDiary();
+    } catch (e) { /* database not available: nothing queued */ }
+    diaryFlushing = false; updatePill(); if (current === "diary") diary();
+  }
   async function apiForm(path, fd) {
-    const res = await fetch(API + path, { method: "POST", headers: { Authorization: "Bearer " + session.token }, body: fd });
+    let res;
+    try { res = await fetch(API + path, { method: "POST", headers: { Authorization: "Bearer " + session.token }, body: fd }); }
+    catch (e) { markNet(false); throw new NetErr("No internet connection."); }
+    markNet(true);
     if (res.status === 401) { auth.clearSession(); location.replace("index.html"); throw new Error("401"); }
     if (!res.ok) { const t = await res.text().catch(() => ""); let m = t; try { m = JSON.parse(t).error || t; } catch (e) { /* plain */ } throw new Error(m || "HTTP " + res.status); }
     return res.json().catch(() => ({}));
@@ -736,7 +795,16 @@
       dz.files.forEach((f) => URL.revokeObjectURL(f.url));
       const cls = dz.cls; dz.files = []; dz.note = ""; dz.subject = "";
       toast("Diary sent to the parents of " + cls); await loadDiary();
-    } catch (e) { if (e.message !== "401") toast(e.message || "Could not send. Check your connection and try again.", true); }
+    } catch (e) {
+      if (HYB && e instanceof NetErr) {            // no internet: keep it on the phone and send it later
+        try {
+          const rec = { id: uid(), cls: dz.cls, subject: dz.subject, note: dz.note.trim(), date: today(), blobs: dz.files.map((f) => f.blob), at: Date.now() };
+          await idb.put(rec); dz.queue.push(queueMeta(rec));
+          dz.files.forEach((f) => URL.revokeObjectURL(f.url)); dz.files = []; dz.note = ""; dz.subject = "";
+          toast("No internet — diary saved. It will be sent when the internet is back."); updatePill();
+        } catch (e2) { toast("Could not save the diary on this phone.", true); }
+      } else if (e.message !== "401") toast(e.message || "Could not send. Check your connection and try again.", true);
+    }
     dz.sending = false; if (current === "diary") diary();
   }
   function diary() {
@@ -756,6 +824,7 @@
           ${dz.files.length < 6 ? `<label class="th add"><input type="file" id="d-cam" accept="image/*" capture="environment" hidden><i class="fas fa-camera"></i><span>Camera</span></label><label class="th add"><input type="file" id="d-files" accept="image/*" multiple hidden><i class="fas fa-image"></i><span>Gallery</span></label>` : ""}</div>
         <div class="field" style="margin:12px 0 0"><label>Note for parents (optional)</label><textarea id="d-note" rows="2" maxlength="500" placeholder="e.g. Learn Q1–Q5 for tomorrow">${esc(dz.note)}</textarea></div>
         <button class="btn" id="d-send" style="margin-top:12px" ${dz.sending || !dz.files.length ? "disabled" : ""}>${dz.sending ? '<i class="fas fa-spinner fa-spin"></i> Sending…' : '<i class="fas fa-paper-plane"></i> Send to parents of ' + esc(dz.cls)}</button>`) : ""}
+      ${dz.queue.length ? `<div class="section-title" style="margin-top:18px">Waiting for internet</div>${dz.queue.map((q) => `<div class="card dentry"><div class="de-top"><div><b>${esc(q.subject)}</b><span>${esc(q.cls)} · ${esc(q.date || "")} · will be sent automatically</span></div><i class="fas fa-clock" style="color:var(--amber)"></i></div></div>`).join("")}` : ""}
       <div class="section-title" style="margin-top:18px">Sent diary</div>
       ${dz.list.length ? dz.list.map((d) => `<div class="card dentry"><div class="de-top"><div><b>${esc(d.subject)}</b><span>${esc(d.className)} · ${esc(d.date || "")}</span></div><button class="icon-btn dark sm" data-ddel="${SSX.esc(d.id)}" aria-label="Delete"><i class="fas fa-trash"></i></button></div>
         ${d.note ? `<p>${esc(d.note)}</p>` : ""}<div class="thumbs sm">${Array.from({ length: d.imageCount || 0 }, (_, i) => `<img data-dimg="${SSX.esc(d.id)}:${i}" alt="" class="dimg">`).join("")}</div></div>`).join("")
@@ -1000,6 +1069,7 @@
   updateDot();
   go("home");
   flushAttendance();
+  flushDiary();
   loadSchoolInfo().then(() => { if (current === "home" || current === "profile") VIEWS[current](); });
   if (inchargeClasses().length) loadAttendanceData().then(() => current === "home" && home());
   loadTests().then(() => { if (current === "quizzes" && quizView === "list") quizzes(); else if (current === "home") home(); });
@@ -1030,6 +1100,7 @@
     const before = liveSig();
     try {
       await flushAttendance();
+      await flushDiary();
       await Promise.all([att.students || inchargeClasses().length ? loadAttendanceData(true) : null, loadAnnouncements(), loadChat(), loadTests(), loadSchoolInfo()]);
     } catch (e) { /* retried on the next tick */ }
     syncing = false;
@@ -1038,6 +1109,8 @@
   }
   setInterval(() => { if (stale && !userBusy() && !document.hidden) { stale = false; rerender(); } else liveSync(); }, LIVE_MS);
   document.addEventListener("visibilitychange", () => { if (!document.hidden) liveSync(); });
-  window.addEventListener("online", liveSync);
+  window.addEventListener("online", () => { updatePill(); liveSync(); });
+  window.addEventListener("offline", () => markNet(false));
+  setInterval(updatePill, 3000);
   window.addEventListener("focus", liveSync);
 })();

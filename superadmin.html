@@ -41,8 +41,54 @@
         <button class="sa-btn-secondary" id="btnPrintPlansTop"><i class="fas fa-print"></i> Print Plans</button>
         <button class="sa-btn-secondary" id="btnOpenCreatePlan"><i class="fas fa-layer-group"></i> Create Plan</button>
         <button class="sa-btn-secondary" id="btnOpenManagePlans"><i class="fas fa-pen-to-square"></i> Manage Plans</button>
+        <button class="sa-btn-secondary" id="btnOpenEventImage"><i class="fas fa-image"></i> Event Image</button>
+        <button class="sa-btn-secondary" id="btnOpenAppVersion"><i class="fab fa-android"></i> Android App Version</button>
         <button class="sa-btn-secondary" id="btnOpenFeedback"><i class="fas fa-comments"></i> Feedback</button>
         <button class="sa-btn-add" id="btnOpenAddSchool"><i class="fas fa-plus"></i> Add School</button>
+      </div>
+    </div>
+
+    <div class="sa-panel" id="appVersionPanel" hidden style="margin-bottom:24px;">
+      <div class="sa-panel-head">
+        <h2><i class="fab fa-android"></i> Android app version</h2>
+        <button type="button" class="sa-mini-btn" id="appVersionClose"><i class="fas fa-times"></i> Close</button>
+      </div>
+      <div style="padding:20px 22px;">
+        <div class="sa-form-row">
+          <div class="sa-field-group">
+            <label>Latest app version number</label>
+            <input type="text" id="appVersionInput" placeholder="e.g. 1.0.8" maxlength="20">
+            <p class="sa-hint" id="appVersionCurrent">Loading…</p>
+          </div>
+        </div>
+        <div class="sa-lock-list" style="max-width:520px;margin-bottom:14px;">
+          <div class="sa-lock-row">
+            <span class="name"><i class="fas fa-triangle-exclamation"></i>Forced update</span>
+            <label class="sa-switch"><input type="checkbox" id="appForceToggle"><span class="slider"></span></label>
+          </div>
+        </div>
+        <p class="sa-hint" style="margin-bottom:14px;">When forced update is ON, every installed app with an older version number shows "update required" after its splash screen and can only continue after downloading the new version. When it is OFF, nothing is blocked.</p>
+        <button type="button" class="sa-btn-add" id="appVersionSave"><i class="fas fa-check"></i> Save</button>
+      </div>
+    </div>
+
+    <div class="sa-panel" id="eventImagePanel" hidden style="margin-bottom:24px;">
+      <div class="sa-panel-head">
+        <h2><i class="fas fa-image"></i> Event image</h2>
+        <button type="button" class="sa-mini-btn" id="eventImageClose"><i class="fas fa-times"></i> Close</button>
+      </div>
+      <div style="padding:20px 22px;">
+        <p class="sa-hint" style="margin-bottom:14px;">This picture is shown to every user (website and Android app) right after the splash screen, with a Skip button. Delete it to stop showing it everywhere. The picture is kept in its original quality.</p>
+        <div id="eventImageCurrent" style="margin-bottom:14px;"></div>
+        <div class="sa-logo-upload" style="margin-bottom:14px;">
+          <label class="btn-choose" for="eventImageInput"><i class="fas fa-upload"></i> Choose image</label>
+          <input type="file" id="eventImageInput" accept="image/jpeg,image/png,image/webp">
+          <span class="sa-hint" id="eventImageFile">JPG, PNG or WebP, up to 6 MB</span>
+        </div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;">
+          <button type="button" class="sa-btn-add" id="eventImageSave"><i class="fas fa-check"></i> Upload &amp; show to everyone</button>
+          <button type="button" class="sa-btn-danger" id="eventImageDelete"><i class="fas fa-trash"></i> Delete image</button>
+        </div>
       </div>
     </div>
 

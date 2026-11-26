@@ -23,9 +23,40 @@ const DEMO_VIDEO_ID = "mTzF4O9ev_c"; // YouTube video ID
 const DEMO_VIDEO_FB_URL = ""; // Facebook video URL
 const DEMO_VIDEO_SRC = ""; // Direct video URL  e.g. 'https://example.com/demo.mp4'
 
+/* Never leave this page while the splash animation is still playing (auto-login used to cut it short). */
+/* The event image (event-popup.js) is shown right after the splash; never leave this page while it is still loading/showing. */
+window.__eventPending = true;
+(function () {
+  try {
+    const s = document.createElement("script");
+    s.src = "event-popup.js";
+    s.onerror = () => { window.__eventPending = false; };
+    (document.head || document.documentElement).appendChild(s);
+    setTimeout(() => { if (!window.__eventShowing) window.__eventPending = false; }, 14000);
+  } catch (e) { window.__eventPending = false; }
+})();
+window.__goAfterSplash = function (url) {
+  const go = () => {
+    const t0 = Date.now();
+    (function wait() {
+      if (window.__eventPending && Date.now() - t0 < 60000) return setTimeout(wait, 250);
+      window.location.href = url;
+    })();
+  };
+  if (document.documentElement.classList.contains("splash-on") && !window.__splashDone) {
+    document.addEventListener("splash:done", () => setTimeout(go, 300), { once: true });
+    setTimeout(go, 6000); // safety net
+  } else go();
+};
+
 /* ── SHOW A TOAST IF REDIRECTED HERE AFTER A BLOCK ── */
 (function () {
   const params = new URLSearchParams(window.location.search);
+  if (params.get("offline_only")) {
+    window.addEventListener("DOMContentLoaded", () => {
+      setTimeout(() => showToast("This school works offline only. Please use the Soft School Android app.", "error"), 400);
+    });
+  }
   if (params.get("blocked")) {
     window.addEventListener("DOMContentLoaded", () => {
       setTimeout(() => showToast("Your school's access has been suspended. Please contact support.", "error"), 400);
@@ -796,6 +827,10 @@ window.SoftSchoolAuth = SoftSchoolAuth;
     overlay.innerHTML =
       '<i class="fas fa-circle-notch fa-spin" style="color:var(--teal-500,#1E8F86);"></i> Signing you in…';
     document.body.appendChild(overlay);
+    if (document.documentElement.classList.contains("splash-on") && !window.__splashDone) {
+      overlay.style.display = "none"; // do not cover the splash animation
+      document.addEventListener("splash:done", () => { overlay.style.display = "flex"; }, { once: true });
+    }
 
     let result;
     try {
@@ -806,13 +841,13 @@ window.SoftSchoolAuth = SoftSchoolAuth;
 
     if (result.ok) {
       SoftSchoolAuth.startSession(result);
-      window.location.href = "main.html";
+      window.__goAfterSplash("main.html");
       return; // leave the overlay up until the browser navigates away
     }
 
     if (result && ["network", "error", "locked"].indexOf(result.reason) !== -1 &&
         SoftSchoolAuth.currentSession() && SoftSchoolAuth.getRememberMe()) {
-      window.location.href = "main.html"; // temporary failure: use cached session
+      window.__goAfterSplash("main.html"); // temporary failure: use cached session
       return;
     }
     overlay.remove();
@@ -834,10 +869,10 @@ window.SoftSchoolAuth = SoftSchoolAuth;
     try {
       if (o.role === "teacher" && window.SoftSchoolTeacher) {
         window.SoftSchoolTeacher.setSession(o.teacherId);
-        window.location.href = "teacher-portal.html";
+        window.__goAfterSplash("teacher-portal.html");
       } else if (o.role === "parent") {
         Object.keys(o.ss || {}).forEach((k) => sessionStorage.setItem(k, o.ss[k]));
-        window.location.href = o.target;
+        window.__goAfterSplash(o.target);
       }
     } catch (e) {}
   });
@@ -1841,3 +1876,6 @@ if (siteHeader) {
   const modal = document.getElementById("loginModal");
   if (modal) modal.classList.add("open");
 })();
+
+/* load the forced-update check (Android app only) */
+(function () { try { if (window.SoftSchoolBg && !window.__ssAppUpdate) { var s = document.createElement('script'); s.src = 'app-update.js'; (document.head || document.documentElement).appendChild(s); } } catch (e) { /* ignore */ } })();

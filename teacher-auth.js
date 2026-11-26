@@ -47,7 +47,7 @@
     if (!pending) return;
     localStorage.setItem(KEY, JSON.stringify({
       token: pending.token, schoolId: pending.schoolId, staff: pending.staff,
-      school: pending.school ? { name: pending.school.name, logo: pending.school.logo, prefix: pending.school.prefix, address: pending.school.address, phone: pending.school.phone } : null,
+      school: pending.school ? { name: pending.school.name, logo: pending.school.logo, prefix: pending.school.prefix, address: pending.school.address, phone: pending.school.phone, hybrid: !!pending.school.hybrid } : null,
       passwordChanged: !!pending.passwordChanged, at: Date.now()
     }));
   }
