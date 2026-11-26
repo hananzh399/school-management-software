@@ -11,7 +11,7 @@
 
   function show(src, id) {
     var o = document.createElement('div');
-    o.style.cssText = 'position:fixed;inset:0;z-index:2147483600;display:flex;align-items:center;justify-content:center;padding:18px;background:rgba(8,15,30,.78);opacity:0;transition:opacity .35s ease';
+    o.style.cssText = 'position:fixed !important;inset:0 !important;z-index:2147483600 !important;display:flex !important;visibility:visible !important;pointer-events:auto !important;align-items:center;justify-content:center;padding:18px;background:rgba(8,15,30,.78);opacity:0;transition:opacity .35s ease';   /* !important: the app's login screen hides other page parts */
     o.innerHTML = '<div style="position:relative;max-width:min(94vw,720px);max-height:92vh;display:flex;flex-direction:column;align-items:center;gap:12px">' +
       '<img alt="" style="max-width:100%;max-height:78vh;object-fit:contain;border-radius:16px;box-shadow:0 24px 70px rgba(0,0,0,.5);background:#fff;transform:scale(.96);transition:transform .35s ease">' +
       '<button type="button" style="padding:11px 34px;border:0;border-radius:999px;background:#fff;color:#0b1120;font:600 15px system-ui,sans-serif;box-shadow:0 6px 18px rgba(0,0,0,.35);cursor:pointer">Skip</button></div>';
@@ -27,7 +27,7 @@
     o.querySelector('button').onclick = close;
     o.addEventListener('click', function (e) { if (e.target === o) close(); });
     document.addEventListener('keydown', key);
-    document.body.appendChild(o);
+    (document.documentElement || document.body).appendChild(o);   // on <html>, outside <body>: rules that hide the body's other children cannot reach it
     requestAnimationFrame(function () { o.style.opacity = '1'; img.style.transform = 'scale(1)'; });
     window.__eventShowing = true;
     try { sessionStorage.setItem(SHOWN, id || '1'); } catch (e) { /* ignore */ }
