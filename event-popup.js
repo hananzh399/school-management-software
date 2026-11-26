@@ -38,7 +38,7 @@
      for its details, the picture is tried directly. Nothing is shown (and nothing waits) when there is no image. */
   function toData(blob) { return new Promise(function (ok, bad) { var r = new FileReader(); r.onload = function () { ok(r.result); }; r.onerror = function () { bad(r.error); }; r.readAsDataURL(blob); }); }
   function decode(src) { return new Promise(function (ok, bad) { var im = new Image(); im.onload = function () { ok(src); }; im.onerror = function () { bad(new Error('bad picture')); }; im.src = src; }); }
-  async function prepare() {
+  async function webPrep() {
     var stamp = Date.now(), id = '1';
     var meta = fetch(base + '/api/app/event?t=' + stamp).then(function (r) { return r.ok ? r.json() : null; }).catch(function () { return undefined; });
     var pic = fetch(base + '/api/app/event/image?t=' + stamp).then(function (r) { return r.ok ? r.blob() : null; }).catch(function () { return undefined; });
@@ -49,15 +49,33 @@
     if (b) { try { return { src: await decode(await toData(b)), id: id }; } catch (e) { /* fall through */ } }
     try { return { src: await decode(base + '/api/app/event/image?v=' + encodeURIComponent(id) + '&t=' + stamp), id: id }; } catch (e) { return null; }   // direct, if reading it as data failed
   }
-  var ready = prepare().catch(function () { return null; });
+  /* Android app: the app itself downloads the picture (no browser limits), then hands it to the page. */
+  function nativePrep() {
+    return new Promise(function (ok) {
+      var bg = window.SoftSchoolBg;
+      if (!bg || typeof bg.fetchEvent !== 'function') return ok(null);
+      var t = setTimeout(function () { ok(null); }, 10000);
+      window.__ssEventNative = function (txt) {
+        clearTimeout(t);
+        try { var n = JSON.parse(txt); if (n && n.active && n.data) { decode(n.data).then(function (src) { ok({ src: src, id: n.id || '1' }); }, function () { ok(null); }); } else ok(null); } catch (e) { ok(null); }
+      };
+      try { bg.fetchEvent(base); } catch (e) { clearTimeout(t); ok(null); }
+    });
+  }
+  var ready = new Promise(function (resolve) {
+    var left = 2, fin = false;
+    function end(v) { if (fin) return; if (v) { fin = true; return resolve(v); } if (--left === 0) { fin = true; resolve(null); } }
+    nativePrep().then(end, function () { end(null); });
+    webPrep().then(end, function () { end(null); });
+  });
   var shownOnce = false;
   async function go() {
     if (shownOnce) return; shownOnce = true;
-    var res = await Promise.race([ready, new Promise(function (r) { setTimeout(function () { r(null); }, 9000); })]);
+    var res = await Promise.race([ready, new Promise(function (r) { setTimeout(function () { r(null); }, 12000); })]);
     if (!res) return done();
     if (document.body) show(res.src, res.id); else document.addEventListener('DOMContentLoaded', function () { show(res.src, res.id); });
   }
-  setTimeout(function () { if (!window.__eventShowing) done(); }, 15000);                            // never hold anything back for long
+  setTimeout(function () { if (!window.__eventShowing) done(); }, 16000);                            // never hold anything back for long
   if (document.documentElement.classList.contains('splash-on') && !window.__splashDone) {
     document.addEventListener('splash:done', go, { once: true });
   } else go();
