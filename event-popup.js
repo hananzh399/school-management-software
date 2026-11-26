@@ -20,7 +20,7 @@
     function close() {
       if (closed) return; closed = true;
       o.style.opacity = '0';
-      setTimeout(function () { o.remove(); try { URL.revokeObjectURL(src); } catch (e) { /* ignore */ } done(); }, 360);
+      setTimeout(function () { o.remove(); done(); }, 360);
       document.removeEventListener('keydown', key);
     }
     function key(e) { if (e.key === 'Escape') close(); }
@@ -33,24 +33,32 @@
     try { sessionStorage.setItem(SHOWN, id || '1'); } catch (e) { /* ignore */ }
   }
 
-  async function run() {
-    try {
-      var r = await fetch(base + '/api/app/event');
-      if (!r.ok) return done();
-      var j = await r.json();
-      if (!j || !j.active) return done();
-      var ir = await fetch(base + '/api/app/event/image?v=' + encodeURIComponent(j.id));
-      if (!ir.ok) return done();
-      var url = URL.createObjectURL(await ir.blob());
-      var probe = new Image();
-      probe.onload = function () { show(url, j.id); };
-      probe.onerror = function () { done(); };
-      probe.src = url;
-    } catch (e) { done(); }
+  /* The picture is fetched and decoded WHILE the splash is playing, so it can pop up the moment the splash ends.
+     It is turned into a data: address (allowed by the app's page rules, unlike blob:) and, if the server cannot be asked
+     for its details, the picture is tried directly. Nothing is shown (and nothing waits) when there is no image. */
+  function toData(blob) { return new Promise(function (ok, bad) { var r = new FileReader(); r.onload = function () { ok(r.result); }; r.onerror = function () { bad(r.error); }; r.readAsDataURL(blob); }); }
+  function decode(src) { return new Promise(function (ok, bad) { var im = new Image(); im.onload = function () { ok(src); }; im.onerror = function () { bad(new Error('bad picture')); }; im.src = src; }); }
+  async function prepare() {
+    var stamp = Date.now(), id = '1';
+    var meta = fetch(base + '/api/app/event?t=' + stamp).then(function (r) { return r.ok ? r.json() : null; }).catch(function () { return undefined; });
+    var pic = fetch(base + '/api/app/event/image?t=' + stamp).then(function (r) { return r.ok ? r.blob() : null; }).catch(function () { return undefined; });
+    var j = await meta;
+    if (j === null || (j && j.active === false)) return null;             // the server says: no event image (deleted / never set)
+    if (j && j.id != null) id = j.id;
+    var b = await pic;
+    if (b) { try { return { src: await decode(await toData(b)), id: id }; } catch (e) { /* fall through */ } }
+    try { return { src: await decode(base + '/api/app/event/image?v=' + encodeURIComponent(id) + '&t=' + stamp), id: id }; } catch (e) { return null; }   // direct, if reading it as data failed
   }
-  function go() { if (navigator.onLine === false) return done(); if (document.body) run(); else document.addEventListener('DOMContentLoaded', run); }
-  setTimeout(function () { if (!window.__eventShowing) done(); }, 12000);                              // never hold anything back for long
+  var ready = prepare().catch(function () { return null; });
+  var shownOnce = false;
+  async function go() {
+    if (shownOnce) return; shownOnce = true;
+    var res = await Promise.race([ready, new Promise(function (r) { setTimeout(function () { r(null); }, 9000); })]);
+    if (!res) return done();
+    if (document.body) show(res.src, res.id); else document.addEventListener('DOMContentLoaded', function () { show(res.src, res.id); });
+  }
+  setTimeout(function () { if (!window.__eventShowing) done(); }, 15000);                            // never hold anything back for long
   if (document.documentElement.classList.contains('splash-on') && !window.__splashDone) {
-    document.addEventListener('splash:done', function () { setTimeout(go, 250); }, { once: true });
+    document.addEventListener('splash:done', go, { once: true });
   } else go();
 })();
