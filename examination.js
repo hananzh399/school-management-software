@@ -137,7 +137,7 @@
         SCALE = DEF_SCALE.map(x => Object.assign({}, x));
     }
     applyGrading();
-    function save() { try { localStorage.setItem(KEY, JSON.stringify(db)); } catch (e) { /* ignore */ } }
+    function save() { try { localStorage.setItem(KEY, JSON.stringify(db)); } catch (e) { if (!save.warned) { save.warned = true; try { toast("This device's storage is full — large pictures may not be kept offline.", true); } catch (x) { /* ignore */ } } } }
     let saveT; const saveSoon = () => { clearTimeout(saveT); saveT = setTimeout(save, 400); };
 
     /* ───────── server sync (/api/exams) ───────── */
@@ -294,6 +294,10 @@
 .doc .ph{color:#888}
 .doc .qimg{clear:both;margin-top:6px;text-align:center}
 .doc .qimg img{max-width:100%;height:auto}
+.doc .pgx{position:relative;z-index:0;--u:.184mm}
+.doc .pgi{position:absolute;box-sizing:border-box}
+.doc .pgi svg{display:block;width:100%;height:100%;overflow:visible}
+.doc .pgi img{display:block;width:100%;height:100%;object-fit:fill}
 `;
     (function injectDocCss() { const st = document.createElement("style"); st.id = "ex-doc-css"; st.textContent = DOC_CSS; document.head.appendChild(st); })();
 
@@ -382,7 +386,7 @@
         return {
             id: null, term: db.prefs.term, cls: db.prefs.cls || "", section: "", subj: "", date: iso(new Date()), mins: 90, title: "",
             instr: "Read each question carefully. Write neatly. Attempt all sections as instructed.",
-            sections: [mkSection("MCQs"), mkSection("Short Questions"), mkSection("Long Questions")]
+            sections: [mkSection("MCQs"), mkSection("Short Questions"), mkSection("Long Questions")], items: []
         };
     }
     const filled = sec => sec.questions.filter(q => q.text.trim());
@@ -391,7 +395,7 @@
     const paperQs = p => p.sections.reduce((a, s) => a + filled(s).length, 0);
     const defTitle = p => (p.subj || "Paper") + " — " + p.term + " (" + clsLabel(p.cls, p.section) + ")";
 
-    function paperHtml(p) {
+    function paperHtml(p, edit) {
         const L = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
         let h = docHead(esc(p.term) + " Examination " + (p.date ? p.date.slice(0, 4) : new Date().getFullYear())) +
             '<div class="meta"><span>Subject: ' + esc(p.subj || "—") + "</span><span>Class: " + esc(clsLabel(p.cls, p.section) || "—") + "</span><span>Time: " + (+p.mins || 0) + " mins</span><span>Max Marks: " + paperTotal(p) + "</span></div>" +
@@ -413,18 +417,278 @@
             h += "</ol>";
         });
         if (!any) h += '<p class="ph" style="text-align:center;margin:40px 0">Start typing questions on the left — they appear here.</p>';
-        return h + '<div class="foot">— End of Paper —</div>';
+        const bot = itemsBottom(p);
+        return '<div class="pgx"' + (bot ? ' style="min-height:calc(var(--u) * ' + Math.ceil(bot) + ')"' : "") + ">" + h + '<div class="foot">— End of Paper —</div>' + overlayHtml(p, edit) + "</div>";
     }
+    /* ============================================================
+       PICTURES & SHAPES — objects placed freely on the paper
+       Geometry is stored in "u" = 1/1000 of the paper's text width (184 mm on A4), so a
+       position means the same thing in the preview and on the printout:
+       x/w run 0..1000 across the page, y/h run down the paper (one A4 page = PAGE_H).
+       ============================================================ */
+    const U_MM = .184, PAGE_H = 1473, MIN_U = 12, MAX_ITEMS = 40;
+    let SEL = [], POBJ = null, STAGE_BOUND = false;
+    const ITEM_LABEL = { image: "Picture", rect: "Rectangle", ellipse: "Circle", triangle: "Triangle", hline: "Horizontal line", vline: "Vertical line" };
+    const ITEM_ICON = { image: "image", rect: "square", ellipse: "circle", triangle: "caret-up", hline: "minus", vline: "grip-lines-vertical" };
+    const itemOf = id => ((P && P.items) || []).find(i => i.id === id);
+    const nz = (v, d) => isFinite(+v) && v !== "" && v != null ? +v : d;
+    const r2 = v => Math.round(v * 100) / 100;
+    const okColor = (c, d) => /^#[0-9a-fA-F]{3,8}$/.test(c || "") ? c : d;
+    const toMm = u => Math.round(u * U_MM * 10) / 10;
+
+    function shapeSvg(it) {
+        const fill = it.fill ? okColor(it.fill, "none") : "none", sw = Math.max(0, nz(it.sw, 2)), stroke = sw ? okColor(it.stroke, "#111111") : "none";
+        const a = 'fill="' + fill + '" stroke="' + stroke + '" stroke-width="' + sw + '" stroke-linejoin="round" vector-effect="non-scaling-stroke"';
+        const g = it.type === "ellipse" ? '<ellipse cx="50" cy="50" rx="50" ry="50" ' + a + "/>"
+            : it.type === "triangle" ? '<polygon points="50,0 100,100 0,100" ' + a + "/>"
+            : it.type === "hline" ? '<line x1="0" y1="50" x2="100" y2="50" ' + a + ' fill="none"/>'
+            : it.type === "vline" ? '<line x1="50" y1="0" x2="50" y2="100" ' + a + ' fill="none"/>'
+            : '<rect x="0" y="0" width="100" height="100" ' + a + "/>";
+        return '<svg viewBox="0 0 100 100" preserveAspectRatio="none" style="opacity:' + Math.min(1, Math.max(.05, nz(it.op, 1))) + '">' + g + "</svg>";
+    }
+    function itemHtml(it, z, edit, selected, single) {
+        const st = "left:calc(var(--u) * " + r2(nz(it.x, 0)) + ");top:calc(var(--u) * " + r2(nz(it.y, 0)) + ");width:calc(var(--u) * " + r2(nz(it.w, 100)) + ");height:calc(var(--u) * " + r2(nz(it.h, 100)) + ");z-index:" + (it.behind ? -1 : z + 1);
+        const body = it.type === "image"
+            ? (safeImg(it.src) ? '<img src="' + safeImg(it.src) + '" alt="" draggable="false" style="opacity:' + Math.min(1, Math.max(.05, nz(it.op, 1))) + '">' : "")
+            : shapeSvg(it);
+        const hs = edit && single && selected ? (it.type === "image" ? ["nw", "ne", "sw", "se"] : ["nw", "n", "ne", "e", "se", "s", "sw", "w"]).map(d => '<i class="pgh" data-h="' + d + '"></i>').join("") : "";
+        return '<div class="pgi' + (edit ? " pgi-edit" : "") + (selected ? " sel" : "") + '"' + (edit ? ' data-id="' + esc(it.id) + '"' : "") + ' style="' + st + '">' + body + hs + "</div>";
+    }
+    function overlayHtml(p, edit) { return (p.items || []).map((it, i) => itemHtml(it, i, edit, edit && SEL.indexOf(it.id) >= 0, SEL.length === 1)).join(""); }
+    const itemsBottom = p => (p.items || []).reduce((a, it) => Math.max(a, nz(it.y, 0) + nz(it.h, 0)), 0);
+
+    /* sizes the u unit to the preview width and marks the approximate page breaks */
+    function decorate() {
+        const w = $("#pg-paper"), g = w && $(".pgx", w); if (!g) return;
+        const u = g.clientWidth / 1000; if (!(u > 0)) return;
+        g.style.setProperty("--u", u + "px");
+        const H = g.offsetHeight / u;
+        for (let k = 1; k * PAGE_H < H; k++) { const d = document.createElement("div"); d.className = "pg-guide"; d.style.top = (k * PAGE_H * u) + "px"; d.innerHTML = "<span>Page " + (k + 1) + " ↓</span>"; g.appendChild(d); }
+    }
+
+    /* ───────── reading an image file ───────── */
+    function readImage(file) {
+        return new Promise((res, rej) => {
+            if (!/^image\//.test(file.type)) return rej(new Error("Please choose an image file (JPG, PNG, WebP, GIF or SVG)."));
+            if (file.size > 15 * 1024 * 1024) return rej(new Error("That image is larger than 15 MB."));
+            const url = URL.createObjectURL(file), im = new Image();
+            im.onload = () => {
+                try {
+                    let w = im.naturalWidth || 600, h = im.naturalHeight || 400; const k = Math.min(1, 1000 / w); w = Math.max(1, Math.round(w * k)); h = Math.max(1, Math.round(h * k));
+                    const c = document.createElement("canvas"); c.width = w; c.height = h; c.getContext("2d").drawImage(im, 0, 0, w, h);
+                    let src = "";
+                    if (/png|gif|webp|svg/.test(file.type)) { src = c.toDataURL("image/png"); }   // keeps transparent logos transparent
+                    if (!src || src.length > 450000) { const f = impCanvas(w, h); f.getContext("2d").drawImage(im, 0, 0, w, h); src = f.toDataURL("image/jpeg", .82); }
+                    res({ src, w, h });
+                } catch (e) { rej(new Error("Could not process that image.")); }
+                finally { URL.revokeObjectURL(url); }
+            };
+            im.onerror = () => { URL.revokeObjectURL(url); rej(new Error("That image could not be opened.")); };
+            im.src = url;
+        });
+    }
+    const pickImage = job => { POBJ = job; const f = $("#pg-imgfile"); if (f) f.click(); };
+    function applyImage(job, im) {
+        if (job.mode === "q") {                         // the picture printed under a question
+            const q = P.sections[job.s] && P.sections[job.s].questions[job.q]; if (!q) return;
+            q.img = im.src; secs(); preview(); keep(); return toast("Picture set for the question.");
+        }
+        if (job.mode === "replace") {                   // same place, same width — height follows the new picture so it is not stretched
+            const it = itemOf(job.id); if (!it) return;
+            it.src = im.src; it.ar = im.h / im.w; it.h = r2(it.w * it.ar); refreshAll(); keep(); return toast("Picture replaced.");
+        }
+        addItem("image", im);
+    }
+
+    /* ───────── adding / editing items ───────── */
+    function addItem(type, im) {
+        P.items = P.items || [];
+        if (P.items.length >= MAX_ITEMS) return toast("Maximum " + MAX_ITEMS + " pictures and shapes per paper.", 1);
+        const o = (P.items.length % 8) * 24;
+        const it = { id: uid(), type, x: 0, y: 140 + o, w: 300, h: 180, fill: "", stroke: "#111111", sw: 2, op: 1, behind: false };
+        if (type === "image") { it.src = im.src; it.ar = im.h / im.w; it.w = 360; it.h = it.w * it.ar; if (it.h > 600) { it.h = 600; it.w = it.h / it.ar; } it.sw = 0; }
+        else if (type === "ellipse") { it.w = 260; it.h = 260; }
+        else if (type === "triangle") { it.w = 300; it.h = 260; }
+        else if (type === "hline") { it.w = 500; it.h = 20; }
+        else if (type === "vline") { it.w = 20; it.h = 400; }
+        else { it.w = 340; it.h = 200; }
+        it.w = r2(it.w); it.h = r2(it.h); it.x = r2(Math.max(0, (1000 - it.w) / 2 + o));
+        P.items.push(it); SEL = [it.id]; refreshAll(); keep();
+    }
+    function refreshAll() { preview(); objs(); props(); }
+    const delSel = () => { if (!SEL.length) return; P.items = P.items.filter(i => SEL.indexOf(i.id) < 0); SEL = []; refreshAll(); keep(); };
+    function moveSel(dx, dy) {
+        SEL.map(itemOf).filter(Boolean).forEach(it => { it.x = r2(Math.min(1000 - it.w, Math.max(0, it.x + dx))); it.y = r2(Math.max(0, it.y + dy)); });
+        refreshAll(); keep();
+    }
+    function alignSel(kind) {
+        const its = SEL.map(itemOf).filter(Boolean); if (!its.length) return;
+        if (kind === "dh" || kind === "dv") {            // spread evenly (needs three or more)
+            if (its.length < 3) return toast("Select three or more objects to spread them evenly.", 1);
+            const h = kind === "dh", k = h ? "x" : "y", s = h ? "w" : "h", a = its.slice().sort((p, q) => p[k] - q[k]);
+            const first = a[0][k], last = a[a.length - 1][k] + a[a.length - 1][s], gap = (last - first - a.reduce((t, i) => t + i[s], 0)) / (a.length - 1);
+            let pos = first; a.forEach(i => { i[k] = r2(pos); pos += i[s] + gap; });
+        } else {
+            let b;                                       // one object aligns to the page; several align to each other
+            if (its.length > 1) { const x0 = Math.min.apply(null, its.map(i => i.x)), y0 = Math.min.apply(null, its.map(i => i.y)); b = { x: x0, y: y0, w: Math.max.apply(null, its.map(i => i.x + i.w)) - x0, h: Math.max.apply(null, its.map(i => i.y + i.h)) - y0 }; }
+            else { const pg = Math.max(0, Math.floor((its[0].y + its[0].h / 2) / PAGE_H)); b = { x: 0, y: pg * PAGE_H, w: 1000, h: PAGE_H }; }
+            its.forEach(i => {
+                if (kind === "l") i.x = b.x; else if (kind === "c") i.x = b.x + (b.w - i.w) / 2; else if (kind === "r") i.x = b.x + b.w - i.w;
+                else if (kind === "t") i.y = b.y; else if (kind === "m") i.y = b.y + (b.h - i.h) / 2; else if (kind === "b") i.y = b.y + b.h - i.h;
+                i.x = r2(Math.max(0, i.x)); i.y = r2(Math.max(0, i.y));
+            });
+        }
+        refreshAll(); keep();
+    }
+    function itemAct(act) {
+        const its = SEL.map(itemOf).filter(Boolean); if (!its.length) return;
+        if (act === "replace") { if (its.length === 1 && its[0].type === "image") pickImage({ mode: "replace", id: its[0].id }); return; }
+        if (act === "del") return delSel();
+        if (act === "front") { P.items = P.items.filter(i => SEL.indexOf(i.id) < 0).concat(its); }
+        else if (act === "back") { P.items = its.concat(P.items.filter(i => SEL.indexOf(i.id) < 0)); }
+        else if (act === "dup") {
+            if (P.items.length + its.length > MAX_ITEMS) return toast("Maximum " + MAX_ITEMS + " pictures and shapes per paper.", 1);
+            const cp = its.map(i => Object.assign({}, i, { id: uid(), x: r2(Math.min(1000 - i.w, i.x + 24)), y: r2(i.y + 24) }));
+            P.items = P.items.concat(cp); SEL = cp.map(i => i.id);
+        }
+        refreshAll(); keep();
+    }
+
+    /* ───────── the Pictures & Shapes panel ───────── */
+    function objs() {
+        const b = $("#pg-objs"); if (!b) return;
+        const its = P.items || [], cnt = {};
+        b.innerHTML = its.length ? its.map(it => { cnt[it.type] = (cnt[it.type] || 0) + 1; return '<button type="button" class="pg-obj' + (SEL.indexOf(it.id) >= 0 ? " on" : "") + '" data-sel="' + esc(it.id) + '"><i class="fas fa-' + ITEM_ICON[it.type] + '"></i>' + ITEM_LABEL[it.type] + " " + cnt[it.type] + (it.behind ? " <small>behind text</small>" : "") + "</button>"; }).join("")
+            : '<span class="pg-hint">No pictures or shapes on this paper yet.</span>';
+    }
+    function props() {
+        const box = $("#pg-props"); if (!box) return;
+        const its = SEL.map(itemOf).filter(Boolean);
+        if (!its.length) { box.innerHTML = '<p class="pg-hint"><i class="fas fa-hand-pointer"></i> Click a picture or shape on the paper (or in the list) to move, resize, replace or align it. Hold Shift to pick several. Arrow keys nudge, Delete removes. Dashed lines on the preview show roughly where pages break.</p>'; return; }
+        const one = its.length === 1, it = its[0], al = (a, t, ic) => '<button type="button" class="ex-btn sm ghost" data-al="' + a + '"><i class="fas fa-' + ic + '"></i> ' + t + "</button>";
+        let h = '<div class="pgp"><div class="pgp-t">Align ' + (one ? "to the page" : "to each other") + '</div>' +
+            '<div class="pgp-row"><span class="pgp-l">Horizontally</span>' + al("l", "Left", "arrow-left") + al("c", "Centre", "arrows-left-right") + al("r", "Right", "arrow-right") + (its.length > 2 ? al("dh", "Spread", "left-right") : "") + "</div>" +
+            '<div class="pgp-row"><span class="pgp-l">Vertically</span>' + al("t", "Top", "arrow-up") + al("m", "Middle", "arrows-up-down") + al("b", "Bottom", "arrow-down") + (its.length > 2 ? al("dv", "Spread", "up-down") : "") + "</div></div>";
+        if (one) {
+            const fl = (k, t) => field(t, '<input type="number" step="0.5" min="0" data-fld="' + k + '" value="' + toMm(it[k]) + '">');
+            h += '<div class="pgp"><div class="pgp-t">Position &amp; size <small>mm</small></div><div class="pgp-grid">' + fl("x", "X") + fl("y", "Y") + fl("w", "Width") + fl("h", "Height") + "</div></div>";
+            const op = '<label class="pgp-c">Opacity <input type="range" min="10" max="100" step="5" data-pf="op" value="' + Math.round(nz(it.op, 1) * 100) + '"></label>',
+                bh = '<label class="pgp-c"><input type="checkbox" data-pf="behind"' + (it.behind ? " checked" : "") + '> Behind the text</label>';
+            if (it.type === "image") h += '<div class="pgp"><div class="pgp-row"><button type="button" class="ex-btn sm" data-act="replace"><i class="fas fa-arrow-up-from-bracket"></i> Replace picture</button></div><div class="pgp-row">' + op + bh + "</div></div>";
+            else {
+                const line = it.type === "hline" || it.type === "vline";
+                h += '<div class="pgp"><div class="pgp-t">Style</div><div class="pgp-row">' +
+                    (line ? "" : '<label class="pgp-c">Fill <input type="color" data-pf="fill" value="' + okColor(it.fill, "#ffffff") + '"></label><label class="pgp-c"><input type="checkbox" data-pf="nofill"' + (it.fill ? "" : " checked") + '> No fill</label>') +
+                    '<label class="pgp-c">' + (line ? "Colour" : "Border") + ' <input type="color" data-pf="stroke" value="' + okColor(it.stroke, "#111111") + '"></label>' +
+                    '<label class="pgp-c">Thickness <input type="number" min="0" max="12" step="0.5" data-pf="sw" value="' + nz(it.sw, 2) + '"></label></div><div class="pgp-row">' + op + bh + "</div></div>";
+            }
+        }
+        const ac = (a, t, ic, cls) => '<button type="button" class="ex-btn sm ghost' + (cls ? " " + cls : "") + '" data-act="' + a + '"><i class="fas fa-' + ic + '"></i> ' + t + "</button>";
+        return void (box.innerHTML = h + '<div class="pgp-row pgp-end">' + ac("front", "Bring forward", "layer-group") + ac("back", "Send back", "arrow-down-short-wide") + ac("dup", "Duplicate", "copy") + ac("del", "Delete", "trash", "pgp-del") + "</div>");
+    }
+    function syncFields() {
+        const it = SEL.length === 1 && itemOf(SEL[0]); if (!it) return;
+        $$("[data-fld]", $("#pg-itemsbox")).forEach(i => { if (i !== document.activeElement) i.value = toMm(it[i.dataset.fld]); });
+    }
+    function onBoxClick(e) {
+        const b = e.target.closest("button"); if (!b) return;
+        if (b.dataset.add) { if (b.dataset.add === "image") pickImage({ mode: "new" }); else addItem(b.dataset.add); }
+        else if (b.dataset.sel) { const id = b.dataset.sel, m = e.shiftKey || e.ctrlKey || e.metaKey; SEL = m ? (SEL.indexOf(id) >= 0 ? SEL.filter(x => x !== id) : SEL.concat(id)) : [id]; refreshAll(); }
+        else if (b.dataset.al) alignSel(b.dataset.al);
+        else if (b.dataset.act) itemAct(b.dataset.act);
+    }
+    function onBoxInput(e) {
+        const t = e.target, it = SEL.length === 1 && itemOf(SEL[0]); if (!it) return;
+        if (t.dataset.fld) {
+            const k = t.dataset.fld, v = Math.max(k === "w" || k === "h" ? MIN_U : 0, +t.value / U_MM);
+            if (!isFinite(v) || t.value === "") return;
+            it[k] = r2(v);
+            if (it.type === "image" && it.ar && (k === "w" || k === "h")) { if (k === "w") it.h = r2(it.w * it.ar); else it.w = r2(it.h / it.ar); }
+            it.x = r2(Math.min(Math.max(0, it.x), Math.max(0, 1000 - it.w)));
+            preview(); syncFields(); keep();
+        } else if (t.dataset.pf) {
+            const k = t.dataset.pf;
+            if (k === "op") it.op = Math.min(1, Math.max(.1, +t.value / 100));
+            else if (k === "behind") { it.behind = t.checked; objs(); }
+            else if (k === "nofill") it.fill = t.checked ? "" : (it.fill || "#ffffff");
+            else if (k === "fill") { it.fill = okColor(t.value, "#ffffff"); const nf = $('[data-pf="nofill"]', $("#pg-itemsbox")); if (nf) nf.checked = false; }
+            else if (k === "stroke") it.stroke = okColor(t.value, "#111111");
+            else if (k === "sw") it.sw = Math.min(12, Math.max(0, nz(t.value, 2)));
+            preview(); keep();
+        }
+    }
+
+    /* ───────── dragging and resizing on the preview ───────── */
+    function bindStage() {
+        const stage = $("#pg-paper"); if (!stage) return;
+        stage.addEventListener("pointerdown", e => {
+            const el = e.target.closest(".pgi-edit"), hd = e.target.closest(".pgh");
+            if (!el) { if (SEL.length) { SEL = []; refreshAll(); } return; }
+            if (e.pointerType === "mouse" && e.button !== 0) return;
+            const id = el.dataset.id, multi = e.shiftKey || e.ctrlKey || e.metaKey;
+            if (multi) SEL = SEL.indexOf(id) >= 0 ? SEL.filter(x => x !== id) : SEL.concat(id);
+            else if (SEL.indexOf(id) < 0) SEL = [id];
+            refreshAll();
+            if (SEL.indexOf(id) < 0) return;
+            e.preventDefault();
+            const g = $(".pgx", stage), u = g.clientWidth / 1000, sx = e.clientX, sy = e.clientY, dir = hd ? hd.dataset.h : "";
+            const snap = SEL.map(i => { const it = itemOf(i); return it && { id: i, x: it.x, y: it.y, w: it.w, h: it.h }; }).filter(Boolean);
+            let moved = false;
+            const paint = it => {
+                const n = $('.pgi[data-id="' + it.id + '"]', stage); if (!n) return;
+                n.style.left = "calc(var(--u) * " + r2(it.x) + ")"; n.style.top = "calc(var(--u) * " + r2(it.y) + ")"; n.style.width = "calc(var(--u) * " + r2(it.w) + ")"; n.style.height = "calc(var(--u) * " + r2(it.h) + ")";
+            };
+            const mv = ev => {
+                if (!moved && Math.hypot(ev.clientX - sx, ev.clientY - sy) < 3) return;
+                moved = true;
+                const dx = (ev.clientX - sx) / u, dy = (ev.clientY - sy) / u;
+                if (!dir) {
+                    snap.forEach(s => { const it = itemOf(s.id); it.x = Math.min(1000 - it.w, Math.max(0, s.x + dx)); it.y = Math.max(0, s.y + dy); });
+                    if (snap.length === 1) { const it = itemOf(snap[0].id); [0, (1000 - it.w) / 2, 1000 - it.w].forEach(c => { if (Math.abs(it.x - c) < 8) it.x = c; }); }   // gentle snap to the margins and the centre
+                    snap.forEach(s => paint(itemOf(s.id)));
+                } else {
+                    const s = snap[0], it = itemOf(s.id); let x = s.x, y = s.y, w = s.w, h = s.h;
+                    if (dir.indexOf("e") >= 0) w = s.w + dx; if (dir.indexOf("w") >= 0) w = s.w - dx;
+                    if (dir.indexOf("s") >= 0) h = s.h + dy; if (dir.indexOf("n") >= 0) h = s.h - dy;
+                    w = Math.max(MIN_U, w);
+                    if (it.type === "image") h = w * (s.h / s.w); else h = Math.max(MIN_U, h);
+                    if (dir.indexOf("w") >= 0) x = s.x + s.w - w; if (dir.indexOf("n") >= 0) y = s.y + s.h - h;
+                    x = Math.max(0, x); y = Math.max(0, y);
+                    if (x + w > 1000) { w = 1000 - x; if (it.type === "image") h = w * (s.h / s.w); }
+                    it.x = x; it.y = y; it.w = w; it.h = h; paint(it);
+                }
+                syncFields();
+            };
+            const up = () => {
+                window.removeEventListener("pointermove", mv); window.removeEventListener("pointerup", up); window.removeEventListener("pointercancel", up);
+                if (moved) { snap.forEach(s => { const it = itemOf(s.id); if (it) { it.x = r2(it.x); it.y = r2(it.y); it.w = r2(it.w); it.h = r2(it.h); } }); refreshAll(); keep(); }
+            };
+            window.addEventListener("pointermove", mv); window.addEventListener("pointerup", up); window.addEventListener("pointercancel", up);
+        });
+        if (STAGE_BOUND) return; STAGE_BOUND = true;     // these two listen on the whole page, so they are added once
+        document.addEventListener("keydown", e => {
+            if (!SEL.length || !P || !$("#pg-paper")) return;
+            const t = e.target; if (t && /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName)) return;
+            const st = e.shiftKey ? 25 : 5, d = { ArrowLeft: [-st, 0], ArrowRight: [st, 0], ArrowUp: [0, -st], ArrowDown: [0, st] }[e.key];
+            if (d) { e.preventDefault(); moveSel(d[0], d[1]); }
+            else if (e.key === "Delete" || e.key === "Backspace") { e.preventDefault(); delSel(); }
+            else if (e.key === "Escape") { SEL = []; refreshAll(); }
+        });
+        window.addEventListener("resize", () => { if ($("#pg-paper")) decorate(); });
+    }
+
     function classCtl(attr, val) {
         const n = classNames();
         return n.length ? '<select ' + attr + ">" + (val && n.indexOf(val) < 0 ? "<option>" + esc(val) + "</option>" : "") + opts(n, val) + "</select>" : '<input ' + attr + ' value="' + esc(val) + '" placeholder="Class name">';
     }
     function vPaper() {
         if (!P) P = db.draft ? JSON.parse(JSON.stringify(db.draft)) : newPaper();
+        if (!Array.isArray(P.items)) P.items = [];
+        SEL = [];
         freshRoot();   // new node => no duplicate listeners when the view is re-rendered
         const root = ROOT();
         root.innerHTML = head("file-pen", "Paper <span>Generation</span>", "Set up the paper, write your questions inside each section, then print.",
-            '<button class="ex-btn ghost" id="pg-import" title="Scan a printed paper (PDF) into sections, marks and pictures"><i class="fas fa-file-import"></i> Import PDF</button><input type="file" id="pg-pdf" accept="application/pdf,.pdf" hidden><button class="ex-btn ghost" id="pg-reset"><i class="fas fa-file-circle-plus"></i> New</button><button class="ex-btn ghost" id="pg-save"><i class="fas fa-floppy-disk"></i> Save</button><button class="ex-btn" id="pg-print"><i class="fas fa-print"></i> Print</button>') +
+            '<button class="ex-btn ghost" id="pg-import" title="Scan a printed paper (PDF) into sections, marks and pictures"><i class="fas fa-file-import"></i> Import PDF</button><input type="file" id="pg-pdf" accept="application/pdf,.pdf" hidden><input type="file" id="pg-imgfile" accept="image/*" hidden><button class="ex-btn ghost" id="pg-reset"><i class="fas fa-file-circle-plus"></i> New</button><button class="ex-btn ghost" id="pg-save"><i class="fas fa-floppy-disk"></i> Save</button><button class="ex-btn" id="pg-print"><i class="fas fa-print"></i> Print</button>') +
             dataBanner() + subjectList() +
             '<div class="ex-split"><div class="ex-col-left">' +
             '<div class="ex-panel"><h3><span class="ex-step">1</span> Paper Setup</h3><div class="ex-grid">' +
@@ -437,10 +701,11 @@
             '<div class="ex-grid one" style="margin-top:12px">' + field("Paper title <small>(optional)</small>", '<input data-p="title" placeholder="Auto: Subject — Term (Class)" value="' + esc(P.title) + '">') +
             field("Instructions", '<textarea data-p="instr" rows="2">' + esc(P.instr) + "</textarea>") + "</div></div>" +
             '<div class="ex-panel"><h3><span class="ex-step">2</span> Sections &amp; Questions <span class="ex-spacer"><button class="ex-btn sm ghost" id="pg-addsec"><i class="fas fa-plus"></i> Section</button></span></h3><div id="pg-secs"></div>' +
-            '<div class="ex-total"><span><i class="fas fa-calculator"></i> Total marks</span><b id="pg-total"></b></div></div></div>' +
+            '<div class="ex-total"><span><i class="fas fa-calculator"></i> Total marks</span><b id="pg-total"></b></div></div>' +
+            '<div class="ex-panel"><h3><span class="ex-step">3</span> Pictures &amp; Shapes</h3><div id="pg-itemsbox"><div class="pg-addrow"><button class="ex-btn sm" type="button" data-add="image"><i class="fas fa-image"></i> Add picture</button><button class="ex-btn sm ghost" type="button" data-add="rect"><i class="fas fa-square"></i> Rectangle</button><button class="ex-btn sm ghost" type="button" data-add="ellipse"><i class="fas fa-circle"></i> Circle</button><button class="ex-btn sm ghost" type="button" data-add="triangle"><i class="fas fa-caret-up"></i> Triangle</button><button class="ex-btn sm ghost" type="button" data-add="hline"><i class="fas fa-minus"></i> Line</button><button class="ex-btn sm ghost" type="button" data-add="vline"><i class="fas fa-grip-lines-vertical"></i> Line</button></div><div class="pg-objs" id="pg-objs"></div><div id="pg-props"></div></div></div></div>' +
             '<div class="ex-col-right"><div class="ex-panel ex-sticky"><h3><i class="fas fa-eye"></i> Live Preview <small id="pg-count"></small></h3><div class="ex-paper-wrap"><div class="ex-sheetpage doc" id="pg-paper"></div></div></div></div></div>' +
             '<div class="ex-panel"><h3><i class="fas fa-folder-open"></i> Saved Papers</h3><div id="pg-saved"></div></div>';
-        fillSections(); secs(); preview(); savedList();
+        fillSections(); secs(); preview(); objs(); props(); savedList();
 
         root.addEventListener("input", onChange); root.addEventListener("change", onChange);
         function onChange(e) {
@@ -464,8 +729,15 @@
             const b = e.target.closest("button"); if (!b) return;
             if (b.dataset.rmsec != null) { if (P.sections.length <= 1) return toast("A paper needs at least one section.", 1); P.sections.splice(+b.dataset.rmsec, 1); secs(); preview(); keep(); }
             else if (b.dataset.addq != null) { const sec = P.sections[+b.dataset.addq]; sec.questions.push(blankQ(sec.type)); secs(); const ta = $$('[data-s="' + b.dataset.addq + '"][data-f="text"]').pop(); if (ta) ta.focus(); keep(); }
+            else if (b.dataset.addimg != null) { const [s, q] = b.dataset.addimg.split("."); pickImage({ mode: "q", s: +s, q: +q }); }
             else if (b.dataset.rmimg != null) { const [s, q] = b.dataset.rmimg.split("."); P.sections[+s].questions[+q].img = ""; secs(); preview(); keep(); }
             else if (b.dataset.rmq != null) { const [s, q] = b.dataset.rmq.split("."); const sec = P.sections[+s]; sec.questions.splice(+q, 1); if (!sec.questions.length) sec.questions.push(blankQ(sec.type)); secs(); preview(); keep(); }
+        });
+        bindStage();
+        const ib = $("#pg-itemsbox"); ib.addEventListener("click", onBoxClick); ib.addEventListener("input", onBoxInput); ib.addEventListener("change", onBoxInput);
+        $("#pg-imgfile").addEventListener("change", async e => {
+            const f = e.target.files && e.target.files[0], job = POBJ; e.target.value = ""; POBJ = null; if (!f || !job) return;
+            try { applyImage(job, await readImage(f)); } catch (err) { toast(err && err.message ? err.message : "Could not read that image.", 1); }
         });
         $("#pg-import").addEventListener("click", () => $("#pg-pdf").click());
         $("#pg-pdf").addEventListener("change", e => { const f = e.target.files && e.target.files[0]; e.target.value = ""; if (f) importPdf(f); });
@@ -474,19 +746,24 @@
             const go = () => { P = newPaper(); db.draft = null; save(); vPaper(); window.scrollTo(0, 0); };
             paperQs(P) ? confirmBox("Start a new paper?", "The questions you have typed in the current paper will be cleared. Saved papers are not affected.", "Clear &amp; start new", go) : go();
         });
-        $("#pg-print").addEventListener("click", () => {
+        $("#pg-print").addEventListener("click", async () => {
             if (!paperQs(P)) return toast("Write at least one question before printing.", 1);
+            await preloadImgs(P);
             printDoc(P.title || defTitle(P), '<div class="doc">' + paperHtml(P) + "</div>");
         });
-        $("#pg-save").addEventListener("click", () => {
+        $("#pg-save").addEventListener("click", async ev => {
             if (!P.cls) return toast("Choose a class.", 1);
             if (!P.subj.trim()) return toast("Enter the subject.", 1);
             if (!paperQs(P)) return toast("Write at least one question.", 1);
+            const btn = ev.currentTarget; let upErr = "";
+            btn.disabled = true;
+            try { await uploadPaperImages(P); } catch (err) { upErr = err && err.message ? err.message : "no connection"; } finally { btn.disabled = false; }
             const title = P.title.trim() || defTitle(P), data = JSON.parse(JSON.stringify(P));
-            const rec = { id: P.id || uid(), title, term: P.term, cls: P.cls, section: P.section || "", subj: P.subj.trim(), date: P.date, total: paperTotal(P), at: Date.now(), sections: data.sections, mins: P.mins, instr: P.instr };
+            const rec = { id: P.id || uid(), title, term: P.term, cls: P.cls, section: P.section || "", subj: P.subj.trim(), date: P.date, total: paperTotal(P), at: Date.now(), sections: data.sections, mins: P.mins, instr: P.instr, items: JSON.parse(JSON.stringify(P.items || [])) };
             const i = db.papers.findIndex(x => x.id === rec.id);
             if (i >= 0) db.papers[i] = rec; else db.papers.unshift(rec);
-            P.id = rec.id; db.draft = JSON.parse(JSON.stringify(P)); save(); pend("PUT", "/papers/" + rec.id, rec); savedList(); toast("Paper saved — it is now available in Result Upload.");
+            P.id = rec.id; (db.layouts = db.layouts || {})[rec.id] = rec.items; db.draft = JSON.parse(JSON.stringify(P)); save(); pend("PUT", "/papers/" + rec.id, rec); savedList(); toast("Paper saved — it is now available in Result Upload.");
+            if (upErr) toast("The paper is saved on this device, but its pictures could not be uploaded (" + upErr + "). Press Save again when you are online.", 1);
         });
     }
     function keep() { db.draft = JSON.parse(JSON.stringify(P)); saveSoon(); }
@@ -501,7 +778,7 @@
     function footTxt(s) { const n = filled(s).length; return n + " question" + (n === 1 ? "" : "s") + " · " + effAttempt(s) * (+s.marks || 0) + " marks"; }
     function preview() {
         $$("[data-foot]").forEach(e => { e.textContent = footTxt(P.sections[+e.dataset.foot]); });
-        const p = $("#pg-paper"); if (p) p.innerHTML = paperHtml(P);
+        const p = $("#pg-paper"); if (p) { p.innerHTML = paperHtml(P, true); decorate(); }
         totals(); const c = $("#pg-count"); if (c) c.textContent = paperQs(P) + " questions";
     }
     function secs() {
@@ -518,7 +795,7 @@
                     '<div class="pg-q"><span class="n">' + (k + 1) + '</span><div class="body"><textarea rows="2" data-s="' + i + '" data-q="' + k + '" data-f="text" placeholder="' + (s.type === "Fill in the Blanks" ? "Type the sentence — use ______ for the blank" : s.type === "True / False" ? "Type the statement" : "Type the question…") + '">' + esc(q.text) + "</textarea>" +
                     (safeImg(q.img) ? '<div class="pg-img"><img src="' + safeImg(q.img) + '" alt=""><button class="ex-btn sm ghost" type="button" data-rmimg="' + i + "." + k + '"><i class="fas fa-image"></i> Remove picture</button></div>' : "") +
                     (s.type === "MCQs" ? '<div class="pg-opts">' + [0, 1, 2, 3].map(o => '<label><i>' + "abcd"[o] + '</i><input data-s="' + i + '" data-q="' + k + '" data-f="opt' + o + '" value="' + esc(q.opts[o] || "") + '" placeholder="Option ' + "ABCD"[o] + '"></label>').join("") + "</div>" : "") +
-                    '</div><button class="ex-icon-btn del" type="button" data-rmq="' + i + "." + k + '" title="Remove question"><i class="fas fa-xmark"></i></button></div>').join("") + "</div>" +
+                    '</div><button class="ex-icon-btn" type="button" data-addimg="' + i + "." + k + '" title="Add or replace this question\'s picture"><i class="fas fa-image"></i></button><button class="ex-icon-btn del" type="button" data-rmq="' + i + "." + k + '" title="Remove question"><i class="fas fa-xmark"></i></button></div>').join("") + "</div>" +
                 '<div class="pg-sec-foot"><button class="ex-btn sm ghost" type="button" data-addq="' + i + '"><i class="fas fa-plus"></i> Add question</button><span class="pg-foot-n" data-foot="' + i + '">' + footTxt(s) + "</span></div></div>";
         }).join("");
         $$("textarea[data-f=text]", box).forEach(autoGrow);
@@ -531,14 +808,14 @@
                 '</td><td class="ex-rowact"><button class="ex-btn sm ghost" data-open="' + SSX.esc(p.id) + '"><i class="fas fa-pen"></i> Edit</button><button class="ex-icon-btn" data-dup="' + SSX.esc(p.id) + '" title="Duplicate"><i class="fas fa-copy"></i></button><button class="ex-icon-btn" data-prn="' + SSX.esc(p.id) + '" title="Print"><i class="fas fa-print"></i></button><button class="ex-icon-btn del" data-del="' + SSX.esc(p.id) + '" title="Delete"><i class="fas fa-trash"></i></button></td></tr>').join("") + "</tbody></table></div>"
             : empty("folder-open", "No saved papers yet", "Press Save to keep a paper here and use it in Result Upload.");
         const get = id => db.papers.find(q => q.id === id);
-        const toP = (p, copy) => ({ id: copy ? null : p.id, term: p.term, cls: p.cls, section: p.section || "", subj: copy ? p.subj : p.subj, date: p.date, mins: p.mins, title: copy ? "" : (p.title === defTitle(p) ? "" : p.title), instr: p.instr, sections: JSON.parse(JSON.stringify(p.sections)) });
+        const toP = (p, copy) => ({ id: copy ? null : p.id, term: p.term, cls: p.cls, section: p.section || "", subj: copy ? p.subj : p.subj, date: p.date, mins: p.mins, title: copy ? "" : (p.title === defTitle(p) ? "" : p.title), instr: p.instr, sections: JSON.parse(JSON.stringify(p.sections)), items: JSON.parse(JSON.stringify(p.items || (db.layouts && db.layouts[p.id]) || [])) });
         $$("[data-open]", b).forEach(x => x.addEventListener("click", () => { const p = get(x.dataset.open); if (p) { P = toP(p); keep(); vPaper(); window.scrollTo(0, 0); } }));
         $$("[data-dup]", b).forEach(x => x.addEventListener("click", () => { const p = get(x.dataset.dup); if (p) { P = toP(p, true); keep(); vPaper(); window.scrollTo(0, 0); toast("Copy opened — save it to keep it."); } }));
-        $$("[data-prn]", b).forEach(x => x.addEventListener("click", () => { const p = get(x.dataset.prn); if (p) printDoc(p.title, '<div class="doc">' + paperHtml(toP(p)) + "</div>"); }));
+        $$("[data-prn]", b).forEach(x => x.addEventListener("click", async () => { const p = get(x.dataset.prn); if (!p) return; const tp = toP(p); await preloadImgs(tp); printDoc(p.title, '<div class="doc">' + paperHtml(tp) + "</div>"); }));
         $$("[data-del]", b).forEach(x => x.addEventListener("click", () => {
             const p = get(x.dataset.del); if (!p) return;
             confirmBox("Delete this paper?", "<b>" + esc(p.title) + "</b>" + (db.results[p.id] ? " and the marks uploaded for it" : "") + " will be removed permanently.", "Delete", () => {
-                db.papers = db.papers.filter(q => q.id !== p.id); delete db.results[p.id]; if (P && P.id === p.id) { P.id = null; keep(); } save(); dropQ("/results/" + p.id); pend("DELETE", "/papers/" + p.id); savedList();
+                db.papers = db.papers.filter(q => q.id !== p.id); delete db.results[p.id]; if (db.layouts) delete db.layouts[p.id]; if (P && P.id === p.id) { P.id = null; keep(); } save(); dropQ("/results/" + p.id); pend("DELETE", "/papers/" + p.id); savedList();
             });
         }));
     }
@@ -848,7 +1125,78 @@
             if (!job.cancelled) { closeModal(); toast("Could not read this PDF" + (e && e.name === "PasswordException" ? " (it is password protected)" : "") + ". Check your internet connection and try again.", 1); }
         } finally { if (worker) { try { await worker.terminate(); } catch (e) { /* ignore */ } } }
     }
-    const safeImg = s => /^data:image\/(jpeg|png);base64,[A-Za-z0-9+\/=]+$/.test(s || "") ? s : "";
+    /* ============================================================
+       PICTURE FILES — on the server a picture is a file, and a paper only holds its short path
+       ("exam-images/<uuid>.jpg"). In the browser a picture is either a data: URL (just added, not
+       saved yet) or such a path, which is fetched once (with the normal login) and kept in memory.
+       ============================================================ */
+    const IMG_PATH = /^exam-images\/[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}\.(?:jpg|png)$/;
+    const isDataImg = v => /^data:image\/(jpeg|png);base64,[A-Za-z0-9+\/=]+$/.test(v || "");
+    const IMGC = new Map(), IMG_BUSY = new Map(), IMG_FAIL = new Map();
+    const blobToData = b => new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = () => rej(new Error("read failed")); r.readAsDataURL(b); });
+    let imgTimer = 0;
+    function imgLoaded() {          // a picture arrived: redraw the preview (and the editor, unless the user is typing)
+        clearTimeout(imgTimer);
+        imgTimer = setTimeout(() => {
+            if (!$("#pg-paper")) return;
+            preview();
+            const a = document.activeElement;
+            if (!(a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName))) secs();
+        }, 80);
+    }
+    function loadImg(path) {
+        if (IMGC.has(path)) return Promise.resolve(IMGC.get(path));
+        if (IMG_BUSY.has(path)) return IMG_BUSY.get(path);
+        if (Date.now() - (IMG_FAIL.get(path) || 0) < 30000) return Promise.resolve("");   // do not hammer the server after a failure
+        const pr = (async () => {
+            const ctl = new AbortController(), t = setTimeout(() => ctl.abort(), 20000);
+            try {
+                const r = await fetch(API_ORIGIN + "/api/exams/images/" + path.slice(12) + "?schoolId=" + encodeURIComponent(school.schoolId), { signal: ctl.signal });
+                if (!r.ok) throw new Error("HTTP " + r.status);
+                const d = await blobToData(await r.blob());
+                if (!isDataImg(d)) throw new Error("not a picture");
+                IMGC.set(path, d); IMG_FAIL.delete(path);
+                return d;
+            } catch (e) { IMG_FAIL.set(path, Date.now()); warnOnce("Some pictures could not be loaded. Check your connection."); return ""; }
+            finally { clearTimeout(t); IMG_BUSY.delete(path); }
+        })();
+        IMG_BUSY.set(path, pr);
+        pr.then(d => { if (d) imgLoaded(); });
+        return pr;
+    }
+    const safeImg = v => { v = v || ""; if (isDataImg(v)) return v; if (IMG_PATH.test(v)) { const c = IMGC.get(v); if (c) return c; loadImg(v); } return ""; };
+    async function preloadImgs(p) {   // before printing: make sure every saved picture of the paper is in memory
+        const need = new Set();
+        ((p && p.sections) || []).forEach(s => (s.questions || []).forEach(q => { if (IMG_PATH.test(q.img || "")) need.add(q.img); }));
+        ((p && p.items) || []).forEach(i => { if (IMG_PATH.test(i.src || "")) need.add(i.src); });
+        const todo = Array.from(need).filter(x => !IMGC.has(x));
+        if (todo.length) await Promise.race([Promise.all(todo.map(loadImg)), new Promise(r => setTimeout(r, 20000))]);
+    }
+    async function uploadImg(dataUrl) {
+        const blob = await (await fetch(dataUrl)).blob(), fd = new FormData();
+        fd.append("file", blob, "picture." + (blob.type === "image/png" ? "png" : "jpg"));
+        const ctl = new AbortController(), t = setTimeout(() => ctl.abort(), 40000);
+        try {
+            const r = await fetch(API_ORIGIN + "/api/exams/images?schoolId=" + encodeURIComponent(school.schoolId), { method: "POST", body: fd, signal: ctl.signal });
+            if (!r.ok) { let m = "HTTP " + r.status; try { const j = await r.json(); m = j.message || j.error || m; } catch (e) { /* keep */ } throw new Error(m); }
+            const j = await r.json();
+            if (!IMG_PATH.test(j.path || "")) throw new Error("unexpected reply");
+            IMGC.set(j.path, dataUrl);       // already have the picture: no need to download it again
+            return j.path;
+        } finally { clearTimeout(t); }
+    }
+    /* Sends every picture that is still a data: URL to the server and swaps it for its path. Pictures that were
+       uploaded before the failure stay uploaded, so saving again only sends what is left. */
+    async function uploadPaperImages(p) {
+        if (!school.schoolId) return;
+        const refs = [];
+        ((p && p.sections) || []).forEach(s => (s.questions || []).forEach(q => { if (isDataImg(q.img)) refs.push([q, "img"]); }));
+        ((p && p.items) || []).forEach(i => { if (i.type === "image" && isDataImg(i.src)) refs.push([i, "src"]); });
+        for (const d of Array.from(new Set(refs.map(r => r[0][r[1]])))) {
+            const path = await uploadImg(d);
+            refs.forEach(r => { if (r[0][r[1]] === d) r[0][r[1]] = path; });
+        }
+    }
 
     /* ============================================================
        RESULT UPLOAD — only generated papers, only the real students
