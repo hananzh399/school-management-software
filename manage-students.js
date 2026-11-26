@@ -185,11 +185,68 @@ async function fetchClassConfigsFromServer() {
         const settings = await res.json();
         CLASS_CONFIGS_CACHE = _classConfigsApiToLocal(settings && settings.classes);
         SCHOOL_INFO_CACHE = (settings && typeof settings === 'object') ? settings : {};
+        // Settings -> Info & Setting may have switched admission "*" fields on/off.
+        applyAdmissionRequiredConfig();
         return CLASS_CONFIGS_CACHE;
     } catch (err) {
         console.warn('fetchClassConfigsFromServer: could not reach the server, using last cached data.', err.message);
         return null;
     }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   ADMISSION FORM — MANDATORY FIELD SWITCHES
+   Settings -> "Info & Setting" -> "New Admission — Mandatory Fields" stores the
+   keys of fields switched OFF in settings.admissionOptionalFields (comma list).
+   Keys are the form input `name`s. Empty / missing = every field mandatory
+   (the original behaviour). Used by: the admission form (red * + HTML required),
+   the submit validator, and the Excel importer's "missing" report.
+   ───────────────────────────────────────────────────────────────────────── */
+const ADMISSION_TOGGLEABLE_FIELDS = [
+    'admissionDate', 'studentClass', 'section',
+    'fullName', 'gender', 'dob', 'studentBform', 'orphanStatus',
+    'guardianName', 'guardianRole', 'guardianCnic',
+    'phone1', 'phone2', 'permanentAddress', 'mailingAddress'
+];
+
+function getAdmissionOptionalSet() {
+    const raw = (SCHOOL_INFO_CACHE && SCHOOL_INFO_CACHE.admissionOptionalFields) || '';
+    return new Set(String(raw).split(',').map(k => k.trim())
+        .filter(k => ADMISSION_TOGGLEABLE_FIELDS.includes(k)));
+}
+
+function isAdmissionFieldRequired(key) {
+    return !getAdmissionOptionalSet().has(key);
+}
+
+/** Sync the admission form's red "*" and HTML `required` flags with the settings. */
+function applyAdmissionRequiredConfig() {
+    const form = document.getElementById('student-admission-form');
+    if (!form) return;
+    const optional = getAdmissionOptionalSet();
+
+    ADMISSION_TOGGLEABLE_FIELDS.forEach(key => {
+        const req = !optional.has(key);
+        const els = form.querySelectorAll('[name="' + key + '"]');
+        if (!els.length) return;
+        const group = els[0].closest('.form-input-group');
+
+        els.forEach(el => {
+            if (key === 'section') {
+                // Section only applies when the chosen class has sections (group is hidden otherwise).
+                el.required = req && !(group && group.style.display === 'none');
+            } else {
+                el.required = req;
+            }
+        });
+        const star = group && group.querySelector('.req-star');
+        if (star) star.style.display = req ? '' : 'none';
+    });
+
+    // Tuition fee is auto-filled from the class; it can only be "required"
+    // while Class is, otherwise a blank class would block saving.
+    const fee = document.getElementById('fee-standard');
+    if (fee) fee.required = !optional.has('studentClass');
 }
 
 /** Read class configs: server cache first, then built-in defaults (no localStorage). */
@@ -1247,6 +1304,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!modal) return;
 
         if (modalId === 'student-modal') {
+            applyAdmissionRequiredConfig();
             const isEdit = editIdHidden.value !== "";
             // New school with no current session / no classes yet: show the setup message instead of the form
             if (!isEdit && window.SoftSchoolSetupCheck && window.SoftSchoolSetupCheck.blockAdmission()) return;
@@ -1564,7 +1622,8 @@ document.addEventListener('DOMContentLoaded', () => {
             sectionSelect.innerHTML =
                 '<option value="">Select Section</option>' +
                 sections.map(s => `<option value="${s}">${s}</option>`).join('');
-            sectionSelect.setAttribute('required', '');
+            if (isAdmissionFieldRequired('section')) sectionSelect.setAttribute('required', '');
+            else sectionSelect.removeAttribute('required');
             if (fieldGroup) fieldGroup.style.display = '';
             if (previous && sections.includes(previous)) {
                 sectionSelect.value = previous;
@@ -2710,28 +2769,29 @@ if (certUploadInput) {
        options the page renders. Money fields are validated as
        non-negative decimals so a typed value like "1e9" or
        "-100abc" can't silently reach storage/financial totals. */
-    const ADMISSION_SCHEMA = {
-        fullName:          SSValidate.rules.name({ required: true, maxLength: 80, label: "Student full name" }),
-        guardianName:      SSValidate.rules.name({ required: true, maxLength: 80, label: "Guardian name" }),
-        studentBform:      SSValidate.rules.text({ required: true, maxLength: 15, pattern: /^\d{5}-\d{7}-\d$/, patternMessage: "B-Form number must look like XXXXX-XXXXXXX-X.", label: "Student B-Form number" }),
-        guardianCnic:      SSValidate.rules.text({ required: true, maxLength: 15, pattern: /^\d{5}-\d{7}-\d$/, patternMessage: "Guardian CNIC must look like XXXXX-XXXXXXX-X.", label: "Guardian CNIC" }),
+    // Built per submit so the Settings switches (admissionOptionalFields) are honoured.
+    const buildAdmissionSchema = () => ({
+        fullName:          SSValidate.rules.name({ required: isAdmissionFieldRequired('fullName'), maxLength: 80, label: "Student full name" }),
+        guardianName:      SSValidate.rules.name({ required: isAdmissionFieldRequired('guardianName'), maxLength: 80, label: "Guardian name" }),
+        studentBform:      SSValidate.rules.text({ required: isAdmissionFieldRequired('studentBform'), maxLength: 15, pattern: /^\d{5}-\d{7}-\d$/, patternMessage: "B-Form number must look like XXXXX-XXXXXXX-X.", label: "Student B-Form number" }),
+        guardianCnic:      SSValidate.rules.text({ required: isAdmissionFieldRequired('guardianCnic'), maxLength: 15, pattern: /^\d{5}-\d{7}-\d$/, patternMessage: "Guardian CNIC must look like XXXXX-XXXXXXX-X.", label: "Guardian CNIC" }),
         fatherFullName:    SSValidate.rules.name({ required: false, maxLength: 80, label: "Father name" }),
         fatherCnic:        SSValidate.rules.text({ required: false, maxLength: 15, pattern: /^\d{5}-\d{7}-\d$/, patternMessage: "Father CNIC must look like XXXXX-XXXXXXX-X.", label: "Father CNIC" }),
         medicalIssues:     SSValidate.rules.note({ required: false, maxLength: 300, label: "Medical issues" }),
         previousSchool:    SSValidate.rules.name({ required: false, maxLength: 120, label: "Previous school" }),
         previousClass:     SSValidate.rules.text({ required: false, maxLength: 40, label: "Previous class" }),
-        phone1:            SSValidate.rules.phone({ required: true, label: "Primary phone number" }),
-        phone2:            SSValidate.rules.phone({ required: true, label: "WhatsApp number" }),
-        permanentAddress:  SSValidate.rules.address({ required: true, maxLength: 300, label: "Permanent address" }),
-        mailingAddress:    SSValidate.rules.address({ required: true, maxLength: 300, label: "Mailing address" }),
+        phone1:            SSValidate.rules.phone({ required: isAdmissionFieldRequired('phone1'), label: "Primary phone number" }),
+        phone2:            SSValidate.rules.phone({ required: isAdmissionFieldRequired('phone2'), label: "WhatsApp number" }),
+        permanentAddress:  SSValidate.rules.address({ required: isAdmissionFieldRequired('permanentAddress'), maxLength: 300, label: "Permanent address" }),
+        mailingAddress:    SSValidate.rules.address({ required: isAdmissionFieldRequired('mailingAddress'), maxLength: 300, label: "Mailing address" }),
         transportFee:      SSValidate.rules.money({ required: false, max: 10000000, label: "Transport fee" }),
         admissionFee:      SSValidate.rules.money({ required: false, max: 10000000, label: "Admission fee" }),
         tuitionDiscount:   SSValidate.rules.money({ required: false, max: 10000000, label: "Tuition discount" }),
         transportDiscount: SSValidate.rules.money({ required: false, max: 10000000, label: "Transport discount" }),
         siblingDiscount:   SSValidate.rules.money({ required: false, max: 10000000, label: "Sibling discount" }),
-        dob:               SSValidate.rules.date({ required: true, max: new Date().toISOString().slice(0, 10), label: "Date of birth" }),
-        admissionDate:     SSValidate.rules.date({ required: true, label: "Admission date" }),
-    };
+        dob:               SSValidate.rules.date({ required: isAdmissionFieldRequired('dob'), max: new Date().toISOString().slice(0, 10), label: "Date of birth" }),
+        admissionDate:     SSValidate.rules.date({ required: isAdmissionFieldRequired('admissionDate'), label: "Admission date" }),
+    });
 
     if (admissionForm) {
     admissionForm.onsubmit = async function(e) {
@@ -2765,7 +2825,7 @@ if (certUploadInput) {
         // (instead of silently truncating/"fixing" it) and surfaces
         // the first error so the existing toast UI explains what to
         // fix, exactly like the page's other validation messages.
-        const admissionCheck = SSValidate.validate(studentData, ADMISSION_SCHEMA);
+        const admissionCheck = SSValidate.validate(studentData, buildAdmissionSchema());
         if (!admissionCheck.ok) {
             const firstError = Object.values(admissionCheck.errors)[0];
             showToast("Check the form", firstError, "danger");
@@ -11855,7 +11915,7 @@ function _impRowIssues(rec, vals) {
     /* longer than the admission form allows → it was shortened */
     Object.keys(IMP_MAX_LEN).forEach(k => { if (_impCell(rec, k).length > IMP_MAX_LEN[k]) add(k, `was longer than ${IMP_MAX_LEN[k]} characters and was shortened`); });
     /* the admission form requires these — flag what is empty so it can be completed later via Edit Student */
-    IMP_FORM_REQUIRED.forEach(k => { if (!given(k) && !(k === 'permanentAddress' && vals.permanentAddress)) add(k, 'is empty', 'missing'); });
+    IMP_FORM_REQUIRED.filter(isAdmissionFieldRequired).forEach(k => { if (!given(k) && !(k === 'permanentAddress' && vals.permanentAddress)) add(k, 'is empty', 'missing'); });
     return out;
 }
 

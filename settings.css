@@ -1329,3 +1329,40 @@ select option { background: var(--bg-secondary); color: var(--text-primary); }
 .timing-notify { margin: 0 24px 20px; }
 .timing-notify .switch-row { margin-top: 0; }
 .timing-badge .fas { font-size: 12px; }
+
+/* ── NEW ADMISSION: MANDATORY FIELD SWITCHES ─────────────── */
+.adm-star { color: var(--red); font-weight: 700; }
+.adm-bulk { display: flex; gap: 8px; flex-wrap: wrap; }
+.adm-bulk-btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 8px 14px; border-radius: 10px; cursor: pointer;
+  font: 600 12.5px 'Inter', sans-serif;
+  color: var(--text-main); background: transparent;
+  border: 1px solid var(--border); transition: background 0.2s, border-color 0.2s;
+}
+.adm-bulk-btn:hover { background: var(--green-light); border-color: var(--green); }
+.adm-fields-list { padding: 8px 24px 4px; }
+.adm-group { padding: 14px 0 6px; }
+.adm-group + .adm-group { border-top: 1px solid var(--border); }
+.adm-group-title {
+  font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase;
+  color: var(--text-muted); margin-bottom: 6px; display: flex; align-items: center; gap: 8px;
+}
+.adm-row {
+  display: flex; align-items: center; gap: 14px;
+  padding: 11px 4px; border-bottom: 1px dashed var(--border);
+}
+.adm-row:last-child { border-bottom: none; }
+.adm-row-text { flex: 1; min-width: 0; }
+.adm-row-label { font-size: 14px; font-weight: 600; color: var(--text-main); }
+.adm-row-note { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+.adm-row.is-optional .adm-row-label .adm-star { visibility: hidden; }
+.adm-state {
+  font-size: 11.5px; font-weight: 700; padding: 3px 10px; border-radius: 20px; white-space: nowrap;
+}
+.adm-state.on  { color: var(--red);        background: var(--red-light); }
+.adm-state.off { color: var(--text-muted); background: var(--green-light); }
+.adm-footnote {
+  padding: 14px 24px 20px; font-size: 12.5px; color: var(--text-muted);
+  display: flex; gap: 8px; align-items: flex-start;
+}

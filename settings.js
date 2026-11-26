@@ -547,7 +547,7 @@ function addClassCard() {
 // ═══════════════════════════════════════════════
 function loadSchoolInfo() {
   const s = _serverSettings || {};
-  document.getElementById('school-name').value      = s.schoolName      || '';
+  // School name is no longer edited here — it is kept as-is on the server.
   document.getElementById('school-address').value   = s.schoolAddress   || '';
   document.getElementById('school-phone').value      = s.schoolPhone     || '';
   document.getElementById('school-phone-alt').value  = s.schoolPhoneAlt  || '';
@@ -555,11 +555,14 @@ function loadSchoolInfo() {
   document.getElementById('school-website').value    = s.schoolWebsite   || '';
   document.getElementById('school-principal').value  = s.schoolPrincipal || '';
   document.getElementById('school-reg-no').value     = s.schoolRegNo     || '';
+  renderAdmissionFields();
 }
 
 function collectSchoolInfo() {
   return {
-    name:      document.getElementById('school-name').value.trim(),
+    // School Name is not editable on this page any more; send back the stored one
+    // so saving never blanks it (the server also keeps it if empty).
+    name:      ((_serverSettings && _serverSettings.schoolName) || '').trim(),
     address:   document.getElementById('school-address').value.trim(),
     phone:     document.getElementById('school-phone').value.trim(),
     phoneAlt:  document.getElementById('school-phone-alt').value.trim(),
@@ -572,6 +575,90 @@ function collectSchoolInfo() {
 
 function saveSchoolInfo() {
   // School info is saved to the backend via saveAll() — no localStorage write needed.
+}
+
+// ═══════════════════════════════════════════════
+//  NEW ADMISSION — MANDATORY FIELD SWITCHES
+//  Each switch = the red "*" on that field of the New Admission form in
+//  Student Management. ON = mandatory (default), OFF = optional.
+//  Saved as a comma-separated list of the OFF keys (admissionOptionalFields).
+//  Keys are the form input `name`s used by manage-students.js / the backend.
+// ═══════════════════════════════════════════════
+const ADMISSION_FIELD_GROUPS = [
+  { title: 'Academic & System', icon: 'fa-university', fields: [
+    { key: 'admissionDate', label: 'Admission Date' },
+    { key: 'studentClass',  label: 'Class / Grade', note: 'Also drives roll number & tuition fee' },
+    { key: 'section',       label: 'Section', note: 'Only applies when the class has sections' },
+  ]},
+  { title: 'Personal Information', icon: 'fa-user', fields: [
+    { key: 'fullName',     label: 'Student Full Name' },
+    { key: 'gender',       label: 'Gender' },
+    { key: 'dob',          label: 'Date of Birth' },
+    { key: 'studentBform', label: 'Student B-Form / CNIC Number' },
+    { key: 'orphanStatus', label: 'Orphan Status' },
+  ]},
+  { title: 'Guardian Information', icon: 'fa-users', fields: [
+    { key: 'guardianName', label: 'Guardian Full Name' },
+    { key: 'guardianRole', label: 'Guardian Relation' },
+    { key: 'guardianCnic', label: 'Guardian CNIC Number' },
+  ]},
+  { title: 'Contact & Documentation', icon: 'fa-phone-alt', fields: [
+    { key: 'phone1',           label: 'Primary Phone' },
+    { key: 'phone2',           label: 'WhatsApp Number' },
+    { key: 'permanentAddress', label: 'Permanent Address' },
+    { key: 'mailingAddress',   label: 'Mailing Address' },
+  ]},
+];
+const ADMISSION_ALL_KEYS = ADMISSION_FIELD_GROUPS.flatMap(g => g.fields.map(f => f.key));
+
+function renderAdmissionFields() {
+  const host = document.getElementById('admission-fields-list');
+  if (!host) return;
+  const optional = new Set(String((_serverSettings || {}).admissionOptionalFields || '')
+    .split(',').map(k => k.trim()).filter(Boolean));
+
+  host.innerHTML = ADMISSION_FIELD_GROUPS.map(g => `
+    <div class="adm-group">
+      <div class="adm-group-title"><i class="fas ${g.icon}"></i> ${g.title}</div>
+      ${g.fields.map(f => `
+        <div class="adm-row" data-key="${f.key}">
+          <div class="adm-row-text">
+            <div class="adm-row-label">${f.label} <span class="adm-star">*</span></div>
+            ${f.note ? `<div class="adm-row-note">${f.note}</div>` : ''}
+          </div>
+          <span class="adm-state"></span>
+          <label class="toggle-switch" title="Mandatory on/off">
+            <input type="checkbox" class="adm-toggle" data-key="${f.key}" ${optional.has(f.key) ? '' : 'checked'}>
+            <span class="toggle-slider"></span>
+          </label>
+        </div>`).join('')}
+    </div>`).join('');
+
+  host.querySelectorAll('.adm-toggle').forEach(cb => cb.addEventListener('change', refreshAdmissionRowStates));
+  refreshAdmissionRowStates();
+}
+
+function refreshAdmissionRowStates() {
+  document.querySelectorAll('#admission-fields-list .adm-row').forEach(row => {
+    const on = row.querySelector('.adm-toggle').checked;
+    row.classList.toggle('is-optional', !on);
+    const st = row.querySelector('.adm-state');
+    st.textContent = on ? 'Mandatory' : 'Optional';
+    st.className = 'adm-state ' + (on ? 'on' : 'off');
+  });
+}
+
+function setAllAdmissionFields(required) {
+  document.querySelectorAll('#admission-fields-list .adm-toggle').forEach(cb => { cb.checked = required; });
+  refreshAdmissionRowStates();
+}
+
+/** Comma-separated keys of the fields switched OFF (optional). */
+function collectAdmissionOptionalFields() {
+  const toggles = document.querySelectorAll('#admission-fields-list .adm-toggle');
+  // Panel not rendered yet → keep whatever the server already has.
+  if (!toggles.length) return String((_serverSettings || {}).admissionOptionalFields || '');
+  return Array.from(toggles).filter(cb => !cb.checked).map(cb => cb.dataset.key).join(',');
 }
 
 // ═══════════════════════════════════════════════
@@ -1171,6 +1258,8 @@ async function saveAll() {
     schoolWebsite:   schoolInfo.website,
     schoolPrincipal: schoolInfo.principal,
     schoolRegNo:     schoolInfo.regNo,
+
+    admissionOptionalFields: collectAdmissionOptionalFields(),
 
     lateFeeEnabled:     lateFee.enabled,
     lateFeeDeadlineDay: lateFee.deadlineDay,

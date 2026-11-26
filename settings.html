@@ -91,7 +91,7 @@
     <!-- TABS -->
     <div class="page-tabs">
       <button class="tab-btn active" onclick="switchTab('schoolinfo', this)">
-        <i class="fas fa-school"></i> School Info
+        <i class="fas fa-school"></i> Info &amp; Setting
       </button>
       <button class="tab-btn" onclick="switchTab('classes', this)">
         <i class="fas fa-chalkboard-teacher"></i> Classes &amp; Fees
@@ -118,18 +118,12 @@
       <div class="section-card">
         <div class="section-header">
           <div class="section-header-info">
-            <h2><i class="fas fa-school"></i> School &amp; Contact Details</h2>
+            <h2><i class="fas fa-school"></i> Contact Details</h2>
             <p>Printed on certificates, ID cards and vouchers.</p>
           </div>
         </div>
 
         <div class="variables-panel">
-
-          <div class="var-item" style="max-width:100%;">
-            <label>School Name</label>
-            <input type="text" id="school-name" class="var-input" placeholder="e.g. SoftSchool Academy">
-            <div class="var-hint">Main heading on documents.</div>
-          </div>
 
           <div class="var-item" style="max-width:100%;">
             <label>School Address</label>
@@ -177,9 +171,28 @@
 
         </div>
       </div>
+
+      <!-- ── New Admission: mandatory-field switches ── -->
+      <div class="section-card" id="admission-fields-card">
+        <div class="section-header">
+          <div class="section-header-info">
+            <h2><i class="fas fa-user-plus"></i> New Admission &mdash; Mandatory Fields</h2>
+            <p>Switch the red <span class="adm-star">*</span> on or off. A field that is switched off becomes optional in <b>Student Management</b> (new admission, edit and import).</p>
+          </div>
+          <div class="adm-bulk">
+            <button type="button" class="adm-bulk-btn" onclick="setAllAdmissionFields(true)"><i class="fas fa-check-double"></i> All required</button>
+            <button type="button" class="adm-bulk-btn" onclick="setAllAdmissionFields(false)"><i class="fas fa-ban"></i> All optional</button>
+          </div>
+        </div>
+        <div id="admission-fields-list" class="adm-fields-list"></div>
+        <div class="adm-footnote">
+          <i class="fas fa-circle-info"></i>
+          Roll Number, Age and Tuition Fee are filled in by the system, so they are not listed. Click <b>Save All</b> to apply.
+        </div>
+      </div>
     </div>
 
-    <!-- ═══════════════════ TAB: CLASSES ═══════════════════ (was "active" by default, now School Info is) -->
+    <!-- ═══════════════════ TAB: CLASSES ═══════════════════ (was "active" by default, now Info & Setting is) -->
     <div class="tab-panel" id="tab-classes">
       <div class="section-card">
         <div class="section-header">
