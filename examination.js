@@ -292,8 +292,14 @@
 .doc .pg-break{break-after:page;page-break-after:always}
 .doc .pg-break:last-child{break-after:auto;page-break-after:auto}
 .doc .ph{color:#888}
-.doc .qimg{clear:both;margin-top:6px;text-align:center}
-.doc .qimg img{max-width:100%;height:auto}
+.doc .qimgs{clear:both;display:flex;flex-wrap:wrap;align-items:flex-start;gap:8px;margin-top:6px}
+.doc .qpic{flex:0 0 100%;min-width:0;text-align:center;break-inside:avoid;page-break-inside:avoid}
+.doc .qimgs.two .qpic{flex-basis:calc(50% - 4px)}
+.doc .qbox{display:inline-block;position:relative;max-width:100%;vertical-align:top;line-height:0}
+.doc .qbox img{display:block;max-width:100%;height:auto}
+.doc .qimgs.two .qbox{width:100%}
+.doc .qbox[style] img{width:100%}
+.doc .qimgs.two .qbox img{width:100%}
 .doc .pgx{position:relative;z-index:0;--u:.184mm}
 .doc .pgi{position:absolute;box-sizing:border-box}
 .doc .pgi svg{display:block;width:100%;height:100%;overflow:visible}
@@ -389,6 +395,24 @@
             sections: [mkSection("MCQs"), mkSection("Short Questions"), mkSection("Long Questions")], items: []
         };
     }
+    /* A question holds a list of pictures: q.imgs = [{ src, w }]. w is the width in % of the picture's half
+       (or of the whole line when it is the only one); 0 = automatic. Older papers stored one string, q.img. */
+    const MAX_QPICS = 8, MAX_PAPER_QPICS = 200;
+    const qPics = q => Array.isArray(q.imgs) ? q.imgs : (q.img ? [{ src: q.img, w: 0 }] : []);
+    const editPics = q => { q.imgs = qPics(q); delete q.img; return q.imgs; };
+    const picW = v => { v = +v; return v > 0 ? Math.round(Math.min(100, Math.max(20, v))) : 0; };
+    const paperPicCount = p => p.sections.reduce((a, s) => a + s.questions.reduce((b, q) => b + qPics(q).length, 0), 0);
+    function picsHtml(q, ref, edit) {
+        const list = qPics(q);
+        const cells = list.map((pic, k) => {
+            const src = safeImg(pic.src); if (!src) return "";
+            const w = picW(pic.w), id = ref + "." + k;
+            return '<div class="qpic"><span class="qbox"' + (w ? ' style="width:' + w + '%"' : "") + '><img src="' + src + '" alt="" draggable="false">' +
+                (edit ? '<span class="qtools"><button type="button" data-qrep="' + id + '" title="Replace this picture"><i class="fas fa-rotate"></i></button><button type="button" data-qdel="' + id + '" title="Remove this picture"><i class="fas fa-xmark"></i></button></span><i class="qrs" data-qsize="' + id + '" title="Drag to resize"></i>' : "") +
+                "</span></div>";
+        }).join("");
+        return cells ? '<div class="qimgs ' + (list.length > 1 ? "two" : "one") + '">' + cells + "</div>" : "";
+    }
     const filled = sec => sec.questions.filter(q => q.text.trim());
     const effAttempt = sec => { const n = filled(sec).length, a = +sec.attempt; return a > 0 && a < n ? a : n; };
     const paperTotal = p => p.sections.reduce((a, s) => a + effAttempt(s) * (+s.marks || 0), 0);
@@ -409,7 +433,7 @@
             const att = effAttempt(sec), mk = +sec.marks || 0;
             h += '<div class="secthead"><span>Section ' + L[i] + " — " + esc(sec.type) + " (" + (att >= qs.length ? "Attempt all" : "Attempt any " + att + " of " + qs.length) + ")</span><span>" + att + " × " + mk + " = " + att * mk + '</span></div><ol class="qs"' + (act ? ' start="' + startNo + '"' : "") + ">";
             qs.forEach(q => {
-                h += '<li><span class="qt">' + esc(q.text.trim()) + "</span>" + (sec.type !== "MCQs" ? '<span class="mk">[' + mk + "]</span>" : "") + (safeImg(q.img) ? '<div class="qimg"><img src="' + safeImg(q.img) + '" alt=""></div>' : "");
+                h += '<li><span class="qt">' + esc(q.text.trim()) + "</span>" + (sec.type !== "MCQs" ? '<span class="mk">[' + mk + "]</span>" : "") + picsHtml(q, i + "." + sec.questions.indexOf(q), edit);
                 if (sec.type === "MCQs") { const o = q.opts.map(x => x.trim()).filter(Boolean); if (o.length) h += '<div class="opts">' + o.map((x, k) => "<span>(" + "abcdefgh"[k] + ") " + esc(x) + "</span>").join("") + "</div>"; }
                 if (sec.type === "True / False") h += '<div class="opts"><span>True / False</span></div>';
                 h += "</li>";
@@ -487,11 +511,21 @@
             im.src = url;
         });
     }
-    const pickImage = job => { POBJ = job; const f = $("#pg-imgfile"); if (f) f.click(); };
+    const pickImage = job => { POBJ = job; const f = $("#pg-imgfile"); if (f) { f.multiple = job.mode === "q"; f.click(); } };
     function applyImage(job, im) {
-        if (job.mode === "q") {                         // the picture printed under a question
+        if (job.mode === "q" || job.mode === "qrep") {  // pictures printed under a question
             const q = P.sections[job.s] && P.sections[job.s].questions[job.q]; if (!q) return;
-            q.img = im.src; secs(); preview(); keep(); return toast("Picture set for the question.");
+            const list = editPics(q);
+            if (job.mode === "qrep") {                  // same slot and same size, only the picture changes
+                if (!list[job.k]) return;
+                list[job.k].src = im.src; secs(); preview(); keep(); return toast("Picture replaced.");
+            }
+            if (list.length >= MAX_QPICS) return toast("A question can have at most " + MAX_QPICS + " pictures.", 1);
+            if (paperPicCount(P) >= MAX_PAPER_QPICS) return toast("A paper can have at most " + MAX_PAPER_QPICS + " question pictures.", 1);
+            list.push({ src: im.src, w: 0 });
+            if (list.length === 2) list.forEach(x => { x.w = 0; });     // the second picture splits the line 50 / 50
+            secs(); preview(); keep();
+            return toast(q.text.trim() ? "Picture added to the question." : "Picture added. Type the question to see it on the paper.");
         }
         if (job.mode === "replace") {                   // same place, same width — height follows the new picture so it is not stretched
             const it = itemOf(job.id); if (!it) return;
@@ -622,6 +656,9 @@
     function bindStage() {
         const stage = $("#pg-paper"); if (!stage) return;
         stage.addEventListener("pointerdown", e => {
+            const grip = e.target.closest(".qrs");
+            if (grip) return sizePic(e, grip);
+            if (e.target.closest(".qbox") && !e.target.closest(".pgi-edit")) return;   // leave the preview alone so the replace / remove buttons get their click
             const el = e.target.closest(".pgi-edit"), hd = e.target.closest(".pgh");
             if (!el) { if (SEL.length) { SEL = []; refreshAll(); } return; }
             if (e.pointerType === "mouse" && e.button !== 0) return;
@@ -677,6 +714,27 @@
         window.addEventListener("resize", () => { if ($("#pg-paper")) decorate(); });
     }
 
+    function sizePic(e, grip) {
+        if (e.pointerType === "mouse" && e.button !== 0) return;
+        e.preventDefault();
+        const [s, q, k] = grip.dataset.qsize.split(".").map(Number);
+        const box = grip.parentNode, cell = box.parentNode, full = cell.getBoundingClientRect().width, start = box.getBoundingClientRect().width, sx = e.clientX;
+        if (!(full > 0)) return;
+        let w = 0;
+        const mv = ev => {
+            w = picW((start + (ev.clientX - sx) * 2) / full * 100) || 20;     // x2 because the picture stays centred
+            box.style.width = w + "%";
+        };
+        const up = () => {
+            window.removeEventListener("pointermove", mv); window.removeEventListener("pointerup", up); window.removeEventListener("pointercancel", up);
+            const q0 = P.sections[s] && P.sections[s].questions[q];
+            if (!w || !q0) return;
+            const pic = editPics(q0)[k]; if (!pic) return;
+            pic.w = w; preview(); keep();
+        };
+        window.addEventListener("pointermove", mv); window.addEventListener("pointerup", up); window.addEventListener("pointercancel", up);
+    }
+
     function classCtl(attr, val) {
         const n = classNames();
         return n.length ? '<select ' + attr + ">" + (val && n.indexOf(val) < 0 ? "<option>" + esc(val) + "</option>" : "") + opts(n, val) + "</select>" : '<input ' + attr + ' value="' + esc(val) + '" placeholder="Class name">';
@@ -690,7 +748,7 @@
         root.innerHTML = head("file-pen", "Paper <span>Generation</span>", "Set up the paper, write your questions inside each section, then print.",
             '<button class="ex-btn ghost" id="pg-import" title="Scan a printed paper (PDF) into sections, marks and pictures"><i class="fas fa-file-import"></i> Import PDF</button><input type="file" id="pg-pdf" accept="application/pdf,.pdf" hidden><input type="file" id="pg-imgfile" accept="image/*" hidden><button class="ex-btn ghost" id="pg-reset"><i class="fas fa-file-circle-plus"></i> New</button><button class="ex-btn ghost" id="pg-save"><i class="fas fa-floppy-disk"></i> Save</button><button class="ex-btn" id="pg-print"><i class="fas fa-print"></i> Print</button>') +
             dataBanner() + subjectList() +
-            '<div class="ex-split"><div class="ex-col-left">' +
+            '<div class="ex-split pg-split"><div class="ex-col-left">' +
             '<div class="ex-panel"><h3><span class="ex-step">1</span> Paper Setup</h3><div class="ex-grid">' +
             field("Exam / Term", '<select data-p="term">' + opts(TERMS, P.term) + "</select>") +
             field("Class", classCtl('data-p="cls"', P.cls)) +
@@ -730,14 +788,17 @@
             if (b.dataset.rmsec != null) { if (P.sections.length <= 1) return toast("A paper needs at least one section.", 1); P.sections.splice(+b.dataset.rmsec, 1); secs(); preview(); keep(); }
             else if (b.dataset.addq != null) { const sec = P.sections[+b.dataset.addq]; sec.questions.push(blankQ(sec.type)); secs(); const ta = $$('[data-s="' + b.dataset.addq + '"][data-f="text"]').pop(); if (ta) ta.focus(); keep(); }
             else if (b.dataset.addimg != null) { const [s, q] = b.dataset.addimg.split("."); pickImage({ mode: "q", s: +s, q: +q }); }
-            else if (b.dataset.rmimg != null) { const [s, q] = b.dataset.rmimg.split("."); P.sections[+s].questions[+q].img = ""; secs(); preview(); keep(); }
+            else if (b.dataset.qrep != null) { const [s, q, k] = b.dataset.qrep.split(".").map(Number); pickImage({ mode: "qrep", s, q, k }); }
+            else if (b.dataset.qdel != null) { const [s, q, k] = b.dataset.qdel.split(".").map(Number); editPics(P.sections[s].questions[q]).splice(k, 1); secs(); preview(); keep(); }
             else if (b.dataset.rmq != null) { const [s, q] = b.dataset.rmq.split("."); const sec = P.sections[+s]; sec.questions.splice(+q, 1); if (!sec.questions.length) sec.questions.push(blankQ(sec.type)); secs(); preview(); keep(); }
         });
         bindStage();
         const ib = $("#pg-itemsbox"); ib.addEventListener("click", onBoxClick); ib.addEventListener("input", onBoxInput); ib.addEventListener("change", onBoxInput);
         $("#pg-imgfile").addEventListener("change", async e => {
-            const f = e.target.files && e.target.files[0], job = POBJ; e.target.value = ""; POBJ = null; if (!f || !job) return;
-            try { applyImage(job, await readImage(f)); } catch (err) { toast(err && err.message ? err.message : "Could not read that image.", 1); }
+            const files = Array.from(e.target.files || []), job = POBJ; e.target.value = ""; POBJ = null; if (!files.length || !job) return;
+            for (const f of job.mode === "q" ? files.slice(0, MAX_QPICS) : files.slice(0, 1)) {
+                try { applyImage(job, await readImage(f)); } catch (err) { toast(err && err.message ? err.message : "Could not read that image.", 1); }
+            }
         });
         $("#pg-import").addEventListener("click", () => $("#pg-pdf").click());
         $("#pg-pdf").addEventListener("change", e => { const f = e.target.files && e.target.files[0]; e.target.value = ""; if (f) importPdf(f); });
@@ -760,6 +821,7 @@
             try { await uploadPaperImages(P); } catch (err) { upErr = err && err.message ? err.message : "no connection"; } finally { btn.disabled = false; }
             const title = P.title.trim() || defTitle(P), data = JSON.parse(JSON.stringify(P));
             const rec = { id: P.id || uid(), title, term: P.term, cls: P.cls, section: P.section || "", subj: P.subj.trim(), date: P.date, total: paperTotal(P), at: Date.now(), sections: data.sections, mins: P.mins, instr: P.instr, items: JSON.parse(JSON.stringify(P.items || [])) };
+            rec.sections.forEach(s => s.questions.forEach(q => { const l = qPics(q); if (l.length) { q.imgs = l; q.img = l[0].src; } else delete q.img; }));
             const i = db.papers.findIndex(x => x.id === rec.id);
             if (i >= 0) db.papers[i] = rec; else db.papers.unshift(rec);
             P.id = rec.id; (db.layouts = db.layouts || {})[rec.id] = rec.items; db.draft = JSON.parse(JSON.stringify(P)); save(); pend("PUT", "/papers/" + rec.id, rec); savedList(); toast("Paper saved — it is now available in Result Upload.");
@@ -793,13 +855,21 @@
                 '<button class="ex-icon-btn del" type="button" data-rmsec="' + i + '" title="Remove section"><i class="fas fa-trash"></i></button></div>' +
                 '<div class="pg-qs">' + s.questions.map((q, k) =>
                     '<div class="pg-q"><span class="n">' + (k + 1) + '</span><div class="body"><textarea rows="2" data-s="' + i + '" data-q="' + k + '" data-f="text" placeholder="' + (s.type === "Fill in the Blanks" ? "Type the sentence — use ______ for the blank" : s.type === "True / False" ? "Type the statement" : "Type the question…") + '">' + esc(q.text) + "</textarea>" +
-                    (safeImg(q.img) ? '<div class="pg-img"><img src="' + safeImg(q.img) + '" alt=""><button class="ex-btn sm ghost" type="button" data-rmimg="' + i + "." + k + '"><i class="fas fa-image"></i> Remove picture</button></div>' : "") +
+                    thumbs(q, i + "." + k) +
                     (s.type === "MCQs" ? '<div class="pg-opts">' + [0, 1, 2, 3].map(o => '<label><i>' + "abcd"[o] + '</i><input data-s="' + i + '" data-q="' + k + '" data-f="opt' + o + '" value="' + esc(q.opts[o] || "") + '" placeholder="Option ' + "ABCD"[o] + '"></label>').join("") + "</div>" : "") +
-                    '</div><button class="ex-icon-btn" type="button" data-addimg="' + i + "." + k + '" title="Add or replace this question\'s picture"><i class="fas fa-image"></i></button><button class="ex-icon-btn del" type="button" data-rmq="' + i + "." + k + '" title="Remove question"><i class="fas fa-xmark"></i></button></div>').join("") + "</div>" +
+                    '</div><button class="ex-icon-btn" type="button" data-addimg="' + i + "." + k + '" title="Add a picture to this question"><i class="fas fa-image"></i></button><button class="ex-icon-btn del" type="button" data-rmq="' + i + "." + k + '" title="Remove question"><i class="fas fa-xmark"></i></button></div>').join("") + "</div>" +
                 '<div class="pg-sec-foot"><button class="ex-btn sm ghost" type="button" data-addq="' + i + '"><i class="fas fa-plus"></i> Add question</button><span class="pg-foot-n" data-foot="' + i + '">' + footTxt(s) + "</span></div></div>";
         }).join("");
         $$("textarea[data-f=text]", box).forEach(autoGrow);
         totals();
+    }
+    function thumbs(q, ref) {
+        const cells = qPics(q).map((pic, n) => {
+            const src = safeImg(pic.src), id = ref + "." + n;
+            return '<div class="pg-thumb">' + (src ? '<img src="' + src + '" alt="Picture ' + (n + 1) + '">' : '<i class="fas fa-spinner fa-spin"></i>') +
+                '<span class="qtools"><button type="button" data-qrep="' + id + '" title="Replace this picture"><i class="fas fa-rotate"></i></button><button type="button" data-qdel="' + id + '" title="Remove this picture"><i class="fas fa-xmark"></i></button></span></div>';
+        }).join("");
+        return cells ? '<div class="pg-thumbs">' + cells + "</div>" : "";
     }
     function savedList() {
         const b = $("#pg-saved"); if (!b) return;
@@ -1095,7 +1165,7 @@
                     closeModal();
                     const np = newPaper();
                     np.subj = $("#imp-subj", s).value.trim(); np.cls = $("#imp-cls", s).value || np.cls; np.term = $("#imp-term", s).value; np.mins = +$("#imp-mins", s).value || 90; np.instr = "";
-                    np.sections = L.map(q => ({ type: "Picture / Activity", attempt: 0, marks: +q.marks || 0, touched: true, questions: [{ text: q.text.trim() || "Question", opts: [], img: q.img || "" }] }));
+                    np.sections = L.map(q => ({ type: "Picture / Activity", attempt: 0, marks: +q.marks || 0, touched: true, questions: [{ text: q.text.trim() || "Question", opts: [], imgs: q.img ? [{ src: q.img, w: 0 }] : [] }] }));
                     P = np; keep(); vPaper(); window.scrollTo(0, 0);
                     toast("Imported " + L.length + " questions — review the preview, then Save.");
                 };
@@ -1167,7 +1237,7 @@
     const safeImg = v => { v = v || ""; if (isDataImg(v)) return v; if (IMG_PATH.test(v)) { const c = IMGC.get(v); if (c) return c; loadImg(v); } return ""; };
     async function preloadImgs(p) {   // before printing: make sure every saved picture of the paper is in memory
         const need = new Set();
-        ((p && p.sections) || []).forEach(s => (s.questions || []).forEach(q => { if (IMG_PATH.test(q.img || "")) need.add(q.img); }));
+        ((p && p.sections) || []).forEach(s => (s.questions || []).forEach(q => qPics(q).forEach(x => { if (IMG_PATH.test(x.src || "")) need.add(x.src); })));
         ((p && p.items) || []).forEach(i => { if (IMG_PATH.test(i.src || "")) need.add(i.src); });
         const todo = Array.from(need).filter(x => !IMGC.has(x));
         if (todo.length) await Promise.race([Promise.all(todo.map(loadImg)), new Promise(r => setTimeout(r, 20000))]);
@@ -1190,7 +1260,7 @@
     async function uploadPaperImages(p) {
         if (!school.schoolId) return;
         const refs = [];
-        ((p && p.sections) || []).forEach(s => (s.questions || []).forEach(q => { if (isDataImg(q.img)) refs.push([q, "img"]); }));
+        ((p && p.sections) || []).forEach(s => (s.questions || []).forEach(q => editPics(q).forEach(x => { if (isDataImg(x.src)) refs.push([x, "src"]); })));
         ((p && p.items) || []).forEach(i => { if (i.type === "image" && isDataImg(i.src)) refs.push([i, "src"]); });
         for (const d of Array.from(new Set(refs.map(r => r[0][r[1]])))) {
             const path = await uploadImg(d);

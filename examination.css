@@ -310,9 +310,6 @@
 .imp-meta input{width:70px;margin-left:4px}
 .imp-th{max-width:100%;max-height:150px;object-fit:contain;align-self:flex-start;border:1px solid var(--border-subtle);border-radius:8px;background:#fff}
 .imp-noimg{font-size:11.5px;color:var(--text-muted)}
-.pg-img{margin-top:6px;display:flex;flex-direction:column;gap:6px;align-items:flex-start}
-.pg-img img{max-width:100%;max-height:140px;border:1px solid var(--border-subtle);border-radius:8px;background:#fff}
-
 /* ── Pictures & shapes ── */
 .pgi-edit{cursor:move;touch-action:none;user-select:none;-webkit-user-select:none}
 .pgi-edit:hover{outline:1px dashed #17716A}
@@ -342,3 +339,49 @@
 .pgp-end{border-top:1px solid var(--border-subtle);padding-top:10px;margin-top:10px}
 .ex-btn.ghost.pgp-del:hover{color:#ef4444;border-color:#ef4444}
 @media (max-width:560px){.pgp-grid{grid-template-columns:repeat(2,1fr)}.pgp-l{width:100%}}
+
+/* ── Paper Generation: compact editor on the left, the paper right next to it ── */
+.ex-root:has(.pg-split) { max-width: 1480px; }
+.pg-split .ex-col-left, .pg-split .ex-col-right { min-width: 0; }
+.pg-split .ex-col-left .ex-panel { padding: 13px 14px; border-radius: 14px; margin-bottom: 12px; }
+.pg-split .ex-col-left .ex-panel > h3 { margin-bottom: 10px; font-size: 13.5px; }
+.pg-split .ex-col-left .ex-grid { grid-template-columns: repeat(auto-fit, minmax(115px, 1fr)); gap: 8px; }
+.pg-split .ex-col-left .ex-grid.one { grid-template-columns: 1fr; margin-top: 8px !important; }
+.pg-split .ex-col-left .ex-f input, .pg-split .ex-col-left .ex-f select { height: 32px; font-size: 12px; padding: 0 8px; border-radius: 9px; }
+.pg-split .ex-col-left .ex-f textarea { font-size: 12px; padding: 7px 9px; min-height: 36px; }
+.pg-split .pg-sec { padding: 10px; border-radius: 12px; margin-bottom: 9px; }
+.pg-split .pg-sec-head { gap: 7px; margin-bottom: 8px; }
+.pg-split .pg-badge { width: 28px; height: 30px; border-radius: 9px; font-size: 12.5px; }
+.pg-split .pg-qs { gap: 6px; }
+.pg-split .pg-q { gap: 5px; }
+.pg-split .pg-q .n { width: 20px; height: 20px; margin-top: 6px; font-size: 10px; }
+.pg-split .pg-q textarea { font-size: 12px; padding: 6px 9px; min-height: 32px; }
+.pg-split .pg-opts { gap: 4px; margin-top: 4px; }
+.pg-split .pg-opts input { height: 27px; font-size: 11.5px; padding: 0 8px; }
+.pg-split .pg-q > .ex-icon-btn { width: 26px; height: 26px; margin-top: 3px; }
+.pg-split .pg-sec-foot { margin-top: 8px; }
+@media (min-width: 861px) {
+    .ex-split.pg-split { grid-template-columns: minmax(300px, .75fr) minmax(0, 1.25fr); gap: 14px; align-items: stretch; }
+    .pg-split .ex-sticky { position: sticky; top: 14px; }
+    .pg-split .ex-paper-wrap { max-height: calc(100vh - 100px); padding: 10px; }
+    .pg-split .ex-sheetpage { padding: 28px 26px; }
+}
+@media (max-width: 1180px) {
+    .pg-split .pg-sec-head { flex-wrap: wrap; }
+    .pg-split .pg-sec-ctl { grid-template-columns: 1fr 1fr; order: 3; flex-basis: 100%; }
+    .pg-split .pg-sec-ctl .grow { grid-column: 1 / -1; }
+    .pg-split .pg-sec-head > .ex-icon-btn { margin-left: auto; }
+    .pg-split .pg-opts { grid-template-columns: 1fr; }
+}
+
+/* ── question pictures: two per row, replace / remove at the top right ── */
+.pg-thumbs { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 6px; }
+.pg-thumb { position: relative; display: grid; place-items: center; height: 84px; border: 1px solid var(--border-subtle); border-radius: 8px; background: #fff; overflow: hidden; color: #17716A; }
+.pg-thumb img { max-width: 100%; max-height: 100%; object-fit: contain; }
+.qtools { position: absolute; top: 4px; right: 4px; display: flex; gap: 4px; line-height: 1; z-index: 3; }
+.qtools button { width: 22px; height: 22px; padding: 0; display: grid; place-items: center; border: 0; border-radius: 6px; background: rgba(15, 76, 71, .88); color: #fff; font-size: 10.5px; cursor: pointer; }
+.qtools button:hover { background: #17716A; }
+.qtools button[data-qdel]:hover { background: #ef4444; }
+#pg-paper .qbox { outline: 1px dashed transparent; min-width: 48px; min-height: 28px; }
+#pg-paper .qbox:hover { outline-color: #17716A; }
+#pg-paper .qrs { position: absolute; right: -5px; bottom: -5px; width: 12px; height: 12px; background: #fff; border: 2px solid #17716A; border-radius: 3px; box-sizing: border-box; cursor: nwse-resize; touch-action: none; z-index: 3; }
