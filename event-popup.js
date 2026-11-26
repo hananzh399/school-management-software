@@ -5,8 +5,10 @@
   if (window.__ssEventPopup) return; window.__ssEventPopup = true;
   var SHOWN = 'softschool_event_shown';
   var base = window.SOFTSCHOOL_API_BASE || 'https://thesoftschool.com';
-  try { if (sessionStorage.getItem(SHOWN)) { window.__eventPending = false; return; } } catch (e) { /* ignore */ }
-  window.__eventPending = true;
+  var TOKEN = '1'; try { if (window.SoftSchoolBg && typeof window.SoftSchoolBg.launchId === 'function') TOKEN = String(window.SoftSchoolBg.launchId()); } catch (e) { /* ignore */ }   // changes every time the app is opened
+  var skip = false;                                           // already shown in this visit: do not show again (the app can ask again when it comes back to the front)
+  try { if (sessionStorage.getItem(SHOWN) === TOKEN) { window.__eventPending = false; skip = true; } } catch (e) { /* ignore */ }
+  if (!skip) window.__eventPending = true;
   function done() { window.__eventShowing = false; window.__eventPending = false; }
 
   function show(src, id) {
@@ -30,7 +32,7 @@
     (document.documentElement || document.body).appendChild(o);   // on <html>, outside <body>: rules that hide the body's other children cannot reach it
     requestAnimationFrame(function () { o.style.opacity = '1'; img.style.transform = 'scale(1)'; });
     window.__eventShowing = true;
-    try { sessionStorage.setItem(SHOWN, id || '1'); } catch (e) { /* ignore */ }
+    try { sessionStorage.setItem(SHOWN, TOKEN); } catch (e) { /* ignore */ }
   }
 
   /* The picture is fetched and decoded WHILE the splash is playing, so it can pop up the moment the splash ends.
@@ -62,12 +64,13 @@
       try { bg.fetchEvent(base); } catch (e) { clearTimeout(t); ok(null); }
     });
   }
-  var ready = new Promise(function (resolve) {
+  function prepAll() { return new Promise(function (resolve) {
     var left = 2, fin = false;
     function end(v) { if (fin) return; if (v) { fin = true; return resolve(v); } if (--left === 0) { fin = true; resolve(null); } }
     nativePrep().then(end, function () { end(null); });
     webPrep().then(end, function () { end(null); });
-  });
+  }); }
+  var ready = skip ? null : prepAll();
   var shownOnce = false;
   async function go() {
     if (shownOnce) return; shownOnce = true;
@@ -75,8 +78,17 @@
     if (!res) return done();
     if (document.body) show(res.src, res.id); else document.addEventListener('DOMContentLoaded', function () { show(res.src, res.id); });
   }
-  setTimeout(function () { if (!window.__eventShowing) done(); }, 16000);                            // never hold anything back for long
-  if (document.documentElement.classList.contains('splash-on') && !window.__splashDone) {
-    document.addEventListener('splash:done', go, { once: true });
-  } else go();
+  /* The Android app calls this when the user comes back to the app after being away: the picture is shown again. */
+  window.__ssEventResume = function () {
+    if (window.__eventShowing) return;
+    try { sessionStorage.removeItem(SHOWN); } catch (e) { /* ignore */ }
+    shownOnce = false; window.__eventPending = true; ready = prepAll(); go();
+    setTimeout(function () { if (!window.__eventShowing) done(); }, 16000);
+  };
+  if (!skip) {
+    setTimeout(function () { if (!window.__eventShowing) done(); }, 16000);                          // never hold anything back for long
+    if (document.documentElement.classList.contains('splash-on') && !window.__splashDone) {
+      document.addEventListener('splash:done', go, { once: true });
+    } else go();
+  }
 })();
