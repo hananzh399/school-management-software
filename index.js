@@ -866,6 +866,8 @@ window.SoftSchoolAuth = SoftSchoolAuth;
     let o = null;
     try { o = JSON.parse(localStorage.getItem(KEY)); } catch (e) {}
     if (!o) return;
+    // Coming back from a portal page = the user just pressed Logout there: stay on the login page and forget the saved login.
+    try { if (/\/(parent-portal\/|teacher-portal)/i.test(document.referrer || "")) { localStorage.removeItem(KEY); return; } } catch (e) {}
     try {
       if (o.role === "teacher" && window.SoftSchoolTeacher) {
         window.SoftSchoolTeacher.setSession(o.teacherId);
