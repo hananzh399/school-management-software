@@ -2708,3 +2708,9 @@ html.app-mode #autoLoginOverlay { background: #0B2B28 !important; color: #fff !i
 @media (max-width: 480px) {
   .btn-download-app { width: 100%; justify-content: center; }
 }
+/* ── DOWNLOAD WINDOWS APP BUTTON (same look, Windows blue icon) ── */
+.btn-download-win i { color: #00A4EF; }
+.btn-download-win.is-busy { opacity: .75; pointer-events: none; }
+/* the two download buttons sit together on their own row (on phones every button is already one per row) */
+.hero-break { flex-basis: 100%; height: 0; }
+@media (max-width: 640px) { .hero-break { display: none; } }

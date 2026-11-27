@@ -1881,3 +1881,40 @@ if (siteHeader) {
 
 /* load the forced-update check (Android app only) */
 (function () { try { if (window.SoftSchoolBg && !window.__ssAppUpdate) { var s = document.createElement('script'); s.src = 'app-update.js'; (document.head || document.documentElement).appendChild(s); } } catch (e) { /* ignore */ } })();
+
+/* ── DOWNLOAD WINDOWS APP ──
+   The button downloads the NEWEST installer from the GitHub releases of softschoolmanagement/Windows-Download,
+   so a new release (1.0.7, 1.0.8 ...) is picked up by itself - this file never needs editing for a new version.
+   If GitHub cannot be asked (offline, blocked), the link written in index.html is used instead. */
+(function () {
+  var btn = document.getElementById("downloadWinBtn");
+  if (!btn) return;
+  var LATEST = "https://api.github.com/repos/softschoolmanagement/Windows-Download/releases/latest";
+  var busy = false;
+  btn.addEventListener("click", function (e) {
+    if (busy) { e.preventDefault(); return; }
+    e.preventDefault();
+    busy = true;
+    btn.classList.add("is-busy");
+    var fallback = btn.href;
+    var done = false;
+    function go(url) {
+      if (done) return;
+      done = true;
+      busy = false;
+      btn.classList.remove("is-busy");
+      try { if (typeof showToast === "function") showToast("Your download is starting…", "success"); } catch (err) { /* ignore */ }
+      window.location.href = url;              // a release file downloads; the page stays open
+    }
+    setTimeout(function () { go(fallback); }, 4000);
+    fetch(LATEST, { headers: { Accept: "application/vnd.github+json" } })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (rel) {
+        var assets = (rel && rel.assets) || [];
+        var exe = assets.filter(function (a) { return /\.exe$/i.test(a.name) && /setup/i.test(a.name); })[0] ||
+                  assets.filter(function (a) { return /\.exe$/i.test(a.name); })[0];
+        go(exe && exe.browser_download_url ? exe.browser_download_url : fallback);
+      })
+      .catch(function () { go(fallback); });
+  });
+})();
