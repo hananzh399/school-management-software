@@ -1,3 +1,15 @@
+/* Keep the sign-in key across app restarts: Android closes the app after a while and wipes sessionStorage. */
+(function () {
+  try {
+    var K = 'softschool_api_token', KEEP = 'softschool_api_token_keep';
+    if (!sessionStorage.getItem(K)) { var v = localStorage.getItem(KEEP); if (v) sessionStorage.setItem(K, v); }
+    if (window.__ssTokenKeep) return; window.__ssTokenKeep = true;
+    var SP = Object.getPrototypeOf(sessionStorage), set = SP.setItem, rem = SP.removeItem, clr = SP.clear;
+    SP.setItem = function (k, val) { set.apply(this, arguments); try { if (this === sessionStorage && k === K) localStorage.setItem(KEEP, String(val)); } catch (e) { /* ignore */ } };
+    SP.removeItem = function (k) { rem.apply(this, arguments); try { if (this === sessionStorage && k === K) localStorage.removeItem(KEEP); } catch (e) { /* ignore */ } };
+    SP.clear = function () { clr.apply(this, arguments); try { if (this === sessionStorage) localStorage.removeItem(KEEP); } catch (e) { /* ignore */ } };
+  } catch (e) { /* ignore */ }
+})();
 /*!
  * school-mode.js - which kind of school is this? (Step 2 of the offline / hybrid app)
  *
