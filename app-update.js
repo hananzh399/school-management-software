@@ -26,8 +26,9 @@
   function show(url) {
     if (box) return;
     box = document.createElement('div');
+    box.id = 'ssUpdateBox';                                  // listed in index.css so the app-mode login screen does not hide it
     box.style.cssText = 'position:fixed;inset:0;z-index:2147483647;background:#0b1120;color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:28px;text-align:center;font:16px/1.45 system-ui,sans-serif';
-    box.innerHTML = '<h2 style="margin:0;font-size:22px">Update required</h2><p style="margin:0;max-width:360px;opacity:.9">This version of Soft School (' + installed + ') is outdated. Please download the new version to continue.</p><button id="ssUpdBtn" style="padding:13px 30px;border:0;border-radius:10px;background:#1E8F86;color:#fff;font:600 16px system-ui,sans-serif">Update</button>';
+    box.innerHTML = '<h2 style="margin:0;font-size:22px;color:#fff">Update required</h2><p style="margin:0;max-width:360px;opacity:.9">This version of Soft School (' + installed + ') is outdated. Please download the new version to continue.</p><button id="ssUpdBtn" style="padding:13px 30px;border:0;border-radius:10px;background:#1E8F86;color:#fff;font:600 16px system-ui,sans-serif">Update</button>';
     document.body.appendChild(box);
     box.querySelector('#ssUpdBtn').onclick = function () {
       try { if (bg.openUrl) { bg.openUrl(url || URL_FALLBACK); return; } } catch (e) { /* fall through */ }
