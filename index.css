@@ -2628,7 +2628,7 @@ html.app-mode,
 html.app-mode body { background: var(--white, #fff); overflow: hidden; }
 
 /* hide the whole landing page (header, hero, sections, footer, other modals) */
-html.app-mode body > :not(#splash):not(#loginModal):not(#registerModal):not(#forgotPasswordModal):not(.toast-container):not(.login-loader):not(#autoLoginOverlay):not(script):not(style):not(link):not(noscript) {
+html.app-mode body > :not(#splash):not(#ssUpdateBox):not(#loginModal):not(#registerModal):not(#forgotPasswordModal):not(.toast-container):not(.login-loader):not(#autoLoginOverlay):not(script):not(style):not(link):not(noscript) {
   display: none !important;
 }
 

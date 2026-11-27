@@ -43,6 +43,7 @@
         <button class="sa-btn-secondary" id="btnOpenManagePlans"><i class="fas fa-pen-to-square"></i> Manage Plans</button>
         <button class="sa-btn-secondary" id="btnOpenEventImage"><i class="fas fa-image"></i> Event Image</button>
         <button class="sa-btn-secondary" id="btnOpenAppVersion"><i class="fab fa-android"></i> Android App Version</button>
+        <button class="sa-btn-secondary" id="btnOpenWinVersion"><i class="fab fa-windows"></i> Windows App Version</button>
         <button class="sa-btn-secondary" id="btnOpenFeedback"><i class="fas fa-comments"></i> Feedback</button>
         <button class="sa-btn-add" id="btnOpenAddSchool"><i class="fas fa-plus"></i> Add School</button>
       </div>
@@ -69,6 +70,36 @@
         </div>
         <p class="sa-hint" style="margin-bottom:14px;">When forced update is ON, every installed app with an older version number shows "update required" after its splash screen and can only continue after downloading the new version. When it is OFF, nothing is blocked.</p>
         <button type="button" class="sa-btn-add" id="appVersionSave"><i class="fas fa-check"></i> Save</button>
+      </div>
+    </div>
+
+    <div class="sa-panel" id="winVersionPanel" hidden style="margin-bottom:24px;">
+      <div class="sa-panel-head">
+        <h2><i class="fab fa-windows"></i> Windows app version</h2>
+        <button type="button" class="sa-mini-btn" id="winVersionClose"><i class="fas fa-times"></i> Close</button>
+      </div>
+      <div style="padding:20px 22px;">
+        <div class="sa-form-row">
+          <div class="sa-field-group">
+            <label>Latest Windows app version number</label>
+            <input type="text" id="winVersionInput" placeholder="e.g. 1.0.3" maxlength="20">
+            <p class="sa-hint" id="winVersionCurrent">Loading…</p>
+          </div>
+        </div>
+        <div class="sa-form-row">
+          <div class="sa-field-group">
+            <label>Download link of the new installer (SoftSchool-Setup-x.x.x.exe)</label>
+            <input type="url" id="winUrlInput" placeholder="https://..." maxlength="500">
+          </div>
+        </div>
+        <div class="sa-lock-list" style="max-width:520px;margin-bottom:14px;">
+          <div class="sa-lock-row">
+            <span class="name"><i class="fas fa-triangle-exclamation"></i>Forced update</span>
+            <label class="sa-switch"><input type="checkbox" id="winForceToggle"><span class="slider"></span></label>
+          </div>
+        </div>
+        <p class="sa-hint" style="margin-bottom:14px;">When forced update is ON, every Windows app with an older version number shows "update required" and can only continue after downloading the new installer from the link above. Android phones are not affected.</p>
+        <button type="button" class="sa-btn-add" id="winVersionSave"><i class="fas fa-check"></i> Save</button>
       </div>
     </div>
 

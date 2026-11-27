@@ -1987,6 +1987,50 @@ window.addEventListener("hashchange", routeSuperAdminView);
   });
 })();
 
+/* ══════════════ WINDOWS APP VERSION (forced update) ══════════════
+   Saved on the server at /api/admin/app-version/windows. The Windows app reads /api/app/version/windows when it opens. */
+(function () {
+  const panel = document.getElementById("winVersionPanel");
+  if (!panel) return;
+  const input = document.getElementById("winVersionInput");
+  const urlIn = document.getElementById("winUrlInput");
+  const toggle = document.getElementById("winForceToggle");
+  const info = document.getElementById("winVersionCurrent");
+  let saved = { version: "", forceUpdate: false, url: "" };
+  function paint() {
+    input.value = saved.version || "";
+    urlIn.value = saved.url || "";
+    toggle.checked = !!saved.forceUpdate;
+    info.textContent = saved.version
+      ? "Current saved version: " + saved.version + " — forced update is " + (saved.forceUpdate ? "ON" : "OFF") + "."
+      : "No version saved yet.";
+  }
+  async function load() {
+    info.textContent = "Loading…";
+    try { saved = (await apiRequest("/app-version/windows")) || saved; paint(); }
+    catch (err) { if (!/session expired/i.test(err.message)) info.textContent = "Could not load: " + err.message; }
+  }
+  document.getElementById("btnOpenWinVersion").addEventListener("click", () => { panel.hidden = false; load(); panel.scrollIntoView({ behavior: "smooth", block: "start" }); });
+  document.getElementById("winVersionClose").addEventListener("click", () => { panel.hidden = true; });
+  document.getElementById("winVersionSave").addEventListener("click", async function () {
+    const version = input.value.trim();
+    const url = urlIn.value.trim();
+    const force = toggle.checked;
+    if (!/^[0-9]+(\.[0-9]+){0,3}$/.test(version) && (version || force)) { saToast("Enter the version like 1.0.3", "error"); return; }
+    if (url && !/^https:\/\/\S+$/i.test(url)) { saToast("The download link must start with https://", "error"); return; }
+    if (force && !url) { saToast("Add the download link before turning forced update on.", "error"); return; }
+    const changed = version !== (saved.version || "");
+    if (force && changed && !confirm("Forced update is ON and the version changed. Every Windows app with an older version will be blocked until it updates. Continue?")) return;
+    this.disabled = true;
+    try {
+      saved = await apiRequest("/app-version/windows", { method: "PUT", body: JSON.stringify({ version, forceUpdate: force, url }) });
+      paint();
+      saToast(force ? "Saved — older Windows apps must update." : "Saved.", "success");
+    } catch (err) { saToast("Couldn't save: " + err.message, "error"); }
+    finally { this.disabled = false; }
+  });
+})();
+
 /* ══════════════ EVENT IMAGE ══════════════
    One picture shown to everyone after the splash screen (EventImageController). Kept at good quality:
    files up to 3 MB are sent exactly as chosen; bigger ones are only scaled down to 2400 px with JPEG quality 0.95. */
