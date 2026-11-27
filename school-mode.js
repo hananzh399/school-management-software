@@ -43,8 +43,10 @@
   function modeOf(sc) {
     if (!sc) return null;
     if (!sc.offlineApp) return 'online';
-    return sc.databaseSupported ? 'hybrid' : 'offline';
+    if (sc.databaseSupported) return nativeApp() ? 'hybrid' : 'online';   // a website has no phone database: use the server
+    return 'offline';
   }
+  function nativeApp() { try { return !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform()) || /^(localhost|127\.0\.0\.1)$/.test(location.hostname); } catch (e) { return false; } }
 
   // The remembered state belongs to ONE school; a different school logging in starts fresh.
   function loadState(sc) {
