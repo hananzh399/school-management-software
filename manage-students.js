@@ -49,6 +49,137 @@
  * ============================================================================
  */
 
+/* ═══════════════════════════════════════════════════════════════════════════
+ * LABELS THIS FILE WRITES INLINE
+ * ═══════════════════════════════════════════════════════════════════════════
+ * The student profile panel, the printable record and the roster table build
+ * their labels straight into template literals, so they cannot carry a
+ * data-i18n attribute. TL() looks the English up and returns the Urdu for it.
+ *
+ * Keyed on the English text rather than on a key at each call site: the same
+ * label appears in several of those places, and this way they cannot drift
+ * apart. An English label with no entry comes back unchanged, so a partial
+ * translation shows English rather than a blank.
+ * ═══════════════════════════════════════════════════════════════════════════ */
+const SD_KEYS = {
+    'Academic Information': 'sd.academicInfo',
+    'Personal Data': 'sd.personalData',
+    'Guardian & Contact': 'sd.guardianContact',
+    'Finance & Transport': 'sd.financeTransport',
+    'Registration No.': 'sd.regNo',
+    'Roll Number (Class)': 'sd.rollNumberClass',
+    'Roll No. (Class)': 'sd.rollNoClass',
+    'Class': 'sd.class',
+    'Section': 'sd.section',
+    'Class / Section': 'sd.classSection',
+    'Admission Date': 'sd.admissionDate',
+    'Sibling Group ID': 'sd.siblingGroupId',
+    'Gender': 'sd.gender',
+    'Date of Birth': 'sd.dob',
+    'Computed Age': 'sd.computedAge',
+    'B-Form / CNIC': 'sd.bformCnic',
+    'Medical Conditions': 'sd.medicalConditions',
+    'Orphan Status': 'sd.orphanStatus',
+    'Orphan': 'sd.orphan',
+    'Previous School Attended': 'sd.prevSchoolAttended',
+    'Previous School': 'sd.prevSchool',
+    'Previous Class': 'sd.prevClass',
+    'Admission Class': 'sd.admissionClass',
+    'Guardian Details': 'sd.guardianDetails',
+    'Guardian Name': 'sd.guardianName',
+    'Name': 'sd.name',
+    'Relation': 'sd.relation',
+    'CNIC': 'sd.cnic',
+    'Guardian CNIC': 'sd.guardianCnic',
+    'Father Name': 'sd.fatherName',
+    'Father CNIC': 'sd.fatherCnic',
+    'Contact Information': 'sd.contactInformation',
+    'Phone': 'sd.phone',
+    'WhatsApp': 'sd.whatsapp',
+    'Permanent Address': 'sd.permanentAddress',
+    'Tuition Fee': 'sd.tuitionFee',
+    'Admission Fee': 'sd.admissionFee',
+    'Transport Fee': 'sd.transportFee',
+    'Books Fee': 'sd.booksFee',
+    'Tuition Discount': 'sd.tuitionDiscount',
+    'Transport Discount': 'sd.transportDiscount',
+    'Sibling Discount': 'sd.siblingDiscount',
+    'Total Discount': 'sd.totalDiscount',
+    'Net Payable': 'sd.netPayable',
+    'Sibling of': 'sd.siblingOf',
+    'Complete Student Record': 'sd.completeRecord',
+    'This is a system-generated record from the Student Management System': 'sd.systemGenerated',
+    'NO<br>PHOTO': 'sd.noPhoto',
+    '#': 'sd.hashCol',
+    'Student Name': 'sd.studentName',
+    'Guardian / Father Name': 'sd.guardianFatherName',
+    'Class-Section': 'sd.classSectionCol',
+    'B-Form / CNIC No.': 'sd.bformCnicNo',
+    'Contact No.': 'sd.contactNo',
+    'Reg. No.': 'sd.regNoDot',
+    'Full Name': 'sd.fullName',
+    'Already in class': 'sd.alreadyInClass',
+    'Amount': 'sd.amount',
+    'B-Form / Certificate': 'sd.bformCertificate',
+    'Books Discount': 'sd.booksDiscount',
+    'By section': 'sd.bySection',
+    'Description': 'sd.description',
+    'Discount': 'sd.discount',
+    'Discount Valid Until': 'sd.discountValidUntil',
+    'Has Sibling': 'sd.hasSibling',
+    'New students': 'sd.newStudents',
+    'Roll numbers': 'sd.rollNumbers',
+    'Sibling Information': 'sd.siblingInformation',
+    'Sibling Status': 'sd.siblingStatus'
+};
+
+/* A stored value that is one of a fixed set - a gender, a relation, an orphan
+ * status - is an enumeration, not free text, so it is shown in Urdu too. Only
+ * the DISPLAY changes: the value saved in the database stays the English one,
+ * so searching, sorting and every comparison in this file keep working. A value
+ * that is not in this list (a name, an address) is returned untouched. */
+const VALUE_KEYS = {
+    'Male': 'val.Male',
+    'Female': 'val.Female',
+    'Other': 'val.Other',
+    'Orphan': 'val.Orphan',
+    'Not Orphan': 'val.NotOrphan',
+    'Father': 'val.Father',
+    'Mother': 'val.Mother',
+    'Brother': 'val.Brother',
+    'Sister': 'val.Sister',
+    'Uncle': 'val.Uncle',
+    'Grandparent': 'val.Grandparent',
+    'Legal Guardian': 'val.LegalGuardian',
+    'Husband': 'val.Husband',
+    'Active': 'val.Active',
+    'Dropped': 'val.Dropped',
+    'Graduated': 'val.Graduated',
+    'None': 'val.None',
+    'N/A': 'val.NA',
+    'Teaching': 'val.Teaching',
+    'Non-Teaching': 'val.NonTeaching'
+};
+
+function TV(v) {
+    const raw = String(v == null ? '' : v).trim();
+    const key = VALUE_KEYS[raw];
+    const I = window.AdminI18n;
+    return (key && I && I.has && I.has(key)) ? I.ti(key) : v;
+}
+
+function TL(en) {
+    const raw = String(en == null ? '' : en);
+    // Print-record labels end in a colon: look up the words only, then put the
+    // colon back outside the Urdu phrase so it lands on the correct side.
+    const bare = raw.replace(/\s*:\s*$/, '');
+    const hadColon = bare !== raw;
+    const key = SD_KEYS[bare];
+    const I = window.AdminI18n;
+    const out = (key && I && I.has && I.has(key)) ? I.ti(key) : bare;
+    return hadColon ? out + ':' : out;
+}
+
 let API_STUDENTS = [];
 
 "use strict";
@@ -1521,15 +1652,15 @@ document.addEventListener('DOMContentLoaded', () => {
         row.style.cssText = 'display:grid; grid-template-columns: 2fr 1fr 1fr auto; gap:12px; align-items:end; background:#f8fafc; padding:14px; border-radius:10px; border:1px solid var(--border-color);';
         row.innerHTML = `
             <div class="form-input-group">
-                <label>Description</label>
+                <label>${TL('Description')}</label>
                 <input type="text" class="other-fee-desc" placeholder="e.g. Lab Fee" value="${SSX.esc(data.description || '')}">
             </div>
             <div class="form-input-group">
-                <label>Amount</label>
+                <label>${TL('Amount')}</label>
                 <input type="number" class="other-fee-amount" value="${data.amount || 0}">
             </div>
             <div class="form-input-group">
-                <label>Discount</label>
+                <label>${TL('Discount')}</label>
                 <input type="number" class="other-fee-discount" value="${data.discount || 0}">
             </div>
             <button type="button" class="btn-icon delete remove-other-fee" title="Remove"><i class="fas fa-trash-alt"></i></button>
@@ -3393,10 +3524,10 @@ if (certUploadInput) {
             <table class="sibling-table" ${isSiblingLinked ? 'style="margin-top:9px;"' : ''}>
                 <thead>
                     <tr>
-                        <th>Reg. No.</th>
-                        <th>Full Name</th>
-                        <th>Class</th>
-                        <th>Section</th>
+                        <th>${TL('Reg. No.')}</th>
+                        <th>${TL('Full Name')}</th>
+                        <th>${TL('Class')}</th>
+                        <th>${TL('Section')}</th>
                     </tr>
                 </thead>
                 <tbody>${siblingRowsHtml}
@@ -3755,12 +3886,12 @@ if (certUploadInput) {
                     <tr><td>${esc(sib.regNo || '—')}</td><td>${esc(sib.name || '—')}</td></tr>`).join('');
             const hasTable = hasSiblingsList.length > 0 ? `
                 <table class="sibling-table" ${isSiblingLinked ? 'style="margin-top:9px;"' : ''}>
-                    <thead><tr><th>Reg. No.</th><th>Full Name</th></tr></thead>
+                    <thead><tr><th>${TL('Reg. No.')}</th><th>${TL('Full Name')}</th></tr></thead>
                     <tbody>${hasRows}</tbody>
                 </table>` : '';
             siblingHtml = `
         <section class="rec-section">
-            <div class="rec-section-label"><span class="rec-ico"><i class="fas fa-people-roof"></i></span><span class="rec-txt">Sibling Information</span></div>
+            <div class="rec-section-label"><span class="rec-ico"><i class="fas fa-people-roof"></i></span><span class="rec-txt">${TL('Sibling Information')}</span></div>
             ${linkedNotice}${hasTable}
         </section>`;
         }
@@ -3781,8 +3912,8 @@ if (certUploadInput) {
 
         // ── Certificate-on-file note (the actual document is viewed separately) ──
         const certNoticeHtml = s.certData ? `
-            <div class="rec-field"><span class="rec-flabel">B-Form / Certificate:</span><span class="rec-fvalue" style="color:var(--sg-dark);"><i class="fas fa-check-circle"></i> On file with the school office</span></div>`
-            : `<div class="rec-field"><span class="rec-flabel">B-Form / Certificate:</span><span class="rec-fvalue">Not on file</span></div>`;
+            <div class="rec-field"><span class="rec-flabel">${TL('B-Form / Certificate:')}</span><span class="rec-fvalue" style="color:var(--sg-dark);"><i class="fas fa-check-circle"></i> On file with the school office</span></div>`
+            : `<div class="rec-field"><span class="rec-flabel">${TL('B-Form / Certificate:')}</span><span class="rec-fvalue">Not on file</span></div>`;
 
         const safeFileName = (s.fullName || 'student').replace(/[^a-z0-9]+/gi, '_');
 
@@ -3905,7 +4036,7 @@ if (certUploadInput) {
                 <div class="rec-crest">${recCrestInner}</div>
                 <div>
                     <div class="rec-school-name">${esc(schoolName)}</div>
-                    <div class="rec-school-sub">Complete Student Record</div>
+                    <div class="rec-school-sub">${TL('Complete Student Record')}</div>
                     ${schoolContactLine ? `<div class="rec-school-sub" style="text-transform:none;letter-spacing:0;margin-top:1px;">${schoolContactLine}</div>` : ''}
                 </div>
             </div>
@@ -3930,59 +4061,59 @@ if (certUploadInput) {
         </div>
 
         <section class="rec-section">
-            <div class="rec-section-label"><span class="rec-ico"><i class="fas fa-graduation-cap"></i></span><span class="rec-txt">Academic Information</span></div>
+            <div class="rec-section-label"><span class="rec-ico"><i class="fas fa-graduation-cap"></i></span><span class="rec-txt">${TL('Academic Information')}</span></div>
             <div class="rec-field-grid">
-                <div class="rec-field"><span class="rec-flabel">Registration No.:</span><span class="rec-fvalue" style="font-family:monospace;">${safeVal(registrationNo)}</span></div>
-                <div class="rec-field"><span class="rec-flabel">Roll No. (Class):</span><span class="rec-fvalue">${safeVal(s.rollNo)}</span></div>
-                <div class="rec-field"><span class="rec-flabel">Class / Section:</span><span class="rec-fvalue">${safeVal(s.studentClass)}${s.section ? ' - ' + esc(s.section) : ''}</span></div>
-                <div class="rec-field"><span class="rec-flabel">Admission Date:</span><span class="rec-fvalue">${safeVal(s.admissionDate)}</span></div>
-                ${s.siblingGroupId ? `<div class="rec-field"><span class="rec-flabel">Sibling Group ID:</span><span class="rec-fvalue">${esc(s.siblingGroupId)}</span></div>` : ''}
+                <div class="rec-field"><span class="rec-flabel">${TL('Registration No.:')}</span><span class="rec-fvalue" style="font-family:monospace;">${safeVal(registrationNo)}</span></div>
+                <div class="rec-field"><span class="rec-flabel">${TL('Roll No. (Class):')}</span><span class="rec-fvalue">${safeVal(s.rollNo)}</span></div>
+                <div class="rec-field"><span class="rec-flabel">${TL('Class / Section:')}</span><span class="rec-fvalue">${safeVal(s.studentClass)}${s.section ? ' - ' + esc(s.section) : ''}</span></div>
+                <div class="rec-field"><span class="rec-flabel">${TL('Admission Date:')}</span><span class="rec-fvalue">${safeVal(s.admissionDate)}</span></div>
+                ${s.siblingGroupId ? `<div class="rec-field"><span class="rec-flabel">${TL('Sibling Group ID:')}</span><span class="rec-fvalue">${esc(s.siblingGroupId)}</span></div>` : ''}
             </div>
         </section>
 
         <section class="rec-section">
-            <div class="rec-section-label"><span class="rec-ico"><i class="fas fa-user"></i></span><span class="rec-txt">Personal Data</span></div>
+            <div class="rec-section-label"><span class="rec-ico"><i class="fas fa-user"></i></span><span class="rec-txt">${TL('Personal Data')}</span></div>
             <div class="rec-field-grid">
-                <div class="rec-field"><span class="rec-flabel">Gender:</span><span class="rec-fvalue">${safeVal(s.gender)}</span></div>
-                <div class="rec-field"><span class="rec-flabel">Date of Birth:</span><span class="rec-fvalue">${safeVal(s.dob)}</span></div>
-                <div class="rec-field"><span class="rec-flabel">Computed Age:</span><span class="rec-fvalue">${safeVal(s.age)}</span></div>
-                <div class="rec-field"><span class="rec-flabel">B-Form / CNIC:</span><span class="rec-fvalue">${safeVal(s.studentBform)}</span></div>
-                <div class="rec-field"><span class="rec-flabel">Orphan Status:</span><span class="rec-fvalue">${safeVal(s.orphanStatus)}</span></div>
-                <div class="rec-field"><span class="rec-flabel">Previous School:</span><span class="rec-fvalue">${safeVal(s.previousSchool)}</span></div>
-                <div class="rec-field"><span class="rec-flabel">Previous Class:</span><span class="rec-fvalue">${safeVal(s.previousClass)}</span></div>
-                <div class="rec-field"><span class="rec-flabel">Admission Class:</span><span class="rec-fvalue">${safeVal(s.admissionClass)}</span></div>
-                <div class="rec-field" style="grid-column: span 2;"><span class="rec-flabel">Medical Conditions:</span><span class="rec-fvalue">${safeVal(s.medicalIssues)}</span></div>
+                <div class="rec-field"><span class="rec-flabel">${TL('Gender:')}</span><span class="rec-fvalue">${TV(safeVal(s.gender))}</span></div>
+                <div class="rec-field"><span class="rec-flabel">${TL('Date of Birth:')}</span><span class="rec-fvalue">${safeVal(s.dob)}</span></div>
+                <div class="rec-field"><span class="rec-flabel">${TL('Computed Age:')}</span><span class="rec-fvalue">${safeVal(s.age)}</span></div>
+                <div class="rec-field"><span class="rec-flabel">${TL('B-Form / CNIC:')}</span><span class="rec-fvalue">${safeVal(s.studentBform)}</span></div>
+                <div class="rec-field"><span class="rec-flabel">${TL('Orphan Status:')}</span><span class="rec-fvalue">${TV(safeVal(s.orphanStatus))}</span></div>
+                <div class="rec-field"><span class="rec-flabel">${TL('Previous School:')}</span><span class="rec-fvalue">${safeVal(s.previousSchool)}</span></div>
+                <div class="rec-field"><span class="rec-flabel">${TL('Previous Class:')}</span><span class="rec-fvalue">${safeVal(s.previousClass)}</span></div>
+                <div class="rec-field"><span class="rec-flabel">${TL('Admission Class:')}</span><span class="rec-fvalue">${safeVal(s.admissionClass)}</span></div>
+                <div class="rec-field" style="grid-column: span 2;"><span class="rec-flabel">${TL('Medical Conditions:')}</span><span class="rec-fvalue">${safeVal(s.medicalIssues)}</span></div>
                 ${certNoticeHtml}
             </div>
         </section>
 
         <section class="rec-section">
-            <div class="rec-section-label"><span class="rec-ico"><i class="fas fa-address-book"></i></span><span class="rec-txt">Guardian & Contact</span></div>
+            <div class="rec-section-label"><span class="rec-ico"><i class="fas fa-address-book"></i></span><span class="rec-txt">${TL('Guardian & Contact')}</span></div>
             <div style="display:grid; grid-template-columns:1fr 1fr; gap:14px;">
                 <div class="rec-panel">
-                    <div class="rec-panel-title">Guardian Details</div>
-                    <div class="rec-field" style="margin-bottom:7px;"><span class="rec-flabel">Name:</span><span class="rec-fvalue">${safeVal(s.guardianName)}</span></div>
-                    <div class="rec-field" style="margin-bottom:7px;"><span class="rec-flabel">Relation:</span><span class="rec-fvalue">${safeVal(s.guardianRole)}</span></div>
-                    <div class="rec-field" style="margin-bottom:7px;"><span class="rec-flabel">CNIC:</span><span class="rec-fvalue">${safeVal(s.guardianCnic)}</span></div>
-                    <div class="rec-field" style="margin-bottom:7px;"><span class="rec-flabel">Father Name:</span><span class="rec-fvalue">${safeVal(s.fatherFullName)}</span></div>
-                    <div class="rec-field"><span class="rec-flabel">Father CNIC:</span><span class="rec-fvalue">${safeVal(s.fatherCnic)}</span></div>
+                    <div class="rec-panel-title">${TL('Guardian Details')}</div>
+                    <div class="rec-field" style="margin-bottom:7px;"><span class="rec-flabel">${TL('Name:')}</span><span class="rec-fvalue">${safeVal(s.guardianName)}</span></div>
+                    <div class="rec-field" style="margin-bottom:7px;"><span class="rec-flabel">${TL('Relation:')}</span><span class="rec-fvalue">${TV(safeVal(s.guardianRole))}</span></div>
+                    <div class="rec-field" style="margin-bottom:7px;"><span class="rec-flabel">${TL('CNIC:')}</span><span class="rec-fvalue">${safeVal(s.guardianCnic)}</span></div>
+                    <div class="rec-field" style="margin-bottom:7px;"><span class="rec-flabel">${TL('Father Name:')}</span><span class="rec-fvalue">${safeVal(s.fatherFullName)}</span></div>
+                    <div class="rec-field"><span class="rec-flabel">${TL('Father CNIC:')}</span><span class="rec-fvalue">${safeVal(s.fatherCnic)}</span></div>
                 </div>
                 <div class="rec-panel">
-                    <div class="rec-panel-title">Contact Information</div>
-                    <div class="rec-field" style="margin-bottom:7px;"><span class="rec-flabel">Phone:</span><span class="rec-fvalue">${safeVal(s.phone1)}</span></div>
-                    <div class="rec-field" style="margin-bottom:7px;"><span class="rec-flabel">WhatsApp:</span><span class="rec-fvalue">${safeVal(s.phone2)}</span></div>
-                    <div class="rec-field"><span class="rec-flabel">Permanent Address:</span><span class="rec-fvalue" style="font-size:9px;">${safeVal(s.permanentAddress)}</span></div>
+                    <div class="rec-panel-title">${TL('Contact Information')}</div>
+                    <div class="rec-field" style="margin-bottom:7px;"><span class="rec-flabel">${TL('Phone:')}</span><span class="rec-fvalue">${safeVal(s.phone1)}</span></div>
+                    <div class="rec-field" style="margin-bottom:7px;"><span class="rec-flabel">${TL('WhatsApp:')}</span><span class="rec-fvalue">${safeVal(s.phone2)}</span></div>
+                    <div class="rec-field"><span class="rec-flabel">${TL('Permanent Address:')}</span><span class="rec-fvalue" style="font-size:9px;">${safeVal(s.permanentAddress)}</span></div>
                 </div>
             </div>
         </section>
 
         <section class="rec-section">
-            <div class="rec-section-label"><span class="rec-ico"><i class="fas fa-sack-dollar"></i></span><span class="rec-txt">Finance & Transport</span></div>
+            <div class="rec-section-label"><span class="rec-ico"><i class="fas fa-sack-dollar"></i></span><span class="rec-txt">${TL('Finance & Transport')}</span></div>
             <div class="rec-field-grid">
-                <div class="rec-field"><span class="rec-flabel">Tuition Fee:</span><span class="rec-fvalue">${fmtRs(s.standardFee)}</span></div>
-                <div class="rec-field"><span class="rec-flabel">Admission Fee:</span><span class="rec-fvalue">${fmtRs(s.admissionFee || 0)}</span></div>
-                <div class="rec-field"><span class="rec-flabel">Transport Fee:</span><span class="rec-fvalue">${fmtRs(s.transportFee)}</span></div>
-                ${booksFee > 0 ? `<div class="rec-field"><span class="rec-flabel">Books Fee:</span><span class="rec-fvalue">${fmtRs(booksFee)}</span></div>` : ''}
+                <div class="rec-field"><span class="rec-flabel">${TL('Tuition Fee:')}</span><span class="rec-fvalue">${fmtRs(s.standardFee)}</span></div>
+                <div class="rec-field"><span class="rec-flabel">${TL('Admission Fee:')}</span><span class="rec-fvalue">${fmtRs(s.admissionFee || 0)}</span></div>
+                <div class="rec-field"><span class="rec-flabel">${TL('Transport Fee:')}</span><span class="rec-fvalue">${fmtRs(s.transportFee)}</span></div>
+                ${booksFee > 0 ? `<div class="rec-field"><span class="rec-flabel">${TL('Books Fee:')}</span><span class="rec-fvalue">${fmtRs(booksFee)}</span></div>` : ''}
                 ${otherFeeRowsHtml}
             </div>
             <div class="rec-fee-summary">
@@ -4253,14 +4384,14 @@ if (certUploadInput) {
             <thead>
                 <tr>
                     <th style="width:28px;">#</th>
-                    <th>Student Name</th>
-                    <th>Guardian / Father Name</th>
-                    <th class="sl-center">Class-Section</th>
-                    <th>B-Form / CNIC No.</th>
-                    <th>Guardian CNIC</th>
-                    <th>Father Name</th>
-                    <th>Father CNIC</th>
-                    <th>Contact No.</th>
+                    <th>${TL('Student Name')}</th>
+                    <th>${TL('Guardian / Father Name')}</th>
+                    <th class="sl-center">${TL('Class-Section')}</th>
+                    <th>${TL('B-Form / CNIC No.')}</th>
+                    <th>${TL('Guardian CNIC')}</th>
+                    <th>${TL('Father Name')}</th>
+                    <th>${TL('Father CNIC')}</th>
+                    <th>${TL('Contact No.')}</th>
                 </tr>
             </thead>
             <tbody>
@@ -7407,7 +7538,7 @@ ${pagesHtml}
         // ── Sibling ID row (00X) — profile only ──
         const siblingIdRow = (s.isSibling && s.siblingGroupId)
             ? `<div class="detail-item">
-                   <label>Sibling Group ID</label>
+                   <label>${TL('Sibling Group ID')}</label>
                    <span class="hrk-id-badge" style="font-size:0.85rem;background:#d97706;">${SSX.esc(s.siblingGroupId)}</span>
                </div>`
             : '';
@@ -7415,7 +7546,7 @@ ${pagesHtml}
         // ── "Sibling of …" row ──
         const siblingOfRow = (s.isSibling && s.siblingOf)
             ? `<div class="detail-item full-width-detail">
-                   <label>Sibling Status</label>
+                   <label>${TL('Sibling Status')}</label>
                    <span class="sibling-tag" style="font-size:0.9rem;padding:5px 12px;">
                        <i class="fas fa-user-friends"></i> Sibling of ${SSX.esc(s.siblingOf)}
                    </span>
@@ -7426,7 +7557,7 @@ ${pagesHtml}
         const hasSiblingsRows = (s.hasSiblings && s.hasSiblings.length > 0)
             ? s.hasSiblings.map(sib =>
                 `<div class="detail-item full-width-detail">
-                    <label>Has Sibling</label>
+                    <label>${TL('Has Sibling')}</label>
                     <span class="sibling-tag sibling-tag--has">
                         <i class="fas fa-user-friends"></i> ${SSX.esc(sib.name)}
                         <span style="margin-left:8px;opacity:0.75;font-size:0.78rem;">(Reg: ${SSX.esc(sib.regNo)})</span>
@@ -7501,10 +7632,10 @@ ${pagesHtml}
 
         // ── Books fee row ──
         const booksRow = (parseFloat(s.booksFee||0) > 0 || parseFloat(s.booksDiscount||0) > 0)
-            ? `<div class="detail-item"><label>Books Fee</label><span>Rs. ${safeVal(s.booksFee) || '0'}</span></div>`
+            ? `<div class="detail-item"><label>${TL('Books Fee')}</label><span>Rs. ${safeVal(s.booksFee) || '0'}</span></div>`
             : '';
         const booksDiscRow = (parseFloat(s.booksDiscount||0) > 0)
-            ? `<div class="detail-item discount-item"><label><i class="fas fa-tag" style="color:#d97706;margin-right:4px;"></i>Books Discount</label><span style="color:#d97706;">− Rs. ${parseFloat(s.booksDiscount).toFixed(0)}</span></div>`
+            ? `<div class="detail-item discount-item"><label><i class="fas fa-tag" style="color:#d97706;margin-right:4px;"></i>${TL('Books Discount')}</label><span style="color:#d97706;">− Rs. ${parseFloat(s.booksDiscount).toFixed(0)}</span></div>`
             : '';
 
         // ── Other fees rows ──
@@ -7538,7 +7669,7 @@ ${pagesHtml}
             } else {
                 validityText = 'Not Set';
             }
-            discountValidityRow = `<div class="detail-item"><label>Discount Valid Until</label><span>${validityText}</span></div>`;
+            discountValidityRow = `<div class="detail-item"><label>${TL('Discount Valid Until')}</label><span>${validityText}</span></div>`;
         }
 
         const profileContent = `
@@ -7557,64 +7688,64 @@ ${pagesHtml}
                 </div>
             </div>
 
-            <div class="profile-section-title">Academic Information</div>
+            <div class="profile-section-title">${TL('Academic Information')}</div>
             <div class="profile-details-grid">
                 <div class="detail-item">
-                    <label>Registration No.</label>
+                    <label>${TL('Registration No.')}</label>
                     <span class="hrk-id-badge" style="font-size:0.85rem;">${safeVal(s.regNo || s.id)}</span>
                 </div>
-                <div class="detail-item"><label>Roll Number (Class)</label><span>${safeVal(s.rollNo)}</span></div>
-                <div class="detail-item"><label>Class</label><span>${safeVal(s.studentClass)}</span></div>
-                <div class="detail-item"><label>Section</label><span>${safeVal(s.section)}</span></div>
-                <div class="detail-item"><label>Admission Date</label><span>${safeVal(s.admissionDate)}</span></div>
+                <div class="detail-item"><label>${TL('Roll Number (Class)')}</label><span>${safeVal(s.rollNo)}</span></div>
+                <div class="detail-item"><label>${TL('Class')}</label><span>${safeVal(s.studentClass)}</span></div>
+                <div class="detail-item"><label>${TL('Section')}</label><span>${safeVal(s.section)}</span></div>
+                <div class="detail-item"><label>${TL('Admission Date')}</label><span>${safeVal(s.admissionDate)}</span></div>
                 ${siblingIdRow}
                 ${siblingOfRow}
                 ${hasSiblingsRows}
             </div>
 
-            <div class="profile-section-title">Personal Data</div>
+            <div class="profile-section-title">${TL('Personal Data')}</div>
             <div class="profile-details-grid">
-                <div class="detail-item"><label>Gender</label><span>${safeVal(s.gender)}</span></div>
-                <div class="detail-item"><label>Date of Birth</label><span>${safeVal(s.dob)}</span></div>
-                <div class="detail-item"><label>Computed Age</label><span>${safeVal(s.age)}</span></div>
-                <div class="detail-item"><label>B-Form / CNIC</label><span>${safeVal(s.studentBform)}</span></div>
-                <div class="detail-item full-width-detail"><label>Medical Conditions</label><span>${safeVal(s.medicalIssues)}</span></div>
-                <div class="detail-item"><label>Orphan Status</label><span>${safeVal(s.orphanStatus)}</span></div>
-                <div class="detail-item"><label>Previous School Attended</label><span>${safeVal(s.previousSchool)}</span></div>
-                <div class="detail-item"><label>Previous Class</label><span>${safeVal(s.previousClass)}</span></div>
-                <div class="detail-item"><label>Admission Class</label><span>${safeVal(s.admissionClass)}</span></div>
+                <div class="detail-item"><label>${TL('Gender')}</label><span>${TV(safeVal(s.gender))}</span></div>
+                <div class="detail-item"><label>${TL('Date of Birth')}</label><span>${safeVal(s.dob)}</span></div>
+                <div class="detail-item"><label>${TL('Computed Age')}</label><span>${safeVal(s.age)}</span></div>
+                <div class="detail-item"><label>${TL('B-Form / CNIC')}</label><span>${safeVal(s.studentBform)}</span></div>
+                <div class="detail-item full-width-detail"><label>${TL('Medical Conditions')}</label><span>${safeVal(s.medicalIssues)}</span></div>
+                <div class="detail-item"><label>${TL('Orphan Status')}</label><span>${TV(safeVal(s.orphanStatus))}</span></div>
+                <div class="detail-item"><label>${TL('Previous School Attended')}</label><span>${safeVal(s.previousSchool)}</span></div>
+                <div class="detail-item"><label>${TL('Previous Class')}</label><span>${safeVal(s.previousClass)}</span></div>
+                <div class="detail-item"><label>${TL('Admission Class')}</label><span>${safeVal(s.admissionClass)}</span></div>
             </div>
 
-            <div class="profile-section-title">Guardian & Contact</div>
+            <div class="profile-section-title">${TL('Guardian & Contact')}</div>
             <div class="profile-details-grid">
-                <div class="detail-item"><label>Guardian Name</label><span>${safeVal(s.guardianName)}</span></div>
-                <div class="detail-item"><label>Relation</label><span>${safeVal(s.guardianRole)}</span></div>
-                <div class="detail-item"><label>Guardian CNIC</label><span>${safeVal(s.guardianCnic)}</span></div>
-                <div class="detail-item"><label>Father Name</label><span>${safeVal(s.fatherFullName)}</span></div>
-                <div class="detail-item"><label>Father CNIC</label><span>${safeVal(s.fatherCnic)}</span></div>
-                <div class="detail-item"><label>Phone</label><span>${safeVal(s.phone1)}</span></div>
-                <div class="detail-item"><label><i class="fab fa-whatsapp" style="color:#25d366;"></i> WhatsApp</label><span>${safeVal(s.phone2)}</span></div>
-                <div class="detail-item full-width-detail"><label>Permanent Address</label><span>${safeVal(s.permanentAddress)}</span></div>
+                <div class="detail-item"><label>${TL('Guardian Name')}</label><span>${safeVal(s.guardianName)}</span></div>
+                <div class="detail-item"><label>${TL('Relation')}</label><span>${TV(safeVal(s.guardianRole))}</span></div>
+                <div class="detail-item"><label>${TL('Guardian CNIC')}</label><span>${safeVal(s.guardianCnic)}</span></div>
+                <div class="detail-item"><label>${TL('Father Name')}</label><span>${safeVal(s.fatherFullName)}</span></div>
+                <div class="detail-item"><label>${TL('Father CNIC')}</label><span>${safeVal(s.fatherCnic)}</span></div>
+                <div class="detail-item"><label>${TL('Phone')}</label><span>${safeVal(s.phone1)}</span></div>
+                <div class="detail-item"><label><i class="fab fa-whatsapp" style="color:#25d366;"></i> ${TL('WhatsApp')}</label><span>${safeVal(s.phone2)}</span></div>
+                <div class="detail-item full-width-detail"><label>${TL('Permanent Address')}</label><span>${safeVal(s.permanentAddress)}</span></div>
             </div>
 
-            <div class="profile-section-title">Finance & Transport</div>
+            <div class="profile-section-title">${TL('Finance & Transport')}</div>
             <div class="profile-details-grid">
-                <div class="detail-item"><label>Tuition Fee</label><span>Rs. ${safeVal(s.standardFee)}</span></div>
-                <div class="detail-item"><label>Admission Fee</label><span>Rs. ${safeVal(s.admissionFee) || '0'}</span></div>
-                <div class="detail-item"><label>Transport Fee</label><span>Rs. ${safeVal(s.transportFee)}</span></div>
+                <div class="detail-item"><label>${TL('Tuition Fee')}</label><span>Rs. ${safeVal(s.standardFee)}</span></div>
+                <div class="detail-item"><label>${TL('Admission Fee')}</label><span>Rs. ${safeVal(s.admissionFee) || '0'}</span></div>
+                <div class="detail-item"><label>${TL('Transport Fee')}</label><span>Rs. ${safeVal(s.transportFee)}</span></div>
                 ${booksRow}
                 ${otherFeesRows}
-                ${parseFloat(s.tuitionDiscount||0) > 0 ? `<div class="detail-item discount-item"><label><i class="fas fa-tag" style="color:#d97706;margin-right:4px;"></i>Tuition Discount</label><span style="color:#d97706;">− Rs. ${parseFloat(s.tuitionDiscount).toFixed(0)}</span></div>` : ''}
-                ${parseFloat(s.transportDiscount||0) > 0 ? `<div class="detail-item discount-item"><label><i class="fas fa-tag" style="color:#d97706;margin-right:4px;"></i>Transport Discount</label><span style="color:#d97706;">− Rs. ${parseFloat(s.transportDiscount).toFixed(0)}</span></div>` : ''}
-                ${parseFloat(s.siblingDiscount||0) > 0 ? `<div class="detail-item discount-item"><label><i class="fas fa-tag" style="color:#d97706;margin-right:4px;"></i>Sibling Discount</label><span style="color:#d97706;">− Rs. ${parseFloat(s.siblingDiscount).toFixed(0)}</span></div>` : ''}
+                ${parseFloat(s.tuitionDiscount||0) > 0 ? `<div class="detail-item discount-item"><label><i class="fas fa-tag" style="color:#d97706;margin-right:4px;"></i>${TL('Tuition Discount')}</label><span style="color:#d97706;">− Rs. ${parseFloat(s.tuitionDiscount).toFixed(0)}</span></div>` : ''}
+                ${parseFloat(s.transportDiscount||0) > 0 ? `<div class="detail-item discount-item"><label><i class="fas fa-tag" style="color:#d97706;margin-right:4px;"></i>${TL('Transport Discount')}</label><span style="color:#d97706;">− Rs. ${parseFloat(s.transportDiscount).toFixed(0)}</span></div>` : ''}
+                ${parseFloat(s.siblingDiscount||0) > 0 ? `<div class="detail-item discount-item"><label><i class="fas fa-tag" style="color:#d97706;margin-right:4px;"></i>${TL('Sibling Discount')}</label><span style="color:#d97706;">− Rs. ${parseFloat(s.siblingDiscount).toFixed(0)}</span></div>` : ''}
                 ${booksDiscRow}
                 <div class="detail-item total-discount-item">
-                    <label>Total Discount</label>
+                    <label>${TL('Total Discount')}</label>
                     <span class="total-discount-value">− Rs. ${(parseFloat(s.tuitionDiscount||0) + parseFloat(s.transportDiscount||0) + parseFloat(s.siblingDiscount||0) + parseFloat(s.booksDiscount||0) + otherFeesArr.reduce((sum,f)=>sum+(parseFloat(f.discount||0)),0)).toFixed(0)}</span>
                 </div>
                 ${discountValidityRow}
                 <div class="detail-item net-payable-item">
-                    <label>Net Payable</label>
+                    <label>${TL('Net Payable')}</label>
                     <span class="net-payable-value">Rs. ${s.netPayable}</span>
                 </div>
             </div>
@@ -12240,7 +12371,7 @@ function refreshImport() {
             <span class="imp-panel-sub">Updates as you change the settings.</span></div>` +
         (plan.perClass.length
             ? `<div class="imp-table-wrap"><table class="imp-plan-table">
-                <thead><tr><th>Class</th><th class="imp-num">New students</th><th>By section</th><th class="imp-num">Roll numbers</th><th class="imp-num">Already in class</th></tr></thead>
+                <thead><tr><th>${TL('Class')}</th><th class="imp-num">${TL('New students')}</th><th>${TL('By section')}</th><th class="imp-num">${TL('Roll numbers')}</th><th class="imp-num">${TL('Already in class')}</th></tr></thead>
                 <tbody>${rows}</tbody></table></div>`
             : '<div class="imp-note">No new students would be added with the current settings.</div>') +
         (notes.length ? `<div class="imp-pill-row">${notes.join('')}</div>` : '') +

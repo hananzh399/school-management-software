@@ -3,6 +3,115 @@
  * Handles: sidebar toggle, counter animation, ripple, date display
  */
 
+/* ═══════════════════════════════════════════════════════════════════════════
+ * LABELS THIS FILE WRITES INLINE
+ * ═══════════════════════════════════════════════════════════════════════════
+ * The add/edit staff form and the staff profile view build their labels in
+ * JavaScript, so they cannot carry a data-i18n attribute. TL() looks the
+ * English up and returns the Urdu for it.
+ *
+ * Keyed on the English text because the form is built by createInput() and
+ * the profile by createItem(): translating at those two chokepoints covers
+ * every field at once, including all three renderFormFields variants in this
+ * file. A label with no entry comes back unchanged, so a partial translation
+ * shows English rather than a blank.
+ * ═══════════════════════════════════════════════════════════════════════════ */
+const SF_KEYS = {
+    'Add Teacher': 'sf.addTeacher',
+    'Add Non-Teaching Staff': 'sf.addNonTeaching',
+    'Edit Teacher': 'sf.editTeacher',
+    'Edit Non-Teaching Staff': 'sf.editNonTeaching',
+    'Teacher ID': 'sf.teacherId',
+    'Teacher Name': 'sf.teacherName',
+    'Staff ID': 'sf.staffId',
+    'Staff Name': 'sf.staffName',
+    'Qualification': 'sf.qualification',
+    'Subjects': 'sf.subjects',
+    'Classes': 'sf.classes',
+    'Class Incharge': 'sf.classIncharge',
+    'Salary': 'sf.salary',
+    'Date Joined': 'sf.dateJoined',
+    'CNIC': 'sf.cnic',
+    'Phone Number': 'sf.phoneNumber',
+    'Address': 'sf.address',
+    'Job Title': 'sf.jobTitle',
+    'Start Time': 'sf.startTime',
+    'End Time': 'sf.endTime',
+    'Total Security Amount (PKR)': 'sf.securityTotal',
+    'Monthly Deduction (PKR)': 'sf.securityMonthly',
+    'Teacher Portal Password (blank = unchanged)': 'sf.portalPassword',
+    'Gender': 'sf.gender',
+    'Subjects & Classes': 'sf.subjectsClasses',
+    'Staff Agreement': 'sf.staffAgreement',
+    'View Agreement': 'sf.viewAgreement',
+    'No agreement uploaded.': 'sf.noAgreement',
+    'Father Name': 'sf.fatherNameSuffix',
+    'Mother Name': 'sf.motherNameSuffix',
+    'Guardian Name': 'sf.guardianNameSuffix',
+    'Date of Leaving': 'sf.dateOfLeaving',
+    'Experience Certificate': 'sf.experienceCert',
+    'Choose Photo': 'sf.choosePhoto',
+    'Choose File': 'sf.chooseFile',
+    'CNIC (Pakistani 13-digit)': 'sf.cnicPakistani',
+    'Male': 'sf.male',
+    'Female': 'sf.female',
+    'Other': 'sf.other',
+    'Husband Name': 'sf.husbandName',
+    'No file selected': 'sf.noFileSelected',
+    'Remove': 'sf.remove',
+    'PDF (max 200KB), or JPG/PNG — auto-optimized to ~40KB': 'sf.uploadHint',
+    'Enter father name': 'sf.enterFatherName',
+    'Enter husband name': 'sf.enterHusbandName',
+    'Format: 13 digits — auto-adds dashes': 'sf.cnicHint',
+    'JPG / PNG — auto-optimized to ~40KB': 'sf.photoHint',
+    'Save Details': 'sf.saveDetails'
+};
+
+/* A stored value that is one of a fixed set - a gender, a relation, an orphan
+ * status - is an enumeration, not free text, so it is shown in Urdu too. Only
+ * the DISPLAY changes: the value saved in the database stays the English one,
+ * so searching, sorting and every comparison in this file keep working. A value
+ * that is not in this list (a name, an address) is returned untouched. */
+const VALUE_KEYS = {
+    'Male': 'val.Male',
+    'Female': 'val.Female',
+    'Other': 'val.Other',
+    'Orphan': 'val.Orphan',
+    'Not Orphan': 'val.NotOrphan',
+    'Father': 'val.Father',
+    'Mother': 'val.Mother',
+    'Brother': 'val.Brother',
+    'Sister': 'val.Sister',
+    'Uncle': 'val.Uncle',
+    'Grandparent': 'val.Grandparent',
+    'Legal Guardian': 'val.LegalGuardian',
+    'Husband': 'val.Husband',
+    'Active': 'val.Active',
+    'Dropped': 'val.Dropped',
+    'Graduated': 'val.Graduated',
+    'None': 'val.None',
+    'N/A': 'val.NA',
+    'Teaching': 'val.Teaching',
+    'Non-Teaching': 'val.NonTeaching'
+};
+
+function TV(v) {
+    const raw = String(v == null ? '' : v).trim();
+    const key = VALUE_KEYS[raw];
+    const I = window.AdminI18n;
+    return (key && I && I.has && I.has(key)) ? I.ti(key) : v;
+}
+
+function TL(en) {
+    const raw = String(en == null ? '' : en);
+    const bare = raw.replace(/\s*:\s*$/, '');
+    const hadColon = bare !== raw;
+    const key = SF_KEYS[bare];
+    const I = window.AdminI18n;
+    const out = (key && I && I.has && I.has(key)) ? I.ti(key) : bare;
+    return hadColon ? out + ':' : out;
+}
+
 // ============================================================================
 // PLAN ENFORCEMENT — feature locks + subscription expiry (mirrors the same
 // block in manage-students.js so both pages behave identically). Driven by
@@ -712,7 +821,7 @@ function showProfileView(staffId, category) {
     // value like `<img src=x onerror=...>` can't execute as markup.
     const createItem = (label, val, fullWidth = false) => {
         return `<div class="detail-item ${fullWidth ? 'full-width' : ''}">
-            <span class="detail-label">${SSValidate.escapeHtml(label)}</span>
+            <span class="detail-label">${TL(label)}</span>
             <span class="detail-value">${SSValidate.escapeHtml(val)}</span>
         </div>`;
     };
@@ -722,7 +831,7 @@ function showProfileView(staffId, category) {
         grid.innerHTML += createItem('Subjects', staff.subjects);
         grid.innerHTML += createItem('Classes', staff.classes);
         grid.innerHTML += createItem('Class Incharge', staff.incharge);
-        grid.innerHTML += createItem('Gender', staff.gender);
+        grid.innerHTML += createItem('Gender', TV(staff.gender));
         grid.innerHTML += createItem('Salary', formatCurrency(staff.salary));
         grid.innerHTML += createItem('Date Joined', staff.joined);
         grid.innerHTML += createItem('CNIC', staff.cnic);
@@ -731,7 +840,7 @@ function showProfileView(staffId, category) {
         grid.innerHTML += buildSecurityHTML(staff);
     } else {
         grid.innerHTML += createItem('Job Title', staff.job);
-        grid.innerHTML += createItem('Gender', staff.gender);
+        grid.innerHTML += createItem('Gender', TV(staff.gender));
         grid.innerHTML += createItem('Salary', formatCurrency(staff.salary));
         grid.innerHTML += createItem('Start Time', staff.startTime);
         grid.innerHTML += createItem('End Time', staff.endTime);
@@ -822,7 +931,7 @@ function renderFormFields(category) {
     const createInput = (id, label, type='text', fullWidth=false, required=true, readonly=false) => {
         return `
             <div class="form-group ${fullWidth ? 'full-width' : ''}">
-                <label for="${SSX.esc(id)}">${label}</label>
+                <label for="${SSX.esc(id)}">${TL(label)}</label>
                 <input type="${SSX.esc(type)}" id="${SSX.esc(id)}" name="${SSX.esc(id)}" ${required ? 'required' : ''} ${type === 'number' ? 'min="0"' : ''} ${readonly ? 'readonly' : ''}>
             </div>
         `;
@@ -837,11 +946,11 @@ function renderFormFields(category) {
         grid.innerHTML += createInput('f-incharge', 'Class Incharge');
         grid.innerHTML += `
             <div class="form-group">
-                <label for="f-gender">Gender</label>
+                <label for="f-gender">${TL('Gender')}</label>
                 <select id="f-gender" name="f-gender">
-                    <option value="Male">Male</option>
-                    <option value="Female">Female</option>
-                    <option value="Other">Other</option>
+                    <option value="Male">${TL('Male')}</option>
+                    <option value="Female">${TL('Female')}</option>
+                    <option value="Other">${TL('Other')}</option>
                 </select>
             </div>
         `;
@@ -865,11 +974,11 @@ function renderFormFields(category) {
         grid.innerHTML += createInput('f-endTime', 'End Time');
         grid.innerHTML += `
             <div class="form-group">
-                <label for="f-gender">Gender</label>
+                <label for="f-gender">${TL('Gender')}</label>
                 <select id="f-gender" name="f-gender">
-                    <option value="Male">Male</option>
-                    <option value="Female">Female</option>
-                    <option value="Other">Other</option>
+                    <option value="Male">${TL('Male')}</option>
+                    <option value="Female">${TL('Female')}</option>
+                    <option value="Other">${TL('Other')}</option>
                 </select>
             </div>
         `;
@@ -889,7 +998,7 @@ function renderFormFields(category) {
 
 function openAddForm() {
     isEditMode = false;
-    const title = currentCategory === 'Teaching' ? 'Add Teacher' : 'Add Non-Teaching Staff';
+    const title = currentCategory === 'Teaching' ? TL('Add Teacher') : TL('Add Non-Teaching Staff');
     document.getElementById('form-modal-title').textContent = title;
     renderFormFields(currentCategory);
     document.getElementById('staff-form').reset();
@@ -901,7 +1010,7 @@ function openAddForm() {
 
 function openEditForm() {
     isEditMode = true;
-    const title = currentCategory === 'Teaching' ? 'Edit Teacher' : 'Edit Non-Teaching Staff';
+    const title = currentCategory === 'Teaching' ? TL('Edit Teacher') : TL('Edit Non-Teaching Staff');
     document.getElementById('form-modal-title').textContent = title;
     renderFormFields(currentCategory);
     
@@ -1251,7 +1360,7 @@ function buildCnicField(idPrefix, existing = '') {
                inputmode="numeric"
                autocomplete="off"
                value="${val}">
-        <div class="cnic-hint">Format: 13 digits — auto-adds dashes</div>`;
+        <div class="cnic-hint">${TL('Format: 13 digits — auto-adds dashes')}</div>`;
 }
 function wireCnicField(idPrefix) {
     const inp = document.getElementById(idPrefix);
@@ -1283,9 +1392,9 @@ function buildPhotoField(existing = '') {
     <div class="form-group full-width photo-upload-group">
         <div class="photo-upload-preview" id="f-photo-preview">${inner}</div>
         <div class="photo-upload-actions">
-            <label for="f-photo" class="btn-photo-pick"><i class="fas fa-camera"></i> Choose Photo</label>
+            <label for="f-photo" class="btn-photo-pick"><i class="fas fa-camera"></i> ${TL('Choose Photo')}</label>
             <input type="file" id="f-photo" accept="image/*">
-            <button type="button" class="btn-photo-remove" onclick="clearStaffPhoto()"><i class="fas fa-times"></i> Remove</button>
+            <button type="button" class="btn-photo-remove" onclick="clearStaffPhoto()"><i class="fas fa-times"></i> ${TL('Remove')}</button>
         </div>
     </div>`;
 }
@@ -1483,7 +1592,7 @@ function renderFormFields(category) {
 
     const createInput = (id, label, type='text', fullWidth=false, required=true, readonly=false) => `
         <div class="form-group ${fullWidth ? 'full-width' : ''}">
-            <label for="${SSX.esc(id)}">${label}</label>
+            <label for="${SSX.esc(id)}">${TL(label)}</label>
             <input type="${SSX.esc(type)}" id="${SSX.esc(id)}" name="${SSX.esc(id)}" ${required ? 'required' : ''} ${type === 'number' ? 'min="0"' : ''} ${readonly ? 'readonly' : ''}>
         </div>`;
 
@@ -1499,11 +1608,11 @@ function renderFormFields(category) {
         grid.innerHTML += buildInchargePicker('');
         grid.innerHTML += `
             <div class="form-group">
-                <label for="f-gender">Gender</label>
+                <label for="f-gender">${TL('Gender')}</label>
                 <select id="f-gender" name="f-gender">
-                    <option value="Male">Male</option>
-                    <option value="Female">Female</option>
-                    <option value="Other">Other</option>
+                    <option value="Male">${TL('Male')}</option>
+                    <option value="Female">${TL('Female')}</option>
+                    <option value="Other">${TL('Other')}</option>
                 </select>
             </div>`;
         grid.innerHTML += createInput('f-salary', 'Salary', 'number');
@@ -1511,7 +1620,7 @@ function renderFormFields(category) {
         grid.innerHTML += createInput('f-portal-password', 'Teacher Portal Password (blank = unchanged)', 'password', false);
         grid.innerHTML += `
             <div class="form-group full-width">
-                <label for="f-cnic">CNIC (Pakistani 13-digit)</label>
+                <label for="f-cnic">${TL('CNIC (Pakistani 13-digit)')}</label>
                 ${buildCnicField('f-cnic')}
             </div>`;
         grid.innerHTML += createInput('f-phone', 'Phone Number');
@@ -1524,17 +1633,17 @@ function renderFormFields(category) {
         grid.innerHTML += createInput('f-endTime', 'End Time', 'time');
         grid.innerHTML += `
             <div class="form-group">
-                <label for="f-gender">Gender</label>
+                <label for="f-gender">${TL('Gender')}</label>
                 <select id="f-gender" name="f-gender">
-                    <option value="Male">Male</option>
-                    <option value="Female">Female</option>
-                    <option value="Other">Other</option>
+                    <option value="Male">${TL('Male')}</option>
+                    <option value="Female">${TL('Female')}</option>
+                    <option value="Other">${TL('Other')}</option>
                 </select>
             </div>`;
         grid.innerHTML += createInput('f-salary', 'Salary', 'number');
         grid.innerHTML += `
             <div class="form-group full-width">
-                <label for="f-cnic">CNIC (Pakistani 13-digit)</label>
+                <label for="f-cnic">${TL('CNIC (Pakistani 13-digit)')}</label>
                 ${buildCnicField('f-cnic')}
             </div>`;
         grid.innerHTML += createInput('f-phone', 'Phone Number');
@@ -1558,7 +1667,7 @@ function renderFormFields(category) {
 /* ---- OVERRIDE: openEditForm to prefill new widgets ---- */
 function openEditForm() {
     isEditMode = true;
-    const title = currentCategory === 'Teaching' ? 'Edit Teacher' : 'Edit Non-Teaching Staff';
+    const title = currentCategory === 'Teaching' ? TL('Edit Teacher') : TL('Edit Non-Teaching Staff');
     document.getElementById('form-modal-title').textContent = title;
     renderFormFields(currentCategory);
 
@@ -1619,7 +1728,7 @@ function openEditForm() {
 function openAddForm() {
     isEditMode = false;
     _pendingPhoto = '';
-    const title = currentCategory === 'Teaching' ? 'Add Teacher' : 'Add Non-Teaching Staff';
+    const title = currentCategory === 'Teaching' ? TL('Add Teacher') : TL('Add Non-Teaching Staff');
     document.getElementById('form-modal-title').textContent = title;
     renderFormFields(currentCategory);
     document.getElementById('staff-form').reset();
@@ -1752,7 +1861,7 @@ function showProfileView(staffId, category) {
     // SECURITY: escape stored staff data before it reaches innerHTML.
     const createItem = (label, val, fullWidth = false) => `
         <div class="detail-item ${fullWidth ? 'full-width' : ''}">
-            <span class="detail-label">${SSValidate.escapeHtml(label)}</span>
+            <span class="detail-label">${TL(label)}</span>
             <span class="detail-value">${val ? SSValidate.escapeHtml(val) : '—'}</span>
         </div>`;
 
@@ -1771,7 +1880,7 @@ function showProfileView(staffId, category) {
             } catch(e) {}
         }
         grid.innerHTML += createItem('Class Incharge', inchargeDisplay, true);
-        grid.innerHTML += createItem('Gender', staff.gender);
+        grid.innerHTML += createItem('Gender', TV(staff.gender));
         grid.innerHTML += createItem('Salary', formatCurrency(staff.salary));
         grid.innerHTML += createItem('Date Joined', staff.joined);
         grid.innerHTML += createItem('CNIC', staff.cnic);
@@ -1780,7 +1889,7 @@ function showProfileView(staffId, category) {
         grid.innerHTML += buildSecurityHTML(staff);
     } else {
         grid.innerHTML += createItem('Job Title', staff.job);
-        grid.innerHTML += createItem('Gender', staff.gender);
+        grid.innerHTML += createItem('Gender', TV(staff.gender));
         grid.innerHTML += createItem('Salary', formatCurrency(staff.salary));
         grid.innerHTML += createItem('Start Time', staff.startTime);
         grid.innerHTML += createItem('End Time', staff.endTime);
@@ -2013,10 +2122,10 @@ function buildPhotoField(existing = '') {
     <div class="form-group full-width photo-upload-group">
         <div class="photo-upload-preview" id="f-photo-preview">${inner}</div>
         <div class="photo-upload-actions">
-            <label for="f-photo" class="btn-photo-pick"><i class="fas fa-camera"></i> Choose Photo</label>
+            <label for="f-photo" class="btn-photo-pick"><i class="fas fa-camera"></i> ${TL('Choose Photo')}</label>
             <input type="file" id="f-photo" accept="image/*">
-            <button type="button" class="btn-photo-remove" onclick="clearStaffPhoto()"><i class="fas fa-times"></i> Remove</button>
-            <div class="upload-hint">JPG / PNG — auto-optimized to ~40KB</div>
+            <button type="button" class="btn-photo-remove" onclick="clearStaffPhoto()"><i class="fas fa-times"></i> ${TL('Remove')}</button>
+            <div class="upload-hint">${TL('JPG / PNG — auto-optimized to ~40KB')}</div>
             <div class="upload-error" id="f-photo-error"></div>
         </div>
     </div>`;
@@ -2059,14 +2168,14 @@ function buildAgreementField(existing = null) {
     _pendingAgreement = existing || null;
     return `
     <div class="form-group full-width agreement-upload-group" data-feature="staff_agreement_pic">
-        <label>Staff Agreement</label>
+        <label>${TL('Staff Agreement')}</label>
         <div class="agreement-row">
-            <label for="f-agreement" class="btn-photo-pick"><i class="fas fa-file-upload"></i> Choose File</label>
+            <label for="f-agreement" class="btn-photo-pick"><i class="fas fa-file-upload"></i> ${TL('Choose File')}</label>
             <input type="file" id="f-agreement" accept="application/pdf,image/*">
-            <span class="agreement-file-name" id="f-agreement-name">${_pendingAgreement ? _esc(_pendingAgreement.name) : 'No file selected'}</span>
-            <button type="button" class="btn-photo-remove" onclick="clearStaffAgreement()"><i class="fas fa-times"></i> Remove</button>
+            <span class="agreement-file-name" id="f-agreement-name">${_pendingAgreement ? _esc(_pendingAgreement.name) : TL('No file selected')}</span>
+            <button type="button" class="btn-photo-remove" onclick="clearStaffAgreement()"><i class="fas fa-times"></i> ${TL('Remove')}</button>
         </div>
-        <div class="upload-hint">PDF (max 200KB), or JPG/PNG — auto-optimized to ~40KB</div>
+        <div class="upload-hint">${TL('PDF (max 200KB), or JPG/PNG — auto-optimized to ~40KB')}</div>
         <div class="upload-error" id="f-agreement-error"></div>
     </div>`;
 }
@@ -2098,7 +2207,7 @@ function wireAgreementField() {
                 if (nameEl) nameEl.textContent = file.name;
             } catch (err) {
                 input.value = '';
-                if (nameEl) nameEl.textContent = 'No file selected';
+                if (nameEl) nameEl.textContent = TL('No file selected');
                 _setUploadError('f-agreement-error', 'Could not process that image. Please try another file.');
             }
             return;
@@ -2124,7 +2233,7 @@ function clearStaffAgreement() {
     const input = document.getElementById('f-agreement');
     if (input) input.value = '';
     const nameEl = document.getElementById('f-agreement-name');
-    if (nameEl) nameEl.textContent = 'No file selected';
+    if (nameEl) nameEl.textContent = TL('No file selected');
     _setUploadError('f-agreement-error', '');
 }
 
@@ -2134,11 +2243,11 @@ function clearStaffAgreement() {
 function buildGenderField(value = 'Male') {
     return `
     <div class="form-group">
-        <label for="f-gender">Gender</label>
+        <label for="f-gender">${TL('Gender')}</label>
         <select id="f-gender" name="f-gender" onchange="onGenderChange()">
-            <option value="Male"${value === 'Male' ? ' selected' : ''}>Male</option>
-            <option value="Female"${value === 'Female' ? ' selected' : ''}>Female</option>
-            <option value="Other"${value === 'Other' ? ' selected' : ''}>Other</option>
+            <option value="Male"${value === 'Male' ? ' selected' : ''}>${TL('Male')}</option>
+            <option value="Female"${value === 'Female' ? ' selected' : ''}>${TL('Female')}</option>
+            <option value="Other"${value === 'Other' ? ' selected' : ''}>${TL('Other')}</option>
         </select>
     </div>`;
 }
@@ -2148,20 +2257,20 @@ function buildGuardianField(type = 'Father', name = '') {
     <div class="form-group guardian-group" id="f-guardian-group">
         <div class="guardian-toggle collapsible" id="f-guardian-toggle">
             <button type="button" class="guardian-opt${_guardianType === 'Father' ? ' active' : ''}"
-                    id="f-guardian-opt-father" onclick="setGuardianType('Father')">Father Name</button>
+                    id="f-guardian-opt-father" onclick="setGuardianType('Father')">${TL('Father Name')}</button>
             <button type="button" class="guardian-opt${_guardianType === 'Husband' ? ' active' : ''}"
-                    id="f-guardian-opt-husband" onclick="setGuardianType('Husband')">Husband Name</button>
+                    id="f-guardian-opt-husband" onclick="setGuardianType('Husband')">${TL('Husband Name')}</button>
         </div>
-        <label for="f-guardian-name" id="f-guardian-label">${_guardianType} Name</label>
+        <label for="f-guardian-name" id="f-guardian-label">${TL(_guardianType + ' Name')}</label>
         <input type="text" id="f-guardian-name" name="f-guardian-name" value="${_esc(name)}">
     </div>`;
 }
 function setGuardianType(type) {
     _guardianType = (type === 'Husband') ? 'Husband' : 'Father';
     const label = document.getElementById('f-guardian-label');
-    if (label) label.textContent = `${_guardianType} Name`;
+    if (label) label.textContent = TL(_guardianType + ' Name');
     const input = document.getElementById('f-guardian-name');
-    if (input) input.placeholder = `Enter ${_guardianType.toLowerCase()} name`;
+    if (input) input.placeholder = TL('Enter ' + _guardianType.toLowerCase() + ' name');
     const f = document.getElementById('f-guardian-opt-father');
     const h = document.getElementById('f-guardian-opt-husband');
     if (f) f.classList.toggle('active', _guardianType === 'Father');
@@ -2511,7 +2620,7 @@ function renderFormFields(category) {
 
     const createInput = (id, label, type='text', fullWidth=false, required=true, readonly=false) => `
         <div class="form-group ${fullWidth ? 'full-width' : ''}">
-            <label for="${SSX.esc(id)}">${label}</label>
+            <label for="${SSX.esc(id)}">${TL(label)}</label>
             <input type="${SSX.esc(type)}" id="${SSX.esc(id)}" name="${SSX.esc(id)}" ${required ? 'required' : ''} ${type === 'number' ? 'min="0"' : ''} ${readonly ? 'readonly' : ''}>
         </div>`;
 
@@ -2529,7 +2638,7 @@ function renderFormFields(category) {
         html += createInput('f-joined', 'Date Joined', 'date');
         html += `
             <div class="form-group full-width">
-                <label for="f-cnic">CNIC (Pakistani 13-digit)</label>
+                <label for="f-cnic">${TL('CNIC (Pakistani 13-digit)')}</label>
                 ${buildCnicField('f-cnic')}
             </div>`;
         html += createInput('f-phone', 'Phone Number');
@@ -2546,7 +2655,7 @@ function renderFormFields(category) {
         html += createInput('f-salary', 'Salary', 'number');
         html += `
             <div class="form-group full-width">
-                <label for="f-cnic">CNIC (Pakistani 13-digit)</label>
+                <label for="f-cnic">${TL('CNIC (Pakistani 13-digit)')}</label>
                 ${buildCnicField('f-cnic')}
             </div>`;
         html += createInput('f-phone', 'Phone Number');
@@ -2597,7 +2706,7 @@ function openAddForm() {
     _classAssignments = [];
     _subjectAssignments = [];
     _inchargeOn = false;
-    const title = currentCategory === 'Teaching' ? 'Add Teacher' : 'Add Non-Teaching Staff';
+    const title = currentCategory === 'Teaching' ? TL('Add Teacher') : TL('Add Non-Teaching Staff');
     document.getElementById('form-modal-title').textContent = title;
     renderFormFields(currentCategory);
     // Show the auto-generated staff ID before saving
@@ -2609,7 +2718,7 @@ function openAddForm() {
 /* ---- OVERRIDE: openEditForm ---- */
 function openEditForm() {
     isEditMode = true;
-    const title = currentCategory === 'Teaching' ? 'Edit Teacher' : 'Edit Non-Teaching Staff';
+    const title = currentCategory === 'Teaching' ? TL('Edit Teacher') : TL('Edit Non-Teaching Staff');
     document.getElementById('form-modal-title').textContent = title;
     renderFormFields(currentCategory);
 
@@ -2883,23 +2992,23 @@ function showProfileView(staffId, category) {
     // never for raw staff-entered text.
     const createItem = (label, val, fullWidth = false, isHtml = false) => `
         <div class="detail-item ${fullWidth ? 'full-width' : ''}">
-            <span class="detail-label">${SSValidate.escapeHtml(label)}</span>
+            <span class="detail-label">${TL(label)}</span>
             <span class="detail-value">${val ? (isHtml ? val : SSValidate.escapeHtml(val)) : '—'}</span>
         </div>`;
 
-    const guardianLabel = (staff.guardianType || 'Father') + ' Name';
+    const guardianLabel = TL((staff.guardianType || 'Father') + ' Name');
 
     const agreementHTML = (staff.agreement && staff.agreement.data)
         ? `<button type="button" class="btn btn-view-agreement" onclick="openAgreementModal('${SSX.jsStr(staff.id)}')">
-             <i class="fas fa-file-contract"></i> View Agreement</button>
+             <i class="fas fa-file-contract"></i> ${TL('View Agreement')}</button>
            <span class="agreement-file-label">${_esc(staff.agreement.name || 'agreement')}</span>`
-        : `<span class="agreement-none">No agreement uploaded.</span>`;
+        : `<span class="agreement-none">${TL('No agreement uploaded.')}</span>`;
 
     if (category === 'Teaching') {
         grid.innerHTML += createItem('Qualification', staff.qualification);
         grid.innerHTML += createItem('Subjects & Classes', buildSubjectClassReadonly(staff), true, true);
         grid.innerHTML += createItem('Class Incharge', staff.incharge || 'Not assigned', true);
-        grid.innerHTML += createItem('Gender', staff.gender);
+        grid.innerHTML += createItem('Gender', TV(staff.gender));
         grid.innerHTML += createItem(guardianLabel, staff.guardianName || staff.fatherName);
         grid.innerHTML += createItem('Salary', formatCurrency(staff.salary));
         grid.innerHTML += createItem('Date Joined', staff.joined);
@@ -2910,7 +3019,7 @@ function showProfileView(staffId, category) {
         grid.innerHTML += buildSecurityHTML(staff);
     } else {
         grid.innerHTML += createItem('Job Title', staff.job);
-        grid.innerHTML += createItem('Gender', staff.gender);
+        grid.innerHTML += createItem('Gender', TV(staff.gender));
         grid.innerHTML += createItem(guardianLabel, staff.guardianName || staff.fatherName);
         grid.innerHTML += createItem('Salary', formatCurrency(staff.salary));
         grid.innerHTML += createItem('Start Time', staff.startTime);
