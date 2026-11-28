@@ -3,13 +3,17 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Admin Settings | SoftSchool</title>
+<title data-i18n="hdr.settingsTitle">Admin Settings | SoftSchool</title>
     <link rel="icon" type="image/png" href="logo-icon.png">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
 <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+<!-- language + right-to-left support: loaded BEFORE the page stylesheet so
+     <html dir> is already set when the first paint happens -->
+<script src="admin-i18n.js"></script>
 <link rel="stylesheet" href="settings.css?v=20261026">
 <link rel="stylesheet" href="whatsapp-settings.css?v=1">
 <link rel="stylesheet" href="wa-codes.css?v=1">
+<link rel="stylesheet" href="admin-i18n.css?v=1">
 <script src="xss-safe.js"></script>
 <script>(function(){const s=localStorage.getItem('eduflow-theme');document.documentElement.setAttribute('data-theme',(s==='light'||s==='dark')?s:'dark');})()</script>
 <style>
@@ -36,32 +40,32 @@
       <img src="logo-icon.png" alt="SoftSchool Logo" class="brand-logo">
       <span class="brand-name">Soft<strong>School</strong></span>
     </div>
-    <button id="close-sidebar" class="close-btn" onclick="closeSidebar()" aria-label="Close sidebar" title="Close menu">
+    <button id="close-sidebar" class="close-btn" onclick="closeSidebar()" aria-label="Close sidebar" title="Close menu" data-i18n-aria="hdr.closeSidebar" data-i18n-title="hdr.closeMenu">
       <i class="fas fa-times"></i>
     </button>
   </div>
 
   <div class="sidebar-search">
     <i class="fas fa-search"></i>
-    <input type="text" id="nav-search" placeholder="Search menu...">
+    <input type="text" id="nav-search" placeholder="Search menu..." data-i18n-placeholder="hdr.searchMenu">
   </div>
 
   <nav class="sidebar-nav">
-    <div class="nav-label">Menu</div>
-    <a href="main.html" class="nav-link"><i class="fas fa-th-large"></i><span>Dashboard</span></a>
-    <a href="manage-students.html" class="nav-link"><i class="fas fa-user-graduate"></i><span>Student Management</span></a>
-    <a href="manage-staff.html" class="nav-link"><i class="fas fa-chalkboard-teacher"></i><span>Staff Management</span></a>
-    <a href="attendance.html" class="nav-link"><i class="fas fa-clipboard-check"></i><span>Attendance</span></a>
-    <a href="manage-finance.html" class="nav-link"><i class="fas fa-file-invoice-dollar"></i><span>Fees &amp; Finance</span></a>
-    <a href="reports.html" class="nav-link"><i class="fas fa-chart-pie"></i><span>Reports &amp; Analytics</span></a>
-    <a href="announcements.html" class="nav-link"><i class="fas fa-bullhorn"></i><span>Announcements</span><em class="nav-badge" id="nav-ann-badge" hidden></em></a>
-            <a href="examination.html" class="nav-link"><i class="fas fa-file-signature"></i><span>Examination</span></a>
-            <a href="sessions.html" class="nav-link"><i class="fas fa-calendar-alt"></i><span>Sessions</span></a>
-            <a href="settings.html" class="nav-link active"><i class="fas fa-cog"></i><span>Settings</span></a>
+    <div class="nav-label" data-i18n="nav.menu">Menu</div>
+    <a href="main.html" class="nav-link"><i class="fas fa-th-large"></i><span data-i18n="nav.dashboard">Dashboard</span></a>
+    <a href="manage-students.html" class="nav-link"><i class="fas fa-user-graduate"></i><span data-i18n="nav.students">Student Management</span></a>
+    <a href="manage-staff.html" class="nav-link"><i class="fas fa-chalkboard-teacher"></i><span data-i18n="nav.staff">Staff Management</span></a>
+    <a href="attendance.html" class="nav-link"><i class="fas fa-clipboard-check"></i><span data-i18n="nav.attendance">Attendance</span></a>
+    <a href="manage-finance.html" class="nav-link"><i class="fas fa-file-invoice-dollar"></i><span data-i18n="nav.finance">Fees &amp; Finance</span></a>
+    <a href="reports.html" class="nav-link"><i class="fas fa-chart-pie"></i><span data-i18n="nav.reports">Reports &amp; Analytics</span></a>
+    <a href="announcements.html" class="nav-link"><i class="fas fa-bullhorn"></i><span data-i18n="nav.announcements">Announcements</span><em class="nav-badge" id="nav-ann-badge" hidden></em></a>
+            <a href="examination.html" class="nav-link"><i class="fas fa-file-signature"></i><span data-i18n="nav.examination">Examination</span></a>
+            <a href="sessions.html" class="nav-link"><i class="fas fa-calendar-alt"></i><span data-i18n="nav.sessions">Sessions</span></a>
+            <a href="settings.html" class="nav-link active"><i class="fas fa-cog"></i><span data-i18n="nav.settings">Settings</span></a>
   </nav>
 
   <div class="sidebar-footer">
-    <a href="index.html" class="nav-link logout-btn" onclick="try{if(window.SoftSchoolAdmin&&typeof window.SoftSchoolAdmin.clearSession==='function'){window.SoftSchoolAdmin.clearSession();}}catch(e){} try{localStorage.removeItem('softschool_session');}catch(e){}"><i class="fas fa-sign-out-alt"></i><span>Logout</span></a>
+    <a href="index.html" class="nav-link logout-btn" onclick="try{if(window.SoftSchoolAdmin&&typeof window.SoftSchoolAdmin.clearSession==='function'){window.SoftSchoolAdmin.clearSession();}}catch(e){} try{localStorage.removeItem('softschool_session');}catch(e){}"><i class="fas fa-sign-out-alt"></i><span data-i18n="nav.logout">Logout</span></a>
   </div>
 </aside>
 
@@ -75,7 +79,7 @@
         <i class="fas fa-bars"></i>
       </button>
       <div class="header-title">
-        <h1>System Configuration</h1>
+        <h1 data-i18n="set.pageTitle">System Configuration</h1>
       </div>
     </div>
     <div class="header-actions">
@@ -95,81 +99,134 @@
     <!-- TABS -->
     <div class="page-tabs">
       <button class="tab-btn active" onclick="switchTab('schoolinfo', this)">
-        <i class="fas fa-school"></i> Info &amp; Setting
+        <i class="fas fa-school"></i> <span data-i18n="set.tabInfo">Info &amp; Setting</span>
       </button>
       <button class="tab-btn" onclick="switchTab('classes', this)">
-        <i class="fas fa-chalkboard-teacher"></i> Classes &amp; Fees
+        <i class="fas fa-chalkboard-teacher"></i> <span data-i18n="set.tabClasses">Classes &amp; Fees</span>
       </button>
       <button class="tab-btn" onclick="switchTab('latefee', this)">
-        <i class="fas fa-hourglass-half"></i> Late Fee
+        <i class="fas fa-hourglass-half"></i> <span data-i18n="set.tabLateFee">Late Fee</span>
       </button>
       <button class="tab-btn" onclick="switchTab('variables', this)">
-        <i class="fas fa-sliders-h"></i> Pay Variables
+        <i class="fas fa-sliders-h"></i> <span data-i18n="set.tabVariables">Pay Variables</span>
       </button>
       <button class="tab-btn" onclick="switchTab('attendance-timing', this)">
-        <i class="fas fa-clipboard-check"></i> Attendance Setting
+        <i class="fas fa-clipboard-check"></i> <span data-i18n="set.tabAttendance">Attendance Setting</span>
       </button>
       <button class="tab-btn" id="tab-btn-whatsapp" onclick="switchTab('whatsapp', this)">
         <i class="fab fa-whatsapp"></i> WhatsApp
       </button>
       <button class="tab-btn" onclick="switchTab('teacherlogin', this)">
-        <i class="fas fa-user-lock"></i> Teacher Login
+        <i class="fas fa-user-lock"></i> <span data-i18n="set.tabTeacherLogin">Teacher Login</span>
       </button>
     </div>
 
     <!-- ═══════════════════ TAB: SCHOOL INFO ═══════════════════ -->
     <div class="tab-panel active" id="tab-schoolinfo">
+
+      <!-- ══════════════ LANGUAGE ══════════════
+           Changing this re-renders the whole admin portal and, for Urdu, mirrors
+           the layout to right-to-left. The choice is saved straight away (no need
+           to press "Save All") because the user can see at once whether it worked.
+           Where it is saved depends on the school's mode - see settings.js. -->
+      <div class="section-card" id="language-card">
+        <div class="section-header">
+          <div class="section-header-info">
+            <h2><i class="fas fa-language"></i> <span data-i18n="set.language">Language</span></h2>
+            <p data-i18n="set.languageSub">Choose the language for the whole admin portal.</p>
+          </div>
+        </div>
+
+        <div class="variables-panel">
+          <div class="var-item" style="max-width:100%;">
+            <label for="lang-opt-en" data-i18n="set.languageLabel">Portal Language</label>
+
+            <div class="lang-choice-grid" id="lang-choice-grid" role="radiogroup"
+                 data-i18n-aria="set.languageLabel" aria-label="Portal Language">
+
+              <label class="lang-option" for="lang-opt-en">
+                <input type="radio" name="portal-language" id="lang-opt-en" value="en" checked>
+                <div class="lang-option-text">
+                  <!-- written in its own script on purpose: never translated, so a user
+                       who cannot read the current language can still find their way back -->
+                  <span class="lang-option-native" lang="en" dir="ltr">English</span>
+                  <span class="lang-option-desc" data-i18n="set.langEnglishDesc">Left-to-right layout</span>
+                </div>
+                <span class="lang-option-check" aria-hidden="true"><i class="fas fa-check"></i></span>
+              </label>
+
+              <label class="lang-option" for="lang-opt-ur">
+                <input type="radio" name="portal-language" id="lang-opt-ur" value="ur">
+                <div class="lang-option-text">
+                  <span class="lang-option-native" lang="ur" dir="rtl">&#1575;&#1585;&#1583;&#1608;</span>
+                  <span class="lang-option-desc" data-i18n="set.langUrduDesc">Right-to-left layout</span>
+                </div>
+                <span class="lang-option-check" aria-hidden="true"><i class="fas fa-check"></i></span>
+              </label>
+
+            </div>
+
+            <div class="var-hint" data-i18n="set.languageHint">Urdu also switches the layout to right-to-left.</div>
+
+            <!-- filled in by settings.js: online / offline / hybrid wording -->
+            <div class="lang-storage-note" id="lang-storage-note" hidden>
+              <i class="fas fa-circle-info"></i><span id="lang-storage-note-text"></span>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div class="section-card">
         <div class="section-header">
           <div class="section-header-info">
-            <h2><i class="fas fa-school"></i> Contact Details</h2>
-            <p>Printed on certificates, ID cards and vouchers.</p>
+            <h2><i class="fas fa-school"></i> <span data-i18n="set.contactDetails">Contact Details</span></h2>
+            <p data-i18n="set.contactDetailsSub">Printed on certificates, ID cards and vouchers.</p>
           </div>
         </div>
 
         <div class="variables-panel">
 
           <div class="var-item" style="max-width:100%;">
-            <label>School Address</label>
-            <textarea id="school-address" class="var-input" rows="3" placeholder="Street, area, city, postal code"></textarea>
-            <div class="var-hint">Shown on documents.</div>
+            <label data-i18n="set.schoolAddress">School Address</label>
+            <textarea id="school-address" class="var-input" rows="3" placeholder="Street, area, city, postal code" data-i18n-placeholder="set.schoolAddressPh"></textarea>
+            <div class="var-hint" data-i18n="set.schoolAddressHint">Shown on documents.</div>
           </div>
 
           <div class="school-info-grid">
             <div class="var-item">
-              <label>Contact Phone</label>
-              <input type="tel" id="school-phone" class="var-input" placeholder="e.g. 041-1234567">
-              <div class="var-hint">Primary contact number.</div>
+              <label data-i18n="set.contactPhone">Contact Phone</label>
+              <input type="tel" id="school-phone" class="var-input" placeholder="e.g. 041-1234567" data-i18n-placeholder="set.contactPhonePh">
+              <div class="var-hint" data-i18n="set.contactPhoneHint">Primary contact number.</div>
             </div>
 
             <div class="var-item">
-              <label>Alternate / WhatsApp Number</label>
+              <label data-i18n="set.altPhone">Alternate / WhatsApp Number</label>
               <input type="tel" id="school-phone-alt" class="var-input" placeholder="Optional">
-              <div class="var-hint">Optional second number.</div>
+              <div class="var-hint" data-i18n="set.altPhoneHint">Optional second number.</div>
             </div>
 
             <div class="var-item">
-              <label>Email Address</label>
+              <label data-i18n="set.email">Email Address</label>
               <input type="email" id="school-email" class="var-input" placeholder="e.g. info@softschool.edu.pk">
-              <div class="var-hint">Used on official documents.</div>
+              <div class="var-hint" data-i18n="set.emailHint">Used on official documents.</div>
             </div>
 
             <div class="var-item">
-              <label>Website</label>
+              <label data-i18n="set.website">Website</label>
               <input type="text" id="school-website" class="var-input" placeholder="Optional, e.g. www.softschool.edu.pk">
-              <div class="var-hint">Optional.</div>
+              <div class="var-hint" data-i18n="set.websiteHint">Optional.</div>
             </div>
 
             <div class="var-item">
-              <label>Principal / Head Name</label>
+              <label data-i18n="set.principal">Principal / Head Name</label>
               <input type="text" id="school-principal" class="var-input" placeholder="Optional">
-              <div class="var-hint">Signatory on certificates.</div>
+              <div class="var-hint" data-i18n="set.principalHint">Signatory on certificates.</div>
             </div>
 
             <div class="var-item">
-              <label>Registration / EMIS No.</label>
+              <label data-i18n="set.regNo">Registration / EMIS No.</label>
               <input type="text" id="school-reg-no" class="var-input" placeholder="Optional">
-              <div class="var-hint">If required by your board.</div>
+              <div class="var-hint" data-i18n="set.regNoHint">If required by your board.</div>
             </div>
           </div>
 
@@ -180,12 +237,12 @@
       <div class="section-card" id="admission-fields-card">
         <div class="section-header">
           <div class="section-header-info">
-            <h2><i class="fas fa-user-plus"></i> New Admission &mdash; Mandatory Fields</h2>
+            <h2><i class="fas fa-user-plus"></i> <span data-i18n="set.admissionTitle">New Admission &mdash; Mandatory Fields</span></h2>
             <p>Switch the red <span class="adm-star">*</span> on or off. A field that is switched off becomes optional in <b>Student Management</b> (new admission, edit and import).</p>
           </div>
           <div class="adm-bulk">
-            <button type="button" class="adm-bulk-btn" onclick="setAllAdmissionFields(true)"><i class="fas fa-check-double"></i> All required</button>
-            <button type="button" class="adm-bulk-btn" onclick="setAllAdmissionFields(false)"><i class="fas fa-ban"></i> All optional</button>
+            <button type="button" class="adm-bulk-btn" onclick="setAllAdmissionFields(true)"><i class="fas fa-check-double"></i> <span data-i18n="set.allRequired">All required</span></button>
+            <button type="button" class="adm-bulk-btn" onclick="setAllAdmissionFields(false)"><i class="fas fa-ban"></i> <span data-i18n="set.allOptional">All optional</span></button>
           </div>
         </div>
         <div id="admission-fields-list" class="adm-fields-list"></div>
@@ -653,10 +710,10 @@
 
   <!-- SAVE BAR -->
   <div class="save-bar">
-    <p><i class="fas fa-info-circle"></i> Changes apply immediately.</p>
+    <p><i class="fas fa-info-circle"></i> <span data-i18n="set.changesApply">Changes apply immediately.</span></p>
     <div style="display:flex;gap:10px;">
-      <button class="btn-outline" onclick="resetSettings()"><i class="fas fa-undo"></i> Reset</button>
-      <button class="btn-primary" onclick="saveAll()"><i class="fas fa-save"></i> Save All</button>
+      <button class="btn-outline" onclick="resetSettings()"><i class="fas fa-undo"></i> <span data-i18n="common.reset">Reset</span></button>
+      <button class="btn-primary" onclick="saveAll()"><i class="fas fa-save"></i> <span data-i18n="common.saveAll">Save All</span></button>
     </div>
   </div>
 

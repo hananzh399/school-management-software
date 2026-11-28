@@ -512,11 +512,13 @@
     payPenaltyType: 'percent', payPenaltyValue: 3, payBonus: 1000,
     autosave1Hour: 10, autosave1Minute: 0, autosave1Meridiem: 'AM', autosave1Enabled: true,
     autosave2Hour: 2, autosave2Minute: 0, autosave2Meridiem: 'PM', autosave2Enabled: true,
-    dailyAbsentNotify: false
+    dailyAbsentNotify: false,
+    language: 'en'                       // admin portal language: 'en' | 'ur'
   };
   var SETTINGS_INFO = ['schoolName', 'schoolAddress', 'schoolPhone', 'schoolPhoneAlt', 'schoolEmail', 'schoolWebsite', 'schoolPrincipal', 'schoolRegNo',
                        'lateFeeEnabled', 'lateFeeDeadlineDay', 'lateFeeType', 'lateFeeAmount', 'lateFeeGrace', 'lateFeeRepeatEnabled', 'lateFeeIntervalDays',
                        'payPenaltyType', 'payPenaltyValue', 'payBonus'];
+  var SETTINGS_LANGUAGE = ['language'];
   var SETTINGS_TIMING = ['autosave1Hour', 'autosave1Minute', 'autosave1Meridiem', 'autosave1Enabled', 'autosave2Hour', 'autosave2Minute', 'autosave2Meridiem', 'autosave2Enabled', 'dailyAbsentNotify'];
 
   async function metaGet(db, k) { var r = await db.query('SELECT v FROM meta WHERE k = ?', [k]); return r.length ? r[0].v : null; }
@@ -559,6 +561,12 @@
     var prevFees = {};
     (cur.classes || []).forEach(function (k) { if (k && !isBlank(k.className)) prevFees[norm(k.className)] = amt(k.fee); });
     var next = pickFields(inc, SETTINGS_INFO, cur);
+    // The language is handled separately from pickFields, which resets any field the
+    // client left out. An older app build, and a settings row saved on this phone
+    // before the language feature shipped, both send no language - and must not
+    // quietly put an Urdu portal back into English. Same rule as the server:
+    // write it when the request carries a usable value, otherwise keep what is saved.
+    if (inc.language === 'en' || inc.language === 'ur') next.language = inc.language;
     var classes = Array.isArray(inc.classes) ? inc.classes : [];
     next.classes = classes.map(function (k) { return { className: k.className == null ? null : k.className, fee: k.fee == null ? null : k.fee, fund: k.fund == null ? null : k.fund, sections: k.sections == null ? null : k.sections }; });
     // a changed class fee is applied to the students already in that class (same as the server)
@@ -591,6 +599,25 @@
     await settingsStore(c.db, next);
     return json(200, next);
   }
+  /* PUT /api/settings/{schoolId}/language  -> the admin portal's language.
+     Offline: written to the phone's database and that is the end of it.
+     Hybrid : written to the phone AND marked dirty, so doSettings() uploads it
+              to the server on the next sync. Both are handled by settingsStore().
+     Note this route is NOT guarded by lockError('settings'): the language is a
+     display preference, and a school on a plan without the settings feature still
+     has to be able to read its own portal. */
+  async function settingsLanguage(c) {
+    var g = settingsGuard(c); if (g) return g;
+    var inc = c.body && typeof c.body === 'object' ? c.body : {};
+    var want = String(inc.language == null ? '' : inc.language).toLowerCase();
+    if (want !== 'en' && want !== 'ur') {
+      return fail(400, 'bad_language', 'Language must be "en" or "ur".');
+    }
+    var next = pickFields({ language: want }, SETTINGS_LANGUAGE, await settingsLoad(c.db, c.sc));
+    await settingsStore(c.db, next);
+    return json(200, next);
+  }
+
   async function settingsReset(c) {
     var g = settingsGuard(c); if (g) return g;
     var locked = lockError(c.sc, 'settings'); if (locked) return locked;
@@ -1517,6 +1544,7 @@
     { m: 'GET',    re: /^\/api\/settings\/([^/]+)$/,                  fn: settingsGet },
     { m: 'PUT',    re: /^\/api\/settings\/([^/]+)$/,                  fn: settingsSave,   body: true },
     { m: 'PUT',    re: /^\/api\/settings\/([^/]+)\/timing$/,          fn: settingsTiming, body: true },
+    { m: 'PUT',    re: /^\/api\/settings\/([^/]+)\/language$/,        fn: settingsLanguage, body: true },
     { m: 'GET',    re: /^\/api\/settings\/([^/]+)\/classes$/,         fn: settingsClasses },
     { m: 'POST',   re: /^\/api\/settings\/([^/]+)\/reset$/,           fn: settingsReset },
     { m: 'PUT',    re: /^\/api\/finance\/(staff-bonus)$/,                fn: bonusPut,         body: true },

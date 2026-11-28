@@ -127,6 +127,155 @@ const apiSaveAll       = (payload) => apiRequest(_settingsUrl(), { method: 'PUT'
 const apiSaveTiming    = (payload) => apiRequest(_settingsUrl('/timing'), { method: 'PUT', body: JSON.stringify(payload) });
 const apiResetSettings = ()        => apiRequest(_settingsUrl('/reset'), { method: 'POST' });
 
+// ═══════════════════════════════════════════════
+//  PORTAL LANGUAGE  (English / Urdu)
+// ═══════════════════════════════════════════════
+// WHERE THE CHOICE IS SAVED — the page does not decide this, and does not need to:
+// it always sends the same request, and local-api.js (loaded on this page) decides
+// where it lands based on the school's mode:
+//
+//   online  -> straight to the server            (PUT /api/settings/{schoolId}/language)
+//   offline -> the phone's SQLite database       (local-api.js answers the request itself)
+//   hybrid  -> the phone's database AND queued for upload when internet returns
+//
+// On top of that, admin-i18n.js keeps a copy in localStorage. That copy is only there
+// so the correct language is painted on the FIRST frame of every page, before the
+// settings row has been fetched. The settings row stays the source of truth: when it
+// arrives and disagrees with the local copy, the saved value wins (see adoptFromSettings).
+
+/** PUT the language on its own, so changing it can never overwrite another setting
+ *  that the admin is still editing in a different tab of this page. */
+const apiSaveLanguage = (lang) =>
+  apiRequest(_settingsUrl('/language'), { method: 'PUT', body: JSON.stringify({ language: lang }) });
+
+/**
+ * Saves the language.
+ *
+ * Falls back to a whole-row PUT if the dedicated /language route answers 404 or 405,
+ * so the portal keeps working on a server where the new endpoint has not been
+ * deployed yet (the frontend and the backend are released separately).
+ */
+async function _persistLanguage(lang) {
+  try {
+    const saved = await apiSaveLanguage(lang);
+    if (saved && typeof saved === 'object') _serverSettings = saved;
+    return true;
+  } catch (err) {
+    const notDeployed = /\((404|405)\)/.test(String(err && err.message));
+    if (!notDeployed) throw err;
+
+    console.warn('[Settings] /language route not available, falling back to a full settings PUT.');
+    // Merge onto the row we already hold so the fallback cannot blank anything out.
+    const base = _serverSettings && typeof _serverSettings === 'object' ? _serverSettings : {};
+    const payload = Object.assign({}, base, { language: lang });
+    delete payload.id;
+    delete payload.schoolId;
+    delete payload.teacherPasswordHash;   // never echo a hash back to the server
+    const saved = await apiSaveAll(payload);
+    if (saved && typeof saved === 'object') _serverSettings = saved;
+    return true;
+  }
+}
+
+/** The wording under the cards: tells the admin whether this choice follows them
+ *  to another device, which depends entirely on the school's mode. */
+function _languageStorageNoteKey() {
+  const M = window.SoftSchoolMode;
+  const mode = M && typeof M.get === 'function' ? M.get() : 'online';
+  if (mode === 'offline') return 'set.langNoteOffline';
+  if (mode === 'hybrid')  return 'set.langNoteHybrid';
+  return 'set.langNoteOnline';
+}
+
+function _paintLanguageCard(lang) {
+  document.querySelectorAll('#lang-choice-grid .lang-option').forEach(opt => {
+    const input = opt.querySelector('input[type="radio"]');
+    const on = !!input && input.value === lang;
+    if (input) input.checked = on;
+    opt.classList.toggle('is-active', on);
+    opt.setAttribute('aria-checked', on ? 'true' : 'false');
+  });
+
+  const note = document.getElementById('lang-storage-note');
+  const text = document.getElementById('lang-storage-note-text');
+  if (note && text && window.AdminI18n) {
+    text.textContent = window.AdminI18n.t(_languageStorageNoteKey());
+    note.hidden = false;
+  }
+}
+
+/**
+ * Switches the portal language.
+ *
+ * The screen flips FIRST and the save happens behind it. That order is deliberate:
+ * the whole point of the setting is visible immediately, and the local copy written by
+ * AdminI18n.setLang() already makes the choice survive a reload. If the server cannot
+ * be reached we say so plainly rather than yanking the layout back to English, which
+ * would look like a bug to the person who just tapped the button.
+ */
+async function changePortalLanguage(lang) {
+  const I = window.AdminI18n;
+  if (!I) return;
+
+  const next = lang === 'ur' ? 'ur' : 'en';
+  if (next === I.getLang()) return;              // already there: nothing to save
+
+  const grid = document.getElementById('lang-choice-grid');
+  if (grid) grid.classList.add('is-busy');       // a second tap cannot queue a conflicting save
+
+  I.setLang(next);                               // re-render + mirror the layout, right now
+  _paintLanguageCard(next);
+  _retranslateDynamicUi();
+
+  const label = next === 'ur' ? 'اردو' : 'English';
+  const mode  = window.SoftSchoolMode && window.SoftSchoolMode.get ? window.SoftSchoolMode.get() : 'online';
+
+  try {
+    await _persistLanguage(next);
+    showToast(I.t(mode === 'hybrid' ? 'set.langSavedLocal' : 'set.langSaved', { lang: label }), 'success');
+  } catch (err) {
+    console.error('[Settings] Could not save the language:', err);
+    // The choice is still live on this device (localStorage), so don't undo it.
+    showToast(I.t('set.langFailed'), 'error');
+  } finally {
+    if (grid) grid.classList.remove('is-busy');
+  }
+}
+
+/** Labels that this page builds in JavaScript have to be rebuilt after a language
+ *  change, because AdminI18n.apply() can only retranslate markup it can see. */
+function _retranslateDynamicUi() {
+  try { if (typeof initDate === 'function') initDate(); } catch (e) { /* ignore */ }
+  try { if (typeof loadClasses === 'function') loadClasses(); } catch (e) { /* ignore */ }
+  try { if (typeof renderAttendanceTiming === 'function') renderAttendanceTiming(); } catch (e) { /* ignore */ }
+  try { if (typeof syncLateFeePrefix === 'function') syncLateFeePrefix(); } catch (e) { /* ignore */ }
+  try { if (typeof updateLateFeePreview === 'function') updateLateFeePreview(); } catch (e) { /* ignore */ }
+  try { if (typeof renderAdmissionFields === 'function') renderAdmissionFields(); } catch (e) { /* ignore */ }
+}
+
+/** Wires the two cards up. Called once, from DOMContentLoaded. */
+function initLanguageCard() {
+  const I = window.AdminI18n;
+  if (!I) return;
+
+  // The saved setting wins over the fast local copy: another device may have
+  // changed it since this phone last looked.
+  const saved = _serverSettings && _serverSettings.language;
+  if (saved) I.adoptFromSettings(saved);
+
+  _paintLanguageCard(I.getLang());
+
+  document.querySelectorAll('#lang-choice-grid input[type="radio"]').forEach(input => {
+    input.addEventListener('change', () => { if (input.checked) changePortalLanguage(input.value); });
+  });
+
+  // Keep the cards honest if some other part of the app switches language.
+  window.addEventListener('softschool:lang-changed', (e) => {
+    _paintLanguageCard((e.detail && e.detail.lang) || I.getLang());
+  });
+}
+
+
 // ── Shape converters: backend (SchoolSettings.ClassFee) <-> frontend (name/sections[]) ──
 function _classesApiToLocal(apiClasses) {
   return (Array.isArray(apiClasses) ? apiClasses : []).map(c => ({
@@ -184,7 +333,15 @@ function toggleDarkMode() {
 // Same format as the Finance header date (e.g. "Sun, Oct 4, 2026")
 function initDate() {
   const el = document.getElementById('header-date');
-  if (el) el.textContent = new Date().toLocaleDateString('en-US', { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' });
+  if (!el) return;
+  // In Urdu the weekday and month names have to come from the dictionary, not
+  // from toLocaleDateString: the device's locale data is often missing or wrong
+  // for ur-PK, and the rest of the portal has to agree on one set of month names.
+  if (window.AdminI18n && window.AdminI18n.getLang() === 'ur') {
+    el.textContent = window.AdminI18n.formatDate(new Date());
+    return;
+  }
+  el.textContent = new Date().toLocaleDateString('en-US', { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' });
 }
 
 function initDarkMode() {
@@ -258,6 +415,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Fetch the settings row from the backend first, then render every tab
   // from that (mirrored into localStorage as a cache along the way).
   await loadSettingsFromServer();
+
+  // The language comes first: it decides which language every tab below renders in.
+  initLanguageCard();
 
   loadSchoolInfo();
   loadClasses();
@@ -1274,6 +1434,11 @@ async function saveAll() {
     payBonus:        vars.bonus,
 
     classes: _classesLocalToApi(classes),
+
+    // Sent on every save on purpose: a field left out of this payload is reset to
+    // its default by the server (and by local-api.js offline), which would quietly
+    // put an Urdu portal back into English.
+    language: window.AdminI18n ? window.AdminI18n.getLang() : 'en',
   };
 
   try {
