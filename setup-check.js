@@ -99,16 +99,16 @@
             var steps = [
                 {
                     key: 'session', required: true, done: hasSession && hasCurrent, icon: 'fa-calendar-check',
-                    title: hasSession && !hasCurrent ? 'Choose your current session' : 'Set your academic session',
-                    text: hasSession && !hasCurrent ? 'Press “Set as current” on one of your sessions.' : 'Create the session your school is running now and mark it as current.',
-                    cta: hasSession && !hasCurrent ? 'Open Sessions' : 'Set session',
+                    title: hasSession && !hasCurrent ? T('setup.chooseCurrent', 'Choose your current session') : T('setup.setSession', 'Set your academic session'),
+                    text: hasSession && !hasCurrent ? T('setup.pressSetCurrent', 'Press “Set as current” on one of your sessions.') : T('setup.createSession', 'Create the session your school is running now and mark it as current.'),
+                    cta: hasSession && !hasCurrent ? T('setup.openSessions', 'Open Sessions') : T('setup.setSessionCta', 'Set session'),
                     href: hasSession && !hasCurrent ? 'sessions.html' : 'sessions.html#new'
                 },
                 {
                     key: 'classes', required: true, done: classes.length > 0, icon: 'fa-layer-group',
-                    title: 'Set up your classes',
-                    text: 'Add each class with its monthly fee in Settings.',
-                    cta: 'Set classes', href: 'settings.html#classes'
+                    title: T('setup.setClasses', 'Set up your classes'),
+                    text: T('setup.addEachClass', 'Add each class with its monthly fee in Settings.'),
+                    cta: T('setup.setClassesCta', 'Set classes'), href: 'settings.html#classes'
                 }
             ];
             var requiredDone = steps.every(function (s) { return s.done; });
@@ -118,9 +118,16 @@
             if (requiredDone) {
                 var noFee = classes.filter(function (c) { return !(Number(c.fee) > 0); }).length;
                 extras.push({ key: 'info', done: !!(String(settings.schoolName || '').trim() && String(settings.schoolAddress || '').trim()),
-                    icon: 'fa-school', title: 'Add school name and address', text: 'Printed on vouchers, certificates and ID cards.', cta: 'School info', href: 'settings.html#schoolinfo' });
+                    icon: 'fa-school', title: T('setup.addSchoolInfo', 'Add school name and address'),
+                    text: T('setup.printedOn', 'Printed on vouchers, certificates and ID cards.'),
+                    cta: T('setup.schoolInfoCta', 'School info'), href: 'settings.html#schoolinfo' });
                 extras.push({ key: 'fees', done: noFee === 0,
-                    icon: 'fa-money-bill-wave', title: 'Set a fee for every class', text: noFee + ' class' + (noFee === 1 ? ' has' : 'es have') + ' no fee yet.', cta: 'Set fees', href: 'settings.html#classes' });
+                    icon: 'fa-money-bill-wave', title: T('setup.setFeeEvery', 'Set a fee for every class'),
+                    // one class / several classes is a different sentence in both languages
+                    text: noFee === 1
+                        ? T('setup.noFeeOne', noFee + ' class has no fee yet.', { n: noFee })
+                        : T('setup.noFeeMany', noFee + ' classes have no fee yet.', { n: noFee }),
+                    cta: T('setup.setFeesCta', 'Set fees'), href: 'settings.html#classes' });
             }
             writeOk(requiredDone && extras.every(function (e) { return e.done; }));
             lastModel = { requiredDone: requiredDone, steps: steps, extras: extras };
@@ -130,6 +137,15 @@
         var clear = function () { inflight = null; };
         inflight.then(clear, clear);
         return inflight;
+    }
+
+    /* ------------------------------------------------------------------ text */
+    // Urdu when admin-i18n.js is on the page and knows the key, otherwise the
+    // English that was always here. Uses ti() because every string below is
+    // rendered on screen, so an Urdu phrase has to carry its bidi isolate.
+    function T(key, fallback, vars) {
+        var I = window.AdminI18n;
+        return (I && I.has && I.has(key)) ? I.ti(key, vars) : fallback;
     }
 
     /* ---------------------------------------------------------------------- UI */
@@ -170,7 +186,7 @@
         return '<li class="setup-pop-item' + (s.done ? ' is-done' : '') + '">' +
             '<i class="fas ' + (s.done ? 'fa-circle-check' : s.icon) + '"></i>' +
             '<div class="setup-pop-txt"><b>' + esc(s.title) + '</b><span>' + esc(s.text) + '</span></div>' +
-            (s.done ? '<span class="setup-pop-done">Done</span>' : '<a class="setup-pop-go" href="' + esc(s.href) + '">' + esc(s.cta) + ' <i class="fas fa-arrow-right"></i></a>') +
+            (s.done ? '<span class="setup-pop-done">' + T('setup.done', 'Done') + '</span>' : '<a class="setup-pop-go" href="' + esc(s.href) + '">' + esc(s.cta) + ' <i class="fas fa-arrow-right"></i></a>') +
             '</li>';
     }
 
@@ -193,20 +209,26 @@
         var rows, title, text, cls = 'setup-pop', icon = 'fa-triangle-exclamation', foot = '';
         if (kind === 'next') {
             rows = model.extras.filter(function (e) { return !e.done; });
-            title = 'A few things left to do'; text = 'Session and classes are ready. These are optional but recommended.';
+            title = T('setup.fewThingsLeft', 'A few things left to do');
+            text = T('setup.sessionReady', 'Session and classes are ready. These are optional but recommended.');
             cls += ' is-next'; icon = 'fa-circle-check';
         } else {
             rows = model.steps;
-            if (kind === 'admission') { title = 'Set up before admitting students'; text = 'New admissions need a current session and at least one class.'; }
-            else { title = 'Finish setting up your school'; text = 'Two quick steps are needed before fees, attendance and results work.'; }
-            foot = 'This message goes away once both steps are done.';
+            if (kind === 'admission') {
+                title = T('setup.beforeAdmitting', 'Set up before admitting students');
+                text = T('setup.admissionNeeds', 'New admissions need a current session and at least one class.');
+            } else {
+                title = T('setup.finishSetup', 'Finish setting up your school');
+                text = T('setup.twoQuickSteps', 'Two quick steps are needed before fees, attendance and results work.');
+            }
+            foot = T('setup.goesAway', 'This message goes away once both steps are done.');
         }
         var overlay = document.createElement('div');
         overlay.id = 'setup-pop-overlay';
         overlay.className = 'setup-pop-overlay';
         overlay.innerHTML =
             '<div class="' + cls + '" role="dialog" aria-modal="true" aria-labelledby="setup-pop-title">' +
-            '<button type="button" class="setup-pop-x" aria-label="Close" title="Close">&times;</button>' +
+            '<button type="button" class="setup-pop-x" aria-label="' + T('setup.close', 'Close') + '" title="' + T('setup.close', 'Close') + '">&times;</button>' +
             '<div class="setup-pop-head"><span class="setup-pop-ico"><i class="fas ' + icon + '"></i></span>' +
             '<div><h3 id="setup-pop-title">' + esc(title) + '</h3><p>' + esc(text) + '</p></div></div>' +
             '<ul class="setup-pop-list">' + rows.map(itemRow).join('') + '</ul>' +

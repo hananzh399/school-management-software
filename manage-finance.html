@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Fees & Finance | SoftSchool</title>
+    <title data-i18n="fin.pageTitle">Fees & Finance | SoftSchool</title>
     <link rel="icon" type="image/png" href="logo-icon.png">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
@@ -13,7 +13,7 @@
 <link rel="stylesheet" href="manage-staff.css">
     <link rel="stylesheet" href="manage-finance.css">
     <link rel="stylesheet" href="mobile-ui.css?v=2">
-<link rel="stylesheet" href="admin-i18n.css?v=1">
+<link rel="stylesheet" href="admin-i18n.css?v=2">
 
     <script src="xss-safe.js"></script>
     <script>(function(){const s=localStorage.getItem('eduflow-theme');const t=(s==='light'||s==='dark')?s:'dark';document.documentElement.setAttribute('data-theme',t);})()</script>
@@ -88,8 +88,8 @@
         <!-- ===================== PAGE: MAIN ===================== -->
         <div id="page-main">
             <section class="page-title-section">
-                <h2 class="page-title">Fees & Finance</h2>
-                <p class="page-description">Manage collections, salaries, fines, and operational expenses.</p>
+                <h2 class="page-title" data-i18n="fin.heading">Fees & Finance</h2>
+                <p class="page-description" data-i18n="fin.subtitle">Manage collections, salaries, fines, and operational expenses.</p>
                 <div class="title-divider"></div>
             </section>
 
@@ -98,28 +98,28 @@
                 <div class="finance-card revenue-theme" onclick="showPage('page-student-fees')">
                     <div class="card-glow"></div>
                     <div class="icon-wrapper"><i class="fas fa-hand-holding-usd"></i></div>
-                    <h3 class="card-title">Manage Student Fees</h3>
-                    <p class="card-description">Record tuition and outstanding balance.</p>
+                    <h3 class="card-title" data-i18n="fin.manageStudentFees">Manage Student Fees</h3>
+                    <p class="card-description" data-i18n="fin.manageFeesSub">Record tuition and outstanding balance.</p>
                 </div>
 
                 <div class="finance-card revenue-theme" onclick="showPage('page-student-fine')">
                     <div class="card-glow"></div>
                     <div class="icon-wrapper"><i class="fas fa-exclamation-circle"></i></div>
-                    <h3 class="card-title">Fines</h3>
-                    <p class="card-description">Student &amp; staff fines — late, disciplinary or attendance.</p>
+                    <h3 class="card-title" data-i18n="fin.fines">Fines</h3>
+                    <p class="card-description" data-i18n="fin.finesSub">Student &amp; staff fines — late, disciplinary or attendance.</p>
                 </div>
 
                 <div class="finance-card salary-theme" onclick="showPage('page-salary-hub')">
                     <div class="card-glow"></div>
                     <div class="icon-wrapper"><i class="fas fa-money-check-alt"></i></div>
-                    <h3 class="card-title">Manage Salaries</h3>
-                    <p class="card-description">Process payroll and view payment history.</p>
+                    <h3 class="card-title" data-i18n="fin.manageSalaries">Manage Salaries</h3>
+                    <p class="card-description" data-i18n="fin.salariesSub">Process payroll and view payment history.</p>
                 </div>
 
                 <div class="finance-card expense-theme" onclick="showPage('page-expense-hub')">
                     <div class="card-glow"></div>
                     <div class="icon-wrapper"><i class="fas fa-tools"></i></div>
-                    <h3 class="card-title">Other Expenses</h3>
+                    <h3 class="card-title" data-i18n="fin.otherExpenses">Other Expenses</h3>
                     <p class="card-description">Other institue expesne</p>
                 </div>
             </section>
@@ -129,33 +129,33 @@
         <!-- ===================== PAGE: STUDENT FEES ===================== -->
         <div id="page-student-fees" class="sub-page d-none">
             <section class="page-title-section sub-title-section fee-stats-header">
-                <button class="back-btn" onclick="showPage('page-main')"><i class="fas fa-arrow-left"></i> Back</button>
+                <button class="back-btn" onclick="showPage('page-main')"><i class="fas fa-arrow-left"></i> <span data-i18n="fin.back">Back</span></button>
                 <div class="fee-stats-row" id="fee-stats-row">
                     <div class="fee-stat-card fee-stat-generated">
                         <div class="fee-stat-icon"><i class="fas fa-file-invoice-dollar"></i></div>
                         <div class="fee-stat-info">
-                            <span class="fee-stat-label" id="fee-stat-generated-label">Fee Generated</span>
+                            <span class="fee-stat-label" id="fee-stat-generated-label" data-i18n="fin.feeGenerated">Fee Generated</span>
                             <span class="fee-stat-value" id="fee-stat-generated">Rs. 0</span>
                         </div>
                     </div>
                     <div class="fee-stat-card fee-stat-collected">
                         <div class="fee-stat-icon"><i class="fas fa-hand-holding-usd"></i></div>
                         <div class="fee-stat-info">
-                            <span class="fee-stat-label" id="fee-stat-collected-label">Collected</span>
+                            <span class="fee-stat-label" id="fee-stat-collected-label" data-i18n="fin.collected">Collected</span>
                             <span class="fee-stat-value" id="fee-stat-collected">Rs. 0</span>
                         </div>
                     </div>
                     <div class="fee-stat-card fee-stat-pending">
                         <div class="fee-stat-icon"><i class="fas fa-exclamation-triangle"></i></div>
                         <div class="fee-stat-info">
-                            <span class="fee-stat-label" id="fee-stat-pending-label">Pending</span>
+                            <span class="fee-stat-label" id="fee-stat-pending-label" data-i18n="fin.pending">Pending</span>
                             <span class="fee-stat-value" id="fee-stat-pending">Rs. 0</span>
                         </div>
                     </div>
                     <div class="fee-stat-card fee-stat-totalfine">
                         <div class="fee-stat-icon"><i class="fas fa-coins"></i></div>
                         <div class="fee-stat-info">
-                            <span class="fee-stat-label" id="fee-stat-totalfine-label">Total with Fine</span>
+                            <span class="fee-stat-label" id="fee-stat-totalfine-label" data-i18n="fin.totalWithFine">Total with Fine</span>
                             <span class="fee-stat-value" id="fee-stat-totalfine">Rs. 0</span>
                         </div>
                     </div>
@@ -167,24 +167,24 @@
                 <!-- Heading + global voucher actions, same line -->
                 <div class="fee-global-toolbar">
                     <div class="fee-toolbar-heading-group">
-                        <h3 class="fee-toolbar-heading"><i class="fas fa-layer-group"></i> Manage Student Fees</h3>
-                        <p class="fee-toolbar-desc">Select a grade from the following to manage fees</p>
+                        <h3 class="fee-toolbar-heading"><i class="fas fa-layer-group"></i> <span data-i18n="fin.manageStudentFees">Manage Student Fees</span></h3>
+                        <p class="fee-toolbar-desc" data-i18n="fin.selectGrade">Select a grade from the following to manage fees</p>
                     </div>
                     <div class="fee-global-actions">
                         <button type="button" class="btn-global-action btn-generate-global" id="btn-generate-monthly-global" onclick="handleGenerateMonthlyGlobalClick()">
-                            <i class="fas fa-file-invoice"></i> Generate Monthly Fees
+                            <i class="fas fa-file-invoice"></i> <span data-i18n="fin.generateMonthly">Generate Monthly Fees</span>
                         </button>
-                        <button type="button" class="btn-global-action btn-nextmonth-global" id="btn-reset-next-month" onclick="resetFeesForNextMonth()" title="Move the fee cycle forward so next month's vouchers can be generated">
-                            <i class="fas fa-forward"></i> Move to Next Month
+                        <button type="button" class="btn-global-action btn-nextmonth-global" id="btn-reset-next-month" onclick="resetFeesForNextMonth()" title="Move the fee cycle forward so next month's vouchers can be generated" data-i18n-title="fin.moveNextTitle">
+                            <i class="fas fa-forward"></i> <span data-i18n="fin.moveNextMonth">Move to Next Month</span>
                         </button>
                         <button type="button" class="btn-global-action btn-print-global" id="btn-print-vouchers-global" onclick="openPrintVouchersModal()">
-                            <i class="fas fa-print"></i> Print Vouchers
+                            <i class="fas fa-print"></i> <span data-i18n="fin.printVouchers">Print Vouchers</span>
                         </button>
                         <button type="button" class="btn-global-action btn-customfee-global" onclick="showPage('page-custom-fee')">
-                            <i class="fas fa-tags"></i> Custom Fee
+                            <i class="fas fa-tags"></i> <span data-i18n="fin.customFee">Custom Fee</span>
                         </button>
                         <button type="button" class="btn-global-action btn-defaulter-global" onclick="showPage('page-fee-defaulter')">
-                            <i class="fas fa-exclamation-triangle"></i> Fee Defaulter
+                            <i class="fas fa-exclamation-triangle"></i> <span data-i18n="fin.feeDefaulter">Fee Defaulter</span>
                         </button>
                     </div>
                 </div>
@@ -197,7 +197,7 @@
             <!-- Part B: Student List (Hidden until card clicked) -->
             <div id="class-student-list-view" style="display: none;">
                 <button class="btn-ghost" onclick="backToClassSelection()">
-                    <i class="fas fa-chevron-left"></i> Change Class
+                    <i class="fas fa-chevron-left"></i> <span data-i18n="fin.changeClass">Change Class</span>
                 </button>
 
                 <!-- Class stats: sit right at the top, centered -->
@@ -205,28 +205,28 @@
                     <div class="fee-stat-card fee-stat-generated">
                         <div class="fee-stat-icon"><i class="fas fa-file-invoice-dollar"></i></div>
                         <div class="fee-stat-info">
-                            <span class="fee-stat-label" id="class-fee-stat-generated-label">Generated</span>
+                            <span class="fee-stat-label" id="class-fee-stat-generated-label" data-i18n="fin.generated">Generated</span>
                             <span class="fee-stat-value" id="class-fee-stat-generated">Rs. 0</span>
                         </div>
                     </div>
                     <div class="fee-stat-card fee-stat-collected">
                         <div class="fee-stat-icon"><i class="fas fa-hand-holding-usd"></i></div>
                         <div class="fee-stat-info">
-                            <span class="fee-stat-label" id="class-fee-stat-collected-label">Collected</span>
+                            <span class="fee-stat-label" id="class-fee-stat-collected-label" data-i18n="fin.collected">Collected</span>
                             <span class="fee-stat-value" id="class-fee-stat-collected">Rs. 0</span>
                         </div>
                     </div>
                     <div class="fee-stat-card fee-stat-pending">
                         <div class="fee-stat-icon"><i class="fas fa-exclamation-triangle"></i></div>
                         <div class="fee-stat-info">
-                            <span class="fee-stat-label" id="class-fee-stat-pending-label">Pending</span>
+                            <span class="fee-stat-label" id="class-fee-stat-pending-label" data-i18n="fin.pending">Pending</span>
                             <span class="fee-stat-value" id="class-fee-stat-pending">Rs. 0</span>
                         </div>
                     </div>
                     <div class="fee-stat-card fee-stat-totalfine">
                         <div class="fee-stat-icon"><i class="fas fa-coins"></i></div>
                         <div class="fee-stat-info">
-                            <span class="fee-stat-label" id="class-fee-stat-totalfine-label">Total with Fine</span>
+                            <span class="fee-stat-label" id="class-fee-stat-totalfine-label" data-i18n="fin.totalWithFine">Total with Fine</span>
                             <span class="fee-stat-value" id="class-fee-stat-totalfine">Rs. 0</span>
                         </div>
                     </div>
@@ -234,13 +234,13 @@
 
                 <!-- Heading now sits directly above the search bar / table -->
                 <div class="section-title class-level-title-row">
-                    <h3 id="selected-class-title">Class Name</h3>
+                    <h3 id="selected-class-title" data-i18n="fin.className">Class Name</h3>
                     <div class="class-level-actions">
                         <button type="button" class="btn-global-action btn-record-class" id="btn-fee-record-class" onclick="openFeeRecordList()">
-                            <i class="fas fa-history"></i> Fee Record
+                            <i class="fas fa-history"></i> <span data-i18n="fin.feeRecord">Fee Record</span>
                         </button>
                         <button type="button" class="btn-global-action btn-generate-class" id="btn-generate-class" onclick="handleGenerateClassClick()">
-                            <i class="fas fa-file-invoice"></i> Generate Monthly Fee
+                            <i class="fas fa-file-invoice"></i> <span data-i18n="fin.generateMonthlyFee">Generate Monthly Fee</span>
                         </button>
                     </div>
                 </div>
@@ -248,13 +248,13 @@
                     <div class="fee-toolbar-left">
                         <div class="fee-search-wrap">
                             <i class="fas fa-search"></i>
-                            <input type="text" id="fee-search-input" placeholder="Search by name, ID or guardian..." oninput="filterFeeTable()">
+                            <input type="text" id="fee-search-input" placeholder="Search by name, ID or guardian..." data-i18n-placeholder="fin.searchNameIdPh" oninput="filterFeeTable()">
                         </div>
-                        <select class="fee-status-select" id="fee-status-filter" onchange="setFeeStatusFilter(this.value)" title="Filter by payment status">
-                            <option value="all">All Status</option>
-                            <option value="paid">Paid</option>
-                            <option value="partial">Partial</option>
-                            <option value="pending">Pending</option>
+                        <select class="fee-status-select" id="fee-status-filter" onchange="setFeeStatusFilter(this.value)" title="Filter by payment status" data-i18n-title="fin.filterStatusTitle">
+                            <option value="all" data-i18n="fin.allStatus">All Status</option>
+                            <option value="paid" data-i18n="fin.paid">Paid</option>
+                            <option value="partial" data-i18n="fin.partial">Partial</option>
+                            <option value="pending" data-i18n="fin.pending">Pending</option>
                         </select>
                     </div>
                     <div class="fee-search-count" id="fee-search-count"></div>
@@ -263,12 +263,12 @@
                     <table class="student-table fee-students-table">
                         <thead>
                             <tr>
-                                <th>Student ID</th>
-                                <th>Name</th>
-                                <th>Guardian</th>
-                                <th>Pending Fees</th>
-                                <th>Status</th>
-                                <th>Actions</th>
+                                <th data-i18n="fin.studentId">Student ID</th>
+                                <th data-i18n="fin.name">Name</th>
+                                <th data-i18n="fin.guardian">Guardian</th>
+                                <th data-i18n="fin.pendingFees">Pending Fees</th>
+                                <th data-i18n="fin.status">Status</th>
+                                <th data-i18n="fin.actions">Actions</th>
                             </tr>
                         </thead>
                         <tbody id="fee-table-body"></tbody>
@@ -281,22 +281,22 @@
         <!-- ===================== PAGE: FINES (Students & Staff) ===================== -->
         <div id="page-student-fine" class="sub-page d-none">
             <section class="page-title-section sub-title-section header-with-action">
-                <button class="back-btn" onclick="showPage('page-main')"><i class="fas fa-arrow-left"></i> Back</button>
+                <button class="back-btn" onclick="showPage('page-main')"><i class="fas fa-arrow-left"></i> <span data-i18n="fin.back">Back</span></button>
                 <button type="button" class="btn-global-action btn-view-records header-action-btn" onclick="openFineRecordsWithContext()">
-                    <i class="fas fa-list-alt"></i> View Records
+                    <i class="fas fa-list-alt"></i> <span data-i18n="fin.viewRecords">View Records</span>
                 </button>
-                <h2 class="page-title">Fines</h2>
-                <p class="page-description">Add a fine for a student or a staff member.</p>
+                <h2 class="page-title" data-i18n="fin.fines">Fines</h2>
+                <p class="page-description" data-i18n="fin.addFineIntro">Add a fine for a student or a staff member.</p>
                 <div class="title-divider"></div>
             </section>
 
             <!-- Top tab switcher -->
             <div class="fines-top-switch fines-section-centered">
                 <button type="button" class="fines-top-tab active" id="fine-tab-student" onclick="setFineTargetTab('student')">
-                    <i class="fas fa-user-graduate"></i> Students
+                    <i class="fas fa-user-graduate"></i> <span data-i18n="fin.students">Students</span>
                 </button>
                 <button type="button" class="fines-top-tab" id="fine-tab-staff" onclick="setFineTargetTab('staff')">
-                    <i class="fas fa-chalkboard-teacher"></i> Staff
+                    <i class="fas fa-chalkboard-teacher"></i> <span data-i18n="fin.staff">Staff</span>
                 </button>
             </div>
 
@@ -306,25 +306,25 @@
                     <!-- STUDENT FINE FORM -->
                     <div id="fine-panel-student" class="fine-panel">
                         <div class="form-page-container">
-                            <label class="section-mini-label">Select Student</label>
+                            <label class="section-mini-label" data-i18n="fin.selectStudent">Select Student</label>
 
                             <div class="cascade-select-grid">
                                 <div class="form-group">
-                                    <label>Class</label>
+                                    <label data-i18n="fin.class">Class</label>
                                     <select id="sf-class-select" onchange="onFineClassChange()">
-                                        <option value="">-- Select Class --</option>
+                                        <option value="" data-i18n="fin.selectClassDash">-- Select Class --</option>
                                     </select>
                                 </div>
                                 <div class="form-group">
-                                    <label>Section</label>
+                                    <label data-i18n="fin.section">Section</label>
                                     <select id="sf-section-select" onchange="onFineSectionChange()" disabled>
-                                        <option value="">-- Select Section --</option>
+                                        <option value="" data-i18n="fin.selectSectionDash">-- Select Section --</option>
                                     </select>
                                 </div>
                                 <div class="form-group">
-                                    <label>Student</label>
+                                    <label data-i18n="fin.student">Student</label>
                                     <div class="student-select-combo">
-                                        <input type="text" id="sf-student-select" class="student-combo-input" placeholder="-- Select Student --" autocomplete="off" disabled
+                                        <input type="text" id="sf-student-select" class="student-combo-input" placeholder="-- Select Student --" data-i18n-placeholder="fin.selectStudentPh" autocomplete="off" disabled
                                                oninput="filterFineStudentOptions()" onfocus="openFineStudentOptions()">
                                         <i class="fas fa-chevron-down student-combo-caret"></i>
                                         <div id="sf-student-options" class="fine-results-list student-combo-dropdown d-none"></div>
@@ -334,16 +334,16 @@
                             <div id="sf-selected-student-info" class="selected-target-info d-none"></div>
 
                             <div class="form-group full-width">
-                                <label>Fine Amount (RS)</label>
-                                <input type="number" id="student-fine-amount" min="1" placeholder="Enter amount">
+                                <label data-i18n="fin.fineAmount">Fine Amount (RS)</label>
+                                <input type="number" id="student-fine-amount" min="1" placeholder="Enter amount" data-i18n-placeholder="fin.enterAmount">
                             </div>
                             <div class="form-group full-width">
-                                <label>Fine Description / Cause</label>
-                                <input type="text" id="student-fine-desc" placeholder="e.g. Disciplinary action, damage to property">
+                                <label data-i18n="fin.fineDesc">Fine Description / Cause</label>
+                                <input type="text" id="student-fine-desc" placeholder="e.g. Disciplinary action, damage to property" data-i18n-placeholder="fin.fineDescPh">
                             </div>
                             <div class="modal-actions mt-20">
-                                <button type="button" class="btn btn-cancel" onclick="resetStudentFineForm()">Clear</button>
-                                <button type="button" class="btn btn-primary" onclick="handleAddStudentFine()">Add Fine</button>
+                                <button type="button" class="btn btn-cancel" onclick="resetStudentFineForm()" data-i18n="fin.clear">Clear</button>
+                                <button type="button" class="btn btn-primary" onclick="handleAddStudentFine()" data-i18n="fin.addFine">Add Fine</button>
                             </div>
                         </div>
                     </div>
@@ -352,31 +352,31 @@
                     <div id="fine-panel-staff" class="fine-panel d-none">
                         <div class="form-page-container">
                             <div class="form-group full-width">
-                                <label>Staff Category</label>
+                                <label data-i18n="fin.staffCategory">Staff Category</label>
                                 <div class="staff-category-toggle">
-                                    <button type="button" class="category-btn active" id="btn-teaching" onclick="selectStaffCategory('Teaching')">Teaching</button>
-                                    <button type="button" class="category-btn" id="btn-non-teaching" onclick="selectStaffCategory('Non-Teaching')">Non-Teaching</button>
+                                    <button type="button" class="category-btn active" id="btn-teaching" onclick="selectStaffCategory('Teaching')" data-i18n="fin.teaching">Teaching</button>
+                                    <button type="button" class="category-btn" id="btn-non-teaching" onclick="selectStaffCategory('Non-Teaching')" data-i18n="fin.nonTeaching">Non-Teaching</button>
                                 </div>
                             </div>
 
                             <div class="form-group full-width">
-                                <label>Search Staff</label>
-                                <input type="text" id="staff-fine-search" class="fine-search-input" oninput="filterStaffFineList()" placeholder="Search teacher / staff by name, ID, subject or class">
-                                <p class="search-hint">Results show ID, Name, Class &amp; Subject (or Job for non-teaching).</p>
+                                <label data-i18n="fin.searchStaff">Search Staff</label>
+                                <input type="text" id="staff-fine-search" class="fine-search-input" oninput="filterStaffFineList()" placeholder="Search teacher / staff by name, ID, subject or class" data-i18n-placeholder="fin.searchStaffPh">
+                                <p class="search-hint" data-i18n="fin.resultsShow">Results show ID, Name, Class &amp; Subject (or Job for non-teaching).</p>
                                 <div id="staff-members-list" class="staff-members-list fine-results-list"></div>
                             </div>
 
                             <div class="form-group full-width">
-                                <label>Fine Amount (RS)</label>
+                                <label data-i18n="fin.fineAmount">Fine Amount (RS)</label>
                                 <input type="number" id="staff-fine-amount" min="1" placeholder="Enter amount">
                             </div>
                             <div class="form-group full-width">
-                                <label>Fine Description / Cause</label>
-                                <input type="text" id="staff-fine-desc" placeholder="e.g. Late attendance, misconduct">
+                                <label data-i18n="fin.fineDesc">Fine Description / Cause</label>
+                                <input type="text" id="staff-fine-desc" placeholder="e.g. Late attendance, misconduct" data-i18n-placeholder="fin.causePh">
                             </div>
                             <div class="modal-actions mt-20">
-                                <button type="button" class="btn btn-cancel" onclick="resetStaffFineForm()">Clear</button>
-                                <button type="button" class="btn btn-primary" onclick="handleAddStaffFine()">Add Fine</button>
+                                <button type="button" class="btn btn-cancel" onclick="resetStaffFineForm()" data-i18n="fin.clear">Clear</button>
+                                <button type="button" class="btn btn-primary" onclick="handleAddStaffFine()" data-i18n="fin.addFine">Add Fine</button>
                             </div>
                         </div>
                     </div>
@@ -387,9 +387,9 @@
         <!-- ===================== PAGE: FINE RECORDS (Students & Staff) ===================== -->
         <div id="page-fine-records" class="sub-page d-none">
             <section class="page-title-section sub-title-section">
-                <button class="back-btn" onclick="showPage('page-student-fine')"><i class="fas fa-arrow-left"></i> Back</button>
-                <h2 class="page-title">Fine Records</h2>
-                <p class="page-description">Browse all recorded fines.</p>
+                <button class="back-btn" onclick="showPage('page-student-fine')"><i class="fas fa-arrow-left"></i> <span data-i18n="fin.back">Back</span></button>
+                <h2 class="page-title" data-i18n="fin.fineRecords">Fine Records</h2>
+                <p class="page-description" data-i18n="fin.browseFines">Browse all recorded fines.</p>
                 <div class="title-divider"></div>
             </section>
 
@@ -400,13 +400,13 @@
                         <div class="records-filter-bar">
                             <div class="fee-search-wrap records-search">
                                 <i class="fas fa-search"></i>
-                                <input type="text" id="student-fines-view-search" oninput="filterStudentFinesTable()" placeholder="Search by Reg No, Name or Guardian (e.g. Ali~Ahmed)">
+                                <input type="text" id="student-fines-view-search" oninput="filterStudentFinesTable()" placeholder="Search by Reg No, Name or Guardian (e.g. Ali~Ahmed)" data-i18n-placeholder="fin.searchRegPh">
                             </div>
                             <select id="fr-student-class-filter" onchange="onFrStudentFilterChange()">
-                                <option value="">-- All Classes --</option>
+                                <option value="" data-i18n="fin.allClassesDash">-- All Classes --</option>
                             </select>
                             <select id="fr-student-section-filter" onchange="onFrStudentFilterChange()">
-                                <option value="">-- All Sections --</option>
+                                <option value="" data-i18n="fin.allSectionsDash">-- All Sections --</option>
                             </select>
                             <select id="fr-student-month-filter" onchange="onFrMonthFilterChange()">
                             </select>
@@ -416,17 +416,17 @@
                             <table class="finance-table">
                                 <thead>
                                     <tr>
-                                        <th>Student ID</th>
-                                        <th>Name</th>
-                                        <th>Class</th>
-                                        <th>Section</th>
-                                        <th>Father Name</th>
-                                        <th>Monthly Total Fine & Reason</th>
-                                        <th>Status</th>
+                                        <th data-i18n="fin.studentId">Student ID</th>
+                                        <th data-i18n="fin.name">Name</th>
+                                        <th data-i18n="fin.class">Class</th>
+                                        <th data-i18n="fin.section">Section</th>
+                                        <th data-i18n="fin.fatherName">Father Name</th>
+                                        <th data-i18n="fin.monthlyFineReason">Monthly Total Fine & Reason</th>
+                                        <th data-i18n="fin.status">Status</th>
                                     </tr>
                                 </thead>
                                 <tbody id="student-fines-tbody">
-                                    <tr><td colspan="7" class="empty-row">No fines recorded yet.</td></tr>
+                                    <tr><td colspan="7" class="empty-row" data-i18n="fin.noFines">No fines recorded yet.</td></tr>
                                 </tbody>
                             </table>
                         </div>
@@ -437,12 +437,12 @@
                         <div class="records-filter-bar">
                             <div class="fee-search-wrap records-search">
                                 <i class="fas fa-search"></i>
-                                <input type="text" id="staff-fines-view-search" oninput="filterStaffFinesTable()" placeholder="Search by name, ID or role">
+                                <input type="text" id="staff-fines-view-search" oninput="filterStaffFinesTable()" placeholder="Search by name, ID or role" data-i18n-placeholder="fin.searchRolePh">
                             </div>
                             <div class="staff-category-toggle records-category-toggle">
-                                <button type="button" class="category-btn active" id="fr-staff-cat-all" onclick="setStaffFinesCategoryFilter('All')">All</button>
-                                <button type="button" class="category-btn" id="fr-staff-cat-teaching" onclick="setStaffFinesCategoryFilter('Teaching')">Teaching</button>
-                                <button type="button" class="category-btn" id="fr-staff-cat-non-teaching" onclick="setStaffFinesCategoryFilter('Non-Teaching')">Non-Teaching</button>
+                                <button type="button" class="category-btn active" id="fr-staff-cat-all" onclick="setStaffFinesCategoryFilter('All')" data-i18n="fin.all">All</button>
+                                <button type="button" class="category-btn" id="fr-staff-cat-teaching" onclick="setStaffFinesCategoryFilter('Teaching')" data-i18n="fin.teaching">Teaching</button>
+                                <button type="button" class="category-btn" id="fr-staff-cat-non-teaching" onclick="setStaffFinesCategoryFilter('Non-Teaching')" data-i18n="fin.nonTeaching">Non-Teaching</button>
                             </div>
                         </div>
 
@@ -450,14 +450,14 @@
                             <table class="finance-table">
                                 <thead>
                                     <tr>
-                                        <th>Name</th>
-                                        <th>Job / Role</th>
-                                        <th>Fine Amount (RS)</th>
-                                        <th>Cause</th>
+                                        <th data-i18n="fin.name">Name</th>
+                                        <th data-i18n="fin.jobRole">Job / Role</th>
+                                        <th data-i18n="fin.fineAmount">Fine Amount (RS)</th>
+                                        <th data-i18n="fin.cause">Cause</th>
                                     </tr>
                                 </thead>
                                 <tbody id="staff-fines-tbody">
-                                    <tr><td colspan="4" class="empty-row">No fines recorded yet.</td></tr>
+                                    <tr><td colspan="4" class="empty-row" data-i18n="fin.noFines">No fines recorded yet.</td></tr>
                                 </tbody>
                             </table>
                         </div>
@@ -469,9 +469,9 @@
         <!-- ===================== PAGE: VIEW STAFF BONUS (Records) ===================== -->
         <div id="page-view-staff-bonus" class="sub-page d-none">
             <section class="page-title-section sub-title-section">
-                <button class="back-btn" onclick="goBackFromBonusRecords()"><i class="fas fa-arrow-left"></i> Back</button>
-                <h2 class="page-title">Bonus Records</h2>
-                <p class="page-description">History of all staff bonuses.</p>
+                <button class="back-btn" onclick="goBackFromBonusRecords()"><i class="fas fa-arrow-left"></i> <span data-i18n="fin.back">Back</span></button>
+                <h2 class="page-title" data-i18n="fin.bonusRecords">Bonus Records</h2>
+                <p class="page-description" data-i18n="fin.bonusHistory">History of all staff bonuses.</p>
                 <div class="title-divider"></div>
             </section>
 
@@ -481,11 +481,11 @@
                 <div id="vb-panel-teaching" class="fine-panel">
                     <div class="bonus-records-toolbar">
                         <div class="bonus-records-category-chip">
-                            <i class="fas fa-chalkboard-teacher"></i> Teaching Staff Bonuses
+                            <i class="fas fa-chalkboard-teacher"></i> <span data-i18n="fin.teachingBonuses">Teaching Staff Bonuses</span>
                         </div>
                         <div class="fee-search-wrap bonus-search-wrap">
                             <i class="fas fa-search"></i>
-                            <input type="text" id="staff-bonus-view-search-teaching" oninput="filterStaffBonusTable('Teaching')" placeholder="Search by name, ID or subject…">
+                            <input type="text" id="staff-bonus-view-search-teaching" oninput="filterStaffBonusTable('Teaching')" placeholder="Search by name, ID or subject…" data-i18n-placeholder="fin.searchSubjectPh">
                         </div>
                     </div>
                     <div class="table-container table-container-full bonus-table-container">
@@ -500,7 +500,7 @@
                                 </tr>
                             </thead>
                             <tbody id="staff-bonus-tbody-teaching">
-                                <tr><td colspan="5" class="empty-row">No bonuses recorded yet.</td></tr>
+                                <tr><td colspan="5" class="empty-row" data-i18n="fin.noBonuses">No bonuses recorded yet.</td></tr>
                             </tbody>
                         </table>
                     </div>
@@ -510,11 +510,11 @@
                 <div id="vb-panel-non-teaching" class="fine-panel d-none">
                     <div class="bonus-records-toolbar">
                         <div class="bonus-records-category-chip bonus-chip-nt">
-                            <i class="fas fa-user-tie"></i> Non-Teaching Staff Bonuses
+                            <i class="fas fa-user-tie"></i> <span data-i18n="fin.nonTeachingBonuses">Non-Teaching Staff Bonuses</span>
                         </div>
                         <div class="fee-search-wrap bonus-search-wrap">
                             <i class="fas fa-search"></i>
-                            <input type="text" id="staff-bonus-view-search-non-teaching" oninput="filterStaffBonusTable('Non-Teaching')" placeholder="Search by name, ID or job role…">
+                            <input type="text" id="staff-bonus-view-search-non-teaching" oninput="filterStaffBonusTable('Non-Teaching')" placeholder="Search by name, ID or job role…" data-i18n-placeholder="fin.searchJobPh">
                         </div>
                     </div>
                     <div class="table-container table-container-full bonus-table-container">
@@ -529,7 +529,7 @@
                                 </tr>
                             </thead>
                             <tbody id="staff-bonus-tbody-non-teaching">
-                                <tr><td colspan="5" class="empty-row">No bonuses recorded yet.</td></tr>
+                                <tr><td colspan="5" class="empty-row" data-i18n="fin.noBonuses">No bonuses recorded yet.</td></tr>
                             </tbody>
                         </table>
                     </div>
@@ -540,12 +540,12 @@
         <!-- ===================== PAGE: EXPENSE HUB ===================== -->
         <div id="page-expense-hub" class="sub-page d-none">
             <section class="page-title-section sub-title-section header-with-action">
-                <button class="back-btn" onclick="showPage('page-main')"><i class="fas fa-arrow-left"></i> Back</button>
+                <button class="back-btn" onclick="showPage('page-main')"><i class="fas fa-arrow-left"></i> <span data-i18n="fin.back">Back</span></button>
                 <button type="button" class="btn-global-action btn-view-records header-action-btn" onclick="showPage('page-view-expenses')">
-                    <i class="fas fa-list-alt"></i> View Records
+                    <i class="fas fa-list-alt"></i> <span data-i18n="fin.viewRecords">View Records</span>
                 </button>
-                <h2 class="page-title">Other Expenses</h2>
-                <p class="page-description">Log operational costs — utilities, maintenance, supplies and more.</p>
+                <h2 class="page-title" data-i18n="fin.otherExpenses">Other Expenses</h2>
+                <p class="page-description" data-i18n="fin.logCosts">Log operational costs — utilities, maintenance, supplies and more.</p>
                 <div class="title-divider"></div>
             </section>
 
@@ -560,13 +560,13 @@
                                 <i class="fas fa-receipt"></i>
                             </div>
                             <div>
-                                <h3 class="expense-hub-form-title">Record New Expense</h3>
-                                <p class="expense-hub-form-sub">Fill in the details below to log an expense entry.</p>
+                                <h3 class="expense-hub-form-title" data-i18n="fin.recordNewExpense">Record New Expense</h3>
+                                <p class="expense-hub-form-sub" data-i18n="fin.fillDetails">Fill in the details below to log an expense entry.</p>
                             </div>
                         </div>
                         <div class="expense-hub-fields">
                             <div class="form-group">
-                                <label>Expense Amount <span class="field-currency">(RS)</span></label>
+                                <label><span data-i18n="fin.expenseAmount">Expense Amount</span> <span class="field-currency">(RS)</span></label>
                                 <div class="expense-amount-input-wrap">
                                     <span class="expense-rs-prefix">RS</span>
                                     <input type="number" id="hub-exp-amount" min="1" placeholder="0" class="expense-amount-input">
@@ -575,24 +575,24 @@
                                     <button type="button" class="expense-chip" onclick="addExpenseQuickAmount(500)">+500</button>
                                     <button type="button" class="expense-chip" onclick="addExpenseQuickAmount(1000)">+1,000</button>
                                     <button type="button" class="expense-chip" onclick="addExpenseQuickAmount(5000)">+5,000</button>
-                                    <button type="button" class="expense-chip expense-chip-clear" onclick="setExpenseQuickAmount(0)">Reset</button>
+                                    <button type="button" class="expense-chip expense-chip-clear" onclick="setExpenseQuickAmount(0)" data-i18n="fin.reset">Reset</button>
                                 </div>
                             </div>
                             <div class="form-group">
-                                <label>Description</label>
-                                <input type="text" id="hub-exp-desc" placeholder="e.g. Electricity bill, maintenance supplies, stationery…">
+                                <label data-i18n="fin.description">Description</label>
+                                <input type="text" id="hub-exp-desc" placeholder="e.g. Electricity bill, maintenance supplies, stationery…" data-i18n-placeholder="fin.expenseDescPh">
                             </div>
                             <div class="form-group">
-                                <label for="hub-exp-date">Expense Date</label>
+                                <label for="hub-exp-date" data-i18n="fin.expenseDate">Expense Date</label>
                                 <input type="date" id="hub-exp-date" class="expense-date-input">
                             </div>
                         </div>
                         <div class="expense-hub-actions">
                             <button type="button" class="btn btn-cancel" onclick="clearExpenseHubForm()">
-                                <i class="fas fa-times"></i> Clear
+                                <i class="fas fa-times"></i> <span data-i18n="fin.clear">Clear</span>
                             </button>
                             <button type="button" class="btn btn-primary expense-log-btn" onclick="handleExpenseSubmitHub()">
-                                <i class="fas fa-plus-circle"></i> Log Expense
+                                <i class="fas fa-plus-circle"></i> <span data-i18n="fin.logExpense">Log Expense</span>
                             </button>
                         </div>
                     </div>
@@ -604,28 +604,28 @@
         <!-- ===================== PAGE: ADD EXPENSE ===================== -->
         <div id="page-add-expense" class="sub-page d-none">
             <section class="page-title-section sub-title-section">
-                <button class="back-btn" onclick="showPage('page-expense-hub')"><i class="fas fa-arrow-left"></i> Back</button>
-                <h2 class="page-title">Add Expense</h2>
-                <p class="page-description">Record utilities, maintenance, supplies or any operational expense.</p>
+                <button class="back-btn" onclick="showPage('page-expense-hub')"><i class="fas fa-arrow-left"></i> <span data-i18n="fin.back">Back</span></button>
+                <h2 class="page-title" data-i18n="fin.addExpense">Add Expense</h2>
+                <p class="page-description" data-i18n="fin.recordUtilities">Record utilities, maintenance, supplies or any operational expense.</p>
                 <div class="title-divider"></div>
             </section>
 
             <div class="form-page-container centered-block">
                 <div class="form-group full-width">
-                    <label>Expense Amount (RS)</label>
+                    <label data-i18n="fin.expenseAmountRs">Expense Amount (RS)</label>
                     <input type="number" id="exp-amount" min="1" placeholder="Enter amount">
                 </div>
                 <div class="form-group full-width">
-                    <label>Description</label>
-                    <input type="text" id="exp-desc" placeholder="e.g. Electricity bill, maintenance supplies">
+                    <label data-i18n="fin.description">Description</label>
+                    <input type="text" id="exp-desc" placeholder="e.g. Electricity bill, maintenance supplies" data-i18n-placeholder="fin.expenseDescPh2">
                 </div>
                 <div class="form-group full-width">
-                    <label for="exp-date">Expense Date</label>
+                    <label for="exp-date" data-i18n="fin.expenseDate">Expense Date</label>
                     <input type="date" id="exp-date" class="expense-date-input">
                 </div>
                 <div class="modal-actions mt-20">
-                    <button type="button" class="btn btn-cancel" onclick="showPage('page-expense-hub')">Cancel</button>
-                    <button type="button" class="btn btn-primary" onclick="handleExpenseSubmitNew()">Log Expense</button>
+                    <button type="button" class="btn btn-cancel" onclick="showPage('page-expense-hub')" data-i18n="fin.cancel">Cancel</button>
+                    <button type="button" class="btn btn-primary" onclick="handleExpenseSubmitNew()" data-i18n="fin.logExpense">Log Expense</button>
                 </div>
             </div>
         </div>
@@ -633,12 +633,12 @@
         <!-- ===================== PAGE: VIEW EXPENSES ===================== -->
         <div id="page-view-expenses" class="sub-page d-none">
             <section class="page-title-section sub-title-section stats-header-section">
-                <button class="back-btn" onclick="showPage('page-expense-hub')"><i class="fas fa-arrow-left"></i> Back</button>
+                <button class="back-btn" onclick="showPage('page-expense-hub')"><i class="fas fa-arrow-left"></i> <span data-i18n="fin.back">Back</span></button>
                 <div class="fee-stats-row-compact" id="expense-summary-row">
                     <div class="fee-stat-card fee-stat-pending">
                         <div class="fee-stat-icon"><i class="fas fa-wallet"></i></div>
                         <div class="fee-stat-info">
-                            <span class="fee-stat-label" id="expense-total-label">Total Expenses (Monthly)</span>
+                            <span class="fee-stat-label" id="expense-total-label" data-i18n="fin.totalExpensesMonthly">Total Expenses (Monthly)</span>
                             <span class="fee-stat-value" id="expense-total-value">Rs. 0</span>
                         </div>
                     </div>
@@ -649,35 +649,35 @@
                 <!-- Toolbar sits above the table: title on the left, daily/monthly switcher on the right -->
                 <div class="expense-records-toolbar">
                     <div class="expense-records-toolbar-label" id="expense-records-toolbar-label">
-                        <i class="fas fa-list-ul"></i> Monthly Expenses <span id="expense-records-count"></span>
+                        <i class="fas fa-list-ul"></i> <span data-i18n="fin.monthlyExpenses">Monthly Expenses</span> <span id="expense-records-count"></span>
                     </div>
                     <div class="segemented-control expense-view-switcher" id="expense-view-switcher">
                         <button type="button" class="seg-btn active" data-view="monthly" onclick="setExpenseView('monthly', this)">
-                            <i class="fas fa-calendar-alt"></i> Monthly
+                            <i class="fas fa-calendar-alt"></i> <span data-i18n="fin.monthly">Monthly</span>
                         </button>
                         <button type="button" class="seg-btn" data-view="daily" onclick="setExpenseView('daily', this)">
-                            <i class="fas fa-calendar-day"></i> Daily
+                            <i class="fas fa-calendar-day"></i> <span data-i18n="fin.daily">Daily</span>
                         </button>
                     </div>
                 </div>
 
                 <!-- Date picker row, shown only in daily mode -->
                 <div class="expense-daily-filter-row d-none" id="expense-daily-filter-row">
-                    <label for="expense-daily-date"><i class="fas fa-calendar-alt"></i> Date</label>
+                    <label for="expense-daily-date"><i class="fas fa-calendar-alt"></i> <span data-i18n="fin.date">Date</span></label>
                     <input type="date" id="expense-daily-date" onchange="renderExpensesTable()">
                 </div>
 
                 <table class="finance-table">
                     <thead>
                         <tr>
-                            <th>Date</th>
-                            <th>Time</th>
-                            <th>Expense of</th>
-                            <th>Expense Amount (RS)</th>
+                            <th data-i18n="fin.date">Date</th>
+                            <th data-i18n="fin.time">Time</th>
+                            <th data-i18n="fin.expenseOf">Expense of</th>
+                            <th data-i18n="fin.expenseAmountRs">Expense Amount (RS)</th>
                         </tr>
                     </thead>
                     <tbody id="expenses-tbody">
-                        <tr><td colspan="4" class="empty-row">No expenses recorded yet.</td></tr>
+                        <tr><td colspan="4" class="empty-row" data-i18n="fin.noExpenses">No expenses recorded yet.</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -689,9 +689,9 @@
                 <!-- ===================== PAGE: SALARY HUB ===================== -->
 <div id="page-salary-hub" class="sub-page d-none">
     <section class="page-title-section sub-title-section">
-        <button class="back-btn" onclick="showPage('page-main')"><i class="fas fa-arrow-left"></i> Back</button>
-        <h2 class="page-title">Manage Salaries</h2>
-        <p class="page-description">Select staff category to manage monthly payroll.</p>
+        <button class="back-btn" onclick="showPage('page-main')"><i class="fas fa-arrow-left"></i> <span data-i18n="fin.back">Back</span></button>
+        <h2 class="page-title" data-i18n="fin.manageSalaries">Manage Salaries</h2>
+        <p class="page-description" data-i18n="fin.selectStaffCat">Select staff category to manage monthly payroll.</p>
         <div class="title-divider"></div>
     </section>
 
@@ -699,14 +699,14 @@
         <div class="finance-card salary-theme" onclick="showPage('page-salary-teaching')">
             <div class="card-glow"></div>
             <div class="icon-wrapper"><i class="fas fa-chalkboard-teacher"></i></div>
-            <h3 class="card-title">Teaching Staff</h3>
-            <p class="card-description">Manage salaries for teachers and instructors.</p>
+            <h3 class="card-title" data-i18n="fin.teachingStaff">Teaching Staff</h3>
+            <p class="card-description" data-i18n="fin.teachingSalSub">Manage salaries for teachers and instructors.</p>
         </div>
         <div class="finance-card salary-theme" onclick="showPage('page-salary-non-teaching')">
             <div class="card-glow"></div>
             <div class="icon-wrapper"><i class="fas fa-user-tie"></i></div>
-            <h3 class="card-title">Non-Teaching Staff</h3>
-            <p class="card-description">Manage salaries for admin and support staff.</p>
+            <h3 class="card-title" data-i18n="fin.nonTeachingStaff">Non-Teaching Staff</h3>
+            <p class="card-description" data-i18n="fin.nonTeachingSalSub">Manage salaries for admin and support staff.</p>
         </div>
     </section>
 </div>
@@ -714,25 +714,25 @@
 <!-- ===================== PAGE: TEACHING SALARY ===================== -->
 <div id="page-salary-teaching" class="sub-page d-none">
     <section class="page-title-section sub-title-section">
-        <button class="back-btn" onclick="showPage('page-salary-hub')"><i class="fas fa-arrow-left"></i> Back</button>
-        <h2 class="page-title">Teaching Staff Payroll</h2>
-        <p class="page-description">Monitor and process monthly salaries for teachers.</p>
+        <button class="back-btn" onclick="showPage('page-salary-hub')"><i class="fas fa-arrow-left"></i> <span data-i18n="fin.back">Back</span></button>
+        <h2 class="page-title" data-i18n="fin.teachingPayroll">Teaching Staff Payroll</h2>
+        <p class="page-description" data-i18n="fin.monitorTeachers">Monitor and process monthly salaries for teachers.</p>
         <div class="title-divider"></div>
     </section>
 
     <!-- End-of-month update indicator -->
     <div class="salary-update-notice">
         <i class="fas fa-info-circle"></i>
-        <span>Salary status is updated at the end of each month after processing. Paid entries are locked until the next month.</span>
+        <span data-i18n="fin.salaryLockNote">Salary status is updated at the end of each month after processing. Paid entries are locked until the next month.</span>
     </div>
 
     <!-- Two action buttons above the table -->
     <div class="salary-table-actions">
         <button type="button" class="btn-salary-view-records" onclick="showSalaryRecords('Teaching')">
-            <i class="fas fa-history"></i> Salary Records
+            <i class="fas fa-history"></i> <span data-i18n="fin.salaryRecords">Salary Records</span>
         </button>
         <button type="button" class="btn-salary-bonus" onclick="showPage('page-bonus-teaching')">
-            <i class="fas fa-gift"></i> Bonus
+            <i class="fas fa-gift"></i> <span data-i18n="fin.bonus">Bonus</span>
         </button>
     </div>
 
@@ -741,23 +741,23 @@
         <div class="table-toolbar">
             <div class="table-toolbar-search">
                 <i class="fas fa-search"></i>
-                <input type="text" id="teacher-salary-search" placeholder="Enter Name or Teacher ID..." oninput="filterTeachingSalaries()">
+                <input type="text" id="teacher-salary-search" placeholder="Enter Name or Teacher ID..." data-i18n-placeholder="fin.enterTeacherIdPh" oninput="filterTeachingSalaries()">
             </div>
             <div class="table-toolbar-filter">
-                <label>Current Month</label>
+                <label data-i18n="fin.currentMonth">Current Month</label>
                 <input type="text" id="current-salary-month" readonly>
             </div>
         </div>
         <table class="finance-table">
             <thead>
                 <tr>
-                    <th>Teacher ID</th>
-                    <th>Teacher Name</th>
-                    <th>Designation/Subject</th>
-                    <th>Basic Salary</th>
-                    <th>Absence Fine</th>
-                    <th>Taken Advance</th>
-                    <th>Status</th>
+                    <th data-i18n="fin.teacherId">Teacher ID</th>
+                    <th data-i18n="fin.teacherName">Teacher Name</th>
+                    <th data-i18n="fin.designation">Designation/Subject</th>
+                    <th data-i18n="fin.basicSalary">Basic Salary</th>
+                    <th data-i18n="fin.absenceFine">Absence Fine</th>
+                    <th data-i18n="fin.takenAdvance">Taken Advance</th>
+                    <th data-i18n="fin.status">Status</th>
                 </tr>
             </thead>
             <tbody id="teaching-salary-tbody">
@@ -770,25 +770,25 @@
 <!-- ===================== PAGE: NON-TEACHING SALARY ===================== -->
 <div id="page-salary-non-teaching" class="sub-page d-none">
     <section class="page-title-section sub-title-section">
-        <button class="back-btn" onclick="showPage('page-salary-hub')"><i class="fas fa-arrow-left"></i> Back</button>
-        <h2 class="page-title">Non-Teaching Staff Payroll</h2>
-        <p class="page-description">Monitor and process monthly salaries for workers.</p>
+        <button class="back-btn" onclick="showPage('page-salary-hub')"><i class="fas fa-arrow-left"></i> <span data-i18n="fin.back">Back</span></button>
+        <h2 class="page-title" data-i18n="fin.nonTeachingPayroll">Non-Teaching Staff Payroll</h2>
+        <p class="page-description" data-i18n="fin.monitorWorkers">Monitor and process monthly salaries for workers.</p>
         <div class="title-divider"></div>
     </section>
 
     <!-- End-of-month update indicator -->
     <div class="salary-update-notice">
         <i class="fas fa-info-circle"></i>
-        <span>Salary status is updated at the end of each month after processing. Paid entries are locked until the next month.</span>
+        <span data-i18n="fin.salaryLockNote">Salary status is updated at the end of each month after processing. Paid entries are locked until the next month.</span>
     </div>
 
     <!-- Two action buttons above the table -->
     <div class="salary-table-actions">
         <button type="button" class="btn-salary-view-records" onclick="showSalaryRecords('Non-Teaching')">
-            <i class="fas fa-history"></i> Salary Records
+            <i class="fas fa-history"></i> <span data-i18n="fin.salaryRecords">Salary Records</span>
         </button>
         <button type="button" class="btn-salary-bonus" onclick="showPage('page-bonus-non-teaching')">
-            <i class="fas fa-gift"></i> Bonus
+            <i class="fas fa-gift"></i> <span data-i18n="fin.bonus">Bonus</span>
         </button>
     </div>
 
@@ -797,23 +797,23 @@
         <div class="table-toolbar">
             <div class="table-toolbar-search">
                 <i class="fas fa-search"></i>
-                <input type="text" id="worker-salary-search" placeholder="Enter Name or Worker ID..." oninput="filterNonTeachingSalaries()">
+                <input type="text" id="worker-salary-search" placeholder="Enter Name or Worker ID..." data-i18n-placeholder="fin.enterWorkerIdPh" oninput="filterNonTeachingSalaries()">
             </div>
             <div class="table-toolbar-filter">
-                <label>Current Month</label>
+                <label data-i18n="fin.currentMonth">Current Month</label>
                 <input type="text" id="current-salary-month-nt" readonly>
             </div>
         </div>
         <table class="finance-table">
             <thead>
                 <tr>
-                    <th>Worker ID</th>
-                    <th>Worker Name</th>
-                    <th>Job</th>
-                    <th>Basic Salary</th>
-                    <th>Absence Fine</th>
-                    <th>Taken Advance</th>
-                    <th>Status</th>
+                    <th data-i18n="fin.workerId">Worker ID</th>
+                    <th data-i18n="fin.workerName">Worker Name</th>
+                    <th data-i18n="fin.job">Job</th>
+                    <th data-i18n="fin.basicSalary">Basic Salary</th>
+                    <th data-i18n="fin.absenceFine">Absence Fine</th>
+                    <th data-i18n="fin.takenAdvance">Taken Advance</th>
+                    <th data-i18n="fin.status">Status</th>
                 </tr>
             </thead>
             <tbody id="non-teaching-salary-tbody">
@@ -826,9 +826,9 @@
 <!-- ===================== PAGE: SALARY RECORDS ===================== -->
 <div id="page-salary-records" class="sub-page d-none">
     <section class="page-title-section sub-title-section">
-        <button class="back-btn" id="salary-records-back-btn" onclick="showPage('page-salary-teaching')"><i class="fas fa-arrow-left"></i> Back</button>
-        <h2 class="page-title">Staff Salary Records</h2>
-        <p class="page-description">Month-wise salary payment history for all staff.</p>
+        <button class="back-btn" id="salary-records-back-btn" onclick="showPage('page-salary-teaching')"><i class="fas fa-arrow-left"></i> <span data-i18n="fin.back">Back</span></button>
+        <h2 class="page-title" data-i18n="fin.staffSalaryRecords">Staff Salary Records</h2>
+        <p class="page-description" data-i18n="fin.monthWiseHistory">Month-wise salary payment history for all staff.</p>
         <div class="title-divider"></div>
     </section>
 
@@ -836,24 +836,24 @@
     <div class="salary-records-controls sr-controls-row">
         <div class="sr-category-badge" id="sr-category-badge">
             <i class="fas fa-chalkboard-teacher"></i>
-            <span id="sr-category-label-text">Teaching Staff</span>
+            <span id="sr-category-label-text" data-i18n="fin.teachingStaff">Teaching Staff</span>
         </div>
         <div class="sr-search-wrap">
             <i class="fas fa-search"></i>
-            <input type="text" id="sr-search-input" placeholder="Search by name or ID…" oninput="filterSalaryRecordsTable()">
+            <input type="text" id="sr-search-input" placeholder="Search by name or ID…" data-i18n-placeholder="fin.searchNameIdPh2" oninput="filterSalaryRecordsTable()">
         </div>
         <div class="salary-records-month-filter">
-            <label class="sr-month-label"><i class="fas fa-calendar-alt"></i> Month (Jan–Dec)</label>
+            <label class="sr-month-label"><i class="fas fa-calendar-alt"></i> <span data-i18n="fin.monthJanDec">Month (Jan–Dec)</span></label>
             <select id="sr-month-select" onchange="onSalaryRecordsMonthChange()">
                 <!-- Populated by JS -->
             </select>
         </div>
         <div class="table-toolbar-filter sr-status-filter-wrap">
-            <label>Status</label>
+            <label data-i18n="fin.status">Status</label>
             <select id="sr-status-filter" onchange="filterSalaryRecordsTable()">
-                <option value="">All</option>
-                <option value="paid">Paid</option>
-                <option value="pending">Pending</option>
+                <option value="" data-i18n="fin.all">All</option>
+                <option value="paid" data-i18n="fin.paid">Paid</option>
+                <option value="pending" data-i18n="fin.pending">Pending</option>
             </select>
         </div>
     </div>
@@ -863,21 +863,21 @@
         <table class="finance-table">
             <thead>
                 <tr>
-                    <th>Staff ID</th>
-                    <th>Name</th>
-                    <th>Role / Job</th>
-                    <th>Base Salary</th>
-                    <th>Bonus</th>
-                    <th>Fines Deducted</th>
-                    <th>Security Deducted</th>
-                    <th>Paid Amount</th>
-                    <th>Pending Amount</th>
-                    <th>Month</th>
-                    <th>Status</th>
+                    <th data-i18n="fin.staffId">Staff ID</th>
+                    <th data-i18n="fin.name">Name</th>
+                    <th data-i18n="fin.roleJob">Role / Job</th>
+                    <th data-i18n="fin.baseSalary">Base Salary</th>
+                    <th data-i18n="fin.bonus">Bonus</th>
+                    <th data-i18n="fin.finesDeducted">Fines Deducted</th>
+                    <th data-i18n="fin.securityDeducted">Security Deducted</th>
+                    <th data-i18n="fin.paidAmount">Paid Amount</th>
+                    <th data-i18n="fin.pendingAmount">Pending Amount</th>
+                    <th data-i18n="fin.month">Month</th>
+                    <th data-i18n="fin.status">Status</th>
                 </tr>
             </thead>
             <tbody id="salary-records-tbody">
-                <tr><td colspan="11" class="empty-row">Loading records…</td></tr>
+                <tr><td colspan="11" class="empty-row" data-i18n="fin.loadingRecords">Loading records…</td></tr>
             </tbody>
         </table>
     </div>
@@ -886,9 +886,9 @@
 <!-- ===================== PAGE: BONUS HUB ===================== -->
 <div id="page-bonus-hub" class="sub-page d-none">
     <section class="page-title-section sub-title-section">
-        <button class="back-btn" onclick="showPage('page-main')"><i class="fas fa-arrow-left"></i> Back</button>
-        <h2 class="page-title">Manage Staff Bonuses</h2>
-        <p class="page-description">Select staff category to add or review bonuses.</p>
+        <button class="back-btn" onclick="showPage('page-main')"><i class="fas fa-arrow-left"></i> <span data-i18n="fin.back">Back</span></button>
+        <h2 class="page-title" data-i18n="fin.manageBonuses">Manage Staff Bonuses</h2>
+        <p class="page-description" data-i18n="fin.selectCatBonus">Select staff category to add or review bonuses.</p>
         <div class="title-divider"></div>
     </section>
 
@@ -896,14 +896,14 @@
         <div class="finance-card salary-theme" onclick="showPage('page-bonus-teaching')">
             <div class="card-glow"></div>
             <div class="icon-wrapper"><i class="fas fa-chalkboard-teacher"></i></div>
-            <h3 class="card-title">Teaching Staff</h3>
-            <p class="card-description">Add or view bonuses for teachers and instructors.</p>
+            <h3 class="card-title" data-i18n="fin.teachingStaff">Teaching Staff</h3>
+            <p class="card-description" data-i18n="fin.addViewTeaching">Add or view bonuses for teachers and instructors.</p>
         </div>
         <div class="finance-card salary-theme" onclick="showPage('page-bonus-non-teaching')">
             <div class="card-glow"></div>
             <div class="icon-wrapper"><i class="fas fa-user-tie"></i></div>
-            <h3 class="card-title">Non-Teaching Staff</h3>
-            <p class="card-description">Add or view bonuses for admin and support staff.</p>
+            <h3 class="card-title" data-i18n="fin.nonTeachingStaff">Non-Teaching Staff</h3>
+            <p class="card-description" data-i18n="fin.addViewNonTeaching">Add or view bonuses for admin and support staff.</p>
         </div>
     </section>
 </div>
@@ -911,34 +911,34 @@
 <!-- ===================== PAGE: BONUS - TEACHING STAFF ===================== -->
 <div id="page-bonus-teaching" class="sub-page d-none">
     <section class="page-title-section sub-title-section header-with-action">
-        <button class="back-btn" onclick="goBackToSalaryFromBonus()"><i class="fas fa-arrow-left"></i> Back</button>
+        <button class="back-btn" onclick="goBackToSalaryFromBonus()"><i class="fas fa-arrow-left"></i> <span data-i18n="fin.back">Back</span></button>
         <button type="button" class="btn-global-action btn-view-records header-action-btn" onclick="openBonusRecordsForCategory('Teaching')">
-            <i class="fas fa-list-alt"></i> View Records
+            <i class="fas fa-list-alt"></i> <span data-i18n="fin.viewRecords">View Records</span>
         </button>
-        <h2 class="page-title">Add Bonus — Teaching Staff</h2>
-        <p class="page-description">Select a teaching staff member and record their bonus.</p>
+        <h2 class="page-title" data-i18n="fin.addBonusTeaching">Add Bonus — Teaching Staff</h2>
+        <p class="page-description" data-i18n="fin.pickTeachingMember">Select a teaching staff member and record their bonus.</p>
         <div class="title-divider"></div>
     </section>
     <div class="form-page-container">
         <div class="form-group full-width">
-            <label>Search Staff</label>
-            <input type="text" id="bonus-search-teaching" class="fine-search-input" oninput="filterSalaryBonusList('teaching')" placeholder="Search teacher by name, ID or subject…">
-            <p class="search-hint">Results show ID, Name, Class &amp; Subject.</p>
+            <label data-i18n="fin.searchStaff">Search Staff</label>
+            <input type="text" id="bonus-search-teaching" class="fine-search-input" oninput="filterSalaryBonusList('teaching')" placeholder="Search teacher by name, ID or subject…" data-i18n-placeholder="fin.searchTeacherPh">
+            <p class="search-hint" data-i18n="fin.resultsShowShort">Results show ID, Name, Class &amp; Subject.</p>
             <div id="bonus-members-list-teaching" class="staff-members-list fine-results-list"></div>
         </div>
         <div class="sbp-bonus-row">
             <div class="form-group">
-                <label>Bonus Amount (RS)</label>
+                <label data-i18n="fin.bonusAmount">Bonus Amount (RS)</label>
                 <input type="number" id="bonus-amount-teaching" min="1" placeholder="Enter amount">
             </div>
             <div class="form-group">
-                <label>Reason / Description</label>
-                <input type="text" id="bonus-desc-teaching" placeholder="e.g. Annual performance bonus">
+                <label data-i18n="fin.reasonDesc">Reason / Description</label>
+                <input type="text" id="bonus-desc-teaching" placeholder="e.g. Annual performance bonus" data-i18n-placeholder="fin.bonusReasonPh">
             </div>
         </div>
         <div class="modal-actions mt-12">
-            <button type="button" class="btn btn-cancel" onclick="resetSalaryBonusForm('teaching')">Clear</button>
-            <button type="button" class="btn btn-primary" onclick="handleSalaryPageBonus('Teaching')">Add Bonus</button>
+            <button type="button" class="btn btn-cancel" onclick="resetSalaryBonusForm('teaching')" data-i18n="fin.clear">Clear</button>
+            <button type="button" class="btn btn-primary" onclick="handleSalaryPageBonus('Teaching')" data-i18n="fin.addBonus">Add Bonus</button>
         </div>
     </div>
 </div>
@@ -946,34 +946,34 @@
 <!-- ===================== PAGE: BONUS - NON-TEACHING STAFF ===================== -->
 <div id="page-bonus-non-teaching" class="sub-page d-none">
     <section class="page-title-section sub-title-section header-with-action">
-        <button class="back-btn" onclick="goBackToSalaryFromBonus()"><i class="fas fa-arrow-left"></i> Back</button>
+        <button class="back-btn" onclick="goBackToSalaryFromBonus()"><i class="fas fa-arrow-left"></i> <span data-i18n="fin.back">Back</span></button>
         <button type="button" class="btn-global-action btn-view-records header-action-btn" onclick="openBonusRecordsForCategory('Non-Teaching')">
-            <i class="fas fa-list-alt"></i> View Records
+            <i class="fas fa-list-alt"></i> <span data-i18n="fin.viewRecords">View Records</span>
         </button>
-        <h2 class="page-title">Add Bonus — Non-Teaching Staff</h2>
-        <p class="page-description">Select a non-teaching staff member and record their bonus.</p>
+        <h2 class="page-title" data-i18n="fin.addBonusNonTeaching">Add Bonus — Non-Teaching Staff</h2>
+        <p class="page-description" data-i18n="fin.pickNonTeachingMember">Select a non-teaching staff member and record their bonus.</p>
         <div class="title-divider"></div>
     </section>
     <div class="form-page-container">
         <div class="form-group full-width">
-            <label>Search Staff</label>
-            <input type="text" id="bonus-search-non-teaching" class="fine-search-input" oninput="filterSalaryBonusList('non-teaching')" placeholder="Search staff by name, ID or job role…">
-            <p class="search-hint">Results show ID, Name and Job Role.</p>
+            <label data-i18n="fin.searchStaff">Search Staff</label>
+            <input type="text" id="bonus-search-non-teaching" class="fine-search-input" oninput="filterSalaryBonusList('non-teaching')" placeholder="Search staff by name, ID or job role…" data-i18n-placeholder="fin.searchStaffJobPh">
+            <p class="search-hint" data-i18n="fin.resultsShowJob">Results show ID, Name and Job Role.</p>
             <div id="bonus-members-list-non-teaching" class="staff-members-list fine-results-list"></div>
         </div>
         <div class="sbp-bonus-row">
             <div class="form-group">
-                <label>Bonus Amount (RS)</label>
+                <label data-i18n="fin.bonusAmount">Bonus Amount (RS)</label>
                 <input type="number" id="bonus-amount-non-teaching" min="1" placeholder="Enter amount">
             </div>
             <div class="form-group">
-                <label>Reason / Description</label>
+                <label data-i18n="fin.reasonDesc">Reason / Description</label>
                 <input type="text" id="bonus-desc-non-teaching" placeholder="e.g. Annual performance bonus">
             </div>
         </div>
         <div class="modal-actions mt-12">
-            <button type="button" class="btn btn-cancel" onclick="resetSalaryBonusForm('non-teaching')">Clear</button>
-            <button type="button" class="btn btn-primary" onclick="handleSalaryPageBonus('Non-Teaching')">Add Bonus</button>
+            <button type="button" class="btn btn-cancel" onclick="resetSalaryBonusForm('non-teaching')" data-i18n="fin.clear">Clear</button>
+            <button type="button" class="btn btn-primary" onclick="handleSalaryPageBonus('Non-Teaching')" data-i18n="fin.addBonus">Add Bonus</button>
         </div>
     </div>
 </div>
@@ -991,7 +991,7 @@
                     <div class="sbp-teacher-id" id="sbp-teacher-id">—</div>
                 </div>
             </div>
-            <button class="sbp-close-btn" onclick="closeSalaryBreakdown()" title="Close"><i class="fas fa-times"></i></button>
+            <button class="sbp-close-btn" onclick="closeSalaryBreakdown()" title="Close" data-i18n-title="fin.closeTitle"><i class="fas fa-times"></i></button>
         </div>
 
         <!-- Formula Banner -->
@@ -999,58 +999,58 @@
             <span class="sbp-formula-text">
                 <i class="fas fa-calculator"></i>
                 &nbsp;Net =&nbsp;
-                <span class="f-total">Salary</span>
-                &nbsp;+&nbsp;<span class="f-bonus">Bonus</span>
-                &nbsp;−&nbsp;<span class="f-security">Security</span>
-                &nbsp;−&nbsp;<span class="f-fine">Fine</span>
-                &nbsp;−&nbsp;<span class="f-fine" style="color:#c4b5fd;">Absence</span>
-                &nbsp;−&nbsp;<span class="f-advance">Advance</span>
+                <span class="f-total" data-i18n="fin.salary">Salary</span>
+                &nbsp;+&nbsp;<span class="f-bonus" data-i18n="fin.bonus">Bonus</span>
+                &nbsp;−&nbsp;<span class="f-security" data-i18n="fin.security">Security</span>
+                &nbsp;−&nbsp;<span class="f-fine" data-i18n="fin.fine">Fine</span>
+                &nbsp;−&nbsp;<span class="f-fine" style="color:#c4b5fd;" data-i18n="fin.absence">Absence</span>
+                &nbsp;−&nbsp;<span class="f-advance" data-i18n="fin.advance">Advance</span>
             </span>
         </div>
 
         <!-- Breakdown Cards -->
         <div class="sbp-cards-grid">
             <div class="sbp-card sbp-c-blue">
-                <label><i class="fas fa-money-bill-wave"></i> Total Salary</label>
+                <label><i class="fas fa-money-bill-wave"></i> <span data-i18n="fin.totalSalary">Total Salary</span></label>
                 <input type="text" id="sbp-total-salary" readonly>
             </div>
             <div class="sbp-card sbp-c-green sbp-card-with-action">
-                <label><i class="fas fa-gift"></i> Bonus
-                    <button type="button" class="sbp-inline-add-btn" id="sbp-add-bonus-btn" onclick="toggleInlineBonus()" title="Add Bonus">
+                <label><i class="fas fa-gift"></i> <span data-i18n="fin.bonus">Bonus</span>
+                    <button type="button" class="sbp-inline-add-btn" id="sbp-add-bonus-btn" onclick="toggleInlineBonus()" title="Add Bonus" data-i18n-title="fin.addBonusTitle">
                         <i class="fas fa-plus"></i>
                     </button>
                 </label>
                 <input type="text" id="sbp-bonus" readonly>
                 <div id="sbp-inline-bonus-wrap" class="sbp-inline-bonus-wrap d-none">
-                    <input type="number" min="1" id="sbp-inline-bonus-amount" placeholder="Amount">
-                    <input type="text" id="sbp-inline-bonus-desc" placeholder="Reason">
+                    <input type="number" min="1" id="sbp-inline-bonus-amount" placeholder="Amount" data-i18n-placeholder="fin.amountPh">
+                    <input type="text" id="sbp-inline-bonus-desc" placeholder="Reason" data-i18n-placeholder="fin.reasonPh">
                     <button type="button" class="sbp-btn sbp-btn-pay" onclick="addBonusFromSalaryPanel()">
-                        <i class="fas fa-check"></i> Add
+                        <i class="fas fa-check"></i> <span data-i18n="fin.add">Add</span>
                     </button>
                 </div>
             </div>
             <div class="sbp-card sbp-c-orange">
-                <label><i class="fas fa-shield-alt"></i> Security</label>
+                <label><i class="fas fa-shield-alt"></i> <span data-i18n="fin.security">Security</span></label>
                 <input type="text" id="sbp-security" readonly>
             </div>
             <div class="sbp-card sbp-c-purple">
-                <label><i class="fas fa-exclamation-triangle"></i> Manual Fine</label>
+                <label><i class="fas fa-exclamation-triangle"></i> <span data-i18n="fin.manualFine">Manual Fine</span></label>
                 <input type="text" id="sbp-fine" readonly>
             </div>
             <div class="sbp-card sbp-c-violet">
-                <label><i class="fas fa-calendar-times"></i> Absence Fine <span id="sbp-absent-days-label" style="font-weight:400;opacity:0.7;font-size:9px;margin-left:2px;"></span></label>
+                <label><i class="fas fa-calendar-times"></i> <span data-i18n="fin.absenceFine">Absence Fine</span> <span id="sbp-absent-days-label" style="font-weight:400;opacity:0.7;font-size:9px;margin-left:2px;"></span></label>
                 <input type="text" id="sbp-absence-fine" readonly>
             </div>
             <div class="sbp-card sbp-c-yellow">
-                <label><i class="fas fa-hand-holding"></i> Advance Taken</label>
+                <label><i class="fas fa-hand-holding"></i> <span data-i18n="fin.advanceTaken">Advance Taken</span></label>
                 <input type="text" id="sbp-advance-taken" readonly>
             </div>
             <div class="sbp-card sbp-c-green">
-                <label><i class="fas fa-check-circle"></i> Paid Amount<span style="font-weight:400;opacity:0.7;font-size:9px;margin-left:2px;">(incl. advance)</span></label>
+                <label><i class="fas fa-check-circle"></i> <span data-i18n="fin.paidAmount">Paid Amount</span><span style="font-weight:400;opacity:0.7;font-size:9px;margin-left:2px;" data-i18n="fin.inclAdvance">(incl. advance)</span></label>
                 <input type="text" id="sbp-paid-amount" readonly>
             </div>
             <div class="sbp-card sbp-c-grand">
-                <label><i class="fas fa-hand-holding-usd"></i> Pending Amount</label>
+                <label><i class="fas fa-hand-holding-usd"></i> <span data-i18n="fin.pendingAmount">Pending Amount</span></label>
                 <input type="text" id="sbp-net-payable" readonly>
             </div>
         </div>
@@ -1058,12 +1058,12 @@
         <!-- Advance Pay Section -->
         <div class="sbp-advance-section">
             <button type="button" class="sbp-advance-toggle-btn" id="sbp-toggle-advance-btn" onclick="toggleAdvancePay()">
-                <i class="fas fa-hand-holding-usd"></i> Pay Advance Salary
+                <i class="fas fa-hand-holding-usd"></i> <span data-i18n="fin.payAdvance">Pay Advance Salary</span>
             </button>
             <div id="sbp-advance-input-wrap" class="d-none sbp-advance-input-row">
-                <input type="number" min="1" id="sbp-advance-amount" placeholder="Enter advance amount…">
+                <input type="number" min="1" id="sbp-advance-amount" placeholder="Enter advance amount…" data-i18n-placeholder="fin.advanceAmountPh">
                 <button type="button" class="sbp-btn sbp-btn-pay" onclick="payAdvanceSalary()">
-                    <i class="fas fa-check"></i> Pay
+                    <i class="fas fa-check"></i> <span data-i18n="fin.pay">Pay</span>
                 </button>
             </div>
         </div>
@@ -1071,10 +1071,10 @@
         <!-- Action Buttons -->
         <div class="sbp-actions">
             <button type="button" class="sbp-btn sbp-btn-cancel" onclick="closeSalaryBreakdown()">
-                <i class="fas fa-times"></i> Cancel
+                <i class="fas fa-times"></i> <span data-i18n="fin.cancel">Cancel</span>
             </button>
             <button type="button" class="sbp-btn sbp-btn-pay" id="sbp-pay-salary-btn" onclick="payCurrentSalary()">
-                <i class="fas fa-check-circle"></i> Pay Salary
+                <i class="fas fa-check-circle"></i> <span data-i18n="fin.paySalary">Pay Salary</span>
             </button>
         </div>
     </div>
@@ -1085,12 +1085,12 @@
         <div id="voucher-modal-overlay" class="voucher-modal-overlay" style="display:none;">
             <div class="voucher-modal-box">
                 <div class="voucher-modal-header">
-                    <h3><i class="fas fa-file-invoice"></i> Fee Voucher Preview</h3>
+                    <h3><i class="fas fa-file-invoice"></i> <span data-i18n="fin.voucherPreview">Fee Voucher Preview</span></h3>
                     <div class="voucher-modal-actions">
-                        <button class="btn-primary" onclick="printVoucherFromModal()"><i class="fas fa-print"></i> Print Voucher</button>
-                        <button class="voucher-share-btn" id="share-voucher-btn" onclick="shareVoucherOnline()" title="Share voucher online"><i class="fas fa-share-alt"></i> <span>Share</span></button>
-                        <button class="action-edit-btn" id="edit-voucher-btn" onclick="openVoucherEditModal()" style="background:#f59e0b; color:#fff; padding:6px 14px; border:none; border-radius:6px; cursor:pointer; display:none;"><i class="fas fa-edit"></i> Edit Voucher</button>
-                        <button class="action-back-btn" onclick="closeVoucherModal()"><i class="fas fa-times"></i> Close</button>
+                        <button class="btn-primary" onclick="printVoucherFromModal()"><i class="fas fa-print"></i> <span data-i18n="fin.printVoucher">Print Voucher</span></button>
+                        <button class="voucher-share-btn" id="share-voucher-btn" onclick="shareVoucherOnline()" title="Share voucher online" data-i18n-title="fin.shareVoucherTitle"><i class="fas fa-share-alt"></i> <span data-i18n="fin.share">Share</span></button>
+                        <button class="action-edit-btn" id="edit-voucher-btn" onclick="openVoucherEditModal()" style="background:#f59e0b; color:#fff; padding:6px 14px; border:none; border-radius:6px; cursor:pointer; display:none;"><i class="fas fa-edit"></i> <span data-i18n="fin.editVoucher">Edit Voucher</span></button>
+                        <button class="action-back-btn" onclick="closeVoucherModal()"><i class="fas fa-times"></i> <span data-i18n="fin.close">Close</span></button>
                     </div>
                 </div>
                 <div class="voucher-modal-scroll">
@@ -1106,8 +1106,8 @@
                     <div class="afm-header-left">
                         <div class="afm-header-icon"><i class="fas fa-file-invoice-dollar"></i></div>
                         <div>
-                            <h3>Fee Payment Entry</h3>
-                            <p id="afm-header-subtitle">Recording payment for student</p>
+                            <h3 data-i18n="fin.paymentEntry">Fee Payment Entry</h3>
+                            <p id="afm-header-subtitle" data-i18n="fin.recordingFor">Recording payment for student</p>
                         </div>
                     </div>
                     <button class="afm-close-btn" onclick="closeAddFeesModal()"><i class="fas fa-times"></i></button>
@@ -1123,7 +1123,7 @@
                     <div id="afm-arrears-alert" style="display:none;" class="afm-arrears-alert">
                         <div class="afm-arrears-icon"><i class="fas fa-exclamation-circle"></i></div>
                         <div class="afm-arrears-text">
-                            <strong>Previous Arrears Pending</strong>
+                            <strong data-i18n="fin.prevArrears">Previous Arrears Pending</strong>
                             <span id="afm-arrears-amount-text"></span>
                         </div>
                         <div id="afm-arrears-badge" class="afm-arrears-badge"></div>
@@ -1137,21 +1137,21 @@
                             </div>
 
                             <div class="afm-left-panel afm-discount-panel">
-                                <div class="afm-panel-title"><i class="fas fa-percent"></i> Discount</div>
+                                <div class="afm-panel-title"><i class="fas fa-percent"></i> <span data-i18n="fin.discount">Discount</span></div>
                                 <div class="afm-inline-field">
                                     <input type="number" id="afm-pay-discount" class="afm-input" placeholder="0" min="0" oninput="recalcSimpleAFTotal()">
                                     <span class="afm-rs-label">Rs.</span>
                                 </div>
-                                <p class="afm-helper-text">One-time discount on this payment.</p>
+                                <p class="afm-helper-text" data-i18n="fin.oneTimeDiscount">One-time discount on this payment.</p>
                             </div>
 
                             <!-- Late fine waiver: only visible when a late fine is applied to this bill -->
                             <div class="afm-left-panel afm-waive-panel" id="afm-waive-panel" style="display:none;">
-                                <div class="afm-panel-title"><i class="fas fa-hand-holding-heart"></i> Late Fine</div>
+                                <div class="afm-panel-title"><i class="fas fa-hand-holding-heart"></i> <span data-i18n="fin.lateFine">Late Fine</span></div>
                                 <div id="afm-waive-active" style="display:none;">
                                     <p class="afm-waive-info" id="afm-waive-active-text"></p>
                                     <button type="button" class="afm-waive-undo-btn" onclick="undoLateFineWaiver()">
-                                        <i class="fas fa-rotate-left"></i> Undo Waiver
+                                        <i class="fas fa-rotate-left"></i> <span data-i18n="fin.undoWaiver">Undo Waiver</span>
                                     </button>
                                 </div>
                                 <div id="afm-waive-form">
@@ -1159,20 +1159,20 @@
                                         <input type="checkbox" id="afm-waive-checkbox" onchange="onLateFineWaiveToggle()">
                                         <span class="afm-waive-box"><i class="fas fa-check"></i></span>
                                         <span class="afm-waive-text">
-                                            <strong>Fine Waived Off</strong>
+                                            <strong data-i18n="fin.fineWaived">Fine Waived Off</strong>
                                             <span id="afm-waive-amount-text">Late fine: Rs. 0</span>
                                         </span>
                                     </label>
-                                    <input type="text" id="afm-waive-reason" class="afm-input afm-waive-reason" placeholder="Reason for waiver (optional)" style="display:none;">
-                                    <p class="afm-helper-text">Removes the late fine from this month's bill.</p>
+                                    <input type="text" id="afm-waive-reason" class="afm-input afm-waive-reason" placeholder="Reason for waiver (optional)" data-i18n-placeholder="fin.waiverReasonPh" style="display:none;">
+                                    <p class="afm-helper-text" data-i18n="fin.removesFine">Removes the late fine from this month's bill.</p>
                                 </div>
                             </div>
 
                             <div class="afm-left-panel afm-paybill-panel">
-                                <div class="afm-panel-title"><i class="fas fa-money-bill-wave"></i> Pay Bill</div>
+                                <div class="afm-panel-title"><i class="fas fa-money-bill-wave"></i> <span data-i18n="fin.payBill">Pay Bill</span></div>
                                 <div class="afm-paybill-grid">
                                     <div class="afm-field-group">
-                                        <label class="afm-label"><i class="fas fa-credit-card"></i> Method</label>
+                                        <label class="afm-label"><i class="fas fa-credit-card"></i> <span data-i18n="fin.method">Method</span></label>
                                         <select id="af-payment-method" class="afm-input">
                                             <option value="cash">💵 Cash</option>
                                             <option value="bank">🏦 Bank Transfer</option>
@@ -1181,42 +1181,42 @@
                                         </select>
                                     </div>
                                     <div class="afm-field-group">
-                                        <label class="afm-label"><i class="fas fa-coins"></i> Amount Paid (Rs.)</label>
+                                        <label class="afm-label"><i class="fas fa-coins"></i> <span data-i18n="fin.amountPaidRs">Amount Paid (Rs.)</span></label>
                                         <input type="number" id="afm-pay-amount" class="afm-input" placeholder="Enter amount" min="0" oninput="recalcSimpleAFTotal()">
                                     </div>
                                     <div class="afm-field-group">
-                                        <label class="afm-label"><i class="fas fa-calendar-day"></i> Payment Date</label>
+                                        <label class="afm-label"><i class="fas fa-calendar-day"></i> <span data-i18n="fin.paymentDate">Payment Date</span></label>
                                         <input type="date" id="afm-pay-date" class="afm-input">
                                     </div>
                                     <div class="afm-field-group afm-notes-group">
-                                        <label class="afm-label"><i class="fas fa-sticky-note"></i> Notes</label>
-                                        <input type="text" id="af-fee-notes" placeholder="Receipt ref…" class="afm-input">
+                                        <label class="afm-label"><i class="fas fa-sticky-note"></i> <span data-i18n="fin.notes">Notes</span></label>
+                                        <input type="text" id="af-fee-notes" placeholder="Receipt ref…" data-i18n-placeholder="fin.receiptRefPh" class="afm-input">
                                     </div>
                                 </div>
                                 <button class="afm-confirm-btn afm-pay-btn" onclick="saveSimpleStudentFeePayment()">
                                     <i class="fas fa-check-circle"></i>
-                                    <span>Confirm &amp; Record Payment</span>
+                                    <span data-i18n="fin.confirmRecord">Confirm &amp; Record Payment</span>
                                 </button>
                             </div>
                         </div>
 
                         <!-- RIGHT: liveupdating summary -->
                         <div class="afm-right-panel">
-                            <div class="afm-summary-title"><i class="fas fa-calculator"></i> Payment Summary</div>
+                            <div class="afm-summary-title"><i class="fas fa-calculator"></i> <span data-i18n="fin.paymentSummary">Payment Summary</span></div>
                             <div class="afm-totals-box" id="afm-totals-box">
-                                <div class="afm-total-row"><span>Gross Payable</span><strong id="afm-t-gross-sum">Rs. 0</strong></div>
-                                <div class="afm-total-row"><span><i class="fas fa-tag"></i> Discount</span><strong id="afm-t-disc-sum" style="color:#16a34a;">- Rs. 0</strong></div>
+                                <div class="afm-total-row"><span data-i18n="fin.grossPayable">Gross Payable</span><strong id="afm-t-gross-sum">Rs. 0</strong></div>
+                                <div class="afm-total-row"><span><i class="fas fa-tag"></i> <span data-i18n="fin.discount">Discount</span></span><strong id="afm-t-disc-sum" style="color:#16a34a;">- Rs. 0</strong></div>
                                 <div class="afm-total-divider"></div>
-                                <div class="afm-total-row afm-grand-total"><span>Net Payable</span><strong id="afm-t-payable">Rs. 0</strong></div>
-                                <div class="afm-total-row"><span><i class="fas fa-money-bill"></i> Amount Paid</span><strong id="afm-t-paid-sum" style="color:#16a34a;">Rs. 0</strong></div>
+                                <div class="afm-total-row afm-grand-total"><span data-i18n="fin.netPayable">Net Payable</span><strong id="afm-t-payable">Rs. 0</strong></div>
+                                <div class="afm-total-row"><span><i class="fas fa-money-bill"></i> <span data-i18n="fin.amountPaid">Amount Paid</span></span><strong id="afm-t-paid-sum" style="color:#16a34a;">Rs. 0</strong></div>
                                 <div class="afm-total-divider"></div>
-                                <div class="afm-total-row afm-grand-total"><span>Remaining</span><strong id="afm-t-remaining" style="color:#c2410c;">Rs. 0</strong></div>
+                                <div class="afm-total-row afm-grand-total"><span data-i18n="fin.remaining">Remaining</span><strong id="afm-t-remaining" style="color:#c2410c;">Rs. 0</strong></div>
                             </div>
                         </div>
                     </div>
 
                     <div class="af-history-panel" style="display:none; margin-top:18px;">
-                        <div class="af-panel-title"><i class="fas fa-history"></i> Payment History</div>
+                        <div class="af-panel-title"><i class="fas fa-history"></i> <span data-i18n="fin.paymentHistory">Payment History</span></div>
                         <div id="af-payment-history"></div>
                     </div>
                 </div>
@@ -1231,28 +1231,28 @@
                     <div class="iev-header-left">
                         <div class="iev-header-icon"><i class="fas fa-pen-to-square"></i></div>
                         <div>
-                            <h3>Edit Full Voucher</h3>
-                            <p class="iev-header-sub">Click any field to edit. Use <strong>Add Row</strong> for new items.</p>
+                            <h3 data-i18n="fin.editFullVoucher">Edit Full Voucher</h3>
+                            <p class="iev-header-sub"><span data-i18n="fin.clickAnyField">Click any field to edit. Use</span> <strong data-i18n="fin.addRow">Add Row</strong> <span data-i18n="fin.forNewItems">for new items.</span></p>
                         </div>
                     </div>
-                    <button class="afm-close-btn" onclick="closeInlineVoucherEditor()" aria-label="Close"><i class="fas fa-times"></i></button>
+                    <button class="afm-close-btn" onclick="closeInlineVoucherEditor()" aria-label="Close" data-i18n-aria="fin.closeAria"><i class="fas fa-times"></i></button>
                 </div>
 
                 <div class="voucher-modal-scroll iev-scroll">
                     <div class="iev-meta-grid">
-                        <div><span>Student</span><strong id="iev-student-name">-</strong></div>
-                        <div><span>Reg. No</span><strong id="iev-student-reg">-</strong></div>
-                        <div><span>Class</span><strong id="iev-student-class">-</strong></div>
-                        <div><span>Month</span><strong id="iev-month-label">-</strong></div>
+                        <div><span data-i18n="fin.student">Student</span><strong id="iev-student-name">-</strong></div>
+                        <div><span data-i18n="fin.regNo">Reg. No</span><strong id="iev-student-reg">-</strong></div>
+                        <div><span data-i18n="fin.class">Class</span><strong id="iev-student-class">-</strong></div>
+                        <div><span data-i18n="fin.month">Month</span><strong id="iev-month-label">-</strong></div>
                     </div>
 
                     <table class="iev-table">
                         <thead>
                             <tr>
-                                <th style="width:34%;">Description</th>
-                                <th style="width:22%;">Period</th>
+                                <th style="width:34%;" data-i18n="fin.description">Description</th>
+                                <th style="width:22%;" data-i18n="fin.period">Period</th>
                                 <th style="width:18%;">Amount</th>
-                                <th style="width:18%;">Discount</th>
+                                <th style="width:18%;" data-i18n="fin.discount">Discount</th>
                                 <th style="width:8%;"></th>
                             </tr>
                         </thead>
@@ -1284,7 +1284,7 @@
                     </table>
 
                     <button type="button" class="iev-add-row-btn" onclick="ievAddRow()">
-                        <i class="fas fa-plus"></i> Add Row
+                        <i class="fas fa-plus"></i> <span data-i18n="fin.addRow">Add Row</span>
                     </button>
 
                     <div class="iev-note-section">
@@ -1297,7 +1297,7 @@
                 </div>
 
                 <div class="iev-footer">
-                    <button class="action-back-btn" onclick="closeInlineVoucherEditor()"><i class="fas fa-times"></i> Cancel</button>
+                    <button class="action-back-btn" onclick="closeInlineVoucherEditor()"><i class="fas fa-times"></i> <span data-i18n="fin.cancel">Cancel</span></button>
                     <button class="btn-primary iev-save-btn" onclick="ievSave()"><i class="fas fa-check"></i> Save Voucher</button>
                 </div>
             </div>
@@ -1311,7 +1311,7 @@
                     <div class="afm-header-left">
                         <div class="afm-header-icon"><i class="fas fa-history"></i></div>
                         <div>
-                            <h3 id="fr-title">Fee Record</h3>
+                            <h3 id="fr-title" data-i18n="fin.feeRecord">Fee Record</h3>
                             <p id="fr-subtitle"></p>
                         </div>
                     </div>
@@ -1333,9 +1333,9 @@
                             <table class="student-table fee-students-table fr-table">
                                 <thead>
                                     <tr>
-                                        <th>Student ID</th>
-                                        <th>Name</th>
-                                        <th>Guardian</th>
+                                        <th data-i18n="fin.studentId">Student ID</th>
+                                        <th data-i18n="fin.name">Name</th>
+                                        <th data-i18n="fin.guardian">Guardian</th>
                                         <th>Months</th>
                                         <th>Total Charged</th>
                                         <th>Total Paid</th>
@@ -1359,15 +1359,15 @@
                             <table class="student-table fee-students-table fr-table">
                                 <thead>
                                     <tr>
-                                        <th>Month</th>
+                                        <th data-i18n="fin.month">Month</th>
                                         <th>Fee</th>
                                         <th>Arrears</th>
-                                        <th>Fine</th>
-                                        <th>Discount</th>
+                                        <th data-i18n="fin.fine">Fine</th>
+                                        <th data-i18n="fin.discount">Discount</th>
                                         <th>Total Payable</th>
-                                        <th>Paid</th>
+                                        <th data-i18n="fin.paid">Paid</th>
                                         <th>Balance</th>
-                                        <th>Status</th>
+                                        <th data-i18n="fin.status">Status</th>
                                         <th>Paid On</th>
                                     </tr>
                                 </thead>
@@ -1379,12 +1379,12 @@
                             <table class="student-table fee-students-table fr-table">
                                 <thead>
                                     <tr>
-                                        <th>Date</th>
+                                        <th data-i18n="fin.date">Date</th>
                                         <th>For Month</th>
                                         <th>Amount</th>
                                         <th>Type</th>
-                                        <th>Method</th>
-                                        <th>Notes</th>
+                                        <th data-i18n="fin.method">Method</th>
+                                        <th data-i18n="fin.notes">Notes</th>
                                     </tr>
                                 </thead>
                                 <tbody id="fr-payments-body"></tbody>
@@ -1402,7 +1402,7 @@
                     <div class="afm-header-left">
                         <div class="afm-header-icon"><i class="fas fa-print"></i></div>
                         <div>
-                            <h3>Print Vouchers</h3>
+                            <h3 data-i18n="fin.printVouchers">Print Vouchers</h3>
                             <p id="pv-subtitle">Choose how you'd like to print vouchers</p>
                         </div>
                     </div>
@@ -1465,14 +1465,14 @@
 
                     <!-- Step 2a: class picker -->
                     <div id="pv-class-picker" style="display:none;">
-                        <button class="btn-ghost pv-back-btn" onclick="backToPrintModeSelect()"><i class="fas fa-chevron-left"></i> Back</button>
+                        <button class="btn-ghost pv-back-btn" onclick="backToPrintModeSelect()"><i class="fas fa-chevron-left"></i> <span data-i18n="fin.back">Back</span></button>
                         <p class="pv-step-label">Select a class to print</p>
                         <div class="pv-class-list" id="pv-class-list"></div>
                     </div>
 
                     <!-- Step 2b: student search -->
                     <div id="pv-student-search" style="display:none;">
-                        <button class="btn-ghost pv-back-btn" onclick="backToPrintModeSelect()"><i class="fas fa-chevron-left"></i> Back</button>
+                        <button class="btn-ghost pv-back-btn" onclick="backToPrintModeSelect()"><i class="fas fa-chevron-left"></i> <span data-i18n="fin.back">Back</span></button>
                         <p class="pv-step-label">Search for a student</p>
                         <div class="fee-search-wrap" style="max-width:none;">
                             <i class="fas fa-search"></i>
@@ -1528,7 +1528,7 @@
                     </div>
                 </div>
                 <div class="iev-footer">
-                    <button class="action-back-btn" onclick="closeVoucherPreviewModal()"><i class="fas fa-times"></i> Cancel</button>
+                    <button class="action-back-btn" onclick="closeVoucherPreviewModal()"><i class="fas fa-times"></i> <span data-i18n="fin.cancel">Cancel</span></button>
                     <button class="btn-primary iev-save-btn" id="vp-confirm-btn" onclick="confirmVoucherPreview()"><i class="fas fa-check"></i> Continue</button>
                 </div>
             </div>
@@ -1552,7 +1552,7 @@
         <div id="page-custom-fee" class="sub-page d-none">
             <!-- Pricing / stats sit at the very top, centered -->
             <section class="page-title-section sub-title-section stats-header-section">
-                <button class="back-btn" onclick="showPage('page-student-fees')"><i class="fas fa-arrow-left"></i> Back</button>
+                <button class="back-btn" onclick="showPage('page-student-fees')"><i class="fas fa-arrow-left"></i> <span data-i18n="fin.back">Back</span></button>
                 <div class="fee-stats-row-compact" id="cf-overview-stats-row">
                     <div class="fee-stat-card fee-stat-generated">
                         <div class="fee-stat-icon"><i class="fas fa-file-invoice-dollar"></i></div>
@@ -1612,7 +1612,7 @@
                             <div class="cf-field cf-full" id="cf-class-wrap" style="display:none;">
                                 <label>Select Class</label>
                                 <select id="cf-class-select" class="cf-input">
-                                    <option value="">-- Select Class --</option>
+                                    <option value="" data-i18n="fin.selectClassDash">-- Select Class --</option>
                                 </select>
                             </div>
                             <div class="cf-field cf-full" id="cf-student-wrap" style="display:none;">
@@ -1678,11 +1678,11 @@
                                 <strong id="cf-stat-total">Rs. 0</strong>
                             </div>
                             <div class="cf-stat-card cf-stat-collected">
-                                <span class="cf-stat-label"><i class="fas fa-check-circle"></i> Collected</span>
+                                <span class="cf-stat-label"><i class="fas fa-check-circle"></i> <span data-i18n="fin.collected">Collected</span></span>
                                 <strong id="cf-stat-collected">Rs. 0</strong>
                             </div>
                             <div class="cf-stat-card cf-stat-remaining">
-                                <span class="cf-stat-label"><i class="fas fa-hourglass-half"></i> Remaining</span>
+                                <span class="cf-stat-label"><i class="fas fa-hourglass-half"></i> <span data-i18n="fin.remaining">Remaining</span></span>
                                 <strong id="cf-stat-remaining">Rs. 0</strong>
                             </div>
                         </div>
@@ -1694,9 +1694,9 @@
                                 <input type="text" id="cf-detail-search" oninput="filterCfDetailTable()">
                             </div>
                             <select id="cf-detail-status-filter" class="cf-panel-select" style="width:auto;min-width:130px;flex-shrink:0;" onchange="filterCfDetailTable()">
-                                <option value="">All Status</option>
-                                <option value="paid">Paid</option>
-                                <option value="pending">Pending</option>
+                                <option value="" data-i18n="fin.allStatus">All Status</option>
+                                <option value="paid" data-i18n="fin.paid">Paid</option>
+                                <option value="pending" data-i18n="fin.pending">Pending</option>
                             </select>
                         </div>
 
@@ -1705,13 +1705,13 @@
                             <table class="finance-table cfr-table">
                                 <thead>
                                     <tr>
-                                        <th>Student ID</th>
-                                        <th>Name</th>
-                                        <th>Class</th>
-                                        <th>Guardian</th>
+                                        <th data-i18n="fin.studentId">Student ID</th>
+                                        <th data-i18n="fin.name">Name</th>
+                                        <th data-i18n="fin.class">Class</th>
+                                        <th data-i18n="fin.guardian">Guardian</th>
                                         <th>Amount</th>
-                                        <th>Status</th>
-                                        <th>Actions</th>
+                                        <th data-i18n="fin.status">Status</th>
+                                        <th data-i18n="fin.actions">Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody id="cf-detail-tbody"></tbody>
@@ -1753,7 +1753,7 @@
         <!-- ===================== PAGE: CUSTOM FEE — GENERATE ===================== -->
         <div id="page-custom-fee-generate" class="sub-page d-none">
             <section class="page-title-section sub-title-section">
-                <button class="back-btn" onclick="showPage('page-custom-fee')"><i class="fas fa-arrow-left"></i> Back</button>
+                <button class="back-btn" onclick="showPage('page-custom-fee')"><i class="fas fa-arrow-left"></i> <span data-i18n="fin.back">Back</span></button>
                 <h2 class="page-title">Generate Custom Fee</h2>
                 <p class="page-description">Enter the fee details and choose who to apply it to.</p>
                 <div class="title-divider"></div>
@@ -1778,7 +1778,7 @@
                 <div class="form-group full-width" id="cf-class-wrap" style="display:none;">
                     <label>Select Class</label>
                     <select id="cf-class-select" class="fine-search-input">
-                        <option value="">-- Select Class --</option>
+                        <option value="" data-i18n="fin.selectClassDash">-- Select Class --</option>
                     </select>
                 </div>
                 <div class="form-group full-width" id="cf-student-wrap" style="display:none;">
@@ -1788,7 +1788,7 @@
                     <div id="cf-student-results" class="staff-members-list fine-results-list"></div>
                 </div>
                 <div class="modal-actions mt-20">
-                    <button type="button" class="btn btn-cancel" onclick="showPage('page-custom-fee')">Cancel</button>
+                    <button type="button" class="btn btn-cancel" onclick="showPage('page-custom-fee')" data-i18n="fin.cancel">Cancel</button>
                     <button type="button" class="btn btn-primary" onclick="handleGenerateCustomFee()">
                         <i class="fas fa-file-invoice"></i> Generate Voucher
                     </button>
@@ -1801,7 +1801,7 @@
             <!-- VIEW 1: Clean Overview Table of Generated Custom Fees -->
             <div id="cfr-summary-view" class="centered-block" style="max-width:1100px;">
                 <section class="page-title-section sub-title-section stats-header-section" style="margin-bottom:12px;">
-                    <button class="back-btn" onclick="showPage('page-custom-fee')"><i class="fas fa-arrow-left"></i> Back</button>
+                    <button class="back-btn" onclick="showPage('page-custom-fee')"><i class="fas fa-arrow-left"></i> <span data-i18n="fin.back">Back</span></button>
                     <div class="cfr-header-text-group" style="text-align:left; margin-left:110px;">
                         <h2 class="page-title" style="text-align:left; margin:0;">Custom Fee Records</h2>
                         <p class="page-description" style="text-align:left; margin:2px 0 0; font-size:0.85rem;">Browse all generated custom fee vouchers.</p>
@@ -1813,11 +1813,11 @@
                             <tr>
                                 <th>Fee Name</th>
                                 <th>Amount</th>
-                                <th>Month</th>
-                                <th>Students</th>
-                                <th>Paid</th>
-                                <th>Pending</th>
-                                <th>Actions</th>
+                                <th data-i18n="fin.month">Month</th>
+                                <th data-i18n="fin.students">Students</th>
+                                <th data-i18n="fin.paid">Paid</th>
+                                <th data-i18n="fin.pending">Pending</th>
+                                <th data-i18n="fin.actions">Actions</th>
                             </tr>
                         </thead>
                         <tbody id="cfr-fees-summary-tbody">
@@ -1849,9 +1849,9 @@
                         <option value="">All Sections</option>
                     </select>
                     <select id="cfr-detail-status-filter" class="cf-input cfr-filter-select" onchange="filterCfrDetailTable()">
-                        <option value="">All Status</option>
-                        <option value="paid">Paid</option>
-                        <option value="pending">Pending</option>
+                        <option value="" data-i18n="fin.allStatus">All Status</option>
+                        <option value="paid" data-i18n="fin.paid">Paid</option>
+                        <option value="pending" data-i18n="fin.pending">Pending</option>
                     </select>
                 </div>
 
@@ -1860,13 +1860,13 @@
                     <table class="student-table fee-students-table cfr-table">
                         <thead>
                             <tr>
-                                <th>Student ID</th>
-                                <th>Name</th>
-                                <th>Class</th>
-                                <th>Guardian</th>
+                                <th data-i18n="fin.studentId">Student ID</th>
+                                <th data-i18n="fin.name">Name</th>
+                                <th data-i18n="fin.class">Class</th>
+                                <th data-i18n="fin.guardian">Guardian</th>
                                 <th>Amount</th>
-                                <th>Status</th>
-                                <th>Actions</th>
+                                <th data-i18n="fin.status">Status</th>
+                                <th data-i18n="fin.actions">Actions</th>
                             </tr>
                         </thead>
                         <tbody id="cfr-detail-tbody">
@@ -1881,12 +1881,12 @@
         <div id="page-fee-defaulter" class="sub-page d-none">
             <!-- Pricing / stats sit at the very top, centered -->
             <section class="page-title-section sub-title-section stats-header-section">
-                <button class="back-btn" onclick="showPage('page-student-fees')"><i class="fas fa-arrow-left"></i> Back</button>
+                <button class="back-btn" onclick="showPage('page-student-fees')"><i class="fas fa-arrow-left"></i> <span data-i18n="fin.back">Back</span></button>
                 <div class="fee-stats-row-compact" id="fd-overview-stats-row">
                     <div class="fee-stat-card fee-stat-pending">
                         <div class="fee-stat-icon"><i class="fas fa-calendar-times"></i></div>
                         <div class="fee-stat-info">
-                            <span class="fee-stat-label">Pending Fees</span>
+                            <span class="fee-stat-label" data-i18n="fin.pendingFees">Pending Fees</span>
                             <span class="fee-stat-value" id="fd-overview-after1month">Rs. 0</span>
                         </div>
                     </div>
@@ -1936,16 +1936,16 @@
                 <table class="finance-table">
                     <thead>
                         <tr>
-                            <th>Student ID</th>
-                            <th>Name</th>
-                            <th>Class</th>
-                            <th>Guardian</th>
+                            <th data-i18n="fin.studentId">Student ID</th>
+                            <th data-i18n="fin.name">Name</th>
+                            <th data-i18n="fin.class">Class</th>
+                            <th data-i18n="fin.guardian">Guardian</th>
                             <th>Pending (Total)</th>
-                            <th>Collected</th>
-                            <th>Remaining</th>
+                            <th data-i18n="fin.collected">Collected</th>
+                            <th data-i18n="fin.remaining">Remaining</th>
                             <th>Arrears (Old Dues)</th>
                             <th>Months Pending</th>
-                            <th>Status</th>
+                            <th data-i18n="fin.status">Status</th>
                             <th>Action</th>
                         </tr>
                     </thead>
@@ -1998,9 +1998,9 @@
                 <tr>
                     <th>Ref ID</th>
                     <th>Date Applied</th>
-                    <th>Description</th>
+                    <th data-i18n="fin.description">Description</th>
                     <th>Amount</th>
-                    <th>Status</th>
+                    <th data-i18n="fin.status">Status</th>
                     <th>Settlement Date</th>
                     <th class="text-center">Action</th>
                 </tr>

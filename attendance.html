@@ -13,7 +13,7 @@
 <script src="admin-i18n.js"></script>
 <link rel="stylesheet" href="attendance.css?v=20261026">
     <link rel="stylesheet" href="mobile-ui.css?v=2">
-<link rel="stylesheet" href="admin-i18n.css?v=1">
+<link rel="stylesheet" href="admin-i18n.css?v=2">
     <!-- Saved theme is read from localStorage ('eduflow-theme') and applied immediately
          so there is no flash of the wrong theme. initTheme() in attendance.js saves changes. -->
     <script src="xss-safe.js"></script>
@@ -94,9 +94,9 @@
             </div>
             <div class="header-right">
                 <div class="header-date" id="header-date"></div>
-                <button id="open-scanner-btn" class="scanner-btn" aria-label="Open Scanner" title="Scan student &amp; staff ID cards">
+                <button id="open-scanner-btn" class="scanner-btn" aria-label="Open Scanner" data-i18n-aria="att.openScanner" title="Scan student &amp; staff ID cards" data-i18n-title="att.scanTitle">
                     <i class="fas fa-qrcode"></i>
-                    <span class="scanner-btn__label">Scanner</span>
+                    <span class="scanner-btn__label" data-i18n="att.scanner">Scanner</span>
                 </button>
                 <button id="theme-toggle" class="theme-toggle" aria-label="Toggle theme" data-i18n-aria="hdr.toggleTheme">
                     <i id="theme-icon-moon" class="fas fa-moon"></i>
@@ -107,7 +107,7 @@
         </header>
 
         <section class="page-title-section" id="main-page-title-section">
-            <h1 class="page-title">Today's Attendance</h1>
+            <h1 class="page-title" data-i18n="att.todayAttendance">Today's Attendance</h1>
             <div class="title-divider"></div>
         </section>
 
@@ -117,47 +117,47 @@
                 <div class="attn-stat-icon"><i class="fas fa-user-graduate"></i></div>
                 <div class="attn-stat-meta">
                     <span class="attn-stat-value" id="stat-students-present">0</span>
-                    <span class="attn-stat-label">Students Present</span>
+                    <span class="attn-stat-label" data-i18n="att.studentsPresent">Students Present</span>
                 </div>
             </div>
             <div class="attn-stat-card icon-rose">
                 <div class="attn-stat-icon"><i class="fas fa-user-graduate"></i></div>
                 <div class="attn-stat-meta">
                     <span class="attn-stat-value" id="stat-students-absent">0</span>
-                    <span class="attn-stat-label">Students Absent</span>
+                    <span class="attn-stat-label" data-i18n="att.studentsAbsent">Students Absent</span>
                 </div>
             </div>
             <div class="attn-stat-card icon-indigo">
                 <div class="attn-stat-icon"><i class="fas fa-chalkboard-teacher"></i></div>
                 <div class="attn-stat-meta">
                     <span class="attn-stat-value" id="stat-staff-present">0</span>
-                    <span class="attn-stat-label">Staff Present</span>
+                    <span class="attn-stat-label" data-i18n="att.staffPresent">Staff Present</span>
                 </div>
             </div>
             <div class="attn-stat-card icon-amber">
                 <div class="attn-stat-icon"><i class="fas fa-chalkboard-teacher"></i></div>
                 <div class="attn-stat-meta">
                     <span class="attn-stat-value" id="stat-staff-absent">0</span>
-                    <span class="attn-stat-label">Staff Absent</span>
+                    <span class="attn-stat-label" data-i18n="att.staffAbsent">Staff Absent</span>
                 </div>
             </div>
         </section>
 
         <!-- STAGE 1: Pick mode -->
         <section id="stage-mode" class="stage">
-            <h2 class="section-heading">Mark Attendance</h2>
+            <h2 class="section-heading" data-i18n="att.markAttendance">Mark Attendance</h2>
             <div class="choice-grid">
                 <button class="choice-card icon-emerald" data-mode="student">
                     <div class="card-glow"></div>
                     <div class="choice-icon"><i class="fas fa-user-graduate"></i></div>
-                    <h3>Student Attendance</h3>
-                    <p>Select a class, mark daily status, and review records.</p>
+                    <h3 data-i18n="att.studentAttendance">Student Attendance</h3>
+                    <p data-i18n="att.studentAttSub">Select a class, mark daily status, and review records.</p>
                 </button>
                 <button class="choice-card icon-indigo" data-mode="staff">
                     <div class="card-glow"></div>
                     <div class="choice-icon"><i class="fas fa-chalkboard-teacher"></i></div>
-                    <h3>Staff Attendance</h3>
-                    <p>Mark or review attendance for teaching &amp; non-teaching staff.</p>
+                    <h3 data-i18n="att.staffAttendance">Staff Attendance</h3>
+                    <p data-i18n="att.staffAttSub">Mark or review attendance for teaching &amp; non-teaching staff.</p>
                 </button>
             </div>
         </section>
@@ -165,8 +165,8 @@
         <!-- STAGE 3: Pick a class (student) -->
         <section id="stage-classes" class="stage hidden">
             <div class="stage-header">
-                <button class="back-btn" data-back="mode"><i class="fas fa-arrow-left"></i> Back</button>
-                <h2 class="stage-title">Select Class</h2>
+                <button class="back-btn" data-back="mode"><i class="fas fa-arrow-left"></i> <span data-i18n="att.back">Back</span></button>
+                <h2 class="stage-title" data-i18n="att.selectClass">Select Class</h2>
             </div>
             <div id="classes-grid" class="classes-grid"></div>
         </section>
@@ -174,21 +174,21 @@
         <!-- STAGE 4: Student attendance table -->
         <section id="stage-table" class="stage hidden">
             <div class="stage-header">
-                <button class="back-btn" data-back="classes"><i class="fas fa-arrow-left"></i> Back</button>
+                <button class="back-btn" data-back="classes"><i class="fas fa-arrow-left"></i> <span data-i18n="att.back">Back</span></button>
                 <h2 class="stage-title" id="table-title">Attendance</h2>
-                <button id="table-view-attendance-btn" class="view-attendance-btn"><i class="fas fa-chart-line"></i> View Attendance</button>
-                <button id="table-send-report-btn" class="view-attendance-btn send-report-btn" type="button"><i class="fas fa-paper-plane"></i> Send Report to Parents</button>
+                <button id="table-view-attendance-btn" class="view-attendance-btn"><i class="fas fa-chart-line"></i> <span data-i18n="att.viewAttendance">View Attendance</span></button>
+                <button id="table-send-report-btn" class="view-attendance-btn send-report-btn" type="button"><i class="fas fa-paper-plane"></i> <span data-i18n="att.sendReport">Send Report to Parents</span></button>
             </div>
 
             <div class="toolbar">
                 <div class="search-wrap">
                     <i class="fas fa-search"></i>
-                    <input id="search-input" type="text" placeholder="Search by ID, name, or guardian" />
+                    <input id="search-input" type="text" placeholder="Search by ID, name, or guardian" data-i18n-placeholder="att.searchStudentPh" />
                     <span class="tilde-hint">name~guardian</span>
                 </div>
                 <div class="section-select" id="section-select">
                     <button class="section-trigger" id="section-trigger">
-                        <span id="section-label">All Sections</span>
+                        <span id="section-label" data-i18n="att.allSections">All Sections</span>
                         <i class="fas fa-chevron-down"></i>
                     </button>
                     <div class="section-dropdown hidden" id="section-dropdown">
@@ -196,9 +196,9 @@
                     </div>
                 </div>
                 <div class="bulk-actions">
-                    <button class="bulk-btn bulk-present" data-bulk="present">All Present</button>
-                    <button class="bulk-btn bulk-absent"  data-bulk="absent">All Absent</button>
-                    <button class="bulk-btn bulk-leave"   data-bulk="leave">All Leave</button>
+                    <button class="bulk-btn bulk-present" data-bulk="present" data-i18n="att.allPresent">All Present</button>
+                    <button class="bulk-btn bulk-absent"  data-bulk="absent" data-i18n="att.allAbsent">All Absent</button>
+                    <button class="bulk-btn bulk-leave"   data-bulk="leave" data-i18n="att.allLeave">All Leave</button>
                 </div>
             </div>
 
@@ -208,50 +208,50 @@
                         <thead>
                             <tr>
                                 <th>#</th>
-                                <th>Reg No</th>
-                                <th>Name</th>
-                                <th>Section</th>
-                                <th>Guardian</th>
-                                <th class="th-status">Status</th>
+                                <th data-i18n="att.regNo">Reg No</th>
+                                <th data-i18n="att.name">Name</th>
+                                <th data-i18n="att.section">Section</th>
+                                <th data-i18n="att.guardian">Guardian</th>
+                                <th class="th-status" data-i18n="att.status">Status</th>
                             </tr>
                         </thead>
                         <tbody id="attendance-tbody"></tbody>
                     </table>
                     <div id="empty-state" class="empty-state hidden">
                         <i class="fas fa-inbox"></i>
-                        <p>No students match your search.</p>
+                        <p data-i18n="att.noStudentsMatch">No students match your search.</p>
                     </div>
                 </div>
             </div>
 
             <div class="save-bar">
                 <div class="summary" id="summary"></div>
-                <button id="save-btn" class="save-btn"><i class="fas fa-save"></i> Save Attendance</button>
+                <button id="save-btn" class="save-btn"><i class="fas fa-save"></i> <span data-i18n="att.saveAttendance">Save Attendance</span></button>
             </div>
         </section>
 
         <!-- STAGE 5: Staff attendance table (Add) -->
         <section id="stage-staff" class="stage hidden">
             <div class="stage-header">
-                <button class="back-btn" data-back="mode"><i class="fas fa-arrow-left"></i> Back</button>
-                <h2 class="stage-title">Staff Attendance</h2>
-                <button id="staff-view-attendance-btn" class="view-attendance-btn"><i class="fas fa-chart-line"></i> View Attendance</button>
+                <button class="back-btn" data-back="mode"><i class="fas fa-arrow-left"></i> <span data-i18n="att.back">Back</span></button>
+                <h2 class="stage-title" data-i18n="att.staffAttendance">Staff Attendance</h2>
+                <button id="staff-view-attendance-btn" class="view-attendance-btn"><i class="fas fa-chart-line"></i> <span data-i18n="att.viewAttendance">View Attendance</span></button>
             </div>
             <div class="toolbar">
                 <div class="search-wrap">
                     <i class="fas fa-search"></i>
-                    <input id="staff-search" type="text" placeholder="Search staff by ID or name" />
+                    <input id="staff-search" type="text" placeholder="Search staff by ID or name" data-i18n-placeholder="att.searchStaffPh" />
                 </div>
                 <div class="bulk-actions">
-                    <button class="bulk-btn bulk-present" data-staff-bulk="present">All Present</button>
-                    <button class="bulk-btn bulk-absent"  data-staff-bulk="absent">All Absent</button>
-                    <button class="bulk-btn bulk-leave"   data-staff-bulk="leave">All Leave</button>
-                    <button id="link-biometric-btn" class="bulk-btn biometric-btn" title="Link biometric device"><i class="fas fa-fingerprint"></i> Link Biometric</button>
+                    <button class="bulk-btn bulk-present" data-staff-bulk="present" data-i18n="att.allPresent">All Present</button>
+                    <button class="bulk-btn bulk-absent"  data-staff-bulk="absent" data-i18n="att.allAbsent">All Absent</button>
+                    <button class="bulk-btn bulk-leave"   data-staff-bulk="leave" data-i18n="att.allLeave">All Leave</button>
+                    <button id="link-biometric-btn" class="bulk-btn biometric-btn" title="Link biometric device" data-i18n-title="att.linkBioTitle"><i class="fas fa-fingerprint"></i> <span data-i18n="att.linkBiometric">Link Biometric</span></button>
                 </div>
             </div>
             <div class="autosave-strip" id="autosave-strip">
                 <i class="fas fa-clock"></i>
-                <span>Auto-save scheduled at <b id="autosave-morning-lbl">09:00</b> and <b id="autosave-afternoon-lbl">14:30</b> daily. Change in Settings.</span>
+                <span><span data-i18n="att.autosaveAt">Auto-save scheduled at</span> <b id="autosave-morning-lbl">09:00</b> <span data-i18n="att.and">and</span> <b id="autosave-afternoon-lbl">14:30</b> <span data-i18n="att.autosaveTail">daily. Change in Settings.</span></span>
             </div>
             <div class="table-card">
                 <div class="table-scroll">
@@ -259,11 +259,11 @@
                         <thead>
                             <tr>
                                 <th>#</th>
-                                <th>Staff ID</th>
-                                <th>Name</th>
-                                <th>Role</th>
-                                <th>Department</th>
-                                <th class="th-status">Status</th>
+                                <th data-i18n="att.staffId">Staff ID</th>
+                                <th data-i18n="att.name">Name</th>
+                                <th data-i18n="att.role">Role</th>
+                                <th data-i18n="att.department">Department</th>
+                                <th class="th-status" data-i18n="att.status">Status</th>
                             </tr>
                         </thead>
                         <tbody id="staff-tbody"></tbody>
@@ -272,33 +272,33 @@
             </div>
             <div class="save-bar">
                 <div class="summary" id="staff-summary"></div>
-                <button id="staff-save-btn" class="save-btn"><i class="fas fa-save"></i> Save Attendance</button>
+                <button id="staff-save-btn" class="save-btn"><i class="fas fa-save"></i> <span data-i18n="att.saveAttendance">Save Attendance</span></button>
             </div>
         </section>
 
         <!-- STAGE 6: View Attendance (analytics) -->
         <section id="stage-view" class="stage hidden">
             <div class="stage-header">
-                <button class="back-btn" data-back="submode"><i class="fas fa-arrow-left"></i> Back</button>
-                <h2 class="stage-title" id="view-title">View Attendance</h2>
+                <button class="back-btn" data-back="submode"><i class="fas fa-arrow-left"></i> <span data-i18n="att.back">Back</span></button>
+                <h2 class="stage-title" id="view-title" data-i18n="att.viewAttendance">View Attendance</h2>
             </div>
 
             <div class="toolbar">
                 <div class="search-wrap">
                     <i class="fas fa-search"></i>
-                    <input id="view-search" type="text" placeholder="Search by name or ID" />
+                    <input id="view-search" type="text" placeholder="Search by name or ID" data-i18n-placeholder="att.searchNameIdPh" />
                 </div>
                 <div class="quick-filters" id="view-filters">
-                    <button class="filter-btn active" data-range="7">Last 1 Week</button>
-                    <button class="filter-btn" data-range="30">Last 1 Month</button>
-                    <button class="filter-btn" data-range="365">Last 1 Year</button>
+                    <button class="filter-btn active" data-range="7" data-i18n="att.last1Week">Last 1 Week</button>
+                    <button class="filter-btn" data-range="30" data-i18n="att.last1Month">Last 1 Month</button>
+                    <button class="filter-btn" data-range="365" data-i18n="att.last1Year">Last 1 Year</button>
                 </div>
                 <div class="view-actions" style="display:flex;gap:8px;margin-left:auto;">
                     <button id="view-print-btn" class="bulk-btn" style="background:var(--indigo);color:#fff;border:none;padding:8px 14px;border-radius:8px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;font-weight:600;">
-                        <i class="fas fa-print"></i> Print
+                        <i class="fas fa-print"></i> <span data-i18n="att.print">Print</span>
                     </button>
                     <button id="view-share-btn" class="bulk-btn" style="background:var(--emerald);color:#fff;border:none;padding:8px 14px;border-radius:8px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;font-weight:600;">
-                        <i class="fas fa-share-alt"></i> Share
+                        <i class="fas fa-share-alt"></i> <span data-i18n="att.share">Share</span>
                     </button>
                 </div>
             </div>
@@ -311,20 +311,20 @@
                         <thead>
                             <tr>
                                 <th>#</th>
-                                <th>ID</th>
-                                <th>Name</th>
-                                <th>Guardian</th>
-                                <th class="th-status">Present</th>
-                                <th class="th-status">Absent</th>
-                                <th class="th-status">Leave</th>
-                                <th class="th-status">Latest Status</th>
+                                <th data-i18n="att.id">ID</th>
+                                <th data-i18n="att.name">Name</th>
+                                <th data-i18n="att.guardian">Guardian</th>
+                                <th class="th-status" data-i18n="att.present">Present</th>
+                                <th class="th-status" data-i18n="att.absent">Absent</th>
+                                <th class="th-status" data-i18n="att.leave">Leave</th>
+                                <th class="th-status" data-i18n="att.latestStatus">Latest Status</th>
                             </tr>
                         </thead>
                         <tbody id="view-tbody"></tbody>
                     </table>
                     <div id="view-empty" class="empty-state hidden">
                         <i class="fas fa-inbox"></i>
-                        <p>No records match your search.</p>
+                        <p data-i18n="att.noRecordsMatch">No records match your search.</p>
                     </div>
                 </div>
             </div>
@@ -333,19 +333,19 @@
         <!-- STAGE 7: Monthly class attendance grid (View) -->
         <section id="stage-monthly" class="stage hidden">
             <div class="stage-header">
-                <button class="back-btn" data-back="table"><i class="fas fa-arrow-left"></i> Back</button>
-                <h2 class="stage-title" id="monthly-title">Monthly Attendance</h2>
+                <button class="back-btn" data-back="table"><i class="fas fa-arrow-left"></i> <span data-i18n="att.back">Back</span></button>
+                <h2 class="stage-title" id="monthly-title" data-i18n="att.monthlyAttendance">Monthly Attendance</h2>
             </div>
 
             <div class="toolbar">
                 <div class="search-wrap">
                     <i class="fas fa-search"></i>
-                    <input id="monthly-search" type="text" placeholder="Search by Reg No, name, or guardian" />
+                    <input id="monthly-search" type="text" placeholder="Search by Reg No, name, or guardian" data-i18n-placeholder="att.searchRegPh" />
                     <span class="tilde-hint">name~guardian</span>
                 </div>
                 <div class="section-select" id="monthly-section-select">
                     <button class="section-trigger" id="monthly-section-trigger">
-                        <span id="monthly-section-label">All Sections</span>
+                        <span id="monthly-section-label" data-i18n="att.allSections">All Sections</span>
                         <i class="fas fa-chevron-down"></i>
                     </button>
                     <div class="section-dropdown hidden" id="monthly-section-dropdown">
@@ -357,22 +357,22 @@
             <div class="toolbar view-period-toolbar">
                 <!-- Period Switcher -->
                 <div class="period-switcher" id="student-period-switcher">
-                    <button class="period-btn active" data-student-period="week"><i class="fas fa-calendar-week"></i> Week</button>
-                    <button class="period-btn" data-student-period="month"><i class="fas fa-calendar-day"></i> Month</button>
-                    <button class="period-btn" data-student-period="year"><i class="fas fa-calendar"></i> Year</button>
+                    <button class="period-btn active" data-student-period="week"><i class="fas fa-calendar-week"></i> <span data-i18n="att.week">Week</span></button>
+                    <button class="period-btn" data-student-period="month"><i class="fas fa-calendar-day"></i> <span data-i18n="att.month">Month</span></button>
+                    <button class="period-btn" data-student-period="year"><i class="fas fa-calendar"></i> <span data-i18n="att.year">Year</span></button>
                 </div>
                 <div class="month-nav" style="display:flex;align-items:center;gap:10px;">
                     <button id="month-prev" class="bulk-btn" style="padding:8px 12px;cursor:pointer;"><i class="fas fa-chevron-left"></i></button>
                     <span id="month-label" style="font-weight:600;min-width:200px;text-align:center;"></span>
                     <button id="month-next" class="bulk-btn" style="padding:8px 12px;cursor:pointer;"><i class="fas fa-chevron-right"></i></button>
-                    <button id="open-report-btn" class="bulk-btn" style="padding:8px 14px;cursor:pointer;background:var(--indigo);color:#fff;border:none;border-radius:8px;font-weight:600;margin-left:8px;"><i class="fas fa-file-chart-column"></i> Generate Attendance Report</button>
-                    <button id="monthly-send-report-btn" class="bulk-btn send-report-btn" type="button" style="padding:8px 14px;cursor:pointer;border:none;border-radius:8px;font-weight:600;"><i class="fas fa-paper-plane"></i> Send Report to Parents</button>
+                    <button id="open-report-btn" class="bulk-btn" style="padding:8px 14px;cursor:pointer;background:var(--indigo);color:#fff;border:none;border-radius:8px;font-weight:600;margin-left:8px;"><i class="fas fa-file-chart-column"></i> <span data-i18n="att.generateReport">Generate Attendance Report</span></button>
+                    <button id="monthly-send-report-btn" class="bulk-btn send-report-btn" type="button" style="padding:8px 14px;cursor:pointer;border:none;border-radius:8px;font-weight:600;"><i class="fas fa-paper-plane"></i> <span data-i18n="att.sendReport">Send Report to Parents</span></button>
                 </div>
                 <div style="margin-left:auto;font-size:0.8rem;color:var(--text-secondary);">
-                    Legend: <strong style="color:var(--emerald);">P</strong> Present &middot;
+                    <span data-i18n="att.legend">Legend:</span> <strong style="color:var(--emerald);">P</strong> Present &middot;
                     <strong style="color:var(--rose);">A</strong> Absent &middot;
                     <strong style="color:var(--amber);">L</strong> Leave &middot;
-                    <span style="color:var(--text-muted);">&ndash;</span> No record
+                    <span style="color:var(--text-muted);">&ndash;</span> <span data-i18n="att.noRecord">No record</span>
                 </div>
             </div>
             <div class="table-card">
@@ -380,7 +380,7 @@
                     <table class="attendance-table monthly-table" id="monthly-table"></table>
                     <div id="monthly-empty" class="empty-state hidden">
                         <i class="fas fa-inbox"></i>
-                        <p>No students in this class.</p>
+                        <p data-i18n="att.noStudentsClass">No students in this class.</p>
                     </div>
                 </div>
             </div>
@@ -389,8 +389,8 @@
         <!-- STAGE 8: Single Student Full Attendance Record -->
         <section id="stage-student-record" class="stage hidden">
             <div class="stage-header">
-                <button class="back-btn" data-back="monthly"><i class="fas fa-arrow-left"></i> Back</button>
-                <h2 class="stage-title" id="record-title">Student Attendance Record</h2>
+                <button class="back-btn" data-back="monthly"><i class="fas fa-arrow-left"></i> <span data-i18n="att.back">Back</span></button>
+                <h2 class="stage-title" id="record-title" data-i18n="att.studentRecord">Student Attendance Record</h2>
             </div>
 
             <div class="record-profile" id="record-profile"></div>
@@ -398,15 +398,15 @@
             <div class="toolbar">
                 <div class="search-wrap">
                     <i class="fas fa-search"></i>
-                    <input id="record-search" type="text" placeholder="Search by date (e.g. 2026-06) or status" />
+                    <input id="record-search" type="text" placeholder="Search by date (e.g. 2026-06) or status" data-i18n-placeholder="att.searchDatePh" />
                 </div>
                 <div class="quick-filters" id="record-filters">
-                    <button class="filter-btn active" data-range="all">All Time</button>
-                    <button class="filter-btn" data-range="30">Last 1 Month</button>
-                    <button class="filter-btn" data-range="365">Last 1 Year</button>
+                    <button class="filter-btn active" data-range="all" data-i18n="att.allTime">All Time</button>
+                    <button class="filter-btn" data-range="30" data-i18n="att.last1Month">Last 1 Month</button>
+                    <button class="filter-btn" data-range="365" data-i18n="att.last1Year">Last 1 Year</button>
                 </div>
                 <button id="open-student-report-btn" class="bulk-btn" style="padding:8px 14px;cursor:pointer;background:var(--indigo);color:#fff;border:none;border-radius:8px;font-weight:600;margin-left:auto;white-space:nowrap;">
-                    <i class="fas fa-file-chart-column"></i> Generate Attendance Report
+                    <i class="fas fa-file-chart-column"></i> <span data-i18n="att.generateReport">Generate Attendance Report</span>
                 </button>
             </div>
 
@@ -415,12 +415,12 @@
             <div class="table-card">
                 <div class="table-scroll">
                     <div class="history-row history-row--head">
-                        <span>Date</span><span>Reason / Notes</span><span style="text-align:center;">Status</span>
+                        <span data-i18n="att.date">Date</span><span data-i18n="att.reasonNotes">Reason / Notes</span><span style="text-align:center;" data-i18n="att.status">Status</span>
                     </div>
                     <div id="history-list"></div>
                     <div id="history-empty" class="empty-state hidden">
                         <i class="fas fa-inbox"></i>
-                        <p>No attendance records found for this period.</p>
+                        <p data-i18n="att.noRecordsPeriod">No attendance records found for this period.</p>
                     </div>
                 </div>
             </div>
@@ -429,37 +429,37 @@
         <!-- STAGE 9: Monthly STAFF attendance grid (View) -->
         <section id="stage-staff-monthly" class="stage hidden">
             <div class="stage-header">
-                <button class="back-btn" data-back="staff"><i class="fas fa-arrow-left"></i> Back</button>
-                <h2 class="stage-title" id="staff-monthly-title">Staff Attendance</h2>
+                <button class="back-btn" data-back="staff"><i class="fas fa-arrow-left"></i> <span data-i18n="att.back">Back</span></button>
+                <h2 class="stage-title" id="staff-monthly-title" data-i18n="att.staffAttendance">Staff Attendance</h2>
             </div>
 
             <div class="toolbar">
                 <div class="search-wrap">
                     <i class="fas fa-search"></i>
-                    <input id="staff-monthly-search" type="text" placeholder="Search by Staff ID, name, or job" />
+                    <input id="staff-monthly-search" type="text" placeholder="Search by Staff ID, name, or job" data-i18n-placeholder="att.searchStaffJobPh" />
                 </div>
             </div>
 
             <div class="toolbar view-period-toolbar">
                 <!-- Period Switcher -->
                 <div class="period-switcher" id="staff-period-switcher">
-                    <button class="period-btn active" data-staff-period="week"><i class="fas fa-calendar-week"></i> Week</button>
-                    <button class="period-btn" data-staff-period="month"><i class="fas fa-calendar-day"></i> Month</button>
-                    <button class="period-btn" data-staff-period="year"><i class="fas fa-calendar"></i> Year</button>
+                    <button class="period-btn active" data-staff-period="week"><i class="fas fa-calendar-week"></i> <span data-i18n="att.week">Week</span></button>
+                    <button class="period-btn" data-staff-period="month"><i class="fas fa-calendar-day"></i> <span data-i18n="att.month">Month</span></button>
+                    <button class="period-btn" data-staff-period="year"><i class="fas fa-calendar"></i> <span data-i18n="att.year">Year</span></button>
                 </div>
                 <div class="month-nav" style="display:flex;align-items:center;gap:10px;">
                     <button id="staff-month-prev" class="bulk-btn" style="padding:8px 12px;cursor:pointer;"><i class="fas fa-chevron-left"></i></button>
                     <span id="staff-month-label" style="font-weight:600;min-width:200px;text-align:center;"></span>
                     <button id="staff-month-next" class="bulk-btn" style="padding:8px 12px;cursor:pointer;"><i class="fas fa-chevron-right"></i></button>
-                    <button id="open-staff-report-btn" class="bulk-btn" style="padding:8px 14px;cursor:pointer;background:var(--indigo);color:#fff;border:none;border-radius:8px;font-weight:600;margin-left:8px;"><i class="fas fa-file-chart-column"></i> Generate Attendance Report</button>
-                    <button id="staff-monthly-print-btn" class="bulk-btn" style="padding:8px 14px;cursor:pointer;background:var(--blue);color:#fff;border:none;border-radius:8px;font-weight:600;"><i class="fas fa-print"></i> Print</button>
-                    <button id="staff-monthly-share-btn" class="bulk-btn" style="padding:8px 14px;cursor:pointer;background:var(--emerald);color:#fff;border:none;border-radius:8px;font-weight:600;"><i class="fas fa-share-alt"></i> Share</button>
+                    <button id="open-staff-report-btn" class="bulk-btn" style="padding:8px 14px;cursor:pointer;background:var(--indigo);color:#fff;border:none;border-radius:8px;font-weight:600;margin-left:8px;"><i class="fas fa-file-chart-column"></i> <span data-i18n="att.generateReport">Generate Attendance Report</span></button>
+                    <button id="staff-monthly-print-btn" class="bulk-btn" style="padding:8px 14px;cursor:pointer;background:var(--blue);color:#fff;border:none;border-radius:8px;font-weight:600;"><i class="fas fa-print"></i> <span data-i18n="att.print">Print</span></button>
+                    <button id="staff-monthly-share-btn" class="bulk-btn" style="padding:8px 14px;cursor:pointer;background:var(--emerald);color:#fff;border:none;border-radius:8px;font-weight:600;"><i class="fas fa-share-alt"></i> <span data-i18n="att.share">Share</span></button>
                 </div>
                 <div style="margin-left:auto;font-size:0.8rem;color:var(--text-secondary);">
-                    Legend: <strong style="color:var(--emerald);">P</strong> Present &middot;
+                    <span data-i18n="att.legend">Legend:</span> <strong style="color:var(--emerald);">P</strong> Present &middot;
                     <strong style="color:var(--rose);">A</strong> Absent &middot;
                     <strong style="color:var(--amber);">L</strong> Leave &middot;
-                    <span style="color:var(--text-muted);">&ndash;</span> No record
+                    <span style="color:var(--text-muted);">&ndash;</span> <span data-i18n="att.noRecord">No record</span>
                 </div>
             </div>
             <div class="table-card">
@@ -467,7 +467,7 @@
                     <table class="attendance-table monthly-table" id="staff-monthly-table"></table>
                     <div id="staff-monthly-empty" class="empty-state hidden">
                         <i class="fas fa-inbox"></i>
-                        <p>No staff to display.</p>
+                        <p data-i18n="att.noStaffDisplay">No staff to display.</p>
                     </div>
                 </div>
             </div>
@@ -476,7 +476,7 @@
         <!-- STAGE 10: Single Staff Full Attendance Record -->
         <section id="stage-staff-record" class="stage hidden">
             <div class="stage-header">
-                <button class="back-btn" data-back="staff-monthly"><i class="fas fa-arrow-left"></i> Back</button>
+                <button class="back-btn" data-back="staff-monthly"><i class="fas fa-arrow-left"></i> <span data-i18n="att.back">Back</span></button>
                 <h2 class="stage-title" id="staff-record-title">Staff Attendance Record</h2>
             </div>
 
@@ -493,7 +493,7 @@
                     <button class="filter-btn" data-range="365">1 Year</button>
                 </div>
                 <button id="open-staff-individual-report-btn" class="bulk-btn" style="padding:8px 14px;cursor:pointer;background:var(--indigo);color:#fff;border:none;border-radius:8px;font-weight:600;margin-left:auto;white-space:nowrap;">
-                    <i class="fas fa-file-chart-column"></i> Generate Attendance Report
+                    <i class="fas fa-file-chart-column"></i> <span data-i18n="att.generateReport">Generate Attendance Report</span>
                 </button>
             </div>
 
@@ -502,12 +502,12 @@
             <div class="table-card">
                 <div class="table-scroll">
                     <div class="history-row history-row--head">
-                        <span>Date</span><span>Reason / Notes</span><span style="text-align:center;">Status</span>
+                        <span data-i18n="att.date">Date</span><span data-i18n="att.reasonNotes">Reason / Notes</span><span style="text-align:center;" data-i18n="att.status">Status</span>
                     </div>
                     <div id="staff-history-list"></div>
                     <div id="staff-history-empty" class="empty-state hidden">
                         <i class="fas fa-inbox"></i>
-                        <p>No attendance records found for this period.</p>
+                        <p data-i18n="att.noRecordsPeriod">No attendance records found for this period.</p>
                     </div>
                 </div>
             </div>
@@ -555,9 +555,9 @@
                     </div>
 
                     <div class="report-actions">
-                        <button class="report-action" data-back-scope><i class="fas fa-arrow-left"></i> Back</button>
+                        <button class="report-action" data-back-scope><i class="fas fa-arrow-left"></i> <span data-i18n="att.back">Back</span></button>
                         <button class="report-action report-action--primary" id="report-share-btn"><i class="fab fa-whatsapp"></i> Share on WhatsApp</button>
-                        <button class="report-action" id="report-print-btn"><i class="fas fa-print"></i> Print</button>
+                        <button class="report-action" id="report-print-btn"><i class="fas fa-print"></i> <span data-i18n="att.print">Print</span></button>
                     </div>
                 </div>
             </div>
@@ -613,9 +613,9 @@
                     </div>
 
                     <div class="report-actions">
-                        <button class="report-action" data-back-student-scope><i class="fas fa-arrow-left"></i> Back</button>
+                        <button class="report-action" data-back-student-scope><i class="fas fa-arrow-left"></i> <span data-i18n="att.back">Back</span></button>
                         <button class="report-action report-action--primary" id="student-report-share-btn"><i class="fab fa-whatsapp"></i> Share on WhatsApp</button>
-                        <button class="report-action" id="student-report-print-btn"><i class="fas fa-print"></i> Print</button>
+                        <button class="report-action" id="student-report-print-btn"><i class="fas fa-print"></i> <span data-i18n="att.print">Print</span></button>
                     </div>
                 </div>
             </div>
@@ -652,9 +652,9 @@
                 <div id="staff-report-result" class="report-result hidden">
                     <div id="staff-report-card" class="report-card"></div>
                     <div class="report-actions">
-                        <button class="report-action" data-back-staff-scope><i class="fas fa-arrow-left"></i> Back</button>
+                        <button class="report-action" data-back-staff-scope><i class="fas fa-arrow-left"></i> <span data-i18n="att.back">Back</span></button>
                         <button class="report-action report-action--primary" id="staff-report-share-btn"><i class="fab fa-whatsapp"></i> Share on WhatsApp</button>
-                        <button class="report-action" id="staff-report-print-btn"><i class="fas fa-print"></i> Print</button>
+                        <button class="report-action" id="staff-report-print-btn"><i class="fas fa-print"></i> <span data-i18n="att.print">Print</span></button>
                     </div>
                 </div>
             </div>
@@ -691,9 +691,9 @@
                 <div id="staff-individual-report-result" class="report-result hidden">
                     <div id="staff-individual-report-card" class="report-card"></div>
                     <div class="report-actions">
-                        <button class="report-action" data-back-staff-individual-scope><i class="fas fa-arrow-left"></i> Back</button>
+                        <button class="report-action" data-back-staff-individual-scope><i class="fas fa-arrow-left"></i> <span data-i18n="att.back">Back</span></button>
                         <button class="report-action report-action--primary" id="staff-individual-report-share-btn"><i class="fab fa-whatsapp"></i> Share on WhatsApp</button>
-                        <button class="report-action" id="staff-individual-report-print-btn"><i class="fas fa-print"></i> Print</button>
+                        <button class="report-action" id="staff-individual-report-print-btn"><i class="fas fa-print"></i> <span data-i18n="att.print">Print</span></button>
                     </div>
                 </div>
             </div>
@@ -704,7 +704,7 @@
             <div class="report-modal__backdrop" id="scanner-backdrop"></div>
             <div class="report-modal__panel scanner-panel" role="dialog" aria-modal="true" aria-labelledby="scanner-modal-title">
                 <div class="report-modal__head">
-                    <h3 id="scanner-modal-title"><i class="fas fa-qrcode"></i> Scanner</h3>
+                    <h3 id="scanner-modal-title"><i class="fas fa-qrcode"></i> <span data-i18n="att.scanner">Scanner</span></h3>
                     <button class="report-modal__close" id="scanner-close-btn" aria-label="Close"><i class="fas fa-times"></i></button>
                 </div>
                 <div class="scanner-body">

@@ -223,16 +223,22 @@ function loadAttendanceData(totalStudents, totalStaff, attendanceData) {
     setRingProgress('ring-students', studentPct);
     setRingProgress('ring-staff', staffPct);
 
+    // Urdu when admin-i18n.js is loaded and knows the key, English otherwise.
+    const T = (key, fallback) => {
+        const I = window.AdminI18n;
+        return (I && I.has && I.has(key)) ? I.ti(key) : fallback;
+    };
+
     // Badge + empty-state note
     const badge = document.getElementById('attendance-date-badge');
     const note = document.getElementById('attendance-empty-note');
     if (badge) {
         if (hasData) {
             badge.className = 'trend up';
-            badge.innerHTML = '<i class="fas fa-circle" style="font-size:7px;"></i> Live';
+            badge.innerHTML = '<i class="fas fa-circle" style="font-size:7px;"></i> ' + T('dash.live', 'Live');
         } else {
             badge.className = 'trend neutral';
-            badge.innerHTML = '<i class="fas fa-circle" style="font-size:7px;"></i> Not marked yet';
+            badge.innerHTML = '<i class="fas fa-circle" style="font-size:7px;"></i> ' + T('dash.notMarkedYet', 'Not marked yet');
         }
     }
     if (note) {

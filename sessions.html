@@ -12,7 +12,7 @@
 <script src="admin-i18n.js"></script>
 <link rel="stylesheet" href="manage-staff.css">
     <link rel="stylesheet" href="main.css">
-<link rel="stylesheet" href="admin-i18n.css?v=1">
+<link rel="stylesheet" href="admin-i18n.css?v=2">
     <script src="xss-safe.js"></script>
     <script>(function(){try{var t=localStorage.getItem('eduflow-theme');document.documentElement.setAttribute('data-theme',t==='light'?'light':'dark');}catch(e){document.documentElement.setAttribute('data-theme','dark');}})()</script>
     <script src="access-control.js"></script>
@@ -347,26 +347,26 @@
         <section class="sessions-card" id="page-list">
             <div class="sessions-heading">
                 <h2><i class="fas fa-calendar-alt"></i> Sessions</h2>
-                <button class="add-session-btn" id="add-session-btn" type="button"><i class="fas fa-plus"></i> Add session</button>
+                <button class="add-session-btn" id="add-session-btn" type="button"><i class="fas fa-plus"></i> <span data-i18n="ses.addSession">Add session</span></button>
             </div>
             <section class="session-create" id="session-create" hidden aria-labelledby="session-create-title">
-                <h3 id="session-create-title">Create a session</h3>
-                <p id="session-create-help">Choose the first and last month of this session.</p>
+                <h3 id="session-create-title" data-i18n="ses.createSession">Create a session</h3>
+                <p id="session-create-help" data-i18n="ses.chooseMonths">Choose the first and last month of this session.</p>
                 <div class="session-form-grid">
-                    <label for="session-start">From month
+                    <label for="session-start"><span data-i18n="ses.fromMonth">From month</span>
                         <input id="session-start" type="month" required>
                     </label>
-                    <label for="session-end">Through month
+                    <label for="session-end"><span data-i18n="ses.throughMonth">Through month</span>
                         <input id="session-end" type="month" required>
                     </label>
                     <label class="session-first" for="session-first">
                         <input id="session-first" type="checkbox">
-                        <span>This is the first session</span>
+                        <span data-i18n="ses.isFirst">This is the first session</span>
                     </label>
                 </div>
                 <div class="session-form-actions">
-                    <button class="session-save-btn" id="save-session-btn" type="button"><i class="fas fa-check"></i> Save session</button>
-                    <button class="session-cancel-btn" id="cancel-session-btn" type="button">Cancel</button>
+                    <button class="session-save-btn" id="save-session-btn" type="button"><i class="fas fa-check"></i> <span data-i18n="ses.saveSession">Save session</span></button>
+                    <button class="session-cancel-btn" id="cancel-session-btn" type="button" data-i18n="ses.cancel">Cancel</button>
                 </div>
                 <p class="ss-note err" id="session-form-error" hidden role="alert"></p>
             </section>
@@ -376,8 +376,8 @@
                     <thead>
                         <tr>
                             <th style="width:90px">#</th>
-                            <th>Session Title</th>
-                            <th class="center" style="width:130px">Action</th>
+                            <th data-i18n="ses.sessionTitle">Session Title</th>
+                            <th class="center" style="width:130px" data-i18n="ses.action">Action</th>
                         </tr>
                     </thead>
                     <tbody id="sessions-body"></tbody>
@@ -386,18 +386,18 @@
         </section>
         <!-- SESSION DETAIL PAGE -->
         <section class="sessions-card" id="page-detail" hidden>
-            <button class="back-btn" id="back-btn"><i class="fas fa-arrow-left"></i> Back to Sessions</button>
-            <h2><i class="fas fa-calendar-check"></i> Session <span id="d-title"></span></h2>
+            <button class="back-btn" id="back-btn"><i class="fas fa-arrow-left"></i> <span data-i18n="ses.backToSessions">Back to Sessions</span></button>
+            <h2><i class="fas fa-calendar-check"></i> <span data-i18n="ses.session">Session</span> <span id="d-title"></span></h2>
             <p class="ss-note" id="detail-note" hidden></p>
             <div class="detail-links">
-                <a class="ss-link-btn" href="manage-finance.html" id="open-finance-link"><i class="fas fa-file-invoice-dollar"></i> Open Fees &amp; Finance</a>
+                <a class="ss-link-btn" href="manage-finance.html" id="open-finance-link"><i class="fas fa-file-invoice-dollar"></i> <span data-i18n="ses.openFinance">Open Fees &amp; Finance</span></a>
             </div>
 
-            <h3 class="table-title t-students"><i class="fas fa-user-graduate"></i> Students</h3>
+            <h3 class="table-title t-students"><i class="fas fa-user-graduate"></i> <span data-i18n="ses.students">Students</span></h3>
             <div class="table-wrap">
                 <table class="sessions-table summary-table">
                     <thead>
-                        <tr><th>Before Transfer</th><th>Came</th><th>Went</th><th>At End of Session</th><th>View</th></tr>
+                        <tr><th data-i18n="ses.beforeTransfer">Before Transfer</th><th data-i18n="ses.came">Came</th><th data-i18n="ses.went">Went</th><th data-i18n="ses.atEnd">At End of Session</th><th data-i18n="ses.view">View</th></tr>
                     </thead>
                     <tbody>
                         <tr>
@@ -405,17 +405,17 @@
                             <td class="came" data-label="Came" id="st-came">0</td>
                             <td class="went" data-label="Went" id="st-went">0</td>
                             <td class="total" data-label="At End of Session" id="st-close">0</td>
-                            <td class="view-cell"><button class="eye-btn" id="st-view" title="View all students of this session" aria-label="View students of this session"><i class="fas fa-eye"></i><span class="eye-label">View students</span></button></td>
+                            <td class="view-cell"><button class="eye-btn" id="st-view" title="View all students of this session" data-i18n-title="ses.viewStudentsTitle" aria-label="View students of this session" data-i18n-aria="ses.viewStudentsAria"><i class="fas fa-eye"></i><span class="eye-label" data-i18n="ses.viewStudents">View students</span></button></td>
                         </tr>
                     </tbody>
                 </table>
             </div>
 
-            <h3 class="table-title t-staff"><i class="fas fa-chalkboard-teacher"></i> Staff</h3>
+            <h3 class="table-title t-staff"><i class="fas fa-chalkboard-teacher"></i> <span data-i18n="ses.staff">Staff</span></h3>
             <div class="table-wrap">
                 <table class="sessions-table summary-table">
                     <thead>
-                        <tr><th>Before Transfer</th><th>Came</th><th>Went</th><th>At End of Session</th><th>View</th></tr>
+                        <tr><th data-i18n="ses.beforeTransfer">Before Transfer</th><th data-i18n="ses.came">Came</th><th data-i18n="ses.went">Went</th><th data-i18n="ses.atEnd">At End of Session</th><th data-i18n="ses.view">View</th></tr>
                     </thead>
                     <tbody>
                         <tr>
@@ -423,17 +423,17 @@
                             <td class="came" data-label="Came" id="sf-came">0</td>
                             <td class="went" data-label="Went" id="sf-went">0</td>
                             <td class="total" data-label="At End of Session" id="sf-close">0</td>
-                            <td class="view-cell"><button class="eye-btn" id="sf-view" title="View all staff of this session" aria-label="View staff of this session"><i class="fas fa-eye"></i><span class="eye-label">View staff</span></button></td>
+                            <td class="view-cell"><button class="eye-btn" id="sf-view" title="View all staff of this session" data-i18n-title="ses.viewStaffTitle" aria-label="View staff of this session" data-i18n-aria="ses.viewStaffAria"><i class="fas fa-eye"></i><span class="eye-label" data-i18n="ses.viewStaff">View staff</span></button></td>
                         </tr>
                     </tbody>
                 </table>
             </div>
 
-            <h3 class="table-title t-fees"><i class="fas fa-money-bill-wave"></i> Fees</h3>
+            <h3 class="table-title t-fees"><i class="fas fa-money-bill-wave"></i> <span data-i18n="ses.fees">Fees</span></h3>
             <div class="table-wrap">
                 <table class="sessions-table summary-table">
                     <thead>
-                        <tr><th>Total Generated</th><th>Total Fine</th><th>Total Paid</th><th>Total Pending</th><th>Imported from Previous Session</th><th>View</th></tr>
+                        <tr><th data-i18n="ses.totalGenerated">Total Generated</th><th data-i18n="ses.totalFine">Total Fine</th><th data-i18n="ses.totalPaid">Total Paid</th><th data-i18n="ses.totalPending">Total Pending</th><th data-i18n="ses.imported">Imported from Previous Session</th><th data-i18n="ses.view">View</th></tr>
                     </thead>
                     <tbody>
                         <tr>
@@ -442,17 +442,17 @@
                             <td class="came" data-label="Total Paid" id="fe-paid">0</td>
                             <td class="went" data-label="Total Pending" id="fe-pending">0</td>
                             <td class="imported" data-label="Imported from Previous Session" id="fe-imported">0</td>
-                            <td class="view-cell"><button class="eye-btn" id="fe-view" title="View monthly fee invoices" aria-label="View fee invoices of this session"><i class="fas fa-eye"></i><span class="eye-label">View fee invoices</span></button></td>
+                            <td class="view-cell"><button class="eye-btn" id="fe-view" title="View monthly fee invoices" data-i18n-title="ses.viewInvoicesTitle" aria-label="View fee invoices of this session" data-i18n-aria="ses.viewInvoicesAria"><i class="fas fa-eye"></i><span class="eye-label" data-i18n="ses.viewInvoices">View fee invoices</span></button></td>
                         </tr>
                     </tbody>
                 </table>
             </div>
 
-            <h3 class="table-title t-ie"><i class="fas fa-scale-balanced"></i> Income / Expense</h3>
+            <h3 class="table-title t-ie"><i class="fas fa-scale-balanced"></i> <span data-i18n="ses.incomeExpense">Income / Expense</span></h3>
             <div class="table-wrap">
                 <table class="sessions-table summary-table pl-table">
                     <thead>
-                        <tr><th>Total Paid Fees</th><th>Extra Income</th><th>Total Income</th><th>Salaries</th><th>Other Expenses</th><th>Total Expense</th><th id="ie-pl-head">Profit / Loss</th><th>View</th></tr>
+                        <tr><th data-i18n="ses.totalPaidFees">Total Paid Fees</th><th data-i18n="ses.extraIncome">Extra Income</th><th data-i18n="ses.totalIncome">Total Income</th><th data-i18n="ses.salaries">Salaries</th><th data-i18n="ses.otherExpenses">Other Expenses</th><th data-i18n="ses.totalExpense">Total Expense</th><th id="ie-pl-head" data-i18n="ses.profitLoss">Profit / Loss</th><th data-i18n="ses.view">View</th></tr>
                     </thead>
                     <tbody>
                         <tr>
@@ -463,7 +463,7 @@
                             <td class="expense" data-label="Other Expenses" id="ie-expenses">0</td>
                             <td class="expense" data-label="Total Expense" id="ie-expense">0</td>
                             <td class="profit" data-label="Total Profit" id="ie-pl">0</td>
-                            <td class="view-cell"><button class="eye-btn" id="ie-view" title="View all incomes and expenses of this session" aria-label="View incomes and expenses of this session"><i class="fas fa-eye"></i><span class="eye-label">View incomes &amp; expenses</span></button></td>
+                            <td class="view-cell"><button class="eye-btn" id="ie-view" title="View all incomes and expenses of this session" data-i18n-title="ses.viewIncExpTitle" aria-label="View incomes and expenses of this session" data-i18n-aria="ses.viewIncExpAria"><i class="fas fa-eye"></i><span class="eye-label" data-i18n="ses.viewIncExp">View incomes &amp; expenses</span></button></td>
                         </tr>
                     </tbody>
                 </table>
@@ -475,28 +475,28 @@
     <div class="fs-overlay" id="fs-students" hidden>
         <div class="fs-panel" role="dialog" aria-modal="true" aria-labelledby="fs-title">
             <div class="fs-head">
-                <h2 id="fs-title"><i class="fas fa-user-graduate" id="fs-icon"></i> <span id="fs-title-text">Students</span></h2>
-                <button class="fs-close" id="fs-close" aria-label="Close"><i class="fas fa-times"></i></button>
+                <h2 id="fs-title"><i class="fas fa-user-graduate" id="fs-icon"></i> <span id="fs-title-text" data-i18n="ses.students">Students</span></h2>
+                <button class="fs-close" id="fs-close" aria-label="Close" data-i18n-aria="ses.closeAria"><i class="fas fa-times"></i></button>
             </div>
             <div class="fs-tools">
                 <div class="fs-tabs" id="fs-tabs">
-                    <button class="fs-tab active" data-tab="all"><span id="tl-all">All Students</span> <b id="tc-all">0</b></button>
-                    <button class="fs-tab" data-tab="before">Before Transfer <b id="tc-before">0</b></button>
-                    <button class="fs-tab" data-tab="came">Came <b id="tc-came">0</b></button>
-                    <button class="fs-tab" data-tab="went">Went <b id="tc-went">0</b></button>
+                    <button class="fs-tab active" data-tab="all"><span id="tl-all" data-i18n="ses.allStudents">All Students</span> <b id="tc-all">0</b></button>
+                    <button class="fs-tab" data-tab="before"><span data-i18n="ses.beforeTransfer">Before Transfer</span> <b id="tc-before">0</b></button>
+                    <button class="fs-tab" data-tab="came"><span data-i18n="ses.came">Came</span> <b id="tc-came">0</b></button>
+                    <button class="fs-tab" data-tab="went"><span data-i18n="ses.went">Went</span> <b id="tc-went">0</b></button>
                 </div>
-                <select class="fs-select" id="fs-month" aria-label="Filter by month"><option value="">All months</option></select>
-                <select class="fs-select" id="fs-sort" aria-label="Sort by month">
-                    <option value="default">Sort: Default</option>
-                    <option value="asc">Month: Oldest first</option>
-                    <option value="desc">Month: Newest first</option>
+                <select class="fs-select" id="fs-month" aria-label="Filter by month" data-i18n-aria="ses.filterMonthAria"><option value="" data-i18n="ses.allMonths">All months</option></select>
+                <select class="fs-select" id="fs-sort" aria-label="Sort by month" data-i18n-aria="ses.sortMonthAria">
+                    <option value="default" data-i18n="ses.sortDefault">Sort: Default</option>
+                    <option value="asc" data-i18n="ses.monthOldest">Month: Oldest first</option>
+                    <option value="desc" data-i18n="ses.monthNewest">Month: Newest first</option>
                 </select>
-                <div class="fs-search"><i class="fas fa-search"></i><input type="text" id="fs-search" placeholder="Search…"></div>
+                <div class="fs-search"><i class="fas fa-search"></i><input type="text" id="fs-search" placeholder="Search…" data-i18n-placeholder="ses.searchPh"></div>
             </div>
             <div class="fs-body">
                 <table class="sessions-table">
                     <thead id="fs-thead">
-                        <tr><th>#</th><th>Student ID</th><th>Roll No.</th><th>Name</th><th>Guardian / Father</th><th>Class</th><th>Section</th><th>Gender</th><th>Joined</th><th>Left</th><th>Status</th></tr>
+                        <tr><th>#</th><th data-i18n="ses.studentId">Student ID</th><th data-i18n="ses.rollNo">Roll No.</th><th data-i18n="ses.name">Name</th><th data-i18n="ses.guardian">Guardian / Father</th><th data-i18n="ses.class">Class</th><th data-i18n="ses.section">Section</th><th data-i18n="ses.gender">Gender</th><th data-i18n="ses.joined">Joined</th><th data-i18n="ses.left">Left</th><th data-i18n="ses.status">Status</th></tr>
                     </thead>
                     <tbody id="fs-tbody"></tbody>
                 </table>
@@ -509,9 +509,9 @@
     <div class="fs-overlay" id="fs-fees" hidden>
         <div class="fs-panel" role="dialog" aria-modal="true" aria-labelledby="fe-title">
             <div class="fs-head">
-                <h2 id="fe-title"><i class="fas fa-money-bill-wave"></i> <span id="fe-title-text">Fees</span></h2>
+                <h2 id="fe-title"><i class="fas fa-money-bill-wave"></i> <span id="fe-title-text" data-i18n="ses.fees">Fees</span></h2>
                 <div class="fs-head-actions">
-                    <a class="ss-link-btn" href="manage-finance.html"><i class="fas fa-file-invoice-dollar"></i> Fees &amp; Finance</a>
+                    <a class="ss-link-btn" href="manage-finance.html"><i class="fas fa-file-invoice-dollar"></i> <span data-i18n="ses.feesFinance">Fees &amp; Finance</span></a>
                     <button class="fs-close" id="fe-close" aria-label="Close"><i class="fas fa-times"></i></button>
                 </div>
             </div>
@@ -523,29 +523,29 @@
     <div class="fs-overlay" id="fs-ledger" hidden>
         <div class="fs-panel" role="dialog" aria-modal="true" aria-labelledby="lg-title">
             <div class="fs-head">
-                <h2 id="lg-title"><i class="fas fa-scale-balanced"></i> <span id="lg-title-text">Income / Expense</span></h2>
+                <h2 id="lg-title"><i class="fas fa-scale-balanced"></i> <span id="lg-title-text" data-i18n="ses.incomeExpense">Income / Expense</span></h2>
                 <button class="fs-close" id="lg-close" aria-label="Close"><i class="fas fa-times"></i></button>
             </div>
             <div class="ledger-top" id="lg-top"></div>
             <div class="fs-tools">
                 <div class="fs-tabs" id="lg-tabs">
-                    <button class="fs-tab active" data-tab="all">All <b id="lc-all">0</b></button>
-                    <button class="fs-tab" data-tab="income">Income <b id="lc-income">0</b></button>
-                    <button class="fs-tab" data-tab="expense">Expense <b id="lc-expense">0</b></button>
+                    <button class="fs-tab active" data-tab="all"><span data-i18n="ses.all">All</span> <b id="lc-all">0</b></button>
+                    <button class="fs-tab" data-tab="income"><span data-i18n="ses.income">Income</span> <b id="lc-income">0</b></button>
+                    <button class="fs-tab" data-tab="expense"><span data-i18n="ses.expense">Expense</span> <b id="lc-expense">0</b></button>
                 </div>
-                <select class="fs-select" id="lg-month" aria-label="Filter by month"><option value="">All months</option></select>
-                <select class="fs-select" id="lg-sort" aria-label="Sort entries">
-                    <option value="asc">Month: Oldest first</option>
-                    <option value="desc">Month: Newest first</option>
-                    <option value="amt-desc">Amount: High to low</option>
-                    <option value="amt-asc">Amount: Low to high</option>
+                <select class="fs-select" id="lg-month" aria-label="Filter by month"><option value="" data-i18n="ses.allMonths">All months</option></select>
+                <select class="fs-select" id="lg-sort" aria-label="Sort entries" data-i18n-aria="ses.sortEntriesAria">
+                    <option value="asc" data-i18n="ses.monthOldest">Month: Oldest first</option>
+                    <option value="desc" data-i18n="ses.monthNewest">Month: Newest first</option>
+                    <option value="amt-desc" data-i18n="ses.amtHigh">Amount: High to low</option>
+                    <option value="amt-asc" data-i18n="ses.amtLow">Amount: Low to high</option>
                 </select>
-                <div class="fs-search"><i class="fas fa-search"></i><input type="text" id="lg-search" placeholder="Search by title or month…"></div>
+                <div class="fs-search"><i class="fas fa-search"></i><input type="text" id="lg-search" placeholder="Search by title or month…" data-i18n-placeholder="ses.searchTitlePh"></div>
             </div>
             <div class="fs-body">
                 <table class="sessions-table ledger-table">
                     <thead>
-                        <tr><th>#</th><th>Month</th><th>Type</th><th>Title / Description</th><th class="amt">Amount</th></tr>
+                        <tr><th>#</th><th data-i18n="ses.month">Month</th><th data-i18n="ses.type">Type</th><th data-i18n="ses.titleDesc">Title / Description</th><th class="amt" data-i18n="ses.amount">Amount</th></tr>
                     </thead>
                     <tbody id="lg-tbody"></tbody>
                 </table>
@@ -555,24 +555,24 @@
     </div>
 
     <!-- ROW ACTION MENU (positioned by script, so the table's scroll area never clips it) -->
-    <div class="session-menu" id="session-menu" role="menu" aria-label="Session actions" hidden>
-        <button type="button" role="menuitem" data-action="current"><i class="fas fa-circle-check"></i> Make as current</button>
-        <button type="button" role="menuitem" data-action="finance"><i class="fas fa-file-invoice-dollar"></i> Open Fees &amp; Finance</button>
-        <button type="button" role="menuitem" data-action="edit"><i class="fas fa-pen"></i> Edit</button>
-        <button type="button" role="menuitem" class="danger" data-action="delete"><i class="fas fa-trash"></i> Delete</button>
+    <div class="session-menu" id="session-menu" role="menu" aria-label="Session actions" data-i18n-aria="ses.actionsAria" hidden>
+        <button type="button" role="menuitem" data-action="current"><i class="fas fa-circle-check"></i> <span data-i18n="ses.makeCurrent">Make as current</span></button>
+        <button type="button" role="menuitem" data-action="finance"><i class="fas fa-file-invoice-dollar"></i> <span data-i18n="ses.openFinance">Open Fees &amp; Finance</span></button>
+        <button type="button" role="menuitem" data-action="edit"><i class="fas fa-pen"></i> <span data-i18n="ses.edit">Edit</span></button>
+        <button type="button" role="menuitem" class="danger" data-action="delete"><i class="fas fa-trash"></i> <span data-i18n="ses.delete">Delete</span></button>
     </div>
 
     <!-- DELETE CONFIRMATION -->
     <div class="fs-overlay" id="confirm-overlay" hidden>
         <div class="fs-panel confirm-panel" role="alertdialog" aria-modal="true" aria-labelledby="confirm-title" aria-describedby="confirm-text">
             <div class="fs-head">
-                <h2 id="confirm-title"><i class="fas fa-trash"></i> <span>Delete session?</span></h2>
+                <h2 id="confirm-title"><i class="fas fa-trash"></i> <span data-i18n="ses.deleteQ">Delete session?</span></h2>
             </div>
             <p id="confirm-text"></p>
             <p class="ss-note err" id="confirm-error" hidden role="alert"></p>
             <div class="confirm-actions">
-                <button class="session-cancel-btn" id="confirm-cancel" type="button">Cancel</button>
-                <button class="session-save-btn session-delete-btn" id="confirm-ok" type="button"><i class="fas fa-trash"></i> Delete session</button>
+                <button class="session-cancel-btn" id="confirm-cancel" type="button" data-i18n="ses.cancel">Cancel</button>
+                <button class="session-save-btn session-delete-btn" id="confirm-ok" type="button"><i class="fas fa-trash"></i> <span data-i18n="ses.deleteSession">Delete session</span></button>
             </div>
         </div>
     </div>
@@ -865,7 +865,7 @@
         };
         function render() {
             if (!sessions.length) {
-                body.innerHTML = '<tr><td colspan="3" class="empty-row">No sessions created yet. Select <strong>Add session</strong> to set the school session dates.</td></tr>';
+                body.innerHTML = '<tr><td colspan="3" class="empty-row">No sessions created yet. Select <strong data-i18n="ses.addSession">Add session</strong> to set the school session dates.</td></tr>';
                 return;
             }
             body.innerHTML = sessions.map(function (s, i) {
@@ -1093,8 +1093,8 @@
             var f = financeSummary(idx), isLoss = f.net < 0;
             document.getElementById('lg-title-text').textContent = 'Income / Expense - Session ' + sessions[idx].title;
             document.getElementById('lg-top').innerHTML =
-                '<div class="g"><small>Total Income</small><b>' + money(f.income) + '</b></div>' +
-                '<div class="r"><small>Total Expense</small><b>' + money(f.expense) + '</b></div>' +
+                '<div class="g"><small data-i18n="ses.totalIncome">Total Income</small><b>' + money(f.income) + '</b></div>' +
+                '<div class="r"><small data-i18n="ses.totalExpense">Total Expense</small><b>' + money(f.expense) + '</b></div>' +
                 '<div class="' + (isLoss ? 'r' : 'g') + '"><small>' + (isLoss ? 'Total Loss' : 'Total Profit') + '</small><b>' + money(Math.abs(f.net)) + '</b></div>';
             document.getElementById('lc-all').textContent = lgList.length;
             document.getElementById('lc-income').textContent = lgList.filter(function (e) { return e.type === 'income'; }).length;
@@ -1118,10 +1118,10 @@
             document.getElementById('fe-title-text').textContent = 'Fees - Session ' + sessions[idx].title;
             var tot = data.summary;
             var top = '<div class="fee-top">' +
-                '<div><small>Total Generated</small><b>' + money(tot.generated) + '</b></div>' +
-                '<div class="a"><small>Total Fine</small><b>' + money(tot.fine) + '</b></div>' +
-                '<div class="g"><small>Total Paid</small><b>' + money(tot.paid) + '</b></div>' +
-                '<div class="r"><small>Total Pending</small><b>' + money(tot.pending) + '</b></div></div>';
+                '<div><small data-i18n="ses.totalGenerated">Total Generated</small><b>' + money(tot.generated) + '</b></div>' +
+                '<div class="a"><small data-i18n="ses.totalFine">Total Fine</small><b>' + money(tot.fine) + '</b></div>' +
+                '<div class="g"><small data-i18n="ses.totalPaid">Total Paid</small><b>' + money(tot.paid) + '</b></div>' +
+                '<div class="r"><small data-i18n="ses.totalPending">Total Pending</small><b>' + money(tot.pending) + '</b></div></div>';
             var shown = data.months.filter(function (v) { return v.count > 0 || v.key <= DB.curFeeKey; });
             document.getElementById('fee-sections').innerHTML = top + (shown.length ? shown.map(function (v) {
                 var label = 'Invoice#' + v.no + '-' + MONTHS[v.month] + '-' + v.year;
@@ -1137,7 +1137,7 @@
                         '<div class="m-card"><div class="m-title"><i class="fas fa-rotate-left"></i> Prev Pending</div><div class="imp"><i class="fas fa-file-import"></i> Import Pending</div><span class="pill grey">' + num(v.prev) + '</span></div>' +
                         '<div class="m-card"><div class="m-title"><i class="fas fa-receipt"></i> Current Fee</div><span class="pill grey">' + num(v.gen) + '</span></div>' +
                         '<div class="m-card"><div class="m-title"><i class="fas fa-wallet"></i> Total Payable</div>' +
-                            '<div class="kv"><span>Total Fee</span><b>' + num(v.gen) + '</b></div><div class="kv"><span>Total Fine</span><b>' + num(v.fine) + '</b></div>' +
+                            '<div class="kv"><span>Total Fee</span><b>' + num(v.gen) + '</b></div><div class="kv"><span data-i18n="ses.totalFine">Total Fine</span><b>' + num(v.fine) + '</b></div>' +
                             '<span class="pill yellow">' + money(v.gen + v.fine) + '</span></div>' +
                         '<div class="m-card"><div class="m-title"><i class="fas fa-circle-check"></i> Received</div>' +
                             '<div class="kv"><span>Received (fee + fine) :</span><b>' + num(v.paid) + '</b></div><div class="kv"><span>Discounts given :</span><b>' + num(v.disc) + '</b></div>' +
@@ -1424,14 +1424,14 @@
             return true;
         }
         function statusBadge(x) {
-            var o = x.origin === 'came' ? '<span class="badge came">Came</span>' : '<span class="badge before">Before Transfer</span>';
-            return x.left ? '<span class="badge went">Went</span> ' + o : o;
+            var o = x.origin === 'came' ? '<span class="badge came" data-i18n="ses.came">Came</span>' : '<span class="badge before" data-i18n="ses.beforeTransfer">Before Transfer</span>';
+            return x.left ? '<span class="badge went" data-i18n="ses.went">Went</span> ' + o : o;
         }
         function monthLbl(sm) {
             return (sm === null || sm === undefined) ? '—' : monthName(sessions[currentSession].startKey + sm);
         }
         function monthOptions(idx) {
-            var h = '<option value="">All months</option>';
+            var h = '<option value="" data-i18n="ses.allMonths">All months</option>';
             for (var m = 0; m <= sessions[idx].endKey - sessions[idx].startKey; m++) {
                 h += '<option value="' + m + '">' + monthName(sessions[idx].startKey + m) + '</option>';
             }

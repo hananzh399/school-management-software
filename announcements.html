@@ -14,7 +14,7 @@
     <link rel="stylesheet" href="main.css">
     <link rel="stylesheet" href="announcements.css">
     <link rel="stylesheet" href="mobile-ui.css?v=2">
-<link rel="stylesheet" href="admin-i18n.css?v=1">
+<link rel="stylesheet" href="admin-i18n.css?v=2">
     <script src="xss-safe.js"></script>
     <script>(function(){const t=localStorage.getItem('eduflow-theme')||'dark';document.documentElement.setAttribute('data-theme',t);})()</script>
     <script src="access-control.js"></script>
@@ -69,13 +69,13 @@
             <h2><i class="fas fa-bullhorn"></i> Announcements <span>&amp; Messages</span></h2>
             <div class="am-tools">
                 <button class="am-tool" id="am-sound" type="button" title="Message sound" aria-label="Message sound"><i class="fas fa-volume-high"></i></button>
-                <button class="am-tool" id="am-bell" type="button" title="Message pop-ups"><i class="fas fa-bell"></i><span>Pop-ups</span></button>
+                <button class="am-tool" id="am-bell" type="button" title="Message pop-ups"><i class="fas fa-bell"></i><span data-i18n="ann.popups">Pop-ups</span></button>
             </div>
         </section>
 
         <!-- Messages (chat) and Announcements (notices from the school) are two separate things -->
         <nav class="am-main-tabs" id="am-main-tabs" aria-label="Messages or announcements">
-            <button type="button" class="on" data-pane="messages"><i class="fas fa-comments"></i><span>Messages</span><b id="mt-msg" hidden></b></button>
+            <button type="button" class="on" data-pane="messages"><i class="fas fa-comments"></i><span data-i18n="ann.messages">Messages</span><b id="mt-msg" hidden></b></button>
             <button type="button" data-pane="notices"><i class="fas fa-bullhorn"></i><span data-i18n="nav.announcements">Announcements</span></button>
         </nav>
 
@@ -83,12 +83,12 @@
             <!-- conversation list -->
             <div class="am-list">
                 <div class="am-list-top">
-                    <div class="am-search"><i class="fas fa-search"></i><input id="am-q" placeholder="Search name, ID or student" autocomplete="off"></div>
+                    <div class="am-search"><i class="fas fa-search"></i><input id="am-q" placeholder="Search name, ID or student" data-i18n-placeholder="ann.searchPh" autocomplete="off"></div>
                 </div>
                 <div class="am-tabs" id="am-tabs">
-                    <button class="on" data-f="all">All <b id="cnt-all"></b></button>
-                    <button data-f="teacher"><i class="fas fa-chalkboard-teacher"></i> Teachers <b id="cnt-teacher"></b></button>
-                    <button data-f="parent"><i class="fas fa-people-roof"></i> Parents <b id="cnt-parent"></b></button>
+                    <button class="on" data-f="all"><span data-i18n="ann.all">All</span> <b id="cnt-all"></b></button>
+                    <button data-f="teacher"><i class="fas fa-chalkboard-teacher"></i> <span data-i18n="ann.teachers">Teachers</span> <b id="cnt-teacher"></b></button>
+                    <button data-f="parent"><i class="fas fa-people-roof"></i> <span data-i18n="ann.parents">Parents</span> <b id="cnt-parent"></b></button>
                     <button data-f="unread" title="Unread only"><i class="fas fa-envelope"></i></button>
                 </div>
                 <div class="am-threads" id="am-threads"></div>
@@ -102,13 +102,13 @@
         <section class="an-wrap" id="an-wrap" hidden>
             <div class="an-top">
                 <div class="an-filters" id="an-filters">
-                    <button type="button" class="on" data-f="all">All</button>
-                    <button type="button" data-f="teachers"><i class="fas fa-chalkboard-teacher"></i> Teachers</button>
-                    <button type="button" data-f="parents"><i class="fas fa-people-roof"></i> Parents</button>
+                    <button type="button" class="on" data-f="all" data-i18n="ann.all">All</button>
+                    <button type="button" data-f="teachers"><i class="fas fa-chalkboard-teacher"></i> <span data-i18n="ann.teachers">Teachers</span></button>
+                    <button type="button" data-f="parents"><i class="fas fa-people-roof"></i> <span data-i18n="ann.parents">Parents</span></button>
                 </div>
-                <button type="button" class="an-new" id="an-new"><i class="fas fa-plus"></i><span>New announcement</span></button>
+                <button type="button" class="an-new" id="an-new"><i class="fas fa-plus"></i><span data-i18n="ann.newAnnouncement">New announcement</span></button>
             </div>
-            <p class="an-hint"><i class="fas fa-circle-info"></i> Announcements appear as notices in the Teacher and Parent portals. Result notices are sent automatically from <b>Examination → Send to Parents</b>.</p>
+            <p class="an-hint"><i class="fas fa-circle-info"></i> <span data-i18n="ann.noticeHint">Announcements appear as notices in the Teacher and Parent portals. Result notices are sent automatically from</span> <b data-i18n="ann.examSend">Examination → Send to Parents</b>.</p>
             <div class="an-list" id="an-list"></div>
         </section>
     </main>
@@ -116,44 +116,44 @@
     <!-- new announcement -->
     <div class="am-modal" id="an-modal" hidden>
         <div class="am-sheet">
-            <div class="am-sheet-head"><b>New announcement</b><button id="an-close" type="button" aria-label="Close"><i class="fas fa-xmark"></i></button></div>
-            <label class="an-lbl" for="an-title">Title</label>
-            <input class="an-input" id="an-title" maxlength="120" placeholder="e.g. School closed on Monday" autocomplete="off">
-            <label class="an-lbl" for="an-body">Announcement</label>
-            <textarea class="an-input an-area" id="an-body" rows="4" maxlength="2000" placeholder="Write the notice…"></textarea>
-            <span class="an-lbl">Type</span>
-            <div class="am-seg" id="an-cat"><button class="on" data-cat="notice" type="button">Notice</button><button data-cat="event" type="button">Event</button><button data-cat="holiday" type="button">Holiday</button></div>
-            <span class="an-lbl">Send to</span>
-            <div class="am-seg an-aud" id="an-aud"><button class="on" data-aud="everyone" type="button"><i class="fas fa-users"></i> Everyone</button><button data-aud="teachers" type="button"><i class="fas fa-chalkboard-teacher"></i> Teachers</button><button data-aud="parents" type="button"><i class="fas fa-people-roof"></i> Parents</button><button data-aud="class" type="button"><i class="fas fa-school"></i> A class</button></div>
+            <div class="am-sheet-head"><b data-i18n="ann.newAnnouncement">New announcement</b><button id="an-close" type="button" aria-label="Close"><i class="fas fa-xmark"></i></button></div>
+            <label class="an-lbl" for="an-title" data-i18n="ann.title">Title</label>
+            <input class="an-input" id="an-title" maxlength="120" placeholder="e.g. School closed on Monday" data-i18n-placeholder="ann.titlePh" autocomplete="off">
+            <label class="an-lbl" for="an-body" data-i18n="ann.announcement">Announcement</label>
+            <textarea class="an-input an-area" id="an-body" rows="4" maxlength="2000" placeholder="Write the notice…" data-i18n-placeholder="ann.writeNotice"></textarea>
+            <span class="an-lbl" data-i18n="ann.type">Type</span>
+            <div class="am-seg" id="an-cat"><button class="on" data-cat="notice" type="button" data-i18n="ann.notice">Notice</button><button data-cat="event" type="button" data-i18n="ann.event">Event</button><button data-cat="holiday" type="button" data-i18n="ann.holiday">Holiday</button></div>
+            <span class="an-lbl" data-i18n="ann.sendTo">Send to</span>
+            <div class="am-seg an-aud" id="an-aud"><button class="on" data-aud="everyone" type="button"><i class="fas fa-users"></i> <span data-i18n="ann.everyone">Everyone</span></button><button data-aud="teachers" type="button"><i class="fas fa-chalkboard-teacher"></i> <span data-i18n="ann.teachers">Teachers</span></button><button data-aud="parents" type="button"><i class="fas fa-people-roof"></i> <span data-i18n="ann.parents">Parents</span></button><button data-aud="class" type="button"><i class="fas fa-school"></i> <span data-i18n="ann.aClass">A class</span></button></div>
             <div class="am-class" id="an-class-wrap" hidden><select id="an-class"></select></div>
-            <label class="an-check"><input type="checkbox" id="an-urgent"> <span><b>Mark as urgent</b><small>Shown first and highlighted</small></span></label>
+            <label class="an-check"><input type="checkbox" id="an-urgent"> <span><b data-i18n="ann.markUrgent">Mark as urgent</b><small data-i18n="ann.urgentHint">Shown first and highlighted</small></span></label>
             <div class="an-to" id="an-to"></div>
-            <div class="am-btnrow"><button type="button" id="an-cancel" class="am-ghost">Cancel</button><button type="button" id="an-post" class="an-post"><i class="fas fa-paper-plane"></i> Send announcement</button></div>
+            <div class="am-btnrow"><button type="button" id="an-cancel" class="am-ghost" data-i18n="ann.cancel">Cancel</button><button type="button" id="an-post" class="an-post"><i class="fas fa-paper-plane"></i> <span data-i18n="ann.sendAnnouncement">Send announcement</span></button></div>
         </div>
     </div>
     <div class="am-modal" id="an-confirm" hidden>
         <div class="am-sheet am-small">
-            <b>Delete this announcement?</b>
-            <p>It will disappear for teachers and parents as well.</p>
-            <div class="am-btnrow"><button type="button" id="an-no" class="am-ghost">Cancel</button><button type="button" id="an-yes" class="am-danger">Delete</button></div>
+            <b data-i18n="ann.deleteConfirm">Delete this announcement?</b>
+            <p data-i18n="ann.deleteHint">It will disappear for teachers and parents as well.</p>
+            <div class="am-btnrow"><button type="button" id="an-no" class="am-ghost" data-i18n="ann.cancel">Cancel</button><button type="button" id="an-yes" class="am-danger" data-i18n="ann.delete">Delete</button></div>
         </div>
     </div>
 
     <!-- new message: one person or a group -->
     <div class="am-modal" id="am-modal" hidden>
         <div class="am-sheet">
-            <div class="am-sheet-head"><b>New message</b><button id="am-close" type="button" aria-label="Close"><i class="fas fa-xmark"></i></button></div>
-            <div class="am-seg" id="am-who"><button class="on" data-who="teacher" type="button"><i class="fas fa-chalkboard-teacher"></i> Teachers</button><button data-who="parent" type="button"><i class="fas fa-people-roof"></i> Parents</button></div>
+            <div class="am-sheet-head"><b data-i18n="ann.newMessage">New message</b><button id="am-close" type="button" aria-label="Close"><i class="fas fa-xmark"></i></button></div>
+            <div class="am-seg" id="am-who"><button class="on" data-who="teacher" type="button"><i class="fas fa-chalkboard-teacher"></i> <span data-i18n="ann.teachers">Teachers</span></button><button data-who="parent" type="button"><i class="fas fa-people-roof"></i> <span data-i18n="ann.parents">Parents</span></button></div>
             <div class="am-modes" id="am-modes"></div>
             <div class="am-class" id="am-class-wrap" hidden><select id="am-class"></select></div>
             <div class="am-pickbox" id="am-pickbox" hidden>
-                <div class="am-search"><i class="fas fa-search"></i><input id="pick-q" placeholder="Search by name or ID" autocomplete="off"></div>
-                <div class="am-pickbar"><button type="button" id="pick-all">Select shown</button><button type="button" id="pick-none">Clear</button><span id="pick-n"></span></div>
+                <div class="am-search"><i class="fas fa-search"></i><input id="pick-q" placeholder="Search by name or ID" data-i18n-placeholder="ann.searchNameId" autocomplete="off"></div>
+                <div class="am-pickbar"><button type="button" id="pick-all" data-i18n="ann.selectShown">Select shown</button><button type="button" id="pick-none" data-i18n="ann.clear">Clear</button><span id="pick-n"></span></div>
                 <div class="am-pick" id="am-pick"></div>
             </div>
             <div class="am-to" id="am-to"></div>
             <div class="am-cm-compose">
-                <textarea id="cm-text" rows="2" maxlength="1000" placeholder="Write your message…"></textarea>
+                <textarea id="cm-text" rows="2" maxlength="1000" placeholder="Write your message…" data-i18n-placeholder="ann.writeMessage"></textarea>
                 <button class="am-send" id="cm-send" type="button" aria-label="Send"><i class="fas fa-paper-plane"></i></button>
             </div>
         </div>
@@ -173,13 +173,13 @@
             <button type="button" data-sa="copy"><i class="fas fa-copy"></i> Copy text</button>
             <button type="button" class="del" data-sa="del"><i class="fas fa-trash"></i> Delete message</button>
         </div>
-        <button type="button" class="am-info-close" data-sa="close">Close</button>
+        <button type="button" class="am-info-close" data-sa="close" data-i18n="ann.close">Close</button>
     </div>
     <div class="am-modal" id="am-confirm" hidden>
         <div class="am-sheet am-small">
             <b>Delete this message?</b>
             <p>It will be removed for the teacher or parent as well.</p>
-            <div class="am-btnrow"><button type="button" id="cf-no" class="am-ghost">Cancel</button><button type="button" id="cf-yes" class="am-danger">Delete</button></div>
+            <div class="am-btnrow"><button type="button" id="cf-no" class="am-ghost" data-i18n="ann.cancel">Cancel</button><button type="button" id="cf-yes" class="am-danger" data-i18n="ann.delete">Delete</button></div>
         </div>
     </div>
 

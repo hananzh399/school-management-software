@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Student Management |SoftSchool</title>
+    <title data-i18n="stu.pageTitle">Student Management |SoftSchool</title>
     <link rel="icon" type="image/png" href="logo-icon.png">
     <meta name="description" content="SoftSchool Student Management - Manage student admissions, records and database.">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
@@ -13,7 +13,7 @@
 <script src="admin-i18n.js"></script>
 <link rel="stylesheet" href="manage-students.css">
     <link rel="stylesheet" href="mobile-ui.css?v=2">
-<link rel="stylesheet" href="admin-i18n.css?v=1">
+<link rel="stylesheet" href="admin-i18n.css?v=2">
     <script src="xss-safe.js"></script>
     <script>(function(){const s=localStorage.getItem('softschool-theme');const t=(s==='light'||s==='dark')?s:'dark';document.documentElement.setAttribute('data-theme',t);})()</script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
@@ -125,7 +125,7 @@
                         <i class="fas fa-user-graduate"></i>
                     </div>
                     <div class="stat-details">
-                        <span class="stat-title">Total Enrolled</span>
+                        <span class="stat-title" data-i18n="stu.totalEnrolled">Total Enrolled</span>
                         <h2 id="counter-total">0</h2>
                     </div>
                 </div>
@@ -134,7 +134,7 @@
                         <i class="fas fa-mars"></i>
                     </div>
                     <div class="stat-details">
-                        <span class="stat-title">Male Students</span>
+                        <span class="stat-title" data-i18n="stu.maleStudents">Male Students</span>
                         <h2 id="counter-male">0</h2>
                     </div>
                 </div>
@@ -143,7 +143,7 @@
                         <i class="fas fa-venus"></i>
                     </div>
                     <div class="stat-details">
-                        <span class="stat-title">Female Students</span>
+                        <span class="stat-title" data-i18n="stu.femaleStudents">Female Students</span>
                         <h2 id="counter-female">0</h2>
                     </div>
                 </div>
@@ -156,8 +156,8 @@
         <!-- MANAGEMENT CARDS SECTION -->
         <section class="management-section">
             <div class="page-title-section align-left" style="margin-bottom:30px;">
-                <h2 class="page-title">Manage Students</h2>
-                <p class="page-description">Select an option below to manage student records.</p>
+                <h2 class="page-title" data-i18n="stu.manageStudents">Manage Students</h2>
+                <p class="page-description" data-i18n="stu.pickOption">Select an option below to manage student records.</p>
                 <div class="title-divider"></div>
             </div>
 
@@ -168,8 +168,8 @@
                     <div class="m-icon-wrapper admission-icon">
                         <i class="fas fa-user-plus"></i>
                     </div>
-                    <h3 class="card-title">New Admission</h3>
-                    <p class="card-description">Register a new student with full details.</p>
+                    <h3 class="card-title" data-i18n="stu.newAdmission">New Admission</h3>
+                    <p class="card-description" data-i18n="stu.newAdmissionSub">Register a new student with full details.</p>
                 </div>
 
                 <!-- Card: Manage Records -->
@@ -178,8 +178,8 @@
                     <div class="m-icon-wrapper viewdb-icon">
                         <i class="fas fa-database"></i>
                     </div>
-                    <h3 class="card-title">Manage Records</h3>
-                    <p class="card-description">Browse and search the entire roster.</p>
+                    <h3 class="card-title" data-i18n="stu.manageRecords">Manage Records</h3>
+                    <p class="card-description" data-i18n="stu.manageRecordsSub">Browse and search the entire roster.</p>
                 </div>
 
                 <!-- Card: Bulk Transfer -->
@@ -188,8 +188,8 @@
                     <div class="m-icon-wrapper update-icon">
                         <i class="fas fa-right-left"></i>
                     </div>
-                    <h3 class="card-title">Bulk Transfer</h3>
-                    <p class="card-description">Move many students to another class or section.</p>
+                    <h3 class="card-title" data-i18n="stu.bulkTransfer">Bulk Transfer</h3>
+                    <p class="card-description" data-i18n="stu.bulkTransferSub">Move many students to another class or section.</p>
                 </div>
 
                 <!-- Card: Archive -->
@@ -198,8 +198,8 @@
                     <div class="m-icon-wrapper archive-icon">
                         <i class="fas fa-box-archive"></i>
                     </div>
-                    <h3 class="card-title">Archive Center</h3>
-                    <p class="card-description">View graduated and dropped-out records.</p>
+                    <h3 class="card-title" data-i18n="stu.archiveCenter">Archive Center</h3>
+                    <p class="card-description" data-i18n="stu.archiveSub">View graduated and dropped-out records.</p>
                 </div>
 
                 <!-- Card: Certificates -->
@@ -208,8 +208,8 @@
                     <div class="m-icon-wrapper cert-icon">
                         <i class="fas fa-certificate"></i>
                     </div>
-                    <h3 class="card-title">Certificates</h3>
-                    <p class="card-description">Generate and print school certificates.</p>
+                    <h3 class="card-title" data-i18n="stu.certificates">Certificates</h3>
+                    <p class="card-description" data-i18n="stu.certificatesSub">Generate and print school certificates.</p>
                 </div>
 
                 <!-- Card: Data Export & Import -->
@@ -218,8 +218,8 @@
                     <div class="m-icon-wrapper data-io-icon">
                         <i class="fas fa-file-export"></i>
                     </div>
-                    <h3 class="card-title">Data Export &amp; Import</h3>
-                    <p class="card-description">Export records to Excel or import a backup.</p>
+                    <h3 class="card-title" data-i18n="stu.dataExportImport">Data Export &amp; Import</h3>
+                    <p class="card-description" data-i18n="stu.dataExportSub">Export records to Excel or import a backup.</p>
                 </div>
             </div>
         </section>
@@ -230,13 +230,13 @@
         <section id="data-io-page-view" class="cert-page-view" style="display:none;">
             <div class="cert-page-header">
                 <button class="cert-back-btn" onclick="closeDataIOPage()">
-                    <i class="fas fa-arrow-left"></i> Back
+                    <i class="fas fa-arrow-left"></i> <span data-i18n="stu.back">Back</span>
                 </button>
                 <div class="cert-page-title-wrap">
                     <i class="fas fa-file-export"></i>
-                    <h2 class="cert-page-title">Data Export &amp; Import</h2>
+                    <h2 class="cert-page-title" data-i18n="stu.dataExportImport">Data Export &amp; Import</h2>
                 </div>
-                <p class="cert-page-subtitle">Export students as Excel or CSV, or import them from an Excel, CSV or PDF file.</p>
+                <p class="cert-page-subtitle" data-i18n="stu.exportImportHint">Export students as Excel or CSV, or import them from an Excel, CSV or PDF file.</p>
             </div>
             <div class="cert-page-grid">
                 <!-- Export Card -->
@@ -245,10 +245,10 @@
                     <div class="m-icon-wrapper data-export-icon">
                         <i class="fas fa-file-excel"></i>
                     </div>
-                    <h3 class="card-title">Export Data</h3>
-                    <p class="card-description">Export student records as Excel or CSV — all classes, or just one class and section.</p>
+                    <h3 class="card-title" data-i18n="stu.exportData">Export Data</h3>
+                    <p class="card-description" data-i18n="stu.exportDataSub">Export student records as Excel or CSV — all classes, or just one class and section.</p>
                     <div class="card-template-action" onclick="event.stopPropagation()">
-                        <button type="button" class="tpl-btn" onclick="openTemplateDialog('export')"><i class="fas fa-file-arrow-down"></i> Download template</button>
+                        <button type="button" class="tpl-btn" onclick="openTemplateDialog('export')"><i class="fas fa-file-arrow-down"></i> <span data-i18n="stu.downloadTemplate">Download template</span></button>
                     </div>
                 </div>
                 <!-- Import Card -->
@@ -257,10 +257,10 @@
                     <div class="m-icon-wrapper data-import-icon">
                         <i class="fas fa-file-import"></i>
                     </div>
-                    <h3 class="card-title">Import Data</h3>
-                    <p class="card-description">Import students from an Excel, CSV or PDF file and match its columns.</p>
+                    <h3 class="card-title" data-i18n="stu.importData">Import Data</h3>
+                    <p class="card-description" data-i18n="stu.importDataSub">Import students from an Excel, CSV or PDF file and match its columns.</p>
                     <div class="card-template-action" onclick="event.stopPropagation()">
-                        <button type="button" class="tpl-btn" onclick="openTemplateDialog('import')"><i class="fas fa-file-arrow-down"></i> Download template</button>
+                        <button type="button" class="tpl-btn" onclick="openTemplateDialog('import')"><i class="fas fa-file-arrow-down"></i> <span data-i18n="stu.downloadTemplate">Download template</span></button>
                     </div>
                     <input type="file" id="import-file-input" accept=".xlsx,.xlsm,.xls,.ods,.csv,.tsv,.pdf" style="display:none" onchange="importStudentsFromExcel(event)" onclick="event.stopPropagation()">
                 </div>
@@ -275,13 +275,13 @@
         <section id="cert-page-view" class="cert-page-view" style="display:none;">
             <div class="cert-page-header">
                 <button class="cert-back-btn" onclick="closeCertPage()">
-                    <i class="fas fa-arrow-left"></i> Back
+                    <i class="fas fa-arrow-left"></i> <span data-i18n="stu.back">Back</span>
                 </button>
                 <div class="cert-page-title-wrap">
                     <i class="fas fa-certificate"></i>
-                    <h2 class="cert-page-title">Certificates</h2>
+                    <h2 class="cert-page-title" data-i18n="stu.certificates">Certificates</h2>
                 </div>
-                <p class="cert-page-subtitle">Choose a certificate to generate.</p>
+                <p class="cert-page-subtitle" data-i18n="stu.chooseCert">Choose a certificate to generate.</p>
             </div>
             <div class="cert-page-grid">
                 <div class="manage-card slc-card cert-page-card" onclick="openModal('slc-modal')">
@@ -289,16 +289,16 @@
                     <div class="m-icon-wrapper slc-icon">
                         <i class="fas fa-graduation-cap"></i>
                     </div>
-                    <h3 class="card-title">School Leaving Certificate</h3>
-                    <p class="card-description">Issue a School Leaving Certificate.</p>
+                    <h3 class="card-title" data-i18n="stu.slc">School Leaving Certificate</h3>
+                    <p class="card-description" data-i18n="stu.slcSub">Issue a School Leaving Certificate.</p>
                 </div>
                 <div class="manage-card char-card cert-page-card" onclick="openModal('character-modal')">
                     <div class="card-glow"></div>
                     <div class="m-icon-wrapper char-icon">
                         <i class="fas fa-award"></i>
                     </div>
-                    <h3 class="card-title">Character Certificate</h3>
-                    <p class="card-description">Generate a Character Certificate.</p>
+                    <h3 class="card-title" data-i18n="stu.charCert">Character Certificate</h3>
+                    <p class="card-description" data-i18n="stu.charCertSub">Generate a Character Certificate.</p>
                 </div>
             </div>
         </section>
@@ -309,13 +309,13 @@
         <section id="archive-page-view" class="cert-page-view" style="display:none;">
             <div class="cert-page-header">
                 <button class="cert-back-btn" onclick="closeArchivePage()">
-                    <i class="fas fa-arrow-left"></i> Back
+                    <i class="fas fa-arrow-left"></i> <span data-i18n="stu.back">Back</span>
                 </button>
                 <div class="cert-page-title-wrap">
                     <i class="fas fa-box-archive"></i>
-                    <h2 class="cert-page-title">Archive Center</h2>
+                    <h2 class="cert-page-title" data-i18n="stu.archiveCenter">Archive Center</h2>
                 </div>
-                <p class="cert-page-subtitle">Browse graduated and dropped-out student records.</p>
+                <p class="cert-page-subtitle" data-i18n="stu.browseArchive">Browse graduated and dropped-out student records.</p>
             </div>
 
             <!-- Populated by renderPlanLimitBanners() in manage-students.js when the
@@ -330,16 +330,16 @@
                         <div class="m-icon-wrapper archive-grad-icon">
                             <i class="fas fa-user-graduate"></i>
                         </div>
-                        <h3 class="card-title">Graduated Students</h3>
-                        <p class="card-description">View graduated alumni.</p>
+                        <h3 class="card-title" data-i18n="stu.graduated">Graduated Students</h3>
+                        <p class="card-description" data-i18n="stu.graduatedSub">View graduated alumni.</p>
                     </div>
                     <div class="manage-card cert-page-card archive-drop-card" onclick="archiveOpenDropped()">
                         <div class="card-glow"></div>
                         <div class="m-icon-wrapper archive-drop-icon">
                             <i class="fas fa-user-slash"></i>
                         </div>
-                        <h3 class="card-title">Dropped Out Students</h3>
-                        <p class="card-description">View or reactivate dropped-out students.</p>
+                        <h3 class="card-title" data-i18n="stu.droppedOut">Dropped Out Students</h3>
+                        <p class="card-description" data-i18n="stu.droppedOutSub">View or reactivate dropped-out students.</p>
                     </div>
                 </div>
             </div>
@@ -347,42 +347,42 @@
             <!-- STAGE: GRADUATED -->
             <div id="archive-stage-graduated" class="msc-stage hidden">
                 <div class="msc-stage-header">
-                    <button class="btn-ghost msc-back-btn" onclick="archiveBackToHub()"><i class="fas fa-arrow-left"></i> Back</button>
-                    <h4 class="msc-stage-title"><i class="fas fa-user-graduate"></i> Graduated Students</h4>
+                    <button class="btn-ghost msc-back-btn" onclick="archiveBackToHub()"><i class="fas fa-arrow-left"></i> <span data-i18n="stu.back">Back</span></button>
+                    <h4 class="msc-stage-title"><i class="fas fa-user-graduate"></i> <span data-i18n="stu.graduated">Graduated Students</span></h4>
                 </div>
 
                 <!-- Single merged table: all graduated students, filterable by class / section / year -->
                 <div class="archive-subsection">
                     <div class="archive-subsection-header archive-subsection-header--wrap">
-                        <h5><i class="fas fa-layer-group"></i> Graduated Students</h5>
+                        <h5><i class="fas fa-layer-group"></i> <span data-i18n="stu.graduated">Graduated Students</span></h5>
                         <div class="archive-filter-bar">
                             <div class="archive-filter-group">
-                                <label>Class</label>
+                                <label data-i18n="stu.class">Class</label>
                                 <select id="archive-grad-class-filter" onchange="renderArchiveGraduatedTable()">
-                                    <option value="__ALL__">All Classes</option>
+                                    <option value="__ALL__" data-i18n="stu.allClasses">All Classes</option>
                                 </select>
                             </div>
                             <div class="archive-seg-group" id="archive-grad-section-seg">
-                                <button type="button" class="archive-seg-btn active" data-val="BOTH" onclick="archiveSetGradSection('BOTH')">Both</button>
+                                <button type="button" class="archive-seg-btn active" data-val="BOTH" onclick="archiveSetGradSection('BOTH')" data-i18n="stu.both">Both</button>
                                 <button type="button" class="archive-seg-btn" data-val="A" onclick="archiveSetGradSection('A')">A</button>
                                 <button type="button" class="archive-seg-btn" data-val="B" onclick="archiveSetGradSection('B')">B</button>
                             </div>
                             <div class="archive-filter-group">
-                                <label>Session</label>
+                                <label data-i18n="stu.session">Session</label>
                                 <select id="archive-grad-session-filter" onchange="archiveGradSessionChanged()">
-                                    <option value="ALL">All Sessions</option>
+                                    <option value="ALL" data-i18n="stu.allSessions">All Sessions</option>
                                 </select>
                             </div>
                             <div class="archive-filter-group">
-                                <label>Year</label>
+                                <label data-i18n="stu.year">Year</label>
                                 <select id="archive-grad-year-filter" onchange="renderArchiveGraduatedTable()">
-                                    <option value="0">This Year</option>
-                                    <option value="1">Past Year</option>
-                                    <option value="2">2 Years Ago</option>
-                                    <option value="3">3 Years Ago</option>
-                                    <option value="4">4 Years Ago</option>
-                                    <option value="5">5 Years Ago</option>
-                                    <option value="ALL">All Years</option>
+                                    <option value="0" data-i18n="stu.thisYear">This Year</option>
+                                    <option value="1" data-i18n="stu.pastYear">Past Year</option>
+                                    <option value="2" data-i18n="stu.years2">2 Years Ago</option>
+                                    <option value="3" data-i18n="stu.years3">3 Years Ago</option>
+                                    <option value="4" data-i18n="stu.years4">4 Years Ago</option>
+                                    <option value="5" data-i18n="stu.years5">5 Years Ago</option>
+                                    <option value="ALL" data-i18n="stu.allYears">All Years</option>
                                 </select>
                             </div>
                         </div>
@@ -390,15 +390,15 @@
                     <div class="upd-search-row">
                         <div class="search-box-wrapper upd-search-bar">
                             <i class="fas fa-search"></i>
-                            <input type="text" id="archive-grad-class-search" placeholder="Search by name, ID or guardian…" oninput="renderArchiveGraduatedTable()">
+                            <input type="text" id="archive-grad-class-search" placeholder="Search by name, ID or guardian…" data-i18n-placeholder="stu.searchPh" oninput="renderArchiveGraduatedTable()">
                         </div>
                     </div>
                     <div class="data-table-wrapper">
                         <table class="student-table">
                             <thead>
                                 <tr>
-                                    <th>#</th><th>Student ID</th><th>Name</th><th>Guardian</th>
-                                    <th>Class</th><th>Section</th><th>Graduation Date</th><th class="text-center">Actions</th>
+                                    <th>#</th><th data-i18n="stu.studentId">Student ID</th><th data-i18n="stu.name">Name</th><th data-i18n="stu.guardian">Guardian</th>
+                                    <th data-i18n="stu.class">Class</th><th data-i18n="stu.section">Section</th><th data-i18n="stu.graduationDate">Graduation Date</th><th class="text-center" data-i18n="stu.actions">Actions</th>
                                 </tr>
                             </thead>
                             <tbody id="archive-grad-tbody"><!-- Populated by JS --></tbody>
@@ -410,14 +410,14 @@
             <!-- STAGE: DROPPED OUT -->
             <div id="archive-stage-dropped" class="msc-stage hidden">
                 <div class="msc-stage-header">
-                    <button class="btn-ghost msc-back-btn" onclick="archiveBackToHub()"><i class="fas fa-arrow-left"></i> Back</button>
-                    <h4 class="msc-stage-title"><i class="fas fa-user-slash"></i> Dropped Out Students</h4>
+                    <button class="btn-ghost msc-back-btn" onclick="archiveBackToHub()"><i class="fas fa-arrow-left"></i> <span data-i18n="stu.back">Back</span></button>
+                    <h4 class="msc-stage-title"><i class="fas fa-user-slash"></i> <span data-i18n="stu.droppedOut">Dropped Out Students</span></h4>
                 </div>
                 <div class="archive-filter-bar archive-filter-bar--solo">
                     <div class="archive-filter-group">
-                        <label>Session</label>
+                        <label data-i18n="stu.session">Session</label>
                         <select id="archive-drop-session-filter" onchange="renderArchiveDroppedTable()">
-                            <option value="ALL">All Sessions</option>
+                            <option value="ALL" data-i18n="stu.allSessions">All Sessions</option>
                         </select>
                     </div>
                 </div>
@@ -431,8 +431,8 @@
                     <table class="student-table">
                         <thead>
                             <tr>
-                                <th>#</th><th>Student ID</th><th>Name</th><th>Guardian</th>
-                                <th>Class</th><th>Section</th><th>Date Removed</th><th class="text-center">Actions</th>
+                                <th>#</th><th data-i18n="stu.studentId">Student ID</th><th data-i18n="stu.name">Name</th><th data-i18n="stu.guardian">Guardian</th>
+                                <th data-i18n="stu.class">Class</th><th data-i18n="stu.section">Section</th><th data-i18n="stu.dateRemoved">Date Removed</th><th class="text-center" data-i18n="stu.actions">Actions</th>
                             </tr>
                         </thead>
                         <tbody id="archive-drop-tbody"><!-- Populated by JS --></tbody>
@@ -451,7 +451,7 @@
     <div id="student-modal" class="modal-overlay">
         <div class="modal-container wider">
             <div class="modal-header">
-                <h3 id="form-modal-title"><i class="fas fa-user-plus"></i> Student Admission Entry</h3>
+                <h3 id="form-modal-title"><i class="fas fa-user-plus"></i> <span data-i18n="stu.admissionEntry">Student Admission Entry</span></h3>
                 <button class="close-modal-btn" onclick="closeModal('student-modal')">&times;</button>
             </div>
             <form id="student-admission-form" class="modal-body-scroll">
@@ -460,32 +460,32 @@
                 <!-- SECTION: STUDENT PHOTO -->
                 <div class="image-upload-wrapper">
                     <div class="image-preview-circle">
-                        <img id="student-img-preview" src="https://via.placeholder.com/150?text=Select+Photo" alt="Preview" onclick="openPhotoViewer(this)" title="Click to view full-size photo">
+                        <img id="student-img-preview" src="https://via.placeholder.com/150?text=Select+Photo" alt="Preview" onclick="openPhotoViewer(this)" title="Click to view full-size photo" data-i18n-title="stu.clickFullPhoto">
                         <label for="student-photo" class="upload-trigger"><i class="fas fa-camera"></i></label>
                         <input type="file" id="student-photo" accept="image/*" hidden>
                     </div>
                     <h4 id="display-reg-no" class="hrk-id-badge">—</h4>
-                    <p class="upload-hint">Registration Number (System ID)</p>
+                    <p class="upload-hint" data-i18n="stu.regNumber">Registration Number (System ID)</p>
                     <div id="edit-sibling-badge" class="sibling-tag" style="display:none;margin-top:6px;"></div>
-                    <p class="upload-hint" style="color:var(--text-muted);font-size:0.78rem;">Official Student Photograph</p>
+                    <p class="upload-hint" style="color:var(--text-muted);font-size:0.78rem;" data-i18n="stu.officialPhoto">Official Student Photograph</p>
                     <p id="student-photo-error" class="upload-error-msg" role="alert"><i class="fas fa-circle-exclamation"></i> <span></span></p>
                 </div>
 
                 <!-- SECTION 1: ACADEMIC RECORD -->
-                <div class="form-section-label"><i class="fas fa-university"></i> Academic &amp; System Details</div>
+                <div class="form-section-label"><i class="fas fa-university"></i> <span data-i18n="stu.academicDetails">Academic &amp; System Details</span></div>
                 <div class="form-input-grid">
                     <div class="form-input-group">
-                        <label>Admission Date <span class="req-star">*</span></label>
+                        <label><span data-i18n="stu.admissionDate">Admission Date</span> <span class="req-star">*</span></label>
                         <input type="date" id="admission-date" name="admissionDate" required>
                     </div>
                     <div class="form-input-group">
-                        <label>Roll Number <span style="font-weight:400;color:var(--text-muted)">(Auto — by Class)</span></label>
-                        <input type="text" id="roll-no-input" name="rollNo" readonly class="input-readonly" placeholder="Select class first">
+                        <label><span data-i18n="stu.rollNumber">Roll Number</span> <span style="font-weight:400;color:var(--text-muted)" data-i18n="stu.autoByClass">(Auto — by Class)</span></label>
+                        <input type="text" id="roll-no-input" name="rollNo" readonly class="input-readonly" placeholder="Select class first" data-i18n-placeholder="stu.selectClassFirst">
                     </div>
                     <div class="form-input-group">
-                        <label>Class / Grade <span class="req-star">*</span></label>
+                        <label><span data-i18n="stu.classGrade">Class / Grade</span> <span class="req-star">*</span></label>
                         <select name="studentClass" required>
-                            <option value="">Select Class</option>
+                            <option value="" data-i18n="stu.selectClass">Select Class</option>
                             <option value="Montessori">Montessori</option>
                             <option value="Nursery">Nursery</option>
                             <option value="Prep">Prep</option>
@@ -502,9 +502,9 @@
                         </select>
                     </div>
                     <div class="form-input-group" id="section-field-group">
-                        <label>Section <span class="req-star">*</span></label>
+                        <label><span data-i18n="stu.section">Section</span> <span class="req-star">*</span></label>
                         <select name="section" id="section-select">
-                            <option value="">Select Section</option>
+                            <option value="" data-i18n="stu.selectSection">Select Section</option>
                         </select>
                     </div>
                 </div>
@@ -512,82 +512,82 @@
                 <hr class="form-divider">
 
                 <!-- SECTION 2: PERSONAL IDENTITY -->
-                <div class="form-section-label"><i class="fas fa-user"></i> Personal Information</div>
+                <div class="form-section-label"><i class="fas fa-user"></i> <span data-i18n="stu.personalInfo">Personal Information</span></div>
                 <div class="form-input-grid">
                     <div class="form-input-group">
-                        <label>Student Full Name <span class="req-star">*</span></label>
-                        <input type="text" name="fullName" placeholder="Enter legal name" required>
+                        <label><span data-i18n="stu.fullName">Student Full Name</span> <span class="req-star">*</span></label>
+                        <input type="text" name="fullName" placeholder="Enter legal name" data-i18n-placeholder="stu.enterLegalName" required>
                     </div>
                     <div class="form-input-group">
-                        <label>Gender <span class="req-star">*</span></label>
+                        <label><span data-i18n="stu.gender">Gender</span> <span class="req-star">*</span></label>
                         <select name="gender" required>
-                            <option value="">Select Gender</option>
-                            <option value="Male">Male</option>
-                            <option value="Female">Female</option>
-                            <option value="Other">Other</option>
+                            <option value="" data-i18n="stu.selectGender">Select Gender</option>
+                            <option value="Male" data-i18n="stu.male">Male</option>
+                            <option value="Female" data-i18n="stu.female">Female</option>
+                            <option value="Other" data-i18n="stu.other">Other</option>
                         </select>
                     </div>
                     <div class="form-input-group">
-                        <label>Date of Birth <span class="req-star">*</span></label>
+                        <label><span data-i18n="stu.dob">Date of Birth</span> <span class="req-star">*</span></label>
                         <input type="date" id="student-dob" name="dob" required>
                     </div>
                     <div class="form-input-group">
-                        <label>Calculated Age</label>
-                        <input type="text" id="student-age" name="age" readonly class="input-readonly" placeholder="Auto-calculated">
+                        <label data-i18n="stu.calculatedAge">Calculated Age</label>
+                        <input type="text" id="student-age" name="age" readonly class="input-readonly" placeholder="Auto-calculated" data-i18n-placeholder="stu.autoCalculated">
                     </div>
                     <div class="form-input-group">
-                        <label>Student B-Form / CNIC Number <span class="req-star">*</span></label>
+                        <label><span data-i18n="stu.bformCnic">Student B-Form / CNIC Number</span> <span class="req-star">*</span></label>
                         <input type="text" name="studentBform" class="mask-cnic" placeholder="XXXXX-XXXXXXX-X" required>
                     </div>
                     <div class="form-input-group">
-                        <label>Medical Issues / Allergies</label>
-                        <input type="text" name="medicalIssues" placeholder="Enter 'None' if healthy">
+                        <label data-i18n="stu.medical">Medical Issues / Allergies</label>
+                        <input type="text" name="medicalIssues" placeholder="Enter 'None' if healthy" data-i18n-placeholder="stu.enterNone">
                     </div>
                     <div class="form-input-group full-span">
-                        <label>Orphan Status <span class="req-star">*</span></label>
+                        <label><span data-i18n="stu.orphanStatus">Orphan Status</span> <span class="req-star">*</span></label>
                         <div class="form-radio-group">
                             <label class="form-radio-option">
                                 <input type="radio" name="orphanStatus" value="Orphan" required>
-                                <span>Orphan</span>
+                                <span data-i18n="stu.orphan">Orphan</span>
                             </label>
                             <label class="form-radio-option">
                                 <input type="radio" name="orphanStatus" value="Not Orphan" checked required>
-                                <span>Not Orphan</span>
+                                <span data-i18n="stu.notOrphan">Not Orphan</span>
                             </label>
                         </div>
                     </div>
                     <div class="form-input-group">
-                        <label>Previous School Attended</label>
-                        <input type="text" name="previousSchool" placeholder="Enter previous school name (if any)">
+                        <label data-i18n="stu.prevSchool">Previous School Attended</label>
+                        <input type="text" name="previousSchool" placeholder="Enter previous school name (if any)" data-i18n-placeholder="stu.prevSchoolPh">
                     </div>
                     <div class="form-input-group">
-                        <label>Previous Class</label>
-                        <input type="text" name="previousClass" placeholder="Last class attended (if any)">
+                        <label data-i18n="stu.prevClass">Previous Class</label>
+                        <input type="text" name="previousClass" placeholder="Last class attended (if any)" data-i18n-placeholder="stu.prevClassPh">
                     </div>
                 </div>
 
                 <!-- SECTION 3: GUARDIAN INFORMATION -->
-                <div class="form-section-label"><i class="fas fa-users"></i> Guardian Information</div>
+                <div class="form-section-label"><i class="fas fa-users"></i> <span data-i18n="stu.guardianInfo">Guardian Information</span></div>
                 <div class="form-input-grid">
                     <div class="form-input-group">
-                        <label>Guardian Full Name <span class="req-star">*</span></label>
-                        <input type="text" name="guardianName" placeholder="Enter guardian's legal name" required>
+                        <label><span data-i18n="stu.guardianName">Guardian Full Name</span> <span class="req-star">*</span></label>
+                        <input type="text" name="guardianName" placeholder="Enter guardian's legal name" data-i18n-placeholder="stu.guardianNamePh" required>
                     </div>
                     <div class="form-input-group">
-                        <label>Guardian Relation <span class="req-star">*</span></label>
+                        <label><span data-i18n="stu.guardianRelation">Guardian Relation</span> <span class="req-star">*</span></label>
                         <select name="guardianRole" required>
-                            <option value="">Select Relation</option>
-                            <option value="Father">Father</option>
-                            <option value="Mother">Mother</option>
-                            <option value="Brother">Brother</option>
-                            <option value="Sister">Sister</option>
-                            <option value="Uncle">Uncle</option>
-                            <option value="Grandparent">Grandparent</option>
-                            <option value="Legal Guardian">Legal Guardian</option>
+                            <option value="" data-i18n="stu.selectRelation">Select Relation</option>
+                            <option value="Father" data-i18n="stu.father">Father</option>
+                            <option value="Mother" data-i18n="stu.mother">Mother</option>
+                            <option value="Brother" data-i18n="stu.brother">Brother</option>
+                            <option value="Sister" data-i18n="stu.sister">Sister</option>
+                            <option value="Uncle" data-i18n="stu.uncle">Uncle</option>
+                            <option value="Grandparent" data-i18n="stu.grandparent">Grandparent</option>
+                            <option value="Legal Guardian" data-i18n="stu.legalGuardian">Legal Guardian</option>
                         </select>
                     </div>
                     <div class="form-input-group">
-                        <label>Guardian CNIC Number <span class="req-star">*</span></label>
+                        <label><span data-i18n="stu.guardianCnic">Guardian CNIC Number</span> <span class="req-star">*</span></label>
                         <input type="text" name="guardianCnic" class="mask-cnic" placeholder="XXXXX-XXXXXXX-X" required>
                     </div>
                 </div>
@@ -596,51 +596,51 @@
                      Only shown when the Guardian Relation is something other than "Father".
                      When the guardian IS the father, the guardian name/CNIC are saved as the father's. -->
                 <div id="father-details-section" style="display:none;">
-                    <div class="form-section-label"><i class="fas fa-user-tie"></i> Father Details</div>
+                    <div class="form-section-label"><i class="fas fa-user-tie"></i> <span data-i18n="stu.fatherDetails">Father Details</span></div>
                     <div class="form-input-grid">
                         <div class="form-input-group">
-                            <label>Father Full Name</label>
-                            <input type="text" name="fatherFullName" placeholder="Enter father's legal name">
+                            <label data-i18n="stu.fatherName">Father Full Name</label>
+                            <input type="text" name="fatherFullName" placeholder="Enter father's legal name" data-i18n-placeholder="stu.fatherNamePh">
                         </div>
                         <div class="form-input-group">
-                            <label>Father CNIC Number</label>
+                            <label data-i18n="stu.fatherCnic">Father CNIC Number</label>
                             <input type="text" name="fatherCnic" class="mask-cnic" placeholder="XXXXX-XXXXXXX-X">
                         </div>
                     </div>
                 </div>
 
                 <!-- SECTION 4: CONTACTS & DOCUMENTS -->
-                <div class="form-section-label"><i class="fas fa-phone-alt"></i> Contact &amp; Documentation</div>
+                <div class="form-section-label"><i class="fas fa-phone-alt"></i> <span data-i18n="stu.contactDoc">Contact &amp; Documentation</span></div>
                 <div class="form-input-grid">
                     <div class="form-input-group">
-                        <label>Primary Phone <span class="req-star">(Mandatory) *</span></label>
+                        <label><span data-i18n="stu.primaryPhone">Primary Phone</span> <span class="req-star">(Mandatory) *</span></label>
                         <input type="tel" name="phone1" placeholder="03XX-XXXXXXX" required>
                     </div>
                     <div class="form-input-group">
-                        <label><i class="fab fa-whatsapp" style="color:#25d366;"></i> WhatsApp Number <span class="req-star">(Mandatory) *</span></label>
-                        <input type="tel" name="phone2" placeholder="03XX-XXXXXXX" required title="WhatsApp number of the parent / guardian">
+                        <label><i class="fab fa-whatsapp" style="color:#25d366;"></i> <span data-i18n="stu.whatsappNumber">WhatsApp Number</span> <span class="req-star">(Mandatory) *</span></label>
+                        <input type="tel" name="phone2" placeholder="03XX-XXXXXXX" required title="WhatsApp number of the parent / guardian" data-i18n-title="stu.whatsappTitle">
                     </div>
                     <div class="form-input-group full-span">
-                        <label>Permanent Address <span class="req-star">*</span></label>
-                        <input type="text" id="perm-address" name="permanentAddress" placeholder="House #, Street, City" required>
+                        <label><span data-i18n="stu.permanentAddress">Permanent Address</span> <span class="req-star">*</span></label>
+                        <input type="text" id="perm-address" name="permanentAddress" placeholder="House #, Street, City" data-i18n-placeholder="stu.addressPh" required>
                     </div>
                     <div class="form-input-group full-span">
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
-                            <label style="margin-bottom: 0;">Mailing Address <span class="req-star">*</span></label>
+                            <label style="margin-bottom: 0;"><span data-i18n="stu.mailingAddress">Mailing Address</span> <span class="req-star">*</span></label>
                             <button type="button" id="copy-address-btn" class="copy-addr-btn">
-                                <i class="fas fa-copy"></i> Same as Permanent
+                                <i class="fas fa-copy"></i> <span data-i18n="stu.sameAsPermanent">Same as Permanent</span>
                             </button>
                         </div>
                         <input type="text" id="mail-address" name="mailingAddress" placeholder="House #, Street, City" required>
                     </div>
                     <div class="form-input-group full-span" id="bform-upload-group" data-feature="bform_pic">
-                        <label>Certificate / B-Form Upload</label>
+                        <label data-i18n="stu.certUpload">Certificate / B-Form Upload</label>
                         <div class="certificate-upload-zone">
                             <i class="fas fa-cloud-upload-alt"></i>
-                            <p>Click to upload student certificate (PDF or Image)</p>
+                            <p data-i18n="stu.clickUpload">Click to upload student certificate (PDF or Image)</p>
                             <input type="file" id="cert-upload" accept="image/*,application/pdf">
                             <input type="hidden" name="certData" id="cert-data">
-                            <p id="cert-upload-status" class="upload-hint" style="display:none;color:var(--text-muted);font-size:0.78rem;margin-top:6px;"><i class="fas fa-check-circle" style="color:#10b981;"></i> <span>A document is already on file. Uploading a new one will replace it.</span></p>
+                            <p id="cert-upload-status" class="upload-hint" style="display:none;color:var(--text-muted);font-size:0.78rem;margin-top:6px;"><i class="fas fa-check-circle" style="color:#10b981;"></i> <span data-i18n="stu.docOnFile">A document is already on file. Uploading a new one will replace it.</span></p>
                             <p id="cert-upload-error" class="upload-error-msg" role="alert"><i class="fas fa-circle-exclamation"></i> <span></span></p>
                         </div>
                     </div>
@@ -649,26 +649,26 @@
                 <hr class="form-divider">
 
                 <!-- SECTION 5: TRANSPORTATION -->
-                <div class="form-section-label"><i class="fas fa-bus"></i> Transport Facilities</div>
+                <div class="form-section-label"><i class="fas fa-bus"></i> <span data-i18n="stu.transportFacilities">Transport Facilities</span></div>
                 <div class="form-input-grid">
                     <div class="form-input-group">
-                        <label>Transport Mode</label>
+                        <label data-i18n="stu.transportMode">Transport Mode</label>
                         <select name="transportMode" id="transport-mode">
-                            <option value="Private">Private (Self)</option>
-                            <option value="School Provided">School Provided</option>
+                            <option value="Private" data-i18n="stu.privateSelf">Private (Self)</option>
+                            <option value="School Provided" data-i18n="stu.schoolProvided">School Provided</option>
                         </select>
                     </div>
                     <div class="form-input-group">
-                        <label>Vehicle Type</label>
+                        <label data-i18n="stu.vehicleType">Vehicle Type</label>
                         <select name="transportType">
                             <option value="None">N/A</option>
-                            <option value="School Bus">School Bus</option>
-                            <option value="School Van">School Van</option>
-                            <option value="Coaster">Coaster</option>
+                            <option value="School Bus" data-i18n="stu.schoolBus">School Bus</option>
+                            <option value="School Van" data-i18n="stu.schoolVan">School Van</option>
+                            <option value="Coaster" data-i18n="stu.coaster">Coaster</option>
                         </select>
                     </div>
                     <div class="form-input-group">
-                        <label>Transport Monthly Fee</label>
+                        <label data-i18n="stu.transportFee">Transport Monthly Fee</label>
                         <input type="number" name="transportFee" value="0">
                     </div>
                 </div>
@@ -676,31 +676,31 @@
                 <hr class="form-divider">
 
                 <!-- SECTION 6: FEE STRUCTURE -->
-                <div class="form-section-label"><i class="fas fa-file-invoice-dollar"></i> Financial Profile</div>
+                <div class="form-section-label"><i class="fas fa-file-invoice-dollar"></i> <span data-i18n="stu.financialProfile">Financial Profile</span></div>
                 <div class="form-input-grid">
                     <div class="form-input-group">
-                        <label>Standard Tuition Fee <span style="font-weight:400;color:var(--text-muted)">(Auto — by Class)</span></label>
+                        <label><span data-i18n="stu.standardFee">Standard Tuition Fee</span> <span style="font-weight:400;color:var(--text-muted)" data-i18n="stu.autoByClass">(Auto — by Class)</span></label>
                         <input type="number" id="fee-standard" name="standardFee" required readonly class="input-readonly" placeholder="Select class first">
                     </div>
                     <div class="form-input-group">
-                        <label>Admission Fee</label>
+                        <label data-i18n="stu.admissionFee">Admission Fee</label>
                         <input type="number" id="fee-admission" name="admissionFee" value="0">
                     </div>
                     <div class="form-input-group">
-                        <label>Arrears <span style="font-weight:400;color:var(--text-muted)">(Previous Dues)</span></label>
+                        <label><span data-i18n="stu.arrears">Arrears</span> <span style="font-weight:400;color:var(--text-muted)" data-i18n="stu.previousDues">(Previous Dues)</span></label>
                         <input type="number" id="fee-arrears" name="arrears" value="0" min="0">
-                        <small style="color:var(--text-muted);margin-top:4px;display:block;"><i class="fas fa-info-circle"></i> Leave as 0 if the student has no outstanding balance.</small>
+                        <small style="color:var(--text-muted);margin-top:4px;display:block;"><i class="fas fa-info-circle"></i> <span data-i18n="stu.arrearsHint">Leave as 0 if the student has no outstanding balance.</span></small>
                     </div>
                     <div class="form-input-group">
-                        <label>Tuition Discount</label>
+                        <label data-i18n="stu.tuitionDiscount">Tuition Discount</label>
                         <input type="number" id="fee-discount-tuition" name="tuitionDiscount" value="0">
                     </div>
                     <div class="form-input-group">
-                        <label>Transport Discount</label>
+                        <label data-i18n="stu.transportDiscount">Transport Discount</label>
                         <input type="number" id="fee-discount-transport" name="transportDiscount" value="0">
                     </div>
                     <div class="form-input-group">
-                        <label>Sibling Discount</label>
+                        <label data-i18n="stu.siblingDiscount">Sibling Discount</label>
                         <input type="number" id="fee-discount-sibling" name="siblingDiscount" value="0">
                     </div>
                 </div>
@@ -708,19 +708,19 @@
                 <!-- ANNUAL FUND SECTION -->
                 <div class="form-input-grid" style="margin-top:20px;">
                     <div class="form-input-group full-span" style="flex-direction:row; justify-content:space-between; align-items:center;">
-                        <label style="margin-bottom:0;"><i class="fas fa-calendar-check"></i> Annual Fund</label>
+                        <label style="margin-bottom:0;"><i class="fas fa-calendar-check"></i> <span data-i18n="stu.annualFund">Annual Fund</span></label>
                         <div style="display:flex; align-items:center; gap:10px;">
                             <input type="checkbox" id="annual-fund-enabled" name="annualFundEnabled" style="width:20px; height:20px;">
-                            <label for="annual-fund-enabled" style="margin-bottom:0; font-weight:500;">Enable Annual Fund</label>
+                            <label for="annual-fund-enabled" style="margin-bottom:0; font-weight:500;" data-i18n="stu.enableAnnualFund">Enable Annual Fund</label>
                         </div>
                     </div>
                 </div>
                 <div id="annual-fund-panel" style="display:none; background:rgba(251,191,36,0.08); padding:18px; border-radius:10px; border:1px solid rgba(251,191,36,0.3); margin-top:10px;">
                     <div class="form-input-grid">
                         <div class="form-input-group">
-                            <label><i class="fas fa-calendar-alt"></i> Apply in Month</label>
+                            <label><i class="fas fa-calendar-alt"></i> <span data-i18n="stu.applyInMonth">Apply in Month</span></label>
                             <select id="annual-fund-month" name="annualFundMonth">
-                                <option value="">Select Month</option>
+                                <option value="" data-i18n="stu.selectMonth">Select Month</option>
                                 <option value="1">January</option>
                                 <option value="2">February</option>
                                 <option value="3">March</option>
@@ -736,34 +736,34 @@
                             </select>
                         </div>
                         <div class="form-input-group">
-                            <label>Annual Fund Amount (Rs.)</label>
-                            <input type="number" id="annual-fund-amount" name="annualFundAmount" placeholder="From settings" readonly class="input-readonly">
-                            <small style="color:var(--text-muted);margin-top:4px;display:block;"><i class="fas fa-info-circle"></i> Amount set in settings. Only appears in voucher for the selected month.</small>
+                            <label data-i18n="stu.annualFundAmount">Annual Fund Amount (Rs.)</label>
+                            <input type="number" id="annual-fund-amount" name="annualFundAmount" placeholder="From settings" data-i18n-placeholder="stu.fromSettings" readonly class="input-readonly">
+                            <small style="color:var(--text-muted);margin-top:4px;display:block;"><i class="fas fa-info-circle"></i> <span data-i18n="stu.fundHint">Amount set in settings. Only appears in voucher for the selected month.</span></small>
                         </div>
                     </div>
                 </div>
 
                 <div class="form-input-grid" style="margin-top:20px;">
                     <div class="form-input-group">
-                        <label style="font-weight: 800;">Net Payable (First Month)</label>
+                        <label style="font-weight: 800;" data-i18n="stu.netPayable">Net Payable (First Month)</label>
                         <input type="number" id="fee-net-total" name="netPayable" readonly class="input-readonly net-total-field">
                     </div>
                     <div class="form-input-group">
-                        <label>Discount Type</label>
+                        <label data-i18n="stu.discountType">Discount Type</label>
                         <div style="display: flex; align-items: center; gap: 10px; margin-top: 10px;">
                             <input type="checkbox" id="is-lifetime" name="isLifetime" style="width: 20px; height: 20px;">
-                            <label for="is-lifetime">Lifetime Discount</label>
+                            <label for="is-lifetime" data-i18n="stu.lifetimeDiscount">Lifetime Discount</label>
                         </div>
                     </div>
                     <div class="form-input-group" id="expiry-date-group">
-                        <label>Discount Valid Until</label>
+                        <label data-i18n="stu.discountUntil">Discount Valid Until</label>
                         <input type="date" name="discountExpiry">
                     </div>
                 </div>
 
                 <div class="modal-sticky-footer">
-                    <button type="button" class="btn-ghost" onclick="closeModal('student-modal')">Cancel</button>
-                    <button type="submit" id="form-submit-btn" class="btn-primary-submit">Finalize Admission</button>
+                    <button type="button" class="btn-ghost" onclick="closeModal('student-modal')" data-i18n="stu.cancel">Cancel</button>
+                    <button type="submit" id="form-submit-btn" class="btn-primary-submit" data-i18n="stu.finalizeAdmission">Finalize Admission</button>
                 </div>
             </form>
         </div>
@@ -775,7 +775,7 @@
     <div id="view-only-modal" class="modal-overlay">
         <div class="modal-container wider">
             <div class="modal-header">
-                <h3><i class="fas fa-users"></i> Manage Records</h3>
+                <h3><i class="fas fa-users"></i> <span data-i18n="stu.manageRecords">Manage Records</span></h3>
                 <button class="close-modal-btn" onclick="closeModal('view-only-modal')">&times;</button>
             </div>
             <div class="modal-body modal-body-scroll">
@@ -790,7 +790,7 @@
                 <!-- STAGE 2: SECTION CARDS (All Sections + each section from Settings) -->
                 <div id="vo-stage-sections" class="msc-stage hidden">
                     <div class="msc-stage-header">
-                        <button class="btn-ghost msc-back-btn" onclick="voBackToClasses()"><i class="fas fa-arrow-left"></i> Back to Classes</button>
+                        <button class="btn-ghost msc-back-btn" onclick="voBackToClasses()"><i class="fas fa-arrow-left"></i> <span data-i18n="stu.backToClasses">Back to Classes</span></button>
                         <h4 id="vo-sections-title" class="msc-stage-title"></h4>
                     </div>
                     <div id="vo-sections-grid" class="classes-grid msc-classes-grid">
@@ -801,10 +801,10 @@
                 <!-- STAGE 3: STUDENT TABLE -->
                 <div id="vo-stage-table" class="msc-stage hidden">
                     <div class="msc-stage-header">
-                        <button class="btn-ghost msc-back-btn" onclick="voBackToSections()"><i class="fas fa-arrow-left"></i> Back</button>
+                        <button class="btn-ghost msc-back-btn" onclick="voBackToSections()"><i class="fas fa-arrow-left"></i> <span data-i18n="stu.back">Back</span></button>
                         <h4 id="vo-table-context-title" class="msc-stage-title"></h4>
-                        <button class="btn-secondary btn-sm-upd idc-generate-btn" id="vo-idcard-btn" onclick="voOpenIdCardGenerator()" title="Generate printable ID cards for every student in this class/section">
-                            <i class="fas fa-id-card"></i> Generate ID Cards
+                        <button class="btn-secondary btn-sm-upd idc-generate-btn" id="vo-idcard-btn" onclick="voOpenIdCardGenerator()" title="Generate printable ID cards for every student in this class/section" data-i18n-title="stu.idCardsTitle">
+                            <i class="fas fa-id-card"></i> <span data-i18n="stu.generateIdCards">Generate ID Cards</span>
                         </button>
                     </div>
 
@@ -812,19 +812,19 @@
                     <div class="upd-section-teacher-row">
                         <div id="vo-class-incharge-top" class="upd-class-incharge-top">
                             <i class="fas fa-chalkboard-teacher"></i>
-                            <span class="upd-incharge-label">Class Incharge:</span>
-                            <span id="vo-class-incharge-name" class="upd-incharge-name">Not Assigned</span>
+                            <span class="upd-incharge-label" data-i18n="stu.classIncharge">Class Incharge:</span>
+                            <span id="vo-class-incharge-name" class="upd-incharge-name" data-i18n="stu.notAssigned">Not Assigned</span>
                         </div>
                         <div id="vo-class-teacher-badge" class="upd-teacher-badge" style="display:none;">
                             <i class="fas fa-chalkboard-teacher"></i>
                             <span id="vo-teacher-name">—</span>
-                            <a href="manage-staff.html" class="upd-teacher-link" title="Go to Staff Management">
+                            <a href="manage-staff.html" class="upd-teacher-link" title="Go to Staff Management" data-i18n-title="stu.goToStaff">
                                 <i class="fas fa-external-link-alt"></i>
                             </a>
                         </div>
                         <div class="upd-action-btns">
                             <button onclick="toggleVoPromoteMode()" id="vo-promote-all-btn" class="btn-secondary btn-sm-upd">
-                                <i class="fas fa-graduation-cap"></i> Promote
+                                <i class="fas fa-graduation-cap"></i> <span data-i18n="stu.promote">Promote</span>
                             </button>
                         </div>
                     </div>
@@ -833,35 +833,35 @@
                     <div class="upd-search-row">
                         <div class="search-box-wrapper upd-search-bar">
                             <i class="fas fa-search"></i>
-                            <input type="text" id="vo-search-name" placeholder="Search by name, ID or guardian… (use ~ for Name~Father)">
+                            <input type="text" id="vo-search-name" placeholder="Search by name, ID or guardian… (use ~ for Name~Father)" data-i18n-placeholder="stu.searchTildePh">
                         </div>
-                        <span class="upd-search-hint" title="Tip: separate student name and father/guardian name with a tilde to search both at once."><i class="fas fa-info-circle"></i> Use <strong>~</strong> to search Name~Father, e.g. <em>Ali~Khan</em></span>
-                        <button id="vo-orphan-filter-btn" class="btn-secondary btn-sm-upd" onclick="toggleVoOrphanFilter()" aria-pressed="false" title="Show only students with orphan status">
-        <i class="fas fa-child"></i> Show Orphans Only
+                        <span class="upd-search-hint" title="Tip: separate student name and father/guardian name with a tilde to search both at once." data-i18n-title="stu.tildeTitle"><i class="fas fa-info-circle"></i> <span data-i18n="stu.use">Use</span> <strong>~</strong> <span data-i18n="stu.tildeHint">to search Name~Father, e.g.</span> <em>Ali~Khan</em></span>
+                        <button id="vo-orphan-filter-btn" class="btn-secondary btn-sm-upd" onclick="toggleVoOrphanFilter()" aria-pressed="false" title="Show only students with orphan status" data-i18n-title="stu.orphansTitle">
+        <i class="fas fa-child"></i> <span data-i18n="stu.showOrphans">Show Orphans Only</span>
     </button>
 
                         <!-- SORT BY: button + small pop-up section with multi-select options -->
                         <div class="vo-sort-wrap" id="vo-sort-wrap">
-                            <button type="button" id="vo-sort-btn" class="btn-secondary btn-sm-upd" onclick="toggleVoSortPanel(event)" aria-haspopup="true" aria-expanded="false" aria-controls="vo-sort-panel" title="Sort / filter students by gender, age or record status">
-                                <i class="fas fa-arrow-down-wide-short"></i> Sort By
+                            <button type="button" id="vo-sort-btn" class="btn-secondary btn-sm-upd" onclick="toggleVoSortPanel(event)" aria-haspopup="true" aria-expanded="false" aria-controls="vo-sort-panel" title="Sort / filter students by gender, age or record status" data-i18n-title="stu.sortTitle">
+                                <i class="fas fa-arrow-down-wide-short"></i> <span data-i18n="stu.sortBy">Sort By</span>
                                 <span id="vo-sort-count" class="vo-sort-count" hidden>0</span>
                                 <i class="fas fa-chevron-down vo-sort-caret"></i>
                             </button>
-                            <div id="vo-sort-panel" class="vo-sort-panel" hidden role="group" aria-label="Sort students">
+                            <div id="vo-sort-panel" class="vo-sort-panel" hidden role="group" aria-label="Sort students" data-i18n-aria="stu.sortStudentsAria">
                                 <div class="vo-sort-group">
-                                    <div class="vo-sort-group-title"><i class="fas fa-venus-mars"></i> Gender</div>
-                                    <label class="vo-sort-opt"><input type="checkbox" id="vo-gender-toggle" onchange="voSortChanged()"><span>Sort by gender</span></label>
+                                    <div class="vo-sort-group-title"><i class="fas fa-venus-mars"></i> <span data-i18n="stu.gender">Gender</span></div>
+                                    <label class="vo-sort-opt"><input type="checkbox" id="vo-gender-toggle" onchange="voSortChanged()"><span data-i18n="stu.sortGender">Sort by gender</span></label>
                                     <!-- Appears only while "Sort by gender" is ticked — pick ONE -->
                                     <div class="vo-sort-sub vo-sort-sub--blue" id="vo-gender-sub" hidden>
-                                        <div class="vo-sort-sub-title">Choose one</div>
+                                        <div class="vo-sort-sub-title" data-i18n="stu.chooseOne">Choose one</div>
                                         <div class="vo-sort-sub-grid">
-                                            <label class="vo-sort-opt"><input type="radio" name="vo-gender-pick" data-group="gender" value="Male" onchange="voSortChanged()"><span><i class="fas fa-mars"></i> Male</span></label>
-                                            <label class="vo-sort-opt"><input type="radio" name="vo-gender-pick" data-group="gender" value="Female" onchange="voSortChanged()"><span><i class="fas fa-venus"></i> Female</span></label>
+                                            <label class="vo-sort-opt"><input type="radio" name="vo-gender-pick" data-group="gender" value="Male" onchange="voSortChanged()"><span><i class="fas fa-mars"></i> <span data-i18n="stu.male">Male</span></span></label>
+                                            <label class="vo-sort-opt"><input type="radio" name="vo-gender-pick" data-group="gender" value="Female" onchange="voSortChanged()"><span><i class="fas fa-venus"></i> <span data-i18n="stu.female">Female</span></span></label>
                                         </div>
                                     </div>
                                 </div>
                                 <div class="vo-sort-group">
-                                    <div class="vo-sort-group-title"><i class="fas fa-cake-candles"></i> Age (years)</div>
+                                    <div class="vo-sort-group-title"><i class="fas fa-cake-candles"></i> <span data-i18n="stu.ageYears">Age (years)</span></div>
                                     <div class="vo-sort-age-grid">
                                         <label class="vo-sort-opt"><input type="checkbox" data-group="age" value="0-5" onchange="voSortChanged()"><span>0 – 5</span></label>
                                         <label class="vo-sort-opt"><input type="checkbox" data-group="age" value="5-10" onchange="voSortChanged()"><span>5 – 10</span></label>
@@ -870,37 +870,37 @@
                                     </div>
                                 </div>
                                 <div class="vo-sort-group">
-                                    <div class="vo-sort-group-title"><i class="fas fa-clipboard-check"></i> Record Status</div>
-                                    <label class="vo-sort-opt"><input type="checkbox" data-group="record" value="missing" onchange="voSortChanged()"><span>Missing details</span></label>
+                                    <div class="vo-sort-group-title"><i class="fas fa-clipboard-check"></i> <span data-i18n="stu.recordStatus">Record Status</span></div>
+                                    <label class="vo-sort-opt"><input type="checkbox" data-group="record" value="missing" onchange="voSortChanged()"><span data-i18n="stu.missingDetails">Missing details</span></label>
                                     <!-- Appears only while "Missing details" is ticked -->
                                     <div class="vo-sort-sub" id="vo-missing-sub" hidden>
-                                        <div class="vo-sort-sub-title">Which details are missing?</div>
+                                        <div class="vo-sort-sub-title" data-i18n="stu.whichMissing">Which details are missing?</div>
                                         <div class="vo-sort-sub-grid">
-                                            <label class="vo-sort-opt"><input type="checkbox" data-group="missingFields" value="photo" onchange="voSortChanged()"><span>Photo</span></label>
-                                            <label class="vo-sort-opt"><input type="checkbox" data-group="missingFields" value="certData" onchange="voSortChanged()"><span>B-Form Picture</span></label>
-                                            <label class="vo-sort-opt"><input type="checkbox" data-group="missingFields" value="dob" onchange="voSortChanged()"><span>Date of Birth</span></label>
-                                            <label class="vo-sort-opt"><input type="checkbox" data-group="missingFields" value="phone1" onchange="voSortChanged()"><span>Contact</span></label>
-                                            <label class="vo-sort-opt"><input type="checkbox" data-group="missingFields" value="permanentAddress" onchange="voSortChanged()"><span>Address</span></label>
-                                            <label class="vo-sort-opt"><input type="checkbox" data-group="missingFields" value="studentBform" onchange="voSortChanged()"><span>B-Form Number</span></label>
-                                            <label class="vo-sort-opt"><input type="checkbox" data-group="missingFields" value="guardianName" onchange="voSortChanged()"><span>Guardian Name</span></label>
-                                            <label class="vo-sort-opt"><input type="checkbox" data-group="missingFields" value="guardianCnic" onchange="voSortChanged()"><span>Guardian CNIC</span></label>
-                                            <label class="vo-sort-opt"><input type="checkbox" data-group="missingFields" value="fatherFullName" onchange="voSortChanged()"><span>Father Name</span></label>
-                                            <label class="vo-sort-opt"><input type="checkbox" data-group="missingFields" value="fatherCnic" onchange="voSortChanged()"><span>Father CNIC</span></label>
+                                            <label class="vo-sort-opt"><input type="checkbox" data-group="missingFields" value="photo" onchange="voSortChanged()"><span data-i18n="stu.photo">Photo</span></label>
+                                            <label class="vo-sort-opt"><input type="checkbox" data-group="missingFields" value="certData" onchange="voSortChanged()"><span data-i18n="stu.bformPicture">B-Form Picture</span></label>
+                                            <label class="vo-sort-opt"><input type="checkbox" data-group="missingFields" value="dob" onchange="voSortChanged()"><span data-i18n="stu.dob">Date of Birth</span></label>
+                                            <label class="vo-sort-opt"><input type="checkbox" data-group="missingFields" value="phone1" onchange="voSortChanged()"><span data-i18n="stu.contact">Contact</span></label>
+                                            <label class="vo-sort-opt"><input type="checkbox" data-group="missingFields" value="permanentAddress" onchange="voSortChanged()"><span data-i18n="stu.address">Address</span></label>
+                                            <label class="vo-sort-opt"><input type="checkbox" data-group="missingFields" value="studentBform" onchange="voSortChanged()"><span data-i18n="stu.bformNumber">B-Form Number</span></label>
+                                            <label class="vo-sort-opt"><input type="checkbox" data-group="missingFields" value="guardianName" onchange="voSortChanged()"><span data-i18n="stu.guardianNameShort">Guardian Name</span></label>
+                                            <label class="vo-sort-opt"><input type="checkbox" data-group="missingFields" value="guardianCnic" onchange="voSortChanged()"><span data-i18n="stu.guardianCnicShort">Guardian CNIC</span></label>
+                                            <label class="vo-sort-opt"><input type="checkbox" data-group="missingFields" value="fatherFullName" onchange="voSortChanged()"><span data-i18n="stu.fatherNameShort">Father Name</span></label>
+                                            <label class="vo-sort-opt"><input type="checkbox" data-group="missingFields" value="fatherCnic" onchange="voSortChanged()"><span data-i18n="stu.fatherCnicShort">Father CNIC</span></label>
                                         </div>
-                                        <div class="vo-sort-sub-note">Leave all unticked to show students missing any of these.</div>
+                                        <div class="vo-sort-sub-note" data-i18n="stu.leaveUnticked">Leave all unticked to show students missing any of these.</div>
                                     </div>
-                                    <label class="vo-sort-opt"><input type="checkbox" data-group="record" value="incorrect" onchange="voSortChanged()"><span>Incorrect details</span></label>
+                                    <label class="vo-sort-opt"><input type="checkbox" data-group="record" value="incorrect" onchange="voSortChanged()"><span data-i18n="stu.incorrectDetails">Incorrect details</span></label>
                                 </div>
                                 <div class="vo-sort-footer">
-                                    <span class="vo-sort-hint">Options in different groups are combined.</span>
-                                    <button type="button" class="vo-sort-clear" onclick="voClearSort()"><i class="fas fa-rotate-left"></i> Clear all</button>
+                                    <span class="vo-sort-hint" data-i18n="stu.groupsCombined">Options in different groups are combined.</span>
+                                    <button type="button" class="vo-sort-clear" onclick="voClearSort()"><i class="fas fa-rotate-left"></i> <span data-i18n="stu.clearAll">Clear all</span></button>
                                 </div>
                             </div>
                         </div>
 
                         <div id="vo-promote-actions-bar" style="display:none; align-items:center; gap:10px;">
-                            <button onclick="toggleVoPromoteMode()" class="btn-ghost"><i class="fas fa-times"></i> Cancel</button>
-                            <button onclick="confirmPromotion('vo')" class="btn-primary-submit"><i class="fas fa-check"></i> Confirm</button>
+                            <button onclick="toggleVoPromoteMode()" class="btn-ghost"><i class="fas fa-times"></i> <span data-i18n="stu.cancel">Cancel</span></button>
+                            <button onclick="confirmPromotion('vo')" class="btn-primary-submit"><i class="fas fa-check"></i> <span data-i18n="stu.confirm">Confirm</span></button>
                         </div>
                     </div>
 
@@ -911,14 +911,14 @@
                                 <tr>
                                     <th id="vo-promote-checkbox-header" style="display:none;"><i class="fas fa-check-square"></i></th>
                                     <th>#</th>
-                                    <th>Student ID</th>
-                                    <th>Roll No.</th>
-                                    <th>Name</th>
-                                    <th>Guardian / Father</th>
-                                    <th id="vo-class-col-header">Section</th>
-                                    <th>Gender</th>
-                                    <th id="vo-promote-status-header" style="display:none;">Promotion</th>
-                                    <th class="text-center">View</th>
+                                    <th data-i18n="stu.studentId">Student ID</th>
+                                    <th data-i18n="stu.rollNo">Roll No.</th>
+                                    <th data-i18n="stu.name">Name</th>
+                                    <th data-i18n="stu.guardianFather">Guardian / Father</th>
+                                    <th id="vo-class-col-header" data-i18n="stu.section">Section</th>
+                                    <th data-i18n="stu.gender">Gender</th>
+                                    <th id="vo-promote-status-header" style="display:none;" data-i18n="stu.promotion">Promotion</th>
+                                    <th class="text-center" data-i18n="stu.view">View</th>
                                 </tr>
                             </thead>
                             <tbody id="vo-student-tbody">
@@ -935,7 +935,7 @@
     <div id="bulk-transfer-modal" class="modal-overlay">
         <div class="modal-container wider">
             <div class="modal-header">
-                <h3><i class="fas fa-right-left"></i> Bulk Transfer</h3>
+                <h3><i class="fas fa-right-left"></i> <span data-i18n="stu.bulkTransfer">Bulk Transfer</span></h3>
                 <button class="close-modal-btn" onclick="closeModal('bulk-transfer-modal')">&times;</button>
             </div>
             <div class="modal-body modal-body-scroll">
@@ -948,7 +948,7 @@
                 <!-- STAGE 2: SECTION CARDS -->
                 <div id="btf-stage-sections" class="msc-stage hidden">
                     <div class="msc-stage-header">
-                        <button class="btn-ghost msc-back-btn" onclick="btfBackToClasses()"><i class="fas fa-arrow-left"></i> Back to Classes</button>
+                        <button class="btn-ghost msc-back-btn" onclick="btfBackToClasses()"><i class="fas fa-arrow-left"></i> <span data-i18n="stu.backToClasses">Back to Classes</span></button>
                         <h4 id="btf-sections-title" class="msc-stage-title"></h4>
                     </div>
                     <div id="btf-sections-grid" class="classes-grid msc-classes-grid"></div>
@@ -957,7 +957,7 @@
                 <!-- STAGE 3: STUDENTS + TRANSFER -->
                 <div id="btf-stage-table" class="msc-stage hidden">
                     <div class="msc-stage-header">
-                        <button class="btn-ghost msc-back-btn" onclick="btfBackToSections()"><i class="fas fa-arrow-left"></i> Back</button>
+                        <button class="btn-ghost msc-back-btn" onclick="btfBackToSections()"><i class="fas fa-arrow-left"></i> <span data-i18n="stu.back">Back</span></button>
                         <h4 id="btf-table-context-title" class="msc-stage-title"></h4>
                     </div>
 
@@ -968,20 +968,20 @@
                             <input type="text" id="btf-search-name" placeholder="Search by name, ID or guardian… (use ~ for Name~Father)" oninput="btfRenderTable()">
                         </div>
                         <div class="archive-seg-group" id="btf-gender-seg" style="align-self:auto;">
-                            <button type="button" class="archive-seg-btn active" data-val="ALL" onclick="btfSetGender('ALL')">All</button>
-                            <button type="button" class="archive-seg-btn" data-val="Male" onclick="btfSetGender('Male')"><i class="fas fa-mars"></i> Boys</button>
-                            <button type="button" class="archive-seg-btn" data-val="Female" onclick="btfSetGender('Female')"><i class="fas fa-venus"></i> Girls</button>
+                            <button type="button" class="archive-seg-btn active" data-val="ALL" onclick="btfSetGender('ALL')" data-i18n="stu.all">All</button>
+                            <button type="button" class="archive-seg-btn" data-val="Male" onclick="btfSetGender('Male')"><i class="fas fa-mars"></i> <span data-i18n="stu.boys">Boys</span></button>
+                            <button type="button" class="archive-seg-btn" data-val="Female" onclick="btfSetGender('Female')"><i class="fas fa-venus"></i> <span data-i18n="stu.girls">Girls</span></button>
                         </div>
                     </div>
 
                     <!-- TRANSFER BAR -->
                     <div class="btf-transfer-bar">
-                        <div class="btf-selected-count"><i class="fas fa-check-square"></i> <span id="btf-selected-count">0</span> selected</div>
+                        <div class="btf-selected-count"><i class="fas fa-check-square"></i> <span id="btf-selected-count">0</span> <span data-i18n="stu.selected">selected</span></div>
                         <div class="btf-dest">
-                            <label for="btf-dest-class">Transfer to</label>
+                            <label for="btf-dest-class" data-i18n="stu.transferTo">Transfer to</label>
                             <select id="btf-dest-class" onchange="btfPopulateDestSections()"></select>
                             <select id="btf-dest-section"></select>
-                            <button type="button" class="btn-primary-submit" onclick="btfConfirmTransfer()"><i class="fas fa-right-left"></i> Transfer</button>
+                            <button type="button" class="btn-primary-submit" onclick="btfConfirmTransfer()"><i class="fas fa-right-left"></i> <span data-i18n="stu.transfer">Transfer</span></button>
                         </div>
                     </div>
 
@@ -990,14 +990,14 @@
                         <table class="student-table">
                             <thead>
                                 <tr>
-                                    <th><input type="checkbox" id="btf-select-all" onchange="btfToggleAll(this.checked)" title="Select all shown students" style="width:18px;height:18px;"></th>
+                                    <th><input type="checkbox" id="btf-select-all" onchange="btfToggleAll(this.checked)" title="Select all shown students" data-i18n-title="stu.selectAllShown" style="width:18px;height:18px;"></th>
                                     <th>#</th>
-                                    <th>Student ID</th>
-                                    <th>Roll No.</th>
-                                    <th>Name</th>
-                                    <th>Guardian / Father</th>
-                                    <th>Class</th>
-                                    <th>Gender</th>
+                                    <th data-i18n="stu.studentId">Student ID</th>
+                                    <th data-i18n="stu.rollNo">Roll No.</th>
+                                    <th data-i18n="stu.name">Name</th>
+                                    <th data-i18n="stu.guardianFather">Guardian / Father</th>
+                                    <th data-i18n="stu.class">Class</th>
+                                    <th data-i18n="stu.gender">Gender</th>
                                 </tr>
                             </thead>
                             <tbody id="btf-student-tbody"></tbody>
@@ -1012,7 +1012,7 @@
     <div id="view-modal" class="modal-overlay">
         <div class="modal-container wider">
             <div class="modal-header">
-                <h3><i class="fas fa-pen-to-square"></i> Update Student Database</h3>
+                <h3><i class="fas fa-pen-to-square"></i> <span data-i18n="stu.updateDatabase">Update Student Database</span></h3>
                 <button class="close-modal-btn" onclick="closeModal('view-modal')">&times;</button>
             </div>
             <div class="modal-body modal-body-scroll">
@@ -1027,7 +1027,7 @@
                 <!-- STAGE 2: SECTION CARDS (All Sections + each section from Settings) -->
                 <div id="upd-stage-sections" class="msc-stage hidden">
                     <div class="msc-stage-header">
-                        <button class="btn-ghost msc-back-btn" onclick="updBackToClasses()"><i class="fas fa-arrow-left"></i> Back to Classes</button>
+                        <button class="btn-ghost msc-back-btn" onclick="updBackToClasses()"><i class="fas fa-arrow-left"></i> <span data-i18n="stu.backToClasses">Back to Classes</span></button>
                         <h4 id="upd-sections-title" class="msc-stage-title"></h4>
                     </div>
                     <div id="upd-sections-grid" class="classes-grid msc-classes-grid">
@@ -1038,7 +1038,7 @@
                 <!-- STAGE 3: STUDENT TABLE -->
                 <div id="upd-stage-table" class="msc-stage hidden">
                     <div class="msc-stage-header">
-                        <button class="btn-ghost msc-back-btn" onclick="updBackToSections()"><i class="fas fa-arrow-left"></i> Back</button>
+                        <button class="btn-ghost msc-back-btn" onclick="updBackToSections()"><i class="fas fa-arrow-left"></i> <span data-i18n="stu.back">Back</span></button>
                         <h4 id="upd-table-context-title" class="msc-stage-title"></h4>
                     </div>
 
@@ -1046,8 +1046,8 @@
                     <div class="upd-section-teacher-row">
                         <div id="upd-class-incharge-top" class="upd-class-incharge-top">
                             <i class="fas fa-chalkboard-teacher"></i>
-                            <span class="upd-incharge-label">Class Incharge:</span>
-                            <span id="upd-class-incharge-name" class="upd-incharge-name">Not Assigned</span>
+                            <span class="upd-incharge-label" data-i18n="stu.classIncharge">Class Incharge:</span>
+                            <span id="upd-class-incharge-name" class="upd-incharge-name" data-i18n="stu.notAssigned">Not Assigned</span>
                         </div>
                         <div id="upd-class-teacher-badge" class="upd-teacher-badge" style="display:none;">
                             <i class="fas fa-chalkboard-teacher"></i>
@@ -1058,10 +1058,10 @@
                         </div>
                         <div class="upd-action-btns">
                             <button onclick="togglePromoteMode()" id="promote-all-btn" class="btn-secondary btn-sm-upd">
-                                <i class="fas fa-graduation-cap"></i> Promote
+                                <i class="fas fa-graduation-cap"></i> <span data-i18n="stu.promote">Promote</span>
                             </button>
                             <button onclick="exportToCSV()" class="btn-secondary btn-sm-upd">
-                                <i class="fas fa-file-export"></i> Export
+                                <i class="fas fa-file-export"></i> <span data-i18n="stu.export">Export</span>
                             </button>
                         </div>
                     </div>
@@ -1073,12 +1073,12 @@
                             <input type="text" id="upd-search-input" placeholder="Search by name, ID or guardian… (use ~ for Name~Father)">
                         </div>
                         <button id="upd-orphan-filter-btn" class="btn-secondary btn-sm-upd" onclick="toggleUpdOrphanFilter()" aria-pressed="false" title="Show only students with orphan status">
-        <i class="fas fa-child"></i> Show Orphans Only
+        <i class="fas fa-child"></i> <span data-i18n="stu.showOrphans">Show Orphans Only</span>
     </button>
-                        <span class="upd-search-hint" title="Tip: separate student name and father/guardian name with a tilde to search both at once."><i class="fas fa-info-circle"></i> Use <strong>~</strong> to search Name~Father, e.g. <em>Ali~Khan</em></span>
+                        <span class="upd-search-hint" title="Tip: separate student name and father/guardian name with a tilde to search both at once."><i class="fas fa-info-circle"></i> <span data-i18n="stu.use">Use</span> <strong>~</strong> <span data-i18n="stu.tildeHint">to search Name~Father, e.g.</span> <em>Ali~Khan</em></span>
                         <div id="promote-actions-bar" style="display:none; align-items:center; gap:10px;">
-                            <button onclick="togglePromoteMode()" class="btn-ghost"><i class="fas fa-times"></i> Cancel</button>
-                            <button onclick="confirmPromotion()" class="btn-primary-submit"><i class="fas fa-check"></i> Confirm</button>
+                            <button onclick="togglePromoteMode()" class="btn-ghost"><i class="fas fa-times"></i> <span data-i18n="stu.cancel">Cancel</span></button>
+                            <button onclick="confirmPromotion()" class="btn-primary-submit"><i class="fas fa-check"></i> <span data-i18n="stu.confirm">Confirm</span></button>
                         </div>
                     </div>
 
@@ -1094,14 +1094,14 @@
                                 <tr>
                                     <th id="promote-checkbox-header" style="display:none;"><i class="fas fa-check-square"></i></th>
                                     <th>#</th>
-                                    <th>Student ID</th>
-                                    <th>Roll No.</th>
-                                    <th>Name</th>
-                                    <th>Guardian / Father</th>
-                                    <th id="upd-class-col-header">Section</th>
-                                    <th>Gender</th>
-                                    <th id="promote-status-header" style="display:none;">Promotion</th>
-                                    <th class="text-center">Actions</th>
+                                    <th data-i18n="stu.studentId">Student ID</th>
+                                    <th data-i18n="stu.rollNo">Roll No.</th>
+                                    <th data-i18n="stu.name">Name</th>
+                                    <th data-i18n="stu.guardianFather">Guardian / Father</th>
+                                    <th id="upd-class-col-header" data-i18n="stu.section">Section</th>
+                                    <th data-i18n="stu.gender">Gender</th>
+                                    <th id="promote-status-header" style="display:none;" data-i18n="stu.promotion">Promotion</th>
+                                    <th class="text-center" data-i18n="stu.actions">Actions</th>
                                 </tr>
                             </thead>
                             <tbody id="student-list-tbody">
@@ -1118,18 +1118,18 @@
     <div id="profile-modal" class="modal-overlay" style="z-index: 5000;">
         <div class="modal-container profile-modal-wide">
             <div class="modal-header profile-modal-header">
-                <h3><i class="fas fa-id-card"></i> Complete Student Record</h3>
+                <h3><i class="fas fa-id-card"></i> <span data-i18n="stu.completeRecord">Complete Student Record</span></h3>
                 <button class="close-modal-btn profile-close-btn" onclick="closeModal('profile-modal')">&times;</button>
             </div>
             <div id="profile-content" class="modal-body-scroll text-center">
                 <!-- Dynamic Profile -->
             </div>
             <div class="modal-sticky-footer profile-modal-footer">
-                <button class="btn-ghost profile-close-action" onclick="closeModal('profile-modal')"><i class="fas fa-times"></i> Close</button>
+                <button class="btn-ghost profile-close-action" onclick="closeModal('profile-modal')"><i class="fas fa-times"></i> <span data-i18n="stu.close">Close</span></button>
                 <div class="profile-action-btns">
-                    <button class="btn-share-profile" id="profile-share-btn" onclick="shareCurrentProfile()"><i class="fas fa-share-nodes"></i> Share</button>
-                    <button class="btn-print-profile" onclick="printCurrentStudentRecord()"><i class="fas fa-print"></i> Print Record</button>
-                    <button class="btn-print-admission" onclick="printCurrentAdmissionForm()"><i class="fas fa-file-signature"></i> Print Admission Form</button>
+                    <button class="btn-share-profile" id="profile-share-btn" onclick="shareCurrentProfile()"><i class="fas fa-share-nodes"></i> <span data-i18n="stu.share">Share</span></button>
+                    <button class="btn-print-profile" onclick="printCurrentStudentRecord()"><i class="fas fa-print"></i> <span data-i18n="stu.printRecord">Print Record</span></button>
+                    <button class="btn-print-admission" onclick="printCurrentAdmissionForm()"><i class="fas fa-file-signature"></i> <span data-i18n="stu.printAdmissionForm">Print Admission Form</span></button>
                 </div>
             </div>
         </div>
@@ -1141,7 +1141,7 @@
     <div id="import-map-modal" class="modal-overlay" style="z-index: 5000;">
         <div class="modal-container wider">
             <div class="modal-header">
-                <h3 id="imp-title"><i class="fas fa-file-import"></i> <span>Import Students</span></h3>
+                <h3 id="imp-title"><i class="fas fa-file-import"></i> <span data-i18n="stu.importStudents">Import Students</span></h3>
                 <button class="close-modal-btn" onclick="closeImportMapper()">&times;</button>
             </div>
             <div class="modal-body-scroll imp-body">
@@ -1159,11 +1159,11 @@
                 <div id="imp-step2" hidden>
                     <div class="imp-detected" id="imp-detected"></div>
                     <div class="imp-panel" id="imp-options"></div>
-                    <div class="imp-panel-title imp-fields-title"><i class="fas fa-table-columns"></i> Match each field to a column in your file <button type="button" class="imp-link-btn imp-reset-btn" onclick="resetImportMapping()"><i class="fas fa-rotate-left"></i> Reset matching</button></div>
+                    <div class="imp-panel-title imp-fields-title"><i class="fas fa-table-columns"></i> <span data-i18n="stu.matchFields">Match each field to a column in your file</span> <button type="button" class="imp-link-btn imp-reset-btn" onclick="resetImportMapping()"><i class="fas fa-rotate-left"></i> <span data-i18n="stu.resetMatching">Reset matching</span></button></div>
                     <div class="imp-colhead">
-                        <span>SoftSchool field</span>
+                        <span data-i18n="stu.softschoolField">SoftSchool field</span>
                         <span></span>
-                        <span>Column found in your file</span>
+                        <span data-i18n="stu.columnFound">Column found in your file</span>
                     </div>
                     <div id="imp-rows"></div>
                     <div class="imp-panel" id="imp-preview"></div>
@@ -1173,10 +1173,10 @@
             <div class="modal-sticky-footer imp-footer">
                 <div class="imp-summary" id="imp-summary"></div>
                 <div class="imp-footer-btns">
-                    <button type="button" class="btn-ghost" id="imp-cancel-btn" onclick="closeImportMapper()">Cancel</button>
-                    <button type="button" class="btn-ghost" id="imp-step-btn" onclick="toggleImportStep()">Review columns</button>
+                    <button type="button" class="btn-ghost" id="imp-cancel-btn" onclick="closeImportMapper()" data-i18n="stu.cancel">Cancel</button>
+                    <button type="button" class="btn-ghost" id="imp-step-btn" onclick="toggleImportStep()" data-i18n="stu.reviewColumns">Review columns</button>
                     <button type="button" class="btn-primary-submit" id="imp-run-btn" onclick="runStudentImport()">
-                        <i class="fas fa-file-import"></i> <span>Import Students</span>
+                        <i class="fas fa-file-import"></i> <span data-i18n="stu.importStudents">Import Students</span>
                     </button>
                 </div>
             </div>
@@ -1187,7 +1187,7 @@
     <div id="template-modal" class="modal-overlay" style="z-index: 5000;">
         <div class="modal-container">
             <div class="modal-header">
-                <h3 id="tpl-title"><i class="fas fa-file-arrow-down"></i> <span>Download Template</span></h3>
+                <h3 id="tpl-title"><i class="fas fa-file-arrow-down"></i> <span data-i18n="stu.downloadTemplateBtn">Download Template</span></h3>
                 <button class="close-modal-btn" onclick="closeTemplateDialog()">&times;</button>
             </div>
             <div class="modal-body-scroll imp-body">
@@ -1208,7 +1208,7 @@
             <div class="modal-sticky-footer imp-footer">
                 <div class="imp-summary" id="tpl-summary"></div>
                 <div class="imp-footer-btns">
-                    <button type="button" class="btn-ghost" onclick="closeTemplateDialog()">Cancel</button>
+                    <button type="button" class="btn-ghost" onclick="closeTemplateDialog()" data-i18n="stu.cancel">Cancel</button>
                 </div>
             </div>
         </div>
@@ -1218,23 +1218,23 @@
     <div id="export-modal" class="modal-overlay" style="z-index: 5000;">
         <div class="modal-container">
             <div class="modal-header">
-                <h3 id="exp-title"><i class="fas fa-file-export"></i> <span>Export Students</span></h3>
+                <h3 id="exp-title"><i class="fas fa-file-export"></i> <span data-i18n="stu.exportStudents">Export Students</span></h3>
                 <button class="close-modal-btn" onclick="closeExportDialog()">&times;</button>
             </div>
             <div class="modal-body-scroll imp-body">
                 <!-- STEP 1 — format -->
                 <div id="exp-step1">
-                    <p class="exp-lead">How would you like to export the student records?</p>
+                    <p class="exp-lead" data-i18n="stu.howExport">How would you like to export the student records?</p>
                     <div class="exp-format-grid">
                         <button type="button" class="exp-format-card" onclick="exportPickFormat('xlsx')">
                             <span class="exp-format-icon is-xlsx"><i class="fas fa-file-excel"></i></span>
                             <strong>Excel</strong><span class="exp-format-ext">.xlsx</span>
-                            <small>A full workbook: student directory, discount breakdown, class summary, fee overview and photo index. Optional photo gallery.</small>
+                            <small data-i18n="stu.fullWorkbook">A full workbook: student directory, discount breakdown, class summary, fee overview and photo index. Optional photo gallery.</small>
                         </button>
                         <button type="button" class="exp-format-card" onclick="exportPickFormat('csv')">
                             <span class="exp-format-icon is-csv"><i class="fas fa-file-csv"></i></span>
                             <strong>CSV</strong><span class="exp-format-ext">.csv</span>
-                            <small>One simple file with every student detail. Opens in Excel, Google Sheets and other programs, and can be imported back.</small>
+                            <small data-i18n="stu.oneSimpleFile">One simple file with every student detail. Opens in Excel, Google Sheets and other programs, and can be imported back.</small>
                         </button>
                     </div>
                 </div>
@@ -1244,10 +1244,10 @@
             <div class="modal-sticky-footer imp-footer">
                 <div class="imp-summary" id="exp-summary"></div>
                 <div class="imp-footer-btns">
-                    <button type="button" class="btn-ghost" id="exp-back-btn" onclick="exportBack()" hidden><i class="fas fa-arrow-left"></i> Back</button>
-                    <button type="button" class="btn-ghost" id="exp-cancel-btn" onclick="closeExportDialog()">Cancel</button>
+                    <button type="button" class="btn-ghost" id="exp-back-btn" onclick="exportBack()" hidden><i class="fas fa-arrow-left"></i> <span data-i18n="stu.back">Back</span></button>
+                    <button type="button" class="btn-ghost" id="exp-cancel-btn" onclick="closeExportDialog()" data-i18n="stu.cancel">Cancel</button>
                     <button type="button" class="btn-primary-submit" id="exp-run-btn" onclick="runExport()" hidden>
-                        <i class="fas fa-file-export"></i> <span>Export</span>
+                        <i class="fas fa-file-export"></i> <span data-i18n="stu.export">Export</span>
                     </button>
                 </div>
             </div>
@@ -1258,8 +1258,8 @@
     <div id="toast-msg" class="toast-notification">
         <div class="toast-indicator"></div>
         <div class="toast-content">
-            <h4 id="toast-title">Success</h4>
-            <p id="toast-body">Operation performed successfully.</p>
+            <h4 id="toast-title" data-i18n="stu.success">Success</h4>
+            <p id="toast-body" data-i18n="stu.opSuccess">Operation performed successfully.</p>
         </div>
     </div>
 
@@ -1273,8 +1273,8 @@
                     <div class="slc-modal-title-group">
                         <div class="slc-modal-icon"><i class="fas fa-graduation-cap"></i></div>
                         <div>
-                            <h2 class="slc-modal-title">School Leaving Certificate</h2>
-                            <p class="slc-modal-subtitle">Generate an official certificate for a departing student</p>
+                            <h2 class="slc-modal-title" data-i18n="stu.slc">School Leaving Certificate</h2>
+                            <p class="slc-modal-subtitle" data-i18n="stu.certForDeparting">Generate an official certificate for a departing student</p>
                         </div>
                     </div>
                     <button class="close-modal-btn slc-close-btn" onclick="closeModal('slc-modal')">&times;</button>
@@ -1287,7 +1287,7 @@
                 <div class="slc-controls-panel">
                     <div class="slc-controls-row">
                         <div class="slc-control-group slc-search-group">
-                            <label class="slc-control-label"><i class="fas fa-search"></i> Search Student</label>
+                            <label class="slc-control-label"><i class="fas fa-search"></i> <span data-i18n="stu.searchStudent">Search Student</span></label>
                             <div class="slc-search-wrap">
                                 <input type="text" id="slc-search-input" class="slc-search-input" placeholder="Search by name, ID, or Student~Guardian (e.g. Hanan~Habib)&hellip;" oninput="slcSearchStudents()">
                                 <i class="fas fa-search slc-search-icon"></i>
@@ -1295,42 +1295,42 @@
                             </div>
                         </div>
                         <div class="slc-control-group cs-group" id="slc-cs-group">
-                            <label class="slc-control-label"><i class="fas fa-layer-group"></i> Class Status</label>
-                            <div class="cs-toggle" role="radiogroup" aria-label="Class status">
-                                <label class="cs-opt"><input type="radio" name="slc-cs-mode" value="passed" onchange="csModeChanged('slc')"><span><i class="fas fa-circle-check"></i> Passed class</span></label>
-                                <label class="cs-opt"><input type="radio" name="slc-cs-mode" value="enrolled" onchange="csModeChanged('slc')"><span><i class="fas fa-user-graduate"></i> Enrolled in</span></label>
+                            <label class="slc-control-label"><i class="fas fa-layer-group"></i> <span data-i18n="stu.classStatus">Class Status</span></label>
+                            <div class="cs-toggle" role="radiogroup" aria-label="Class status" data-i18n-aria="stu.classStatusAria">
+                                <label class="cs-opt"><input type="radio" name="slc-cs-mode" value="passed" onchange="csModeChanged('slc')"><span><i class="fas fa-circle-check"></i> <span data-i18n="stu.passedClass">Passed class</span></span></label>
+                                <label class="cs-opt"><input type="radio" name="slc-cs-mode" value="enrolled" onchange="csModeChanged('slc')"><span><i class="fas fa-user-graduate"></i> <span data-i18n="stu.enrolledIn">Enrolled in</span></span></label>
                             </div>
                             <!-- Appears after one of the two options above is chosen -->
                             <div class="cs-class-wrap" id="slc-cs-class-wrap">
-                                <span class="cs-class-label" id="slc-cs-class-label">Select class</span>
+                                <span class="cs-class-label" id="slc-cs-class-label" data-i18n="stu.selectClassLower">Select class</span>
                                 <select id="slc-cs-class" class="slc-mini-input" onchange="csClassChanged('slc')"></select>
                             </div>
                         </div>
                         <div class="slc-control-group slc-tel-group">
-                            <label class="slc-control-label"><i class="fas fa-phone"></i> School Contact</label>
+                            <label class="slc-control-label"><i class="fas fa-phone"></i> <span data-i18n="stu.schoolContact">School Contact</span></label>
                             <div class="slc-search-input" style="display:flex;align-items:center;gap:6px;cursor:default;background:var(--bg-secondary,rgba(120,120,120,0.08));">
-                                <i class="fas fa-lock" style="font-size:11px;opacity:0.6;" title="Set on the Settings page"></i>
-                                <span id="slc-contact-preview" style="font-size:12.5px;">Loaded from Settings</span>
+                                <i class="fas fa-lock" style="font-size:11px;opacity:0.6;" title="Set on the Settings page" data-i18n-title="stu.setOnSettings"></i>
+                                <span id="slc-contact-preview" style="font-size:12.5px;" data-i18n="stu.loadedFromSettings">Loaded from Settings</span>
                             </div>
                         </div>
                     </div>
                     <div class="slc-manual-row">
-                        <div class="slc-manual-note"><i class="fas fa-info-circle"></i> Or enter details manually if student not in database</div>
+                        <div class="slc-manual-note"><i class="fas fa-info-circle"></i> <span data-i18n="stu.orEnterManually">Or enter details manually if student not in database</span></div>
                         <div class="slc-manual-fields">
                             <div class="slc-mini-field">
-                                <label>Student ID</label>
+                                <label data-i18n="stu.studentId">Student ID</label>
                                 <input type="text" id="slc-manual-id" class="slc-mini-input" placeholder="e.g. PSC_1">
                             </div>
                             <div class="slc-mini-field slc-mini-wide">
-                                <label>Names <span class="slc-hint">(Student~Guardian)</span></label>
+                                <label><span data-i18n="stu.names">Names</span> <span class="slc-hint" data-i18n="stu.studentGuardian">(Student~Guardian)</span></label>
                                 <input type="text" id="slc-manual-names" class="slc-mini-input" placeholder="Ali Hassan~Ahmed Hassan">
                             </div>
                             <div class="slc-mini-field">
-                                <label>Date of Leaving</label>
+                                <label data-i18n="stu.dateOfLeaving">Date of Leaving</label>
                                 <input type="date" id="slc-leaving-date-input" class="slc-mini-input" onchange="slcUpdateLeavingDate()">
                             </div>
                             <button class="slc-gen-btn" onclick="slcManualGenerate()">
-                                <i class="fas fa-magic"></i> Generate
+                                <i class="fas fa-magic"></i> <span data-i18n="stu.generate">Generate</span>
                             </button>
                         </div>
                     </div>
@@ -1339,8 +1339,8 @@
                 <!-- EMPTY STATE -->
                 <div id="slc-empty-state" class="slc-empty-state">
                     <div class="slc-empty-icon"><i class="fas fa-file-alt"></i></div>
-                    <h3>Certificate Preview</h3>
-                    <p>Search for a student or enter details manually above, then click <strong>Generate</strong> to preview the certificate.</p>
+                    <h3 data-i18n="stu.certPreview">Certificate Preview</h3>
+                    <p><span data-i18n="stu.searchThenClick">Search for a student or enter details manually above, then click</span> <strong data-i18n="stu.generate">Generate</strong> <span data-i18n="stu.toPreview">to preview the certificate.</span></p>
                 </div>
 
                 <!-- LANDSCAPE CERTIFICATE PREVIEW -->
@@ -1372,14 +1372,14 @@
                                     </div>
                                 </div>
                                 <div class="slc-l-serial">
-                                    <div class="slc-l-serial-label">Cert. No.</div>
+                                    <div class="slc-l-serial-label" data-i18n="stu.certNo">Cert. No.</div>
                                     <div class="slc-l-serial-value" id="slc-cert-no">SLC-0001</div>
                                 </div>
                             </div>
 
                             <!-- TITLE -->
-                            <h1 class="slc-l-title">SCHOOL LEAVING CERTIFICATE</h1>
-                            <div class="slc-l-certify"><em>This is to certify that</em></div>
+                            <h1 class="slc-l-title" data-i18n="stu.slcHeading">SCHOOL LEAVING CERTIFICATE</h1>
+                            <div class="slc-l-certify"><em data-i18n="stu.thisCertifies">This is to certify that</em></div>
 
                             <!-- STUDENT NAME (script style) -->
                             <div class="slc-l-name" id="slc-name-display">&#x2014;</div>
@@ -1393,18 +1393,18 @@
                             <!-- DATES ROW: Leaving Date | Voucher/Certificate Generation Date -->
                             <div class="slc-l-dates-row">
                                 <div class="slc-l-date-item">
-                                    <div class="slc-l-date-label"><i class="fas fa-door-open"></i> Date of Leaving School</div>
+                                    <div class="slc-l-date-label"><i class="fas fa-door-open"></i> <span data-i18n="stu.dateLeavingSchool">Date of Leaving School</span></div>
                                     <div class="slc-l-date-value" id="slc-leaving-date">&#x2014;</div>
                                 </div>
                                 <div class="slc-l-date-sep"></div>
                                 <div class="slc-l-date-item">
-                                    <div class="slc-l-date-label"><i class="fas fa-file-invoice"></i> Certificate / Voucher Generated On</div>
+                                    <div class="slc-l-date-label"><i class="fas fa-file-invoice"></i> <span data-i18n="stu.certGeneratedOn">Certificate / Voucher Generated On</span></div>
                                     <div class="slc-l-date-value" id="slc-issue-date">&#x2014;</div>
                                 </div>
                             </div>
 
                             <!-- BOTTOM DETAIL PARAGRAPH -->
-                            <p class="slc-l-record-para" id="slc-record-para">
+                            <p class="slc-l-record-para" id="slc-record-para" data-i18n="stu.recordWillAppear">
                                 Student record will appear here once a student is selected.
                             </p>
 
@@ -1412,8 +1412,8 @@
                             <div class="slc-l-footer slc-l-footer-principal-only">
                                 <div class="slc-l-sig slc-l-sig-principal">
                                     <div class="slc-l-sig-line"></div>
-                                    <div class="slc-l-sig-title">Principal's Signature</div>
-                                    <div class="slc-l-sig-sub">School Principal</div>
+                                    <div class="slc-l-sig-title" data-i18n="stu.principalSignature">Principal's Signature</div>
+                                    <div class="slc-l-sig-sub" data-i18n="stu.schoolPrincipal">School Principal</div>
                                 </div>
                             </div>
 
@@ -1422,9 +1422,9 @@
                 </div>
             </div>
             <div class="modal-sticky-footer slc-modal-footer">
-                <button class="btn-ghost" onclick="closeModal('slc-modal')"><i class="fas fa-times"></i> Close</button>
-                <button class="btn-primary-submit" id="slc-share-btn" onclick="shareSLC()" style="display:none;background:#10b981;"><i class="fab fa-whatsapp"></i> Share</button>
-                <button class="btn-primary-submit" id="slc-print-btn" onclick="printSLC()" style="display:none;"><i class="fas fa-print"></i> Print Certificate</button>
+                <button class="btn-ghost" onclick="closeModal('slc-modal')"><i class="fas fa-times"></i> <span data-i18n="stu.close">Close</span></button>
+                <button class="btn-primary-submit" id="slc-share-btn" onclick="shareSLC()" style="display:none;background:#10b981;"><i class="fab fa-whatsapp"></i> <span data-i18n="stu.share">Share</span></button>
+                <button class="btn-primary-submit" id="slc-print-btn" onclick="printSLC()" style="display:none;"><i class="fas fa-print"></i> <span data-i18n="stu.printCertificate">Print Certificate</span></button>
             </div>
         </div>
     </div>
@@ -1439,8 +1439,8 @@
                     <div class="slc-modal-title-group">
                         <div class="slc-modal-icon char-modal-icon"><i class="fas fa-award"></i></div>
                         <div>
-                            <h2 class="slc-modal-title">Character Certificate</h2>
-                            <p class="slc-modal-subtitle">Generate an official certificate attesting to a student's conduct</p>
+                            <h2 class="slc-modal-title" data-i18n="stu.charCert">Character Certificate</h2>
+                            <p class="slc-modal-subtitle" data-i18n="stu.charCertIntro">Generate an official certificate attesting to a student's conduct</p>
                         </div>
                     </div>
                     <button class="close-modal-btn slc-close-btn" onclick="closeModal('character-modal')">&times;</button>
@@ -1453,7 +1453,7 @@
                 <div class="slc-controls-panel">
                     <div class="slc-controls-row">
                         <div class="slc-control-group slc-search-group">
-                            <label class="slc-control-label"><i class="fas fa-search"></i> Search Student</label>
+                            <label class="slc-control-label"><i class="fas fa-search"></i> <span data-i18n="stu.searchStudent">Search Student</span></label>
                             <div class="slc-search-wrap">
                                 <input type="text" id="char-search-input" class="slc-search-input" placeholder="Search by name, ID, or Student~Guardian (e.g. Hanan~Habib)&hellip;" oninput="charSearchStudents()">
                                 <i class="fas fa-search slc-search-icon"></i>
@@ -1461,62 +1461,62 @@
                             </div>
                         </div>
                         <div class="slc-control-group">
-                            <label class="slc-control-label"><i class="fas fa-balance-scale"></i> Moral Character</label>
+                            <label class="slc-control-label"><i class="fas fa-balance-scale"></i> <span data-i18n="stu.moralCharacter">Moral Character</span></label>
                             <select id="char-conduct-select" class="slc-mini-input" onchange="charUpdateConduct()">
-                                <option value="excellent">Excellent</option>
-                                <option value="good" selected>Good</option>
-                                <option value="moderate">Moderate</option>
-                                <option value="bad">Bad</option>
+                                <option value="excellent" data-i18n="stu.excellent">Excellent</option>
+                                <option value="good" selected data-i18n="stu.good">Good</option>
+                                <option value="moderate" data-i18n="stu.moderate">Moderate</option>
+                                <option value="bad" data-i18n="stu.bad">Bad</option>
                             </select>
                         </div>
                         <div class="slc-control-group cs-group" id="char-cs-group">
-                            <label class="slc-control-label"><i class="fas fa-layer-group"></i> Class Status</label>
+                            <label class="slc-control-label"><i class="fas fa-layer-group"></i> <span data-i18n="stu.classStatus">Class Status</span></label>
                             <div class="cs-toggle" role="radiogroup" aria-label="Class status">
-                                <label class="cs-opt"><input type="radio" name="char-cs-mode" value="passed" onchange="csModeChanged('char')"><span><i class="fas fa-circle-check"></i> Passed class</span></label>
-                                <label class="cs-opt"><input type="radio" name="char-cs-mode" value="enrolled" onchange="csModeChanged('char')"><span><i class="fas fa-user-graduate"></i> Enrolled in</span></label>
+                                <label class="cs-opt"><input type="radio" name="char-cs-mode" value="passed" onchange="csModeChanged('char')"><span><i class="fas fa-circle-check"></i> <span data-i18n="stu.passedClass">Passed class</span></span></label>
+                                <label class="cs-opt"><input type="radio" name="char-cs-mode" value="enrolled" onchange="csModeChanged('char')"><span><i class="fas fa-user-graduate"></i> <span data-i18n="stu.enrolledIn">Enrolled in</span></span></label>
                             </div>
                             <!-- Appears after one of the two options above is chosen -->
                             <div class="cs-class-wrap" id="char-cs-class-wrap">
-                                <span class="cs-class-label" id="char-cs-class-label">Select class</span>
+                                <span class="cs-class-label" id="char-cs-class-label" data-i18n="stu.selectClassLower">Select class</span>
                                 <select id="char-cs-class" class="slc-mini-input" onchange="csClassChanged('char')"></select>
                             </div>
                         </div>
                         <div class="slc-control-group slc-tel-group">
-                            <label class="slc-control-label"><i class="fas fa-phone"></i> School Contact</label>
+                            <label class="slc-control-label"><i class="fas fa-phone"></i> <span data-i18n="stu.schoolContact">School Contact</span></label>
                             <div class="slc-search-input" style="display:flex;align-items:center;gap:6px;cursor:default;background:var(--bg-secondary,rgba(120,120,120,0.08));">
                                 <i class="fas fa-lock" style="font-size:11px;opacity:0.6;" title="Set on the Settings page"></i>
-                                <span style="font-size:12.5px;">Loaded from Settings</span>
+                                <span style="font-size:12.5px;" data-i18n="stu.loadedFromSettings">Loaded from Settings</span>
                             </div>
                         </div>
                     </div>
                     <div class="slc-manual-row">
-                        <div class="slc-manual-note"><i class="fas fa-info-circle"></i> Or enter details manually if student not in database</div>
+                        <div class="slc-manual-note"><i class="fas fa-info-circle"></i> <span data-i18n="stu.orEnterManually">Or enter details manually if student not in database</span></div>
                         <div class="slc-manual-fields">
                             <div class="slc-mini-field">
-                                <label>Student ID</label>
+                                <label data-i18n="stu.studentId">Student ID</label>
                                 <input type="text" id="char-manual-id" class="slc-mini-input" placeholder="e.g. PSC_1">
                             </div>
                             <div class="slc-mini-field slc-mini-wide">
-                                <label>Names <span class="slc-hint">(Student~Guardian)</span></label>
+                                <label><span data-i18n="stu.names">Names</span> <span class="slc-hint" data-i18n="stu.studentGuardian">(Student~Guardian)</span></label>
                                 <input type="text" id="char-manual-names" class="slc-mini-input" placeholder="Rohina Gul~Mukhtiar Ahmed">
                             </div>
                             <div class="slc-mini-field">
-                                <label>Gender</label>
+                                <label data-i18n="stu.gender">Gender</label>
                                 <select id="char-manual-gender" class="slc-mini-input">
-                                    <option value="Female">Female</option>
-                                    <option value="Male">Male</option>
+                                    <option value="Female" data-i18n="stu.female">Female</option>
+                                    <option value="Male" data-i18n="stu.male">Male</option>
                                 </select>
                             </div>
                             <div class="slc-mini-field">
-                                <label>Studied From</label>
+                                <label data-i18n="stu.studiedFrom">Studied From</label>
                                 <input type="date" id="char-from-date-input" class="slc-mini-input" onchange="charUpdateDates()">
                             </div>
                             <div class="slc-mini-field">
-                                <label>Studied To</label>
+                                <label data-i18n="stu.studiedTo">Studied To</label>
                                 <input type="date" id="char-to-date-input" class="slc-mini-input" onchange="charUpdateDates()">
                             </div>
                             <button class="slc-gen-btn" onclick="charManualGenerate()">
-                                <i class="fas fa-magic"></i> Generate
+                                <i class="fas fa-magic"></i> <span data-i18n="stu.generate">Generate</span>
                             </button>
                         </div>
                     </div>
@@ -1525,8 +1525,8 @@
                 <!-- EMPTY STATE -->
                 <div id="char-empty-state" class="slc-empty-state">
                     <div class="slc-empty-icon"><i class="fas fa-award"></i></div>
-                    <h3>Certificate Preview</h3>
-                    <p>Search for a student or enter details manually above, then click <strong>Generate</strong> to preview the certificate.</p>
+                    <h3 data-i18n="stu.certPreview">Certificate Preview</h3>
+                    <p><span data-i18n="stu.searchThenClick">Search for a student or enter details manually above, then click</span> <strong data-i18n="stu.generate">Generate</strong> <span data-i18n="stu.toPreview">to preview the certificate.</span></p>
                 </div>
 
                 <!-- PORTRAIT CHARACTER CERTIFICATE PREVIEW -->
@@ -1556,10 +1556,10 @@
                                 </div>
                             </div>
 
-                            <p class="char-certify-line">Has demonstrated good character as set forth in the</p>
+                            <p class="char-certify-line" data-i18n="stu.goodCharacter">Has demonstrated good character as set forth in the</p>
 
-                            <h1 class="char-title">Charater Certificate</h1>
-                            <h2 class="char-subtitle">CHARACTER DEVELOPMENT PROGRAM</h2>
+                            <h1 class="char-title" data-i18n="stu.charCertHeading">Charater Certificate</h1>
+                            <h2 class="char-subtitle" data-i18n="stu.charProgram">CHARACTER DEVELOPMENT PROGRAM</h2>
 
                             <div class="char-medal-icons">
                                 <i class="fas fa-shield-alt"></i>
@@ -1572,21 +1572,21 @@
                             <div class="char-name-underline"></div>
 
                             <!-- MAIN PARAGRAPH (changes with conduct dropdown) -->
-                            <p class="char-main-para" id="char-main-para">
+                            <p class="char-main-para" id="char-main-para" data-i18n="stu.searchThenGenerate">
                                 Search for a student or enter details manually, then click Generate.
                             </p>
 
                             <div class="char-meta-row">
                                 <div class="char-meta-item">
-                                    <div class="char-meta-label">Student ID</div>
+                                    <div class="char-meta-label" data-i18n="stu.studentId">Student ID</div>
                                     <div class="char-meta-value" id="char-id-display">&#x2014;</div>
                                 </div>
                                 <div class="char-meta-item">
-                                    <div class="char-meta-label">Taught at</div>
+                                    <div class="char-meta-label" data-i18n="stu.taughtAt">Taught at</div>
                                     <div class="char-meta-value" id="char-taught-at">&#x2014;</div>
                                 </div>
                                 <div class="char-meta-item">
-                                    <div class="char-meta-label">Date of Issue</div>
+                                    <div class="char-meta-label" data-i18n="stu.dateOfIssue">Date of Issue</div>
                                     <div class="char-meta-value" id="char-issue-date">&#x2014;</div>
                                 </div>
                             </div>
@@ -1595,7 +1595,7 @@
                             <div class="char-footer">
                                 <div class="char-sig">
                                     <div class="char-sig-line"></div>
-                                    <div class="char-sig-title">Principal's Signature</div>
+                                    <div class="char-sig-title" data-i18n="stu.principalSignature">Principal's Signature</div>
                                 </div>
                             </div>
 
@@ -1604,9 +1604,9 @@
                 </div>
             </div>
             <div class="modal-sticky-footer slc-modal-footer">
-                <button class="btn-ghost" onclick="closeModal('character-modal')"><i class="fas fa-times"></i> Close</button>
-                <button class="btn-primary-submit" id="char-share-btn" onclick="shareCharCert()" style="display:none;background:#10b981;"><i class="fab fa-whatsapp"></i> Share</button>
-                <button class="btn-primary-submit" id="char-print-btn" onclick="printCharCert()" style="display:none;"><i class="fas fa-print"></i> Print Certificate</button>
+                <button class="btn-ghost" onclick="closeModal('character-modal')"><i class="fas fa-times"></i> <span data-i18n="stu.close">Close</span></button>
+                <button class="btn-primary-submit" id="char-share-btn" onclick="shareCharCert()" style="display:none;background:#10b981;"><i class="fab fa-whatsapp"></i> <span data-i18n="stu.share">Share</span></button>
+                <button class="btn-primary-submit" id="char-print-btn" onclick="printCharCert()" style="display:none;"><i class="fas fa-print"></i> <span data-i18n="stu.printCertificate">Print Certificate</span></button>
             </div>
         </div>
     </div>
@@ -1614,19 +1614,19 @@
     <!-- CERTIFICATE / B-FORM FULL-PAGE VIEWER -->
     <div id="cert-viewer-overlay" class="cert-viewer-overlay" onclick="if(event.target===this) closeCertViewer()">
         <div class="cert-viewer-toolbar">
-            <span class="cert-viewer-filename" id="cert-viewer-filename"><i class="fas fa-id-card"></i> Certificate</span>
+            <span class="cert-viewer-filename" id="cert-viewer-filename"><i class="fas fa-id-card"></i> <span data-i18n="stu.certificate">Certificate</span></span>
             <div class="cert-viewer-actions">
                 <button type="button" class="cert-viewer-btn cert-viewer-btn-primary" onclick="downloadCertificate(null)">
-                    <i class="fas fa-download"></i> <span>Download</span>
+                    <i class="fas fa-download"></i> <span data-i18n="stu.download">Download</span>
                 </button>
-                <button type="button" class="cert-viewer-btn cert-viewer-close" onclick="closeCertViewer()" aria-label="Close viewer">
+                <button type="button" class="cert-viewer-btn cert-viewer-close" onclick="closeCertViewer()" aria-label="Close viewer" data-i18n-aria="stu.closeViewer">
                     <i class="fas fa-times"></i>
                 </button>
             </div>
         </div>
         <div class="cert-viewer-body">
             <img id="cert-viewer-image" class="cert-viewer-image" alt="Certificate / B-Form" style="display:none;">
-            <iframe id="cert-viewer-pdf" class="cert-viewer-pdf" style="display:none;" title="Certificate / B-Form PDF"></iframe>
+            <iframe id="cert-viewer-pdf" class="cert-viewer-pdf" style="display:none;" title="Certificate / B-Form PDF" data-i18n-title="stu.certPdfTitle"></iframe>
         </div>
     </div>
 
@@ -1634,7 +1634,7 @@
          in the "Manage Records" profile card or the Update Record edit form. -->
     <div id="photo-viewer-overlay" class="photo-viewer-overlay" onclick="if(event.target===this) closePhotoViewer()">
         <div class="cert-viewer-toolbar">
-            <span class="cert-viewer-filename" id="photo-viewer-filename"><i class="fas fa-image"></i> Student Photo</span>
+            <span class="cert-viewer-filename" id="photo-viewer-filename"><i class="fas fa-image"></i> <span data-i18n="stu.studentPhoto">Student Photo</span></span>
             <div class="cert-viewer-actions">
                 <button type="button" class="cert-viewer-btn cert-viewer-close" onclick="closePhotoViewer()" aria-label="Close viewer">
                     <i class="fas fa-times"></i>
@@ -1655,33 +1655,33 @@
     <div id="idc-overlay" class="idc-overlay" onclick="if(event.target===this) closeIdCardGenerator()">
         <div class="idc-panel">
             <div class="idc-toolbar">
-                <span class="idc-toolbar-title"><i class="fas fa-id-card"></i> <span id="idc-toolbar-label">Student ID Cards</span></span>
+                <span class="idc-toolbar-title"><i class="fas fa-id-card"></i> <span id="idc-toolbar-label" data-i18n="stu.idCards">Student ID Cards</span></span>
                 <div class="idc-toolbar-actions">
                     <button type="button" class="cert-viewer-btn cert-viewer-btn-primary" id="idc-download-all-btn" onclick="downloadAllIdCards()">
-                        <i class="fas fa-file-pdf"></i> <span>Download PDF</span>
+                        <i class="fas fa-file-pdf"></i> <span data-i18n="stu.downloadPdf">Download PDF</span>
                     </button>
                     <label class="idc-per-page-label" for="idc-print-per-page">
-                        <span>Per page</span>
+                        <span data-i18n="stu.perPage">Per page</span>
                         <select id="idc-print-per-page" class="idc-per-page-select">
-                            <option value="2">2 students</option>
-                            <option value="3" selected>3 students</option>
+                            <option value="2" data-i18n="stu.students2">2 students</option>
+                            <option value="3" selected data-i18n="stu.students3">3 students</option>
                         </select>
                     </label>
                     <button type="button" class="cert-viewer-btn" id="idc-print-all-btn" onclick="printAllIdCards()">
-                        <i class="fas fa-print"></i> <span>Print All</span>
+                        <i class="fas fa-print"></i> <span data-i18n="stu.printAll">Print All</span>
                     </button>
-                    <button type="button" class="cert-viewer-btn cert-viewer-close" onclick="closeIdCardGenerator()" aria-label="Close ID card generator">
+                    <button type="button" class="cert-viewer-btn cert-viewer-close" onclick="closeIdCardGenerator()" aria-label="Close ID card generator" data-i18n-aria="stu.closeIdGen">
                         <i class="fas fa-times"></i>
                     </button>
                 </div>
             </div>
             <div class="idc-body">
                 <div id="idc-progress" class="idc-progress" style="display:none;">
-                    <i class="fas fa-spinner fa-spin"></i> <span id="idc-progress-text">Generating…</span>
+                    <i class="fas fa-spinner fa-spin"></i> <span id="idc-progress-text" data-i18n="stu.generating">Generating…</span>
                 </div>
                 <div id="idc-empty-state" class="idc-empty-state" style="display:none;">
                     <i class="fas fa-id-card"></i>
-                    <p>No students found for this selection.</p>
+                    <p data-i18n="stu.noStudentsSelection">No students found for this selection.</p>
                 </div>
                 <div id="idc-cards-grid" class="idc-cards-grid">
                     <!-- populated by JS: one .idc-card-thumb per student -->
@@ -1695,21 +1695,21 @@
     <div id="discharge-dialog-overlay" class="discharge-dialog-overlay" aria-hidden="true">
         <div class="discharge-dialog-box" role="dialog" aria-modal="true" aria-labelledby="discharge-dialog-title">
             <div class="discharge-dialog-icon"><i class="fas fa-user-slash"></i></div>
-            <h3 class="discharge-dialog-title" id="discharge-dialog-title">Deactivate Student</h3>
+            <h3 class="discharge-dialog-title" id="discharge-dialog-title" data-i18n="stu.deactivateStudent">Deactivate Student</h3>
             <p class="discharge-dialog-body">
-                Select the discharge date for <strong id="discharge-student-name">this student</strong>.
+                <span data-i18n="stu.selectDischarge">Select the discharge date for</span> <strong id="discharge-student-name" data-i18n="stu.thisStudent">this student</strong>.
             </p>
             <div class="discharge-dialog-field">
-                <label for="discharge-date-input"><i class="fas fa-calendar-day"></i> Discharge Date</label>
+                <label for="discharge-date-input"><i class="fas fa-calendar-day"></i> <span data-i18n="stu.dischargeDate">Discharge Date</span></label>
                 <input type="date" id="discharge-date-input" class="discharge-date-input">
                 <div class="discharge-dialog-error" id="discharge-date-error" role="alert"></div>
             </div>
             <div class="discharge-dialog-actions">
                 <button type="button" class="discharge-btn-cancel" id="discharge-cancel-btn">
-                    <i class="fas fa-times"></i> Cancel
+                    <i class="fas fa-times"></i> <span data-i18n="stu.cancel">Cancel</span>
                 </button>
                 <button type="button" class="discharge-btn-confirm" id="discharge-confirm-btn">
-                    <i class="fas fa-check"></i> Confirm
+                    <i class="fas fa-check"></i> <span data-i18n="stu.confirm">Confirm</span>
                 </button>
             </div>
         </div>

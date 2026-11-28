@@ -1,46 +1,54 @@
 /*!
- * admin-i18n.css - Urdu typography + right-to-left layout for the admin portal.
+ * admin-i18n.css - Urdu typography for the admin portal.
  *
  * Load this AFTER the page's own stylesheet on every admin page:
  *     <link rel="stylesheet" href="settings.css?v=...">
- *     <link rel="stylesheet" href="admin-i18n.css?v=1">
+ *     <link rel="stylesheet" href="admin-i18n.css?v=2">
  *
- * Everything here is scoped to :root[dir="rtl"] or :root[lang="ur"], so an English
- * portal renders byte-for-byte as it does today - nothing in this file applies.
+ * THE LAYOUT DOES NOT MOVE.
+ * Urdu reads right-to-left as a language, but this portal does not turn around
+ * when you switch to it. The sidebar stays on the left, an icon stays to the left
+ * of its label, cards and table columns keep their order, and every screen an
+ * admin already knows looks exactly where they left it. Only the words change.
  *
- * HOW THE FLIP WORKS
- *   admin-i18n.js sets <html dir="rtl">. The browser then does most of the work by
- *   itself: text flows right-to-left, flex rows and grid columns reverse, list bullets
- *   and scrollbars move, and every logical property (margin-inline, inset-inline) follows.
- *   This file only repairs the places the app wrote with hard-coded left / right,
- *   plus the things a browser can never guess: which icons are directional, and which
- *   fields must stay left-to-right because they hold a phone number or an email address.
+ * That is a deliberate choice, and it is how the parent portal already works.
+ * Mirroring the whole interface was tried and thrown away: a dense admin screen
+ * full of numbers, dates, phone numbers, fee columns and English proper nouns
+ * does not survive being flipped, and staff who learned the software in English
+ * lose every landmark at once.
+ *
+ * Individual Urdu PHRASES still read right-to-left. That is handled one string at
+ * a time in admin-i18n.js (iso(), a Unicode right-to-left isolate), so the phrase
+ * reads correctly while the box it sits in does not move a pixel.
+ *
+ * Everything here is scoped to :root[lang="ur"], so an English portal renders
+ * byte-for-byte as it does today - nothing in this file applies to it.
  *
  * SECTIONS
- *   1. Urdu typography
- *   2. Things that must stay left-to-right even in Urdu
- *   3. Sidebar
- *   4. Header
- *   5. Form controls (inputs, prefixes, switches)
- *   6. Cards, tables and lists
- *   7. Toasts, modals and floating buttons
- *   8. Directional icons
- *   9. Utilities
+ *   1. The Urdu typeface
+ *   2. Letter joining and capitals
+ *   3. Room for the script
+ *   4. Size: Urdu reads smaller than Latin
+ *   5. Things that stay in the Latin font
+ *   6. Utilities
+ *   7. The language card
  */
 
 /* ═══════════════════════════════════════════════════════════
-   1. URDU TYPOGRAPHY
+   1. THE URDU TYPEFACE
    ═══════════════════════════════════════════════════════════
    Naskh, not Nastaliq. Nastaliq is the more beautiful Urdu style, but its deep
    slanted baseline needs a lot of vertical room and turns to mush at the 12-13px
-   used in table cells and form labels. Naskh stays crisp and is what Urdu
+   used in table cells and form labels. Naskh stays crisp, and it is what Urdu
    newspapers and government forms use for dense text.
-   The device's own Urdu fonts are listed first as a fallback, so an offline-only
-   school with no internet still gets proper Urdu shaping instead of boxes. */
+
+   The device's own Urdu fonts are listed after the web font, so a school with no
+   internet - an offline-only phone, for instance - still gets proper Urdu letter
+   shaping instead of a row of boxes. */
 :root[lang="ur"] {
   --ss-urdu-font: 'Noto Naskh Arabic', 'Noto Nastaliq Urdu', 'Jameel Noori Nastaleeq',
                   'Nafees Web Naskh', 'Pak Nastaleeq', 'Urdu Typesetting',
-                  'Segoe UI', Tahoma, sans-serif;
+                  'Segoe UI', Tahoma, Arial, sans-serif;
 }
 
 :root[lang="ur"] body,
@@ -48,319 +56,136 @@
 :root[lang="ur"] input,
 :root[lang="ur"] select,
 :root[lang="ur"] textarea,
-:root[lang="ur"] .var-input,
-:root[lang="ur"] .brand-name {
+:root[lang="ur"] .var-input {
   font-family: var(--ss-urdu-font);
 }
 
-/* Urdu glyphs sit lower and carry more marks above and below the baseline than
-   Latin ones, so the same line-height that looks right in English clips them.
-   A little extra room, and no letter-spacing (which breaks Urdu joins). */
-:root[lang="ur"] body {
-  line-height: 1.85;
-  letter-spacing: normal;
-}
-:root[lang="ur"] h1, :root[lang="ur"] h2, :root[lang="ur"] h3,
-:root[lang="ur"] h4, :root[lang="ur"] h5 {
-  line-height: 1.6;
-  letter-spacing: normal;
-  font-weight: 600;          /* Urdu Naskh at 700+ smears at small sizes */
-}
-:root[lang="ur"] label,
-:root[lang="ur"] .var-hint,
-:root[lang="ur"] .nav-label,
-:root[lang="ur"] .toast,
-:root[lang="ur"] .section-header-info p {
-  line-height: 1.75;
-  letter-spacing: normal;
+
+/* ═══════════════════════════════════════════════════════════
+   2. LETTER JOINING AND CAPITALS
+   ═══════════════════════════════════════════════════════════
+   Arabic-script letters join to their neighbours. Any tracking breaks those
+   joins and the word falls apart into loose letters, so letter-spacing has to go
+   everywhere - including on ::before/::after, which several components use for
+   icons and separators.
+
+   Urdu has no capitals either; text-transform: uppercase leaves the letters
+   unchanged but wrecks their spacing, so it is switched off too. */
+:root[lang="ur"] *,
+:root[lang="ur"] *::before,
+:root[lang="ur"] *::after {
+  letter-spacing: 0 !important;
+  text-transform: none !important;
 }
 
-/* Small Urdu text needs a touch more size than small Latin text to stay legible. */
+
+/* ═══════════════════════════════════════════════════════════
+   3. ROOM FOR THE SCRIPT
+   ═══════════════════════════════════════════════════════════
+   Urdu carries marks above and below the baseline that Latin does not, so the
+   line box that fits English clips them. A little more height, applied to the
+   text-bearing elements rather than to everything, so no box changes size. */
+:root[lang="ur"] body { line-height: 1.8; }
+
+:root[lang="ur"] h1, :root[lang="ur"] h2, :root[lang="ur"] h3,
+:root[lang="ur"] h4, :root[lang="ur"] h5, :root[lang="ur"] h6 {
+  line-height: 1.6;
+  font-weight: 600;          /* Urdu Naskh smears at 700+ in small sizes */
+}
+
+:root[lang="ur"] label,
+:root[lang="ur"] p,
+:root[lang="ur"] th, :root[lang="ur"] td,
+:root[lang="ur"] .var-hint,
+:root[lang="ur"] .nav-label,
+:root[lang="ur"] .nav-link span,
+:root[lang="ur"] .tab-btn,
+:root[lang="ur"] .toast,
+:root[lang="ur"] .section-header-info p,
+:root[lang="ur"] .stat-pill-info,
+:root[lang="ur"] .empty-state p {
+  line-height: 1.75;
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   4. SIZE: URDU READS SMALLER THAN LATIN
+   ═══════════════════════════════════════════════════════════
+   At the same pixel size, Urdu Naskh looks noticeably smaller and lighter than
+   Inter. Small text is nudged up so a label or a hint stays comfortable to read
+   across a desk. Kept to fractions of a pixel-size, never enough to re-wrap a
+   column or change a card's height. */
 :root[lang="ur"] .var-hint,
 :root[lang="ur"] .adm-footnote,
 :root[lang="ur"] .save-bar p,
-:root[lang="ur"] .empty-state p { font-size: 13px; }
+:root[lang="ur"] .empty-state p,
+:root[lang="ur"] .section-header-info p { font-size: 13px; }
+
 :root[lang="ur"] .nav-label { font-size: 12px; }
+:root[lang="ur"] .nav-link span { font-size: 14.5px; }
 :root[lang="ur"] .tab-btn { font-size: 13.5px; }
+:root[lang="ur"] label { font-size: 13.5px; }
+:root[lang="ur"] .lang-option-desc { font-size: 12.5px; }
 
-/* Urdu never uses capitals; uppercase transforms produce unchanged text with
-   wrecked spacing, so switch them off. */
-:root[lang="ur"] * { text-transform: none !important; }
 
-/* The brand is a Latin wordmark - keep it in the Latin font. */
+/* ═══════════════════════════════════════════════════════════
+   5. THINGS THAT STAY IN THE LATIN FONT
+   ═══════════════════════════════════════════════════════════
+   Not everything on an Urdu screen should be set in an Urdu face. */
+
+/* The brand is a Latin wordmark. */
 :root[lang="ur"] .brand-name { font-family: 'Space Grotesk', 'Inter', sans-serif; }
 
-
-/* ═══════════════════════════════════════════════════════════
-   2. THINGS THAT MUST STAY LEFT-TO-RIGHT EVEN IN URDU
-   ═══════════════════════════════════════════════════════════
-   A phone number, an email address, a URL, a registration number, a fee amount
-   and a time all read left-to-right in Pakistan too. Left in an RTL field the
-   browser moves the leading digit or the "+" to the wrong end, so "041-1234567"
-   can appear as "1234567-041". These stay LTR and keep their text on the side
-   the user starts typing from. */
-:root[dir="rtl"] input[type="tel"],
-:root[dir="rtl"] input[type="email"],
-:root[dir="rtl"] input[type="url"],
-:root[dir="rtl"] input[type="number"],
-:root[dir="rtl"] input[type="time"],
-:root[dir="rtl"] input[type="date"],
-:root[dir="rtl"] input[type="password"],
-:root[dir="rtl"] .ss-ltr,
-:root[dir="rtl"] code,
-:root[dir="rtl"] kbd,
-:root[dir="rtl"] pre {
-  direction: ltr;
-  text-align: left;
-  unicode-bidi: isolate;
-}
-
-/* ...but their placeholder is Urdu prose, so it belongs on the right. */
-:root[dir="rtl"] input[type="tel"]::placeholder,
-:root[dir="rtl"] input[type="email"]::placeholder,
-:root[dir="rtl"] input[type="url"]::placeholder,
-:root[dir="rtl"] input[type="number"]::placeholder {
-  direction: rtl;
-  text-align: right;
-}
-
-/* Money and counts: digits grouped left-to-right, but the column still sits
-   where an RTL table expects it. */
-:root[dir="rtl"] .ss-num,
-:root[dir="rtl"] .stat-pill-value,
-:root[dir="rtl"] .amount,
-:root[dir="rtl"] .fee-input-field,
-:root[dir="rtl"] .fund-input-field {
+/* A phone number, an email address, a URL, a registration number and an amount
+   are read left-to-right in Pakistan too, and they belong in the Latin face
+   where the digits line up properly. unicode-bidi: isolate keeps each of them a
+   self-contained chunk, so a "+" or a leading zero cannot drift into the Urdu
+   text beside it. */
+:root[lang="ur"] input[type="tel"],
+:root[lang="ur"] input[type="email"],
+:root[lang="ur"] input[type="url"],
+:root[lang="ur"] input[type="number"],
+:root[lang="ur"] input[type="time"],
+:root[lang="ur"] input[type="date"],
+:root[lang="ur"] input[type="password"],
+:root[lang="ur"] code,
+:root[lang="ur"] kbd,
+:root[lang="ur"] pre,
+:root[lang="ur"] .ss-ltr {
+  font-family: 'Inter', system-ui, sans-serif;
   direction: ltr;
   unicode-bidi: isolate;
 }
 
-
-/* ─── safety net for text that has not been translated yet ───
-   The portal is translated page by page. Until a page's strings are tagged, its
-   English sentences sit inside an RTL container, and the browser moves their
-   trailing punctuation to the wrong end: "Changes apply immediately." renders as
-   ".Changes apply immediately".
-   unicode-bidi: plaintext tells the browser to work out each block's direction
-   from its own first strong character, exactly as it does for a plain-text file.
-   An English sentence then reads left-to-right with its full stop on the right,
-   and an Urdu sentence reads right-to-left with its "۔" on the left - so this
-   keeps helping after the translation is finished, for the many labels that mix
-   Urdu words with English names, codes and numbers.
-   It changes character ORDER only, never alignment or box layout, so it cannot
-   move anything on the page. */
-:root[dir="rtl"] p,
-:root[dir="rtl"] h1, :root[dir="rtl"] h2, :root[dir="rtl"] h3,
-:root[dir="rtl"] h4, :root[dir="rtl"] h5, :root[dir="rtl"] h6,
-:root[dir="rtl"] label,
-:root[dir="rtl"] li,
-:root[dir="rtl"] th, :root[dir="rtl"] td,
-:root[dir="rtl"] button,
-:root[dir="rtl"] option,
-:root[dir="rtl"] figcaption,
-:root[dir="rtl"] .var-hint,
-:root[dir="rtl"] .nav-link span,
-:root[dir="rtl"] .tab-btn,
-:root[dir="rtl"] .toast,
-:root[dir="rtl"] .empty-state p {
-  unicode-bidi: plaintext;
+/* Figures on the dashboard and in money columns: Latin face, digits isolated. */
+:root[lang="ur"] .stat-pill-value,
+:root[lang="ur"] .ss-num,
+:root[lang="ur"] .amount {
+  font-family: 'Inter', system-ui, sans-serif;
+  unicode-bidi: isolate;
 }
-
-/* Opt out where a block really must follow the page direction. */
-:root[dir="rtl"] .ss-bidi-normal { unicode-bidi: normal; }
 
 
 /* ═══════════════════════════════════════════════════════════
-   3. SIDEBAR
-   ═══════════════════════════════════════════════════════════
-   The drawer lives on the left and slides in from the left. In Urdu it lives on
-   the right and slides in from the right, so it opens under the user's thumb on
-   the same side as the menu button. */
-:root[dir="rtl"] .sidebar {
-  left: auto;
-  right: 0;
-  transform: translateX(100%);
-  border-right: none;
-  border-left: 1px solid var(--border-subtle);
-}
-:root[dir="rtl"] .sidebar.open { transform: translateX(0); }
-
-/* The active-page marker is a 3px bar against the page edge: that edge is now the right. */
-:root[dir="rtl"] .nav-link {
-  border-left: none;
-  border-right: 3px solid transparent;
-}
-:root[dir="rtl"] .nav-link.active {
-  border-left-color: transparent;
-  border-right-color: #17716A;
-  padding-left: 12px;
-  padding-right: 9px;
-}
-
-/* Search box: magnifier moves to the right, and the text's breathing room with it. */
-:root[dir="rtl"] .sidebar-search i { left: auto; right: 12px; }
-:root[dir="rtl"] .sidebar-search input { padding: 8px 32px 8px 10px; }
-
-/* The badge that counts unread announcements sits at the far end of its row;
-   flexbox already moves it, this only fixes its own inner spacing. */
-:root[dir="rtl"] .nav-badge { margin-left: 0; margin-right: auto; }
-
-
-/* ═══════════════════════════════════════════════════════════
-   4. HEADER
+   6. UTILITIES
    ═══════════════════════════════════════════════════════════ */
-:root[dir="rtl"] .theme-toggle { margin-left: 0; margin-right: 4px; }
-
-/* The theme knob slides left-to-right; in RTL it has to travel the other way. */
-:root[dir="rtl"] .theme-toggle .toggle-slider { left: auto; right: 4px; }
-:root[dir="rtl"]:root[data-theme="light"] .theme-toggle .toggle-slider { transform: translateX(-28px); }
-:root[dir="rtl"] .theme-toggle #theme-icon-moon { transform: translateX(-2px); }
-:root[dir="rtl"] .theme-toggle #theme-icon-sun { transform: translateX(2px); }
-
-/* The decorative background glows are mirrored so the lit corner matches the new layout. */
-:root[dir="rtl"] .glow-1 { right: auto; left: 10%; }
-:root[dir="rtl"] .glow-2 { left: auto; right: 30%; }
-
-/* The school name is often an English proper noun - let it read naturally
-   while still sitting on the correct side of the header. */
-:root[dir="rtl"] .school-name { unicode-bidi: isolate; }
-:root[dir="rtl"] .header-date { direction: rtl; unicode-bidi: isolate; }
-
-
-/* ═══════════════════════════════════════════════════════════
-   5. FORM CONTROLS
-   ═══════════════════════════════════════════════════════════ */
-:root[dir="rtl"] .var-item label,
-:root[dir="rtl"] .var-hint,
-:root[dir="rtl"] .section-header-info h2,
-:root[dir="rtl"] .section-header-info p { text-align: right; }
-
-/* Free-text fields carry dir="auto" (set by admin-i18n.js), so the browser aligns
-   each one from its own content: an Urdu name sits right, a Latin address sits left.
-   text-align is deliberately NOT forced here - doing so would undo that. */
-:root[dir="rtl"] .var-input:not([dir="auto"]),
-:root[dir="rtl"] textarea.var-input:not([dir="auto"]) { text-align: right; }
-
-/* An empty field has no content to judge, so it would start left and jump to the
-   right on the first Urdu letter. Starting it on the right matches the rest of
-   the form and matches where the caret should be for an Urdu typist. */
-:root[dir="rtl"] .var-input[dir="auto"]:placeholder-shown,
-:root[dir="rtl"] textarea.var-input[dir="auto"]:placeholder-shown { text-align: right; }
-
-/* A prefix like "Rs." and a suffix like "%" swap ends. */
-:root[dir="rtl"] .input-prefix { left: auto; right: 9px; }
-:root[dir="rtl"] .input-suffix { right: auto; left: 9px; }
-
-/* On/off switches: the knob starts on the right and travels left. */
-:root[dir="rtl"] .toggle-slider:before { left: auto; right: 3px; }
-:root[dir="rtl"] .toggle-switch input:checked + .toggle-slider:before { transform: translateX(-21px); }
-
-/* A <select> draws its own arrow; browsers place it correctly for the field's
-   direction, so only the text padding needs adjusting where the app set it. */
-:root[dir="rtl"] select.var-input { padding-right: 12px; padding-left: 28px; }
-
-/* Checkbox / radio rows: the control belongs beside the label on the right. */
-:root[dir="rtl"] .adm-field-row,
-:root[dir="rtl"] .checkbox-row { text-align: right; }
-
-/* The search box above the teacher / staff lists. */
-:root[dir="rtl"] .staff-search-wrap i { left: auto; right: 12px; }
-:root[dir="rtl"] .staff-search-wrap input { padding-right: 34px; padding-left: 12px; text-align: right; }
-
-
-/* ═══════════════════════════════════════════════════════════
-   6. CARDS, TABLES AND LISTS
-   ═══════════════════════════════════════════════════════════ */
-:root[dir="rtl"] table { text-align: right; }
-:root[dir="rtl"] th, :root[dir="rtl"] td { text-align: right; }
-
-/* A column of numbers reads better aligned to the digits' own side. */
-:root[dir="rtl"] th.ss-num, :root[dir="rtl"] td.ss-num,
-:root[dir="rtl"] .col-amount, :root[dir="rtl"] .col-total {
-  text-align: left;
-  direction: ltr;
-}
-
-:root[dir="rtl"] .sections-count { margin-left: 0; margin-right: 4px; }
-:root[dir="rtl"] .var-src-tag { margin-left: 0; margin-right: 6px; }
-:root[dir="rtl"] .save-bar p i { margin-right: 0; margin-left: 4px; }
-
-/* The small X that removes a class card moves to the opposite corner. */
-:root[dir="rtl"] .delete-card-btn { right: auto; left: 10px; }
-
-/* Section chips inside a class card. */
-:root[dir="rtl"] .section-chip { direction: rtl; }
-
-:root[dir="rtl"] .empty-state { text-align: center; }  /* stays centred in both */
-
-
-/* ═══════════════════════════════════════════════════════════
-   7. TOASTS, MODALS AND FLOATING BUTTONS
-   ═══════════════════════════════════════════════════════════ */
-:root[dir="rtl"] .toast {
-  right: auto;
-  left: 28px;
-  text-align: right;
-}
-
-/* A dialog's buttons already reverse with the flex row; this keeps the text
-   and the close button on the right sides. */
-:root[dir="rtl"] .modal-header,
-:root[dir="rtl"] .modal-body,
-:root[dir="rtl"] .dialog-body { text-align: right; }
-:root[dir="rtl"] .modal-close { right: auto; left: 14px; }
-
-
-/* ═══════════════════════════════════════════════════════════
-   8. DIRECTIONAL ICONS
-   ═══════════════════════════════════════════════════════════
-   A chevron or arrow points at something, so it has to turn around. A clock,
-   a user or a trash can does not - which is why this is a short, named list
-   rather than a blanket flip of every icon in the portal. */
-:root[dir="rtl"] .fa-chevron-left,
-:root[dir="rtl"] .fa-chevron-right,
-:root[dir="rtl"] .fa-angle-left,
-:root[dir="rtl"] .fa-angle-right,
-:root[dir="rtl"] .fa-angle-double-left,
-:root[dir="rtl"] .fa-angle-double-right,
-:root[dir="rtl"] .fa-arrow-left,
-:root[dir="rtl"] .fa-arrow-right,
-:root[dir="rtl"] .fa-long-arrow-alt-left,
-:root[dir="rtl"] .fa-long-arrow-alt-right,
-:root[dir="rtl"] .fa-caret-left,
-:root[dir="rtl"] .fa-caret-right,
-:root[dir="rtl"] .fa-sign-out-alt,
-:root[dir="rtl"] .fa-sign-in-alt,
-:root[dir="rtl"] .fa-reply,
-:root[dir="rtl"] .fa-share,
-:root[dir="rtl"] .ss-flip-icon {
-  transform: scaleX(-1);
-}
-
-/* Opt out on a case-by-case basis when an icon is already drawn for RTL. */
-:root[dir="rtl"] .ss-no-flip { transform: none !important; }
-
-
-/* ═══════════════════════════════════════════════════════════
-   9. UTILITIES
-   ═══════════════════════════════════════════════════════════ */
-/* Force a run of text to one direction regardless of the page's language. */
-.ss-force-ltr { direction: ltr !important; unicode-bidi: isolate; }
-.ss-force-rtl { direction: rtl !important; unicode-bidi: isolate; }
-
-/* Show an element only in one language. Handy for a note that only makes
-   sense in English, or an Urdu-only reading hint. */
+/* Show an element in one language only - for a note that only makes sense in
+   English, or a reading hint that only makes sense in Urdu. */
 :root[lang="ur"] .ss-only-en { display: none !important; }
 :root[lang="en"] .ss-only-ur { display: none !important; }
 
+/* Force a run of text into one direction, whatever the page language. */
+.ss-force-ltr { direction: ltr !important; unicode-bidi: isolate; }
+.ss-force-rtl { direction: rtl !important; unicode-bidi: isolate; }
+
 
 /* ═══════════════════════════════════════════════════════════
-   THE LANGUAGE CARD ITSELF (settings -> Info & Setting)
+   7. THE LANGUAGE CARD  (Settings -> Info & Setting)
    ═══════════════════════════════════════════════════════════
-   Two big tappable cards rather than a dropdown: the choice is important and
-   rare, each option is shown in its own script so a user who cannot read the
-   current language can still find the one they want, and it is a comfortable
-   touch target on a phone. */
+   Two tappable cards rather than a dropdown: the choice is important and rare,
+   each option is written in its own script so someone who cannot read the
+   language currently on screen can still find the one they want, and it is a
+   comfortable target on a phone. */
 .lang-choice-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
@@ -378,50 +203,50 @@
   border-radius: var(--radius-sm, 10px);
   background: var(--input-bg, transparent);
   cursor: pointer;
-  text-align: start;
+  text-align: left;
   transition: border-color 0.18s ease, background 0.18s ease, transform 0.12s ease;
 }
 .lang-option:hover { border-color: var(--border-hover, #3a4654); }
 .lang-option:active { transform: scale(0.985); }
 
-/* The real radio stays in the DOM for keyboard and screen-reader users; the
-   card is its label, so Space and the arrow keys work as normal. */
+/* The real radio stays in the DOM for keyboard and screen-reader users; the card
+   is its label, so Space and the arrow keys work as they should. */
 .lang-option input[type="radio"] {
   position: absolute;
   opacity: 0;
   width: 1px; height: 1px;
   pointer-events: none;
 }
-.lang-option input[type="radio"]:focus-visible ~ .lang-option-check,
 .lang-option:focus-within {
   outline: 2px solid var(--green, #1a9e6e);
   outline-offset: 2px;
-  border-radius: var(--radius-sm, 10px);
 }
 
 .lang-option-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 
-/* Each option is written in its own script and never translated, so "اردو"
-   always reads as اردو and "English" always reads as English. A user who has
+/* Each option is written in its own script and is never translated, so "اردو"
+   always reads as اردو and "English" always reads as English. An admin who has
    been handed a portal in a language they cannot read can still switch back. */
 .lang-option-native {
   font-size: 15px;
   font-weight: 600;
   color: var(--text-main, #e6edf3);
-  line-height: 1.5;
+  line-height: 1.6;
 }
 .lang-option-native[lang="ur"] {
   font-family: 'Noto Naskh Arabic', 'Jameel Noori Nastaleeq', 'Nafees Web Naskh', sans-serif;
   direction: rtl;
+  unicode-bidi: isolate;
 }
 .lang-option-native[lang="en"] {
   font-family: 'Inter', sans-serif;
   direction: ltr;
+  unicode-bidi: isolate;
 }
 .lang-option-desc { font-size: 12px; color: var(--text-muted, #8a8f98); }
 
 .lang-option-check {
-  margin-inline-start: auto;
+  margin-left: auto;
   flex-shrink: 0;
   width: 20px; height: 20px;
   border-radius: 50%;
@@ -433,7 +258,6 @@
   transition: all 0.18s ease;
 }
 
-/* Selected state */
 .lang-option.is-active {
   border-color: var(--green, #1a9e6e);
   background: var(--green-light, rgba(26,158,110,0.08));
@@ -444,7 +268,7 @@
   color: #fff;
 }
 
-/* Where the setting is stored: changes with the school's mode, so the admin
+/* Where the setting is stored - different wording per school mode, so the admin
    knows whether this choice follows them to another device. */
 .lang-storage-note {
   display: flex;
@@ -457,6 +281,6 @@
 }
 .lang-storage-note i { margin-top: 3px; flex-shrink: 0; color: var(--green, #1a9e6e); }
 
-/* While the save is in flight the cards are dimmed and unclickable, so a
-   double tap cannot queue two conflicting saves. */
+/* Dimmed and unclickable while a save is in flight, so a double tap cannot queue
+   two conflicting saves. */
 .lang-choice-grid.is-busy { opacity: 0.6; pointer-events: none; }
