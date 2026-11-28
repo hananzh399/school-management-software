@@ -13,7 +13,7 @@
 <link rel="stylesheet" href="settings.css?v=20261026">
 <link rel="stylesheet" href="whatsapp-settings.css?v=1">
 <link rel="stylesheet" href="wa-codes.css?v=1">
-<link rel="stylesheet" href="admin-i18n.css?v=2">
+<link rel="stylesheet" href="admin-i18n.css?v=3">
 <script src="xss-safe.js"></script>
 <script>(function(){const s=localStorage.getItem('eduflow-theme');document.documentElement.setAttribute('data-theme',(s==='light'||s==='dark')?s:'dark');})()</script>
 <style>
@@ -75,7 +75,7 @@
   <!-- TOP HEADER -->
   <header class="top-header">
     <div class="header-left">
-      <button class="menu-toggle-btn" onclick="openSidebar()" title="Open menu">
+      <button class="menu-toggle-btn" onclick="openSidebar()" title="Open menu" data-i18n-title="set.openMenu">
         <i class="fas fa-bars"></i>
       </button>
       <div class="header-title">
@@ -83,10 +83,10 @@
       </div>
     </div>
     <div class="header-actions">
-      <span class="badge-saved" id="saved-badge"><i class="fas fa-check-circle"></i> Saved</span>
+      <span class="badge-saved" id="saved-badge"><i class="fas fa-check-circle"></i> <span data-i18n="set.saved">Saved</span></span>
       <div class="header-date" id="header-date"></div>
       <!-- Dark mode toggle -->
-      <button id="theme-toggle" class="theme-toggle" aria-label="Toggle theme" title="Toggle theme" onclick="toggleDarkMode()">
+      <button id="theme-toggle" class="theme-toggle" aria-label="Toggle theme" data-i18n-aria="hdr.toggleTheme" title="Toggle theme" data-i18n-title="hdr.toggleTheme" onclick="toggleDarkMode()">
         <i class="fas fa-moon" id="theme-icon-moon"></i>
         <i class="fas fa-sun" id="theme-icon-sun"></i>
         <div class="toggle-slider"></div>
@@ -201,31 +201,31 @@
 
             <div class="var-item">
               <label data-i18n="set.altPhone">Alternate / WhatsApp Number</label>
-              <input type="tel" id="school-phone-alt" class="var-input" placeholder="Optional">
+              <input type="tel" id="school-phone-alt" class="var-input" placeholder="Optional" data-i18n-placeholder="set.optionalPh">
               <div class="var-hint" data-i18n="set.altPhoneHint">Optional second number.</div>
             </div>
 
             <div class="var-item">
               <label data-i18n="set.email">Email Address</label>
-              <input type="email" id="school-email" class="var-input" placeholder="e.g. info@softschool.edu.pk">
+              <input type="email" id="school-email" class="var-input" placeholder="e.g. info@softschool.edu.pk" data-i18n-placeholder="set.emailPh">
               <div class="var-hint" data-i18n="set.emailHint">Used on official documents.</div>
             </div>
 
             <div class="var-item">
               <label data-i18n="set.website">Website</label>
-              <input type="text" id="school-website" class="var-input" placeholder="Optional, e.g. www.softschool.edu.pk">
+              <input type="text" id="school-website" class="var-input" placeholder="Optional, e.g. www.softschool.edu.pk" data-i18n-placeholder="set.websitePh">
               <div class="var-hint" data-i18n="set.websiteHint">Optional.</div>
             </div>
 
             <div class="var-item">
               <label data-i18n="set.principal">Principal / Head Name</label>
-              <input type="text" id="school-principal" class="var-input" placeholder="Optional">
+              <input type="text" id="school-principal" class="var-input" placeholder="Optional" data-i18n-placeholder="set.optionalPh">
               <div class="var-hint" data-i18n="set.principalHint">Signatory on certificates.</div>
             </div>
 
             <div class="var-item">
               <label data-i18n="set.regNo">Registration / EMIS No.</label>
-              <input type="text" id="school-reg-no" class="var-input" placeholder="Optional">
+              <input type="text" id="school-reg-no" class="var-input" placeholder="Optional" data-i18n-placeholder="set.optionalPh">
               <div class="var-hint" data-i18n="set.regNoHint">If required by your board.</div>
             </div>
           </div>
@@ -238,7 +238,7 @@
         <div class="section-header">
           <div class="section-header-info">
             <h2><i class="fas fa-user-plus"></i> <span data-i18n="set.admissionTitle">New Admission &mdash; Mandatory Fields</span></h2>
-            <p>Switch the red <span class="adm-star">*</span> on or off. A field that is switched off becomes optional in <b>Student Management</b> (new admission, edit and import).</p>
+            <p><span data-i18n="set.admSwitch">Switch the red</span> <span class="adm-star">*</span> <span data-i18n="set.admSwitchTail">on or off. A field that is switched off becomes optional in</span> <b data-i18n="set.admInStudentMgmt">Student Management</b> <span data-i18n="set.admImport">(new admission, edit and import).</span></p>
           </div>
           <div class="adm-bulk">
             <button type="button" class="adm-bulk-btn" onclick="setAllAdmissionFields(true)"><i class="fas fa-check-double"></i> <span data-i18n="set.allRequired">All required</span></button>
@@ -248,7 +248,7 @@
         <div id="admission-fields-list" class="adm-fields-list"></div>
         <div class="adm-footnote">
           <i class="fas fa-circle-info"></i>
-          Roll Number, Age and Tuition Fee are filled in by the system, so they are not listed. Click <b>Save All</b> to apply.
+          <span data-i18n="set.admFootnote">Roll Number, Age and Tuition Fee are filled in by the system, so they are not listed. Click</span> <b data-i18n="common.saveAll">Save All</b> <span data-i18n="set.toApply">to apply.</span>
         </div>
       </div>
     </div>
@@ -258,11 +258,11 @@
       <div class="section-card">
         <div class="section-header">
           <div class="section-header-info">
-            <h2><i class="fas fa-university"></i> Class Fee Structure</h2>
-            <p>Monthly tuition and annual fund per class.</p>
+            <h2><i class="fas fa-university"></i> <span data-i18n="set.classFeeStructure">Class Fee Structure</span></h2>
+            <p data-i18n="set.classFeeSub">Monthly tuition and annual fund per class.</p>
           </div>
           <button class="btn-primary" onclick="addClassCard()">
-            <i class="fas fa-plus"></i> Add Class
+            <i class="fas fa-plus"></i> <span data-i18n="set.addClassBtn">Add Class</span>
           </button>
         </div>
         <div class="class-grid" id="class-grid">
@@ -276,15 +276,15 @@
       <div class="section-card">
         <div class="section-header">
           <div class="section-header-info">
-            <h2><i class="fas fa-hourglass-half"></i> Late Fee Fine</h2>
-            <p>Fine for fees paid after the deadline.</p>
+            <h2><i class="fas fa-hourglass-half"></i> <span data-i18n="set.lateFeeFine">Late Fee Fine</span></h2>
+            <p data-i18n="set.lateFeeFineSub">Fine for fees paid after the deadline.</p>
           </div>
         </div>
 
         <div class="latefee-toggle-bar">
           <div>
-            <div class="toggle-label">Late Fee Enabled</div>
-            <div class="toggle-sub">Off = no late fine.</div>
+            <div class="toggle-label" data-i18n="set.lateFeeEnabledLbl">Late Fee Enabled</div>
+            <div class="toggle-sub" data-i18n="set.offNoFine">Off = no late fine.</div>
           </div>
           <label class="toggle-switch">
             <input type="checkbox" id="latefee-enabled" checked onchange="toggleLateFee()">
@@ -294,63 +294,63 @@
 
         <div id="latefee-disabled-msg" class="transport-disabled-msg">
           <i class="fas fa-circle-check"></i>
-          Late fee is currently disabled. Enable it above to set a fine and deadline.
+          <span data-i18n="set.lateFeeDisabled">Late fee is currently disabled. Enable it above to set a fine and deadline.</span>
         </div>
 
         <div class="latefee-body" id="latefee-body">
           <div class="variables-panel" style="padding: 24px;">
 
             <div class="var-item">
-              <label>Fee Submission Deadline</label>
+              <label data-i18n="set.feeDeadline">Fee Submission Deadline</label>
               <div class="input-prefix-wrap">
                 <input type="number" id="latefee-deadline-day" class="var-input" value="10" min="1" max="28">
-                <span class="input-suffix">of every month</span>
+                <span class="input-suffix" data-i18n="set.ofEveryMonth">of every month</span>
               </div>
-              <div class="var-hint">Day of month.</div>
+              <div class="var-hint" data-i18n="set.dayOfMonth">Day of month.</div>
             </div>
 
             <div class="var-item">
-              <label>Fine Type</label>
+              <label data-i18n="set.fineType">Fine Type</label>
               <select id="latefee-type" class="var-input">
-                <option value="fixed">Fixed Rs amount</option>
-                <option value="percent">Percentage of monthly fee</option>
+                <option value="fixed" data-i18n="set.fixedRs">Fixed Rs amount</option>
+                <option value="percent" data-i18n="set.percentOfFee">Percentage of monthly fee</option>
               </select>
-              <div class="var-hint">Flat or percentage.</div>
+              <div class="var-hint" data-i18n="set.flatOrPercent">Flat or percentage.</div>
             </div>
 
             <div class="var-item">
-              <label>Fine Amount</label>
+              <label data-i18n="set.fineAmount">Fine Amount</label>
               <div class="input-prefix-wrap">
                 <span class="input-prefix" id="latefee-amount-prefix">Rs</span>
                 <input type="number" id="latefee-amount" class="var-input" style="padding-left:28px;" value="200" min="0">
               </div>
-              <div class="var-hint">E.g. Rs 200 or 5%.</div>
+              <div class="var-hint" data-i18n="set.egRs200">E.g. Rs 200 or 5%.</div>
             </div>
 
             <div class="var-item">
-              <label>Grace Days</label>
+              <label data-i18n="set.graceDays">Grace Days</label>
               <div class="input-prefix-wrap">
                 <input type="number" id="latefee-grace" class="var-input" value="0" min="0" max="15">
-                <span class="input-suffix">extra day(s) before fine starts</span>
+                <span class="input-suffix" data-i18n="set.extraDaysBefore">extra day(s) before fine starts</span>
               </div>
-              <div class="var-hint">Extra days after deadline.</div>
+              <div class="var-hint" data-i18n="set.extraDaysAfter">Extra days after deadline.</div>
             </div>
 
             <div class="var-item">
-              <label>Repeat Fine</label>
+              <label data-i18n="set.repeatFine">Repeat Fine</label>
               <label class="switch-inline" style="display:flex;align-items:center;gap:8px;">
-                <input type="checkbox" id="latefee-repeat-enabled"> Add the fine again and again
+                <input type="checkbox" id="latefee-repeat-enabled" data-i18n="set.addAgainAgain"> Add the fine again and again
               </label>
-              <div class="var-hint">Fine is added on top of the old fine until next month or until fees are paid.</div>
+              <div class="var-hint" data-i18n="set.repeatFineHint">Fine is added on top of the old fine until next month or until fees are paid.</div>
             </div>
 
             <div class="var-item" id="latefee-interval-item">
-              <label>Repeat Interval</label>
+              <label data-i18n="set.repeatInterval">Repeat Interval</label>
               <div class="input-prefix-wrap">
                 <input type="number" id="latefee-interval" class="var-input" value="1" min="1" max="30">
-                <span class="input-suffix">day(s) between each new fine</span>
+                <span class="input-suffix" data-i18n="set.daysBetween">day(s) between each new fine</span>
               </div>
-              <div class="var-hint">e.g. 2 = fine added again every 2 days.</div>
+              <div class="var-hint" data-i18n="set.egEvery2Days">e.g. 2 = fine added again every 2 days.</div>
             </div>
 
           </div>
@@ -372,37 +372,37 @@
       <div class="section-card">
         <div class="section-header">
           <div class="section-header-info">
-            <h2><i class="fas fa-sliders-h"></i> Global Pay Variables</h2>
-            <p>Applied to all teacher pay unless overridden.</p>
+            <h2><i class="fas fa-sliders-h"></i> <span data-i18n="set.globalPayVars">Global Pay Variables</span></h2>
+            <p data-i18n="set.globalPaySub">Applied to all teacher pay unless overridden.</p>
           </div>
         </div>
         <div class="variables-panel">
 
           <div class="var-item">
-            <label>Default Leave Penalty Type</label>
+            <label data-i18n="set.defaultPenaltyType">Default Leave Penalty Type</label>
             <select id="var-penalty-type" class="var-input">
-              <option value="percent">Percentage of salary per day</option>
-              <option value="fixed">Fixed Rs amount per day</option>
+              <option value="percent" data-i18n="set.percentPerDay">Percentage of salary per day</option>
+              <option value="fixed" data-i18n="set.fixedPerDay">Fixed Rs amount per day</option>
             </select>
-            <div class="var-hint">Global default.</div>
+            <div class="var-hint" data-i18n="set.globalDefault">Global default.</div>
           </div>
 
           <div class="var-item">
-            <label>Default Leave Penalty Value</label>
+            <label data-i18n="set.defaultPenaltyValue">Default Leave Penalty Value</label>
             <div class="input-prefix-wrap">
               <span class="input-prefix" id="var-penalty-prefix">%</span>
               <input type="number" id="var-penalty-value" class="var-input" style="padding-left:28px;" value="3" min="0">
             </div>
-            <div class="var-hint">E.g. 3% or Rs 500 per day.</div>
+            <div class="var-hint" data-i18n="set.eg3Percent">E.g. 3% or Rs 500 per day.</div>
           </div>
 
           <div class="var-item">
-            <label>Full-Attendance Bonus (Rs)</label>
+            <label data-i18n="set.fullAttBonus">Full-Attendance Bonus (Rs)</label>
             <div class="input-prefix-wrap">
               <span class="input-prefix">Rs</span>
               <input type="number" id="var-bonus" class="var-input" style="padding-left:28px;" value="1000" min="0">
             </div>
-            <div class="var-hint">For zero absences.</div>
+            <div class="var-hint" data-i18n="set.forZeroAbsences">For zero absences.</div>
           </div>
 
         </div>
@@ -415,8 +415,8 @@
       <div class="section-card">
         <div class="section-header">
           <div class="section-header-info">
-            <h2><i class="fas fa-clipboard-check"></i> Attendance Setting</h2>
-            <p>Daily auto-save times and parent notifications for attendance.</p>
+            <h2><i class="fas fa-clipboard-check"></i> <span data-i18n="set.attendanceSetting">Attendance Setting</span></h2>
+            <p data-i18n="set.attendanceSub">Daily auto-save times and parent notifications for attendance.</p>
           </div>
         </div>
 
@@ -425,46 +425,46 @@
           <div class="timing-card">
             <div class="timing-card-head">
               <span class="timing-badge">2</span>
-              <h3>Second Auto Save <span class="timing-subtitle">— Student Attendance</span></h3>
+              <h3><span data-i18n="set.secondAutoSave">Second Auto Save</span> <span class="timing-subtitle" data-i18n="set.studentAttDash">— Student Attendance</span></h3>
             </div>
-            <label>Time</label>
+            <label data-i18n="set.time">Time</label>
             <div class="time-row">
-              <input type="number" id="autosave2-hour"   min="1" max="12" placeholder="HH">
+              <input type="number" id="autosave2-hour"   min="1" max="12" placeholder="HH" data-i18n-placeholder="set.hhPh">
               <span>:</span>
-              <input type="number" id="autosave2-minute" min="0" max="59" placeholder="MM">
+              <input type="number" id="autosave2-minute" min="0" max="59" placeholder="MM" data-i18n-placeholder="set.mmPh">
               <select id="autosave2-meridiem">
-                <option value="AM">AM</option>
-                <option value="PM">PM</option>
+                <option value="AM" data-i18n="set.am">AM</option>
+                <option value="PM" data-i18n="set.pm">PM</option>
               </select>
             </div>
             <label class="switch-row">
               <input type="checkbox" id="autosave2-enabled" checked>
-              <span>Enabled</span>
+              <span data-i18n="set.enabledLbl">Enabled</span>
             </label>
-            <div class="var-hint">Student attendance auto-save.</div>
+            <div class="var-hint" data-i18n="set.studentAutoSave">Student attendance auto-save.</div>
           </div>
 
           <!-- FIRST AUTO SAVE -->
           <div class="timing-card">
             <div class="timing-card-head">
               <span class="timing-badge">1</span>
-              <h3>First Auto Save <span class="timing-subtitle">— Staff Attendance</span></h3>
+              <h3><span data-i18n="set.firstAutoSave">First Auto Save</span> <span class="timing-subtitle" data-i18n="set.staffAttDash">— Staff Attendance</span></h3>
             </div>
-            <label>Time</label>
+            <label data-i18n="set.time">Time</label>
             <div class="time-row">
-              <input type="number" id="autosave1-hour"   min="1" max="12" placeholder="HH">
+              <input type="number" id="autosave1-hour"   min="1" max="12" placeholder="HH" data-i18n-placeholder="set.hhPh">
               <span>:</span>
-              <input type="number" id="autosave1-minute" min="0" max="59" placeholder="MM">
+              <input type="number" id="autosave1-minute" min="0" max="59" placeholder="MM" data-i18n-placeholder="set.mmPh">
               <select id="autosave1-meridiem">
-                <option value="AM">AM</option>
-                <option value="PM">PM</option>
+                <option value="AM" data-i18n="set.am">AM</option>
+                <option value="PM" data-i18n="set.pm">PM</option>
               </select>
             </div>
             <label class="switch-row">
               <input type="checkbox" id="autosave1-enabled" checked>
-              <span>Enabled</span>
+              <span data-i18n="set.enabledLbl">Enabled</span>
             </label>
-            <div class="var-hint">Staff attendance auto-save.</div>
+            <div class="var-hint" data-i18n="set.staffAutoSave">Staff attendance auto-save.</div>
           </div>
         </div>
 
@@ -472,18 +472,18 @@
         <div class="timing-card timing-notify">
           <div class="timing-card-head">
             <span class="timing-badge"><i class="fas fa-bell"></i></span>
-            <h3>Parent Notification <span class="timing-subtitle">— Absent Students</span></h3>
+            <h3><span data-i18n="set.parentNotification">Parent Notification</span> <span class="timing-subtitle" data-i18n="set.absentStudentsDash">— Absent Students</span></h3>
           </div>
           <label class="switch-row">
             <input type="checkbox" id="absent-notify-enabled">
-            <span>Enable daily send notification of student absent</span>
+            <span data-i18n="set.enableDailyAbsent">Enable daily send notification of student absent</span>
           </label>
-          <div class="var-hint">When on, the parent of every student marked absent today receives one message in the parent portal (School Office chat) as soon as attendance is saved. Nothing is sent when this is off, and a parent is never notified twice for the same day.</div>
+          <div class="var-hint" data-i18n="set.absentNotifyHint">When on, the parent of every student marked absent today receives one message in the parent portal (School Office chat) as soon as attendance is saved. Nothing is sent when this is off, and a parent is never notified twice for the same day.</div>
         </div>
 
         <div class="timing-actions">
           <button class="btn-primary" onclick="saveAttendanceTiming()">
-            <i class="fas fa-save"></i> Save Settings
+            <i class="fas fa-save"></i> <span data-i18n="set.saveSettings">Save Settings</span>
           </button>
           <span id="timing-status" class="timing-status"></span>
         </div>
@@ -497,17 +497,17 @@
       <div class="section-card">
         <div class="section-header">
           <div class="section-header-info">
-            <h2><i class="fab fa-whatsapp"></i> WhatsApp Automation</h2>
-            <p>Link your school's WhatsApp number once. Parents then get absent alerts, fee vouchers and fee reminders automatically.</p>
+            <h2><i class="fab fa-whatsapp"></i> <span data-i18n="set.waAutomation">WhatsApp Automation</span></h2>
+            <p data-i18n="set.waAutomationSub">Link your school's WhatsApp number once. Parents then get absent alerts, fee vouchers and fee reminders automatically.</p>
           </div>
         </div>
 
         <div class="latefee-toggle-bar">
           <div>
-            <div class="toggle-label">Connection</div>
-            <div class="toggle-sub"><span id="wa-state" class="wa-pill wa-off">Checking…</span> <span id="wa-number" class="wa-number"></span></div>
+            <div class="toggle-label" data-i18n="set.connection">Connection</div>
+            <div class="toggle-sub"><span id="wa-state" class="wa-pill wa-off" data-i18n="set.checking">Checking…</span> <span id="wa-number" class="wa-number"></span></div>
           </div>
-          <button class="btn-danger" id="wa-disconnect-btn" style="display:none" onclick="waLogout()"><i class="fas fa-unlink"></i> Disconnect</button>
+          <button class="btn-danger" id="wa-disconnect-btn" style="display:none" onclick="waLogout()"><i class="fas fa-unlink"></i> <span data-i18n="set.disconnect">Disconnect</span></button>
         </div>
 
         <!-- Not connected: two ways to link -->
@@ -516,35 +516,35 @@
             <div class="timing-card">
               <div class="timing-card-head">
                 <span class="timing-badge">1</span>
-                <h3>Scan QR Code <span class="timing-subtitle">— recommended</span></h3>
+                <h3><span data-i18n="set.scanQr">Scan QR Code</span> <span class="timing-subtitle" data-i18n="set.recommended">— recommended</span></h3>
               </div>
               <ol class="wa-steps">
-                <li>Use a <b>dedicated school number</b> with WhatsApp installed.</li>
-                <li>Click <b>Show QR Code</b> below.</li>
-                <li>On that phone open WhatsApp → <b>Linked devices</b> → <b>Link a device</b> and scan.</li>
+                <li><span data-i18n="set.useA">Use a</span> <b data-i18n="set.dedicatedNumber">dedicated school number</b> <span data-i18n="set.withWaInstalled">with WhatsApp installed.</span></li>
+                <li><span data-i18n="set.click">Click</span> <b data-i18n="set.showQrCode">Show QR Code</b> <span data-i18n="set.below">below.</span></li>
+                <li><span data-i18n="set.onThatPhone">On that phone open WhatsApp →</span> <b data-i18n="set.linkedDevices">Linked devices</b> → <b data-i18n="set.linkADevice">Link a device</b> <span data-i18n="set.andScan">and scan.</span></li>
               </ol>
               <div id="wa-qr-wrap" class="wa-qr-box" style="display:none">
                 <img id="wa-qr-img" class="wa-qr-img" alt="WhatsApp QR code" width="240" height="240">
-                <div class="var-hint">The code refreshes by itself. Keep this page open.</div>
+                <div class="var-hint" data-i18n="set.codeRefreshes">The code refreshes by itself. Keep this page open.</div>
               </div>
               <div class="wa-card-actions">
-                <button class="btn-primary" id="wa-qr-btn" onclick="waConnect(false)"><i class="fas fa-qrcode"></i> Show QR Code</button>
+                <button class="btn-primary" id="wa-qr-btn" onclick="waConnect(false)"><i class="fas fa-qrcode"></i> <span data-i18n="set.showQrCode">Show QR Code</span></button>
               </div>
             </div>
 
             <div class="timing-card">
               <div class="timing-card-head">
                 <span class="timing-badge">2</span>
-                <h3>Link With Phone Number <span class="timing-subtitle">— no camera needed</span></h3>
+                <h3><span data-i18n="set.linkWithPhone">Link With Phone Number</span> <span class="timing-subtitle" data-i18n="set.noCameraNeeded">— no camera needed</span></h3>
               </div>
-              <label for="wa-phone">School WhatsApp number</label>
+              <label for="wa-phone" data-i18n="set.schoolWaNumber">School WhatsApp number</label>
               <input id="wa-phone" type="tel" class="var-input" placeholder="e.g. 03001234567">
-              <div class="var-hint" style="margin-top:6px">You will get an 8-character code. On the phone choose <b>Link with phone number instead</b> and type it in.</div>
+              <div class="var-hint" style="margin-top:6px"><span data-i18n="set.youWillGetCode">You will get an 8-character code. On the phone choose</span> <b data-i18n="set.linkWithPhoneInstead">Link with phone number instead</b> <span data-i18n="set.andTypeIt">and type it in.</span></div>
               <div id="wa-code-wrap" class="wa-qr-box" style="display:none">
                 <div id="wa-code" class="wa-code"></div>
               </div>
               <div class="wa-card-actions">
-                <button class="btn-outline" onclick="waConnect(true)"><i class="fas fa-key"></i> Get Link Code</button>
+                <button class="btn-outline" onclick="waConnect(true)"><i class="fas fa-key"></i> <span data-i18n="set.getLinkCode">Get Link Code</span></button>
               </div>
             </div>
           </div>
@@ -560,82 +560,82 @@
         <div class="section-card">
           <div class="section-header">
             <div class="section-header-info">
-              <h2><i class="fas fa-bell"></i> Automatic Messages</h2>
-              <p>Choose what parents receive and edit the wording.</p>
+              <h2><i class="fas fa-bell"></i> <span data-i18n="set.autoMessages">Automatic Messages</span></h2>
+              <p data-i18n="set.autoMessagesSub">Choose what parents receive and edit the wording.</p>
             </div>
           </div>
 
           <div class="latefee-toggle-bar">
             <div>
-              <div class="toggle-label">WhatsApp Automation</div>
-              <div class="toggle-sub">Master switch. Off = nothing is sent.</div>
+              <div class="toggle-label" data-i18n="set.waAutomation">WhatsApp Automation</div>
+              <div class="toggle-sub" data-i18n="set.masterSwitch">Master switch. Off = nothing is sent.</div>
             </div>
             <label class="toggle-switch"><input type="checkbox" id="wa-enabled"><span class="toggle-slider"></span></label>
           </div>
           <div class="latefee-toggle-bar">
             <div>
-              <div class="toggle-label">Absent Alert</div>
-              <div class="toggle-sub">Message the parent once a day when a student is marked absent.</div>
+              <div class="toggle-label" data-i18n="set.absentAlert">Absent Alert</div>
+              <div class="toggle-sub" data-i18n="set.absentAlertSub">Message the parent once a day when a student is marked absent.</div>
             </div>
             <label class="toggle-switch"><input type="checkbox" id="wa-absent"><span class="toggle-slider"></span></label>
           </div>
           <div class="latefee-toggle-bar">
             <div>
-              <div class="toggle-label">Fee Voucher</div>
-              <div class="toggle-sub">Send the fee voucher details to the parent as soon as a voucher is generated.</div>
+              <div class="toggle-label" data-i18n="set.feeVoucher">Fee Voucher</div>
+              <div class="toggle-sub" data-i18n="set.feeVoucherSub">Send the fee voucher details to the parent as soon as a voucher is generated.</div>
             </div>
             <label class="toggle-switch"><input type="checkbox" id="wa-voucher"><span class="toggle-slider"></span></label>
           </div>
           <div class="latefee-toggle-bar">
             <div>
-              <div class="toggle-label">Fee Reminder</div>
-              <div class="toggle-sub">Remind only the parents whose fee is still pending, before, on or after the due date.</div>
+              <div class="toggle-label" data-i18n="set.feeReminder">Fee Reminder</div>
+              <div class="toggle-sub" data-i18n="set.feeReminderSub">Remind only the parents whose fee is still pending, before, on or after the due date.</div>
             </div>
             <label class="toggle-switch"><input type="checkbox" id="wa-reminder"><span class="toggle-slider"></span></label>
           </div>
           <div id="wa-rem-opts" class="wa-rem-opts" style="display:none">
-            <div class="wa-rem-title">When should reminders be sent?</div>
+            <div class="wa-rem-title" data-i18n="set.whenReminders">When should reminders be sent?</div>
             <div class="wa-rem-when">
-              <label class="wa-chip"><input type="checkbox" id="wa-rem-before"> Before due date</label>
-              <label class="wa-chip"><input type="checkbox" id="wa-rem-on"> On due date</label>
-              <label class="wa-chip"><input type="checkbox" id="wa-rem-after"> After due date</label>
+              <label class="wa-chip"><input type="checkbox" id="wa-rem-before" data-i18n="set.beforeDue"> Before due date</label>
+              <label class="wa-chip"><input type="checkbox" id="wa-rem-on" data-i18n="set.onDue"> On due date</label>
+              <label class="wa-chip"><input type="checkbox" id="wa-rem-after" data-i18n="set.afterDue"> After due date</label>
             </div>
             <div id="wa-rem-before-box" class="wa-rem-days" style="display:none">
-              <span class="wa-rem-lbl">Days before due date</span>
+              <span class="wa-rem-lbl" data-i18n="set.daysBefore">Days before due date</span>
               <div class="wa-days" id="wa-rem-before-days"></div>
             </div>
             <div id="wa-rem-after-box" class="wa-rem-days" style="display:none">
-              <span class="wa-rem-lbl">Days after due date</span>
+              <span class="wa-rem-lbl" data-i18n="set.daysAfter">Days after due date</span>
               <div class="wa-days" id="wa-rem-after-days"></div>
             </div>
-            <div class="var-hint">Reminders go out at 10:00 AM on the chosen days, only to parents whose fee is still unpaid. You can pick more than one day.</div>
+            <div class="var-hint" data-i18n="set.remindersGoOut">Reminders go out at 10:00 AM on the chosen days, only to parents whose fee is still unpaid. You can pick more than one day.</div>
           </div>
 
           <div class="variables-panel">
             <div class="var-item wa-wide">
-              <label for="wa-limit">Daily sending limit (messages per day)</label>
-              <input type="number" id="wa-limit" class="var-input" min="10" max="1000" step="10" placeholder="No limit">
-              <div class="var-hint">Leave empty for no daily limit. A single message is sent immediately. Bulk messages (or several in a row) wait in a queue and go out slowly, with short rests between batches, at any time of day. Messages over your daily limit are not lost: they stay in the queue and go out the next day. Each parent number receives at most 4 messages a day.</div>
+              <label for="wa-limit" data-i18n="set.dailyLimit">Daily sending limit (messages per day)</label>
+              <input type="number" id="wa-limit" class="var-input" min="10" max="1000" step="10" placeholder="No limit" data-i18n-placeholder="set.noLimitPh">
+              <div class="var-hint" data-i18n="set.dailyLimitHint">Leave empty for no daily limit. A single message is sent immediately. Bulk messages (or several in a row) wait in a queue and go out slowly, with short rests between batches, at any time of day. Messages over your daily limit are not lost: they stay in the queue and go out the next day. Each parent number receives at most 4 messages a day.</div>
               <div class="var-hint" id="wa-queue-info"></div>
             </div>
             <div class="var-item wa-wide">
-              <label for="wa-absent-tpl">Absent message</label>
+              <label for="wa-absent-tpl" data-i18n="set.absentMessage">Absent message</label>
               <textarea id="wa-absent-tpl" class="var-input" rows="3" maxlength="1000"></textarea>
-              <div class="var-hint">Use: {student} {class} {date} {school}</div>
+              <div class="var-hint" data-i18n="set.useAbsentVars">Use: {student} {class} {date} {school}</div>
             </div>
             <div class="var-item wa-wide">
-              <label for="wa-voucher-tpl">Fee voucher message</label>
+              <label for="wa-voucher-tpl" data-i18n="set.voucherMessage">Fee voucher message</label>
               <textarea id="wa-voucher-tpl" class="var-input" rows="3" maxlength="1000"></textarea>
-              <div class="var-hint">Use: {student} {class} {amount} {balance} {month} {duedate} {school}</div>
+              <div class="var-hint" data-i18n="set.useVoucherVars">Use: {student} {class} {amount} {balance} {month} {duedate} {school}</div>
             </div>
             <div class="var-item wa-wide">
-              <label for="wa-reminder-tpl">Fee reminder message</label>
+              <label for="wa-reminder-tpl" data-i18n="set.reminderMessage">Fee reminder message</label>
               <textarea id="wa-reminder-tpl" class="var-input" rows="3" maxlength="1000"></textarea>
-              <div class="var-hint">Use: {student} {class} {balance} {month} {duedate} {school}</div>
+              <div class="var-hint" data-i18n="set.useReminderVars">Use: {student} {class} {balance} {month} {duedate} {school}</div>
             </div>
           </div>
           <div class="timing-actions">
-            <button class="btn-primary" onclick="waSaveConfig()"><i class="fas fa-save"></i> Save Settings</button>
+            <button class="btn-primary" onclick="waSaveConfig()"><i class="fas fa-save"></i> <span data-i18n="set.saveSettings">Save Settings</span></button>
             <span id="wa-msg" class="timing-status"></span>
           </div>
         </div>
@@ -643,24 +643,24 @@
         <div class="section-card">
           <div class="section-header">
             <div class="section-header-info">
-              <h2><i class="fas fa-paper-plane"></i> Send Test Message</h2>
-              <p>Check that WhatsApp is working before you rely on it.</p>
+              <h2><i class="fas fa-paper-plane"></i> <span data-i18n="set.sendTestMessage">Send Test Message</span></h2>
+              <p data-i18n="set.sendTestSub">Check that WhatsApp is working before you rely on it.</p>
             </div>
           </div>
           <div class="variables-panel">
             <div class="var-item">
-              <label for="wa-test-phone">Your WhatsApp number</label>
+              <label for="wa-test-phone" data-i18n="set.yourWaNumber">Your WhatsApp number</label>
               <input id="wa-test-phone" type="tel" class="var-input" placeholder="e.g. 03001234567">
             </div>
           </div>
           <div class="timing-actions">
-            <button class="btn-outline" onclick="waSendTest()"><i class="fas fa-paper-plane"></i> Send Test</button>
+            <button class="btn-outline" onclick="waSendTest()"><i class="fas fa-paper-plane"></i> <span data-i18n="set.sendTest">Send Test</span></button>
             <span id="wa-test-msg" class="timing-status"></span>
           </div>
         </div>
       </div>
 
-      <p class="var-hint wa-note"><i class="fas fa-info-circle"></i> Messages are sent a few seconds apart to protect your number. Keep the linked phone on and online — WhatsApp unlinks it after about 2 weeks offline. Parent numbers come from each student's Phone 1 / Phone 2.</p>
+      <p class="var-hint wa-note"><i class="fas fa-info-circle"></i> <span data-i18n="set.waFootnote">Messages are sent a few seconds apart to protect your number. Keep the linked phone on and online — WhatsApp unlinks it after about 2 weeks offline. Parent numbers come from each student's Phone 1 / Phone 2.</span></p>
     </div>
 
     <!-- ═══════════════════ TAB: TEACHER LOGIN ═══════════════════ -->
@@ -668,20 +668,20 @@
       <div class="section-card">
         <div class="section-header">
           <div class="section-header-info">
-            <h2><i class="fas fa-user-lock"></i> Teacher Portal Password</h2>
-            <p>Default password teachers use to sign in.</p>
+            <h2><i class="fas fa-user-lock"></i> <span data-i18n="set.teacherPassword">Teacher Portal Password</span></h2>
+            <p data-i18n="set.teacherPasswordSub">Default password teachers use to sign in.</p>
           </div>
         </div>
         <div class="variables-panel">
           <div class="var-item">
-            <label>Default Password</label>
-            <input type="password" id="tl-password" class="var-input" placeholder="At least 6 characters" autocomplete="new-password">
-            <div class="var-hint" id="tl-state">Checking…</div>
+            <label data-i18n="set.defaultPassword">Default Password</label>
+            <input type="password" id="tl-password" class="var-input" placeholder="At least 6 characters" data-i18n-placeholder="set.atLeast6Ph" autocomplete="new-password">
+            <div class="var-hint" id="tl-state" data-i18n="set.checking">Checking…</div>
           </div>
         </div>
         <div class="timing-actions">
-          <button class="btn-primary" onclick="saveTeacherDefaultPassword()"><i class="fas fa-save"></i> Save Password</button>
-          <button class="btn-outline" onclick="toggleTeacherPassword()" id="tl-eye"><i class="fas fa-eye"></i> Show</button>
+          <button class="btn-primary" onclick="saveTeacherDefaultPassword()"><i class="fas fa-save"></i> <span data-i18n="set.savePassword">Save Password</span></button>
+          <button class="btn-outline" onclick="toggleTeacherPassword()" id="tl-eye"><i class="fas fa-eye"></i> <span data-i18n="set.show">Show</span></button>
           <span id="tl-status" class="timing-status"></span>
         </div>
       </div>
@@ -689,18 +689,18 @@
       <div class="section-card">
         <div class="section-header">
           <div class="section-header-info">
-            <h2><i class="fas fa-rotate-left"></i> Reset a Teacher</h2>
-            <p>Back to the default password. Allows one more change.</p>
+            <h2><i class="fas fa-rotate-left"></i> <span data-i18n="set.resetTeacher">Reset a Teacher</span></h2>
+            <p data-i18n="set.resetTeacherSub">Back to the default password. Allows one more change.</p>
           </div>
         </div>
         <div class="variables-panel">
           <div class="var-item">
-            <label>Teacher ID</label>
-            <input type="text" id="tl-reset-id" class="var-input" placeholder="e.g. PSC_T_1">
+            <label data-i18n="set.teacherIdLbl">Teacher ID</label>
+            <input type="text" id="tl-reset-id" class="var-input" placeholder="e.g. PSC_T_1" data-i18n-placeholder="set.teacherIdPh">
           </div>
         </div>
         <div class="timing-actions">
-          <button class="btn-outline" onclick="resetTeacherPassword()"><i class="fas fa-rotate-left"></i> Reset Password</button>
+          <button class="btn-outline" onclick="resetTeacherPassword()"><i class="fas fa-rotate-left"></i> <span data-i18n="set.resetPassword">Reset Password</span></button>
           <span id="tl-reset-status" class="timing-status"></span>
         </div>
       </div>
@@ -723,11 +723,11 @@
 <div class="modal-overlay" id="confirm-modal">
   <div class="modal-box">
     <div class="modal-icon"><i class="fas fa-trash-alt"></i></div>
-    <h3 id="modal-title">Delete this class?</h3>
-    <p id="modal-body">This permanently removes the class and its fee setup. Student records are kept.</p>
+    <h3 id="modal-title" data-i18n="set.deleteClassQ">Delete this class?</h3>
+    <p id="modal-body" data-i18n="set.deleteClassHint">This permanently removes the class and its fee setup. Student records are kept.</p>
     <div class="modal-actions">
-      <button class="btn-cancel" onclick="closeModal()">Cancel</button>
-      <button class="btn-danger" id="modal-confirm-btn">Delete</button>
+      <button class="btn-cancel" onclick="closeModal()" data-i18n="set.cancelBtn">Cancel</button>
+      <button class="btn-danger" id="modal-confirm-btn" data-i18n="set.deleteBtn">Delete</button>
     </div>
   </div>
 </div>
@@ -735,7 +735,7 @@
 <!-- TOAST -->
 <div class="toast" id="toast">
   <div class="toast-dot success" id="toast-dot"></div>
-  <div id="toast-text">Settings saved.</div>
+  <div id="toast-text" data-i18n="set.settingsSaved">Settings saved.</div>
 </div>
 
 <script src="shared-data.js"></script>

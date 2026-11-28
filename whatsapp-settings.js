@@ -73,10 +73,24 @@
     if (text) setTimeout(() => { if (el.textContent === text) el.textContent = ''; }, 6000);
   }
 
+  // Urdu when admin-i18n.js is loaded and knows the key, English otherwise.
+  // ti() because these labels are shown on screen.
+  function T(key, fallback) {
+    var I = window.AdminI18n;
+    return (I && I.has && I.has(key)) ? I.ti(key) : fallback;
+  }
+
+  // Read through a getter rather than built once, so the labels follow a
+  // language change without the page being reloaded.
   const LABEL = {
-    connected: 'Connected', connecting: 'Connecting…', reconnecting: 'Reconnecting…', qr: 'Waiting for scan',
-    pairing: 'Waiting for code', disconnected: 'Not connected', service_down: 'Service offline',
-    not_configured: 'Not set up on server',
+    get connected()      { return T('wa.connected', 'Connected'); },
+    get connecting()     { return T('wa.connecting', 'Connecting…'); },
+    get reconnecting()   { return T('wa.reconnecting', 'Reconnecting…'); },
+    get qr()             { return T('wa.qr', 'Waiting for scan'); },
+    get pairing()        { return T('wa.pairing', 'Waiting for code'); },
+    get disconnected()   { return T('wa.disconnected', 'Not connected'); },
+    get service_down()   { return T('wa.serviceDown', 'Service offline'); },
+    get not_configured() { return T('wa.notConfigured', 'Not set up on server'); },
   };
   const TONE = { connected: 'wa-on', connecting: 'wa-wait', reconnecting: 'wa-wait', qr: 'wa-wait', pairing: 'wa-wait' };
 

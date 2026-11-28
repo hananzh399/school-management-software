@@ -320,6 +320,23 @@ async function loadSettingsFromServer() {
 }
 
 // ═══════════════════════════════════════════════
+//  TEXT
+// ═══════════════════════════════════════════════
+// Strings this file builds in JavaScript cannot carry a data-i18n attribute, so
+// they go through here: Urdu when admin-i18n.js is loaded and knows the key,
+// and the English that was always there otherwise.
+//   Ti() - text that goes on screen  (adds the bidi isolate)
+//   Tp() - a title, aria-label or value used for comparison (plain)
+function Ti(key, fallback, vars) {
+  const I = window.AdminI18n;
+  return (I && I.has && I.has(key)) ? I.ti(key, vars) : fallback;
+}
+function Tp(key, fallback, vars) {
+  const I = window.AdminI18n;
+  return (I && I.has && I.has(key)) ? I.t(key, vars) : fallback;
+}
+
+// ═══════════════════════════════════════════════
 //  DARK MODE
 // ═══════════════════════════════════════════════
 function toggleDarkMode() {
@@ -499,7 +516,9 @@ async function refreshTeacherPasswordState() {
   if (!el) return;
   try {
     const r = await apiRequest(_settingsUrl('/teacher-password'));
-    el.textContent = r && r.set ? '✓ A default password is set. Enter a new one to change it.' : 'Not set yet. Teachers cannot sign in until you set one.';
+    el.textContent = r && r.set
+      ? Ti('set.pwdSet', '✓ A default password is set. Enter a new one to change it.')
+      : Ti('set.pwdNotSet', 'Not set yet. Teachers cannot sign in until you set one.');
   } catch (e) { el.textContent = 'Could not check status.'; }
 }
 
@@ -614,24 +633,24 @@ function appendClassCard(name, fee, fund, isNew = false, sections = []) {
   div.dataset.originalName = isNew ? '' : (name || '');
 
   div.innerHTML = `
-    <button class="delete-card-btn" title="Remove class">
+    <button class="delete-card-btn" title="${Tp('set.removeClassTitle', 'Remove class')}">
       <i class="fas fa-times"></i>
     </button>
     <div class="class-card-header">
       <div class="class-icon" style="background:${color}22; color:${color}"><i class="fas ${icon}"></i></div>
-      <span class="class-badge ${isNew ? 'new-badge' : ''}">${isNew ? 'New' : 'Active'}</span>
+      <span class="class-badge ${isNew ? 'new-badge' : ''}">${isNew ? Ti('set.badgeNew', 'New') : Ti('set.badgeActive', 'Active')}</span>
     </div>
-    <input type="text" class="class-name-input" value="${SSX.esc(name)}" placeholder="Class name (e.g. Grade 3)">
+    <input type="text" class="class-name-input" value="${SSX.esc(name)}" placeholder="${Tp('set.classNamePh', 'Class name (e.g. Grade 3)')}">
     <div class="fee-row">
       <div>
-        <div class="fee-label">Monthly Tuition</div>
+        <div class="fee-label">${Ti('set.monthlyTuition', 'Monthly Tuition')}</div>
         <div class="input-prefix-wrap">
           <span class="input-prefix">Rs</span>
           <input type="number" class="fee-input-field" value="${fee}" placeholder="0" min="0" style="padding-left:28px;">
         </div>
       </div>
       <div>
-        <div class="fee-label">Annual Fund</div>
+        <div class="fee-label">${Ti('set.annualFundLbl', 'Annual Fund')}</div>
         <div class="input-prefix-wrap">
           <span class="input-prefix">Rs</span>
           <input type="number" class="fund-input-field" value="${fund}" placeholder="0" min="0" style="padding-left:28px;">
@@ -641,14 +660,14 @@ function appendClassCard(name, fee, fund, isNew = false, sections = []) {
 
     <div class="sections-block">
       <div class="sections-header">
-        <div class="fee-label" style="margin:0;">Sections <span class="sections-count">(${sections.length})</span></div>
-        <button type="button" class="btn-add-section" title="Add section">
-          <i class="fas fa-plus"></i> Add
+        <div class="fee-label" style="margin:0;">${Ti('set.sectionsLbl', 'Sections')} <span class="sections-count">(${sections.length})</span></div>
+        <button type="button" class="btn-add-section" title="${Tp('set.addSectionTitle', 'Add section')}">
+          <i class="fas fa-plus"></i> ${Ti('set.addShort', 'Add')}
         </button>
       </div>
       <div class="sections-list"></div>
       <div class="sections-empty" style="${sections.length ? 'display:none' : ''}">
-        No sections yet. Click <b>Add</b> to create one (e.g. A, B, Rose).
+        ${Ti('set.noSectionsYet', 'No sections yet. Click')} <b>${Ti('set.addShort', 'Add')}</b> ${Ti('set.noSectionsTail', 'to create one (e.g. A, B, Rose).')}
       </div>
     </div>
   `;
@@ -871,17 +890,34 @@ function updateLateFeePreview() {
   const amount = parseFloat(document.getElementById('latefee-amount').value)          || 0;
   const cutoff = day + grace;
 
+  // Urdu when admin-i18n.js is loaded and knows the key, English otherwise.
+  const T = (key, fallback, vars) => {
+    const I = window.AdminI18n;
+    return (I && I.has && I.has(key)) ? I.t(key, vars) : fallback;
+  };
+
   const amountText = type === 'percent'
-    ? `${amount}% of that month's tuition fee`
-    : `Rs ${amount.toLocaleString()}`;
+    ? T('set.previewPercent', `${amount}% of that month's tuition fee`, { n: amount })
+    : T('set.previewRs', `Rs ${amount.toLocaleString()}`, { n: amount.toLocaleString() });
 
   const repeat   = document.getElementById('latefee-repeat-enabled').checked;
   const interval = Math.max(1, parseInt(document.getElementById('latefee-interval').value, 10) || 1);
   document.getElementById('latefee-interval-item').style.display = repeat ? '' : 'none';
 
+  // The sentence is assembled first and wrapped once, so the whole preview reads
+  // as one Urdu phrase instead of several isolates butted together.
+  const sentence =
+    T('set.previewMain',
+      `Fees paid after day ${cutoff} of the month will be fined ${amountText}.`,
+      { day: cutoff, amount: amountText }) +
+    (repeat
+      ? T('set.previewRepeat',
+          ` The same fine is added again every ${interval} day(s) on top of the old fine until next month or until fees are paid.`,
+          { n: interval })
+      : '');
+  const I18N = window.AdminI18n;
   document.getElementById('latefee-preview-text').textContent =
-    `Fees paid after day ${cutoff} of the month will be fined ${amountText}.` +
-    (repeat ? ` The same fine is added again every ${interval} day(s) on top of the old fine until next month or until fees are paid.` : '');
+    I18N && I18N.iso ? I18N.iso(sentence) : sentence;
 }
 
 // ═══════════════════════════════════════════════
