@@ -38,17 +38,31 @@
     '.upd-action-btns .btn-secondary',                     // Promote
     '.profile-action-btns > button',                       // Share / Print Record / Print Admission Form
     '.slc-modal-footer > .btn-primary-submit',             // Share / Print on the certificate windows
+    // Fees & Finance
+    '.btn-global-action',                                  // Generate / Print vouchers / Custom fee / Defaulter / View Records ...
+    '.fee-actions-cell > button', '.fee-actions-cell > a', // per-row buttons in the fee tables
+    '.fd-refresh-btn', '.salary-table-actions > button', '.cf-detail-actions > button',
+    '.voucher-modal-actions > button:not(.action-back-btn)',   // Print / Share / Edit on the fee voucher window
+    // Examination
+    '.ex-actions > .ex-btn', '.ex-hero-actions > .ex-btn',
     // full-screen ID card / certificate viewers
     '.idc-toolbar-actions > button:not(.cert-viewer-close)', '.sidc-toolbar-actions > button:not(.cert-viewer-close)',
     '.cert-viewer-actions > button:not(.cert-viewer-close)'
   ];
 
   // the row a group of buttons belongs to (the ⋮ button is added at the end of this row)
-  var HOSTS = '.agreement-modal-footer, .profile-action-btns, .slc-modal-footer, .profile-actions, .view-actions, .bulk-actions, .table-controls-actions, ' +
+  var HOSTS = '.fd-toolbar, .salary-table-actions, .cf-detail-actions, .voucher-modal-actions, .fee-actions-cell, .fee-global-actions, .class-level-actions, .ex-actions, .ex-hero-actions, .page-title-section, .agreement-modal-footer, .profile-action-btns, .slc-modal-footer, .profile-actions, .view-actions, .bulk-actions, .table-controls-actions, ' +
               '.upd-action-btns, .idc-toolbar-actions, .sidc-toolbar-actions, .cert-viewer-actions, ' +
               '.stage-header, .msc-stage-header, .view-header, .toolbar';
 
-  var BACK = '.back-btn, .msc-back-btn, .cert-back-btn';
+  // ONE ⋮ per screen: every button found inside the same "screen" goes into the same menu.
+  // (the ⋮ is placed in the screen's header row when that row has buttons, otherwise in the first toolbar)
+  var SCOPES = '.stage, .msc-stage, .directory-view, .profile-view, .cert-page-view, .modal-container, ' +
+               '.modal-content, .report-modal__panel, .idc-panel, .sidc-panel, .archive-center, .fin-page, ' +
+               '.voucher-modal-header, .screen, .view-section, .page-section, .sub-page, #class-selection-view, #class-student-list-view, .ex-root, tr';
+  var HEADER_HOSTS = '.stage-header, .msc-stage-header, .view-header, .page-header, .fin-header, .section-header, .page-title-section, .ex-title, .ex-hero';
+
+  var BACK = '.back-btn, .msc-back-btn, .cert-back-btn, .ex-back, .am-back';
 
   var ITEM_SEL = MENU_ITEMS.join(',');
   var groups = [];            // [{host, wrap, btn, menu, items:[{el, parent, next}]}]
@@ -57,16 +71,30 @@
   function qsa(sel, root) { return Array.prototype.slice.call((root || document).querySelectorAll(sel)); }
 
   // ───────────── build / remove the ⋮ menus ─────────────
+  function pruneGroups() {
+    groups = groups.filter(function (g) {
+      if (document.documentElement.contains(g.host)) return true;
+      if (g.observer) g.observer.disconnect();
+      return false;                                 // the screen was re-drawn (e.g. Examination): forget it
+    });
+  }
+
   function build() {
+    pruneGroups();
     var found = qsa(ITEM_SEL).filter(function (el) { return !el.__muMoved; });
     if (!found.length) return;
 
     found.forEach(function (el) {
       var host = el.closest(HOSTS);
       if (!host) return;
+      var scope = host.closest(SCOPES) || host;
       var g = null;
-      for (var i = 0; i < groups.length; i++) { if (groups[i].host === host) { g = groups[i]; break; } }
-      if (!g) g = makeGroup(host);
+      for (var i = 0; i < groups.length; i++) { if (groups[i].scope === scope) { g = groups[i]; break; } }
+      if (!g) g = makeGroup(host, scope);
+      else if (g.host !== host && !g.host.matches(HEADER_HOSTS) && host.matches(HEADER_HOSTS)) {
+        host.appendChild(g.wrap);            // the header row wins: move the single ⋮ there
+        g.host = host;
+      }
       g.items.push({ el: el, parent: el.parentNode, next: el.nextSibling });
       el.__muMoved = true;
       g.menu.appendChild(el);
@@ -74,7 +102,7 @@
     groups.forEach(refresh);
   }
 
-  function makeGroup(host) {
+  function makeGroup(host, scope) {
     var wrap = document.createElement('div');
     wrap.className = 'mu-more-wrap';
     var btn = document.createElement('button');
@@ -91,7 +119,7 @@
     wrap.appendChild(menu);
     host.appendChild(wrap);
 
-    var g = { host: host, wrap: wrap, btn: btn, menu: menu, items: [] };
+    var g = { host: host, scope: scope, wrap: wrap, btn: btn, menu: menu, items: [] };
     groups.push(g);
 
     btn.addEventListener('click', function (e) {
@@ -206,7 +234,7 @@
         schedule();
         if (!mq.matches) return;
         clearTimeout(rebuildTimer);
-        rebuildTimer = setTimeout(build, 350);
+        rebuildTimer = setTimeout(build, 60);
       }).observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['class', 'style', 'hidden'] });
     }
   }
