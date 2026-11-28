@@ -2714,3 +2714,47 @@ html.app-mode #autoLoginOverlay { background: #0B2B28 !important; color: #fff !i
 /* the two download buttons sit together on their own row (on phones every button is already one per row) */
 .hero-break { flex-basis: 100%; height: 0; }
 @media (max-width: 640px) { .hero-break { display: none; } }
+
+
+/* ══════════════════════════════════════════════════════════
+   MOBILE HOME PAGE (phones): no big "Sign Up Now" button in the header,
+   a small "Login" button in its place, and smaller hero buttons.
+   (Sign up is still available inside the Login window.)
+   ══════════════════════════════════════════════════════════ */
+@media (max-width: 640px) {
+  /* header: hide Sign Up, show a compact Login with its word */
+  .btn-signup-top { display: none !important; }
+  .btn-login-top {
+    display: inline-flex !important;
+    padding: 7px 16px !important;
+    font-size: 0.84rem !important;
+    gap: 6px !important;
+    border-radius: 999px !important;
+    background: var(--teal-600) !important;
+    border-color: var(--teal-600) !important;
+    color: var(--white) !important;
+    box-shadow: none !important;
+  }
+  .btn-login-top span { display: inline !important; }
+  .btn-login-top i { font-size: 0.75rem; }
+  .btn-login-top:hover { transform: none; }
+  .nav-toggle { width: 36px; height: 36px; }
+
+  /* hero: the big orange "Get Started" is hidden on phones (Login is right below it) */
+  .btn-get-started { display: none !important; }
+
+  /* hero: smaller buttons */
+  .hero-actions { gap: 8px !important; }
+  .btn-get-started, .btn-login-hero {
+    padding: 10px 16px !important;
+    font-size: 0.88rem !important;
+    border-radius: 10px !important;
+  }
+  .btn-download-app {
+    padding: 9px 14px !important;
+    font-size: 0.82rem !important;
+    gap: 8px !important;
+    border-radius: 10px !important;
+  }
+  .btn-download-app i { font-size: 1rem; }
+}

@@ -1,0 +1,323 @@
+/*!
+ * mobile-ui.css - compact phone layout for the admin pages
+ * (Manage Students, Manage Staff, Attendance).
+ *
+ * Load it AFTER the page's own CSS. Everything is inside @media (max-width: 768px),
+ * so the desktop / Windows app is not touched at all.
+ *
+ * What it does on phones:
+ *   1. Smaller, quieter buttons (no more giant full-width buttons).
+ *   2. Back button = small round button, fixed at the upper-left (see mobile-ui.js).
+ *   3. Extra buttons live in a three-dot menu (the "⋮" button added by mobile-ui.js).
+ *   4. Tables / cards a little smaller so they fit a phone screen.
+ */
+
+/* the three-dot UI only exists on phones (mobile-ui.js only builds it there) */
+.mu-more-wrap { display: none; }
+
+@media (max-width: 768px) {
+
+  :root {
+    --mu-top: calc(env(safe-area-inset-top, 0px) + 8px);
+    --mu-border: var(--border-subtle, rgba(148, 163, 184, .28));
+    --mu-card: var(--bg-card, #1e293b);
+    --mu-text: var(--text-primary, #f1f5f9);
+    --mu-pop: #1e293b;                  /* solid colour for the ⋮ menu (theme colours can be see-through) */
+  }
+  [data-theme="light"] { --mu-pop: #ffffff; }
+
+  /* ───────────── 1. BACK BUTTON: fixed, upper-left, round, icon only ───────────── */
+  .back-btn,
+  .msc-back-btn,
+  .cert-back-btn {
+    position: fixed !important;
+    top: var(--mu-top) !important;
+    left: 10px !important;
+    right: auto !important;
+    z-index: 1200 !important;
+    width: 36px !important;
+    height: 36px !important;
+    min-width: 0 !important;
+    min-height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    gap: 0 !important;
+    display: inline-flex !important;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50% !important;
+    border: 1px solid var(--mu-border) !important;
+    background: var(--mu-card) !important;
+    color: var(--mu-text) !important;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, .28) !important;
+    font-size: 0 !important;            /* hides the "Back" / "Back to Classes" words, keeps the arrow */
+    line-height: 1;
+    transform: none !important;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .back-btn i,
+  .msc-back-btn i,
+  .cert-back-btn i { font-size: 14px !important; margin: 0 !important; }
+  .back-btn:active,
+  .msc-back-btn:active,
+  .cert-back-btn:active { transform: scale(.92) !important; }
+
+  /* A "fixed" button is pinned to the SCREEN only if no parent has a transform.
+     attendance.css animates each .stage with a slide-up (transform), which would carry the back
+     button away with it, so on phones the stages fade in with opacity only. */
+  .stage, .cert-page-view, .fade-in { animation: mu-fade .3s ease both !important; }
+
+  /* only the top-most visible back button is shown (set by mobile-ui.js) */
+  .mu-back-hidden { visibility: hidden !important; pointer-events: none !important; }
+
+  /* leave room at the left of the page header for the fixed back button */
+  body.mu-has-back .main-header,
+  body.mu-has-back .archive-center .main-header { padding-left: 46px !important; }
+
+  /* ───────────── 2. THREE-DOT MENU ───────────── */
+  .mu-more-wrap {
+    display: block;
+    position: relative;
+    flex: 0 0 auto;
+    margin-left: auto;
+  }
+  .mu-more-wrap.mu-empty { display: none; }
+
+  .mu-more {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 34px;
+    height: 34px;
+    padding: 0;
+    border-radius: 10px;
+    border: 1px solid var(--mu-border);
+    background: var(--mu-card);
+    color: var(--mu-text);
+    font-size: 15px;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .mu-more:active { transform: scale(.92); }
+
+  .mu-menu {
+    display: none;
+    position: fixed;                    /* position is set by mobile-ui.js so it is never clipped */
+    top: 0;
+    right: 10px;
+    z-index: 5000;
+    min-width: 190px;
+    max-width: calc(100vw - 20px);
+    max-height: 70vh;
+    overflow-y: auto;
+    flex-direction: column;
+    gap: 2px;
+    padding: 6px;
+    border-radius: 12px;
+    border: 1px solid var(--mu-border);
+    background: var(--mu-pop);
+    box-shadow: 0 14px 34px rgba(0, 0, 0, .4);
+  }
+  .mu-more-wrap.mu-open .mu-menu { display: flex; }
+
+  /* every button moved into the menu becomes a simple list row
+     (no "display" rule on purpose, so buttons the page hides with display:none stay hidden) */
+  .mu-menu > * {
+    width: 100% !important;
+    flex: none !important;
+    margin: 0 !important;
+    min-height: 38px !important;
+    padding: 8px 12px !important;
+    justify-content: flex-start !important;
+    text-align: left !important;
+    white-space: nowrap !important;
+    font-size: 13px !important;
+    font-weight: 600 !important;
+    border: 0 !important;
+    border-radius: 8px !important;
+    background: transparent !important;
+    color: var(--mu-text) !important;
+    box-shadow: none !important;
+    transform: none !important;
+    filter: none !important;
+    gap: 10px !important;
+    order: 0 !important;
+  }
+  .mu-menu > * i { width: 16px; text-align: center; font-size: 13px; opacity: .85; }
+  .mu-menu > *:active { background: rgba(148, 163, 184, .18) !important; }
+  .mu-menu > .btn-deactivate,
+  .mu-menu > .bulk-absent { color: #ef4444 !important; }
+
+  /* ───────────── 3. SMALLER BUTTONS EVERYWHERE ───────────── */
+  .btn, .btn-primary, .btn-secondary, .btn-ghost, .btn-sm-upd, .btn-primary-submit,
+  .btn-archive-center, .bulk-btn, .filter-btn, .view-attendance-btn, .save-btn,
+  .report-action, .period-btn, .section-trigger, .edit-btn, .archive-tab,
+  .cam-ctrl-btn, .biometric-browse-btn {
+    min-height: 34px !important;
+    padding: 7px 12px !important;
+    font-size: 12.5px !important;
+    border-radius: 8px !important;
+    gap: 6px !important;
+  }
+  .btn i, .btn-primary i, .btn-secondary i, .btn-ghost i, .bulk-btn i, .save-btn i { font-size: 12px; }
+
+  /* compact header */
+  .main-header { padding: 10px 0 !important; margin-bottom: 14px !important; gap: 8px !important; }
+  .menu-toggle { min-width: 36px !important; min-height: 36px !important; padding: 7px 10px !important; font-size: 15px !important; }
+  .school-branding .school-name { font-size: 12.5px !important; letter-spacing: 0; }
+  .theme-toggle { transform: scale(.85); transform-origin: right center; }
+  .scanner-btn { padding: 0 !important; width: 34px; height: 34px; min-height: 34px !important; justify-content: center; }
+  .scanner-btn__label { display: none !important; }
+
+  /* titles a bit smaller */
+  .page-title { font-size: 20px !important; }
+  .stage-title, .view-title, .msc-stage-title { font-size: 16px !important; }
+
+  /* page-level header rows: title on the left, ⋮ on the right, in one line */
+  .stage-header, .view-header, .msc-stage-header {
+    flex-wrap: nowrap !important;
+    gap: 8px !important;
+    margin-bottom: 12px !important;
+  }
+  .stage-title, .view-title, .msc-stage-title { flex: 1 1 auto; min-width: 0; margin: 0; }
+
+  /* ───────────── ATTENDANCE ───────────── */
+  .toolbar {
+    flex-direction: row !important;
+    flex-wrap: wrap !important;
+    align-items: center !important;
+    gap: 8px !important;
+    margin-bottom: 10px !important;
+  }
+  .toolbar .search-wrap { flex: 1 1 0 !important; width: auto !important; min-width: 0 !important; }
+  .toolbar .search-wrap input { padding-top: 8px !important; padding-bottom: 8px !important; font-size: 14px !important; }
+  .toolbar .section-select { flex: 0 0 auto; width: auto !important; min-width: 0 !important; }
+  .toolbar .bulk-actions,
+  .toolbar .view-actions { width: auto !important; flex: 0 0 auto !important; margin-left: 0 !important; }
+  .view-period-toolbar > div[style*="margin-left:auto"] { width: auto !important; }
+  .month-nav { width: auto !important; flex: 1 1 auto; }
+
+  .attn-stat-card { padding: 9px 10px !important; gap: 8px !important; }
+  .attn-stat-icon { width: 30px !important; height: 30px !important; font-size: 12px !important; }
+  .attn-stat-value { font-size: 16px !important; }
+
+  /* student cards (attendance table turned into cards by attendance.css) */
+  .attendance-table:not(.monthly-table) tbody tr { padding: 2px 12px 10px !important; margin-bottom: 10px !important; }
+  .attendance-table:not(.monthly-table) tbody td { padding: 6px 0 !important; font-size: 12.5px !important; }
+  .attendance-table:not(.monthly-table) tbody td.td-name { padding: 10px 0 8px !important; font-size: 14.5px !important; }
+  .attendance-table:not(.monthly-table) tbody td.td-status { padding: 9px 0 0 !important; }
+  .td-status .status-cell { gap: 6px !important; }
+  .td-status .status-btn { min-height: 34px !important; padding: 6px 4px !important; font-size: 12px !important; gap: 4px !important; border-radius: 8px !important; }
+
+  /* monthly grid: slightly smaller cells so more days fit */
+  .monthly-table thead th, .monthly-table tbody td { padding: 6px 5px !important; font-size: 11.5px !important; }
+
+  /* Save bar: one compact row instead of a tall stacked block */
+  .save-bar {
+    flex-direction: row !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    gap: 8px !important;
+    padding: 8px 10px !important;
+    margin-top: 10px !important;
+    border-radius: 12px !important;
+  }
+  .save-bar .summary { justify-content: flex-start !important; font-size: 11.5px !important; gap: 8px !important; flex: 1 1 auto; min-width: 0; flex-wrap: wrap; }
+  .save-btn { width: auto !important; flex: 0 0 auto; padding: 8px 14px !important; }
+
+  .autosave-strip { font-size: 11.5px !important; padding: 7px 10px !important; }
+
+  /* ───────────── MANAGE STAFF ───────────── */
+  .table-controls { flex-direction: row !important; align-items: center !important; gap: 8px !important; margin-bottom: 10px !important; }
+  .table-controls .search-box { flex: 1 1 0 !important; width: auto !important; min-width: 0 !important; }
+  .table-controls .search-box input { padding-top: 8px !important; padding-bottom: 8px !important; font-size: 14px !important; }
+  .table-controls { flex-wrap: nowrap !important; }
+  .table-controls-actions { display: flex !important; flex-wrap: nowrap !important; align-items: center; gap: 6px !important; width: auto !important; flex: 0 0 auto !important; }
+  /* "Add Staff" stays visible but becomes a small + button; its words are hidden */
+  #add-staff-btn { flex: 0 0 34px !important; width: 34px !important; min-width: 34px !important; max-width: 34px !important; padding: 0 !important; justify-content: center; gap: 0 !important; font-size: 0 !important; box-shadow: none !important; }
+  #add-staff-btn i { font-size: 14px !important; margin: 0 !important; }
+
+  /* staff cards (staff table turned into cards by manage-staff.css) */
+  .staff-table tbody tr { padding: 2px 12px 6px !important; margin-bottom: 8px !important; }
+  .staff-table td { padding: 6px 0 !important; font-size: 12.5px !important; }
+  .staff-table td.td-bold { font-size: 14px !important; padding: 9px 0 8px !important; }
+  .staff-table .id-badge { font-size: 11px !important; padding: 2px 8px !important; }
+
+  /* profile card: actions in a ⋮ at its top-right corner */
+  .profile-card { position: relative; }
+  .profile-actions { position: absolute !important; top: 10px; right: 10px; width: auto !important; margin: 0 !important; padding: 0 !important; display: block !important; z-index: 5; }
+  .profile-actions .mu-more-wrap { margin: 0; }
+  .profile-actions .mu-more { background: rgba(15, 23, 42, .55); color: #fff; border-color: rgba(255, 255, 255, .25); }
+
+  /* summary strip */
+  .summary-item { font-size: 12px !important; }
+
+  /* ───────────── MANAGE STUDENTS ───────────── */
+  .upd-section-teacher-row { gap: 8px !important; flex-wrap: wrap; }
+  .upd-action-btns { display: flex; align-items: center; margin-left: auto; width: auto !important; }
+  .upd-search-row { gap: 8px !important; }
+
+  /* student tables: a little smaller so more fits the screen (still scroll sideways if needed) */
+  .student-table { min-width: 560px !important; }
+  .student-table th { padding: 8px 8px !important; font-size: .64rem !important; }
+  .student-table td { padding: 8px 8px !important; font-size: .78rem !important; }
+  .data-table-wrapper table th { padding: 8px 8px !important; font-size: .66rem !important; }
+  .data-table-wrapper table td { padding: 8px 8px !important; font-size: .78rem !important; }
+
+  /* student record + certificate windows: footer = Close on the left, ⋮ on the right */
+  .profile-modal-footer, .slc-modal-footer {
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    gap: 8px !important;
+    padding: 8px 12px !important;
+  }
+  .profile-action-btns { display: flex !important; grid-template-columns: none !important; width: auto !important; flex: 0 0 auto !important; gap: 0 !important; }
+  .profile-modal-footer .btn-ghost, .slc-modal-footer .btn-ghost { flex: 0 0 auto !important; width: auto !important; margin-right: auto !important; }
+  .profile-modal-footer { justify-content: flex-end !important; }
+
+  /* staff windows: Cancel + Save side by side; certificate footer = Close + ⋮ */
+  .form-modal-footer.modal-actions, .modal-actions {
+    display: flex !important;
+    flex-direction: row !important;
+    justify-content: flex-end !important;
+    align-items: center !important;
+    gap: 8px !important;
+  }
+  .form-modal-footer.modal-actions .btn, .modal-actions .btn { flex: 0 0 auto !important; width: auto !important; }
+  .agreement-modal-footer {
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    gap: 8px !important;
+    padding: 8px 12px !important;
+  }
+  .agreement-modal-footer .btn-cancel { flex: 0 0 auto !important; width: auto !important; margin-right: auto !important; }
+
+  /* full-screen ID card / certificate toolbars: tidy row */
+  .idc-toolbar, .sidc-toolbar, .cert-viewer-toolbar {
+    flex-wrap: nowrap !important;
+    gap: 8px !important;
+    padding: 8px 10px !important;
+  }
+  .idc-toolbar-actions, .sidc-toolbar-actions, .cert-viewer-actions { gap: 6px !important; }
+  .idc-per-page-label > span, .sidc-per-page-label > span { display: none !important; }
+  .idc-per-page-select, .sidc-per-page-select { padding: 6px 8px !important; font-size: 12.5px !important; min-height: 34px; }
+  .idc-toolbar-title, .sidc-toolbar-title { font-size: 13px !important; min-width: 0; flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .idc-toolbar-actions, .sidc-toolbar-actions, .cert-viewer-actions { display: flex; align-items: center; margin-left: auto; width: auto !important; }
+}
+
+@keyframes mu-fade { from { opacity: 0; } to { opacity: 1; } }
+
+/* very small phones */
+@media (max-width: 360px) {
+  .school-branding .school-name { font-size: 11px !important; }
+  .mu-menu { min-width: 170px; }
+}
+
+/* short landscape phones: the fixed back button must not cover the header */
+@media (max-width: 768px) and (max-height: 480px) and (orientation: landscape) {
+  .back-btn, .msc-back-btn, .cert-back-btn { width: 32px !important; height: 32px !important; top: 6px !important; }
+}
